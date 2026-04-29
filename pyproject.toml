@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=70.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cycbercompany-agent-os"
+version = "0.1.0"
+description = "Local-first personal agent OS backend foundation."
+requires-python = ">=3.12"
+dependencies = [
+  "aiosqlite>=0.20.0",
+  "cryptography>=43.0.0",
+  "fastapi>=0.115.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.4.0",
+  "playwright>=1.45.0",
+  "pypdf>=5.0.0",
+  "PyYAML>=6.0.2",
+  "uvicorn[standard]>=0.30.0",
+  "chromadb>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "anyio>=4.4.0",
+  "httpx>=0.27.0",
+  "mypy>=1.11.0",
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.23.0",
+  "ruff>=0.6.0",
+  "types-PyYAML>=6.0.12",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["apps/local-api/tests", "tests"]
+markers = [
+  "unit: fast unit-level tests without API lifecycle requirements",
+  "api: local API and service integration tests using TestClient or repositories",
+  "integration: multi-service backend integration scenarios",
+  "eval: deterministic eval suite and release evidence tests",
+  "slow: long-running release gate, full-chain, or evidence aggregation tests",
+  "release: release gate, report, backup, benchmark, and diagnostic tests",
+  "security: safety, approval, permission, DLP, and secret-leakage boundary tests",
+  "chat_main_chain: chat main-chain acceptance and related response-plan tests",
+]
+pythonpath = [
+  "apps/local-api",
+  "packages/core-types",
+  "services/asset-broker",
+  "services/brain",
+  "services/capability-graph",
+  "services/chat-runtime",
+  "services/context-gateway",
+  "services/heart",
+  "services/memory",
+  "services/persona-engine",
+  "services/response-composer",
+  "services/safety",
+  "services/shell-runtime",
+  "services/skill-engine",
+  "services/task-engine",
+  "services/tools",
+  "services/trace",
+]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+[tool.setuptools]
+packages = []

@@ -1,0 +1,47 @@
+roles:
+  - key: chief_of_staff
+    display_name: 首席助理
+    default_department_key: ceo_office
+    description: 任务统筹、计划、复盘。
+    authority_level: 20
+    default_skills:
+      - task_planning
+      - review_summary
+      - coordination
+  - key: product_manager
+    display_name: 产品经理
+    default_department_key: product
+    description: 产品设计、需求拆解。
+    authority_level: 10
+    default_skills:
+      - requirement_analysis
+      - product_design
+      - roadmap_planning
+  - key: architect
+    display_name: 技术架构师
+    default_department_key: engineering
+    description: 架构设计、代码、部署。
+    authority_level: 10
+    default_skills:
+      - architecture_design
+      - code_generation
+      - deployment_debug
+  - key: content_operator
+    display_name: 内容运营
+    default_department_key: operations
+    description: 文案、标题、账号内容。
+    authority_level: 10
+    default_skills:
+      - short_video_script
+      - social_copywriting
+      - content_calendar
+  - key: personal_butler
+    display_name: 私人管家
+    default_department_key: life_service
+    description: 日程、陪伴、家居。
+    authority_level: 10
+    default_skills:
+      - daily_planning
+      - emotional_support
+      - home_control
+

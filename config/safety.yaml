@@ -1,0 +1,18 @@
+risk:
+  require_confirmation:
+    - file_delete
+    - file_overwrite
+    - external_post
+    - payment
+    - wallet_sign
+    - system_setting_change
+    - install_program
+    - send_sensitive_data
+  deny_paths:
+    - ~/.ssh/**
+    - ~/.gnupg/**
+    - ~/.config/*/secrets/**
+    - browser_profile://default/**
+  sandbox:
+    high_risk_tools: docker
+
