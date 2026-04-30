@@ -58,7 +58,7 @@ async def get_tool(
     return await registry.tool_runtime.get_tool(tool_name)
 
 
-@router.post("/execute", response_model=ToolExecuteResponse)
+@router.post("/execute", response_model=ToolExecuteResponse, response_model_exclude_none=True)
 async def execute_tool(
     payload: ToolExecuteRequest,
     request: Request,

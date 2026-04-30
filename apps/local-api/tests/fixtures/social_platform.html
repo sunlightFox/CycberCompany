@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Local Social Platform Test Page</title>
+  </head>
+  <body>
+    <main>
+      <h1>Local Social Platform</h1>
+      <section id="login">
+        <h2>Account Login</h2>
+        <form method="post" action="/login">
+          <label>
+            Username
+            <input name="username" autocomplete="username" />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="current-password" />
+          </label>
+          <button type="submit">Sign in</button>
+        </form>
+      </section>
+      <section id="compose">
+        <h2>Publish Article</h2>
+        <form method="post" action="/articles">
+          <label>
+            Title
+            <input name="title" />
+          </label>
+          <label>
+            Body
+            <textarea name="body"></textarea>
+          </label>
+          <button type="submit">Publish</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

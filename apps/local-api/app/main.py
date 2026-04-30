@@ -32,6 +32,7 @@ from app.api import (
     routes_response_composer,
     routes_retrieval,
     routes_safety,
+    routes_scheduled_tasks,
     routes_settings,
     routes_shells,
     routes_skills,
@@ -115,6 +116,8 @@ def create_app() -> FastAPI:
     app.include_router(routes_capabilities.router)
     app.include_router(routes_knowledge.router)
     app.include_router(routes_tasks.router)
+    app.include_router(routes_scheduled_tasks.router)
+    app.include_router(routes_scheduled_tasks.run_router)
     app.include_router(routes_approvals.router)
     app.include_router(routes_tools.router)
     app.include_router(routes_execution_boundary.router)

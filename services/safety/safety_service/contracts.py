@@ -80,7 +80,8 @@ class SafetyService:
             policy_sources.append("safety.prompt_injection")
 
         if privacy.sensitivity_hits:
-            risk = _max_risk(risk, RiskLevel.R5)
+            if not _local_readonly_browser_evidence(request):
+                risk = _max_risk(risk, RiskLevel.R5)
             required_controls.append("dlp_redaction")
             policy_sources.append("safety.dlp")
             if _is_external_or_exfiltration(request):
@@ -219,6 +220,8 @@ def _hard_deny_action(request: ActionRequest) -> bool:
 
 
 def _is_external_or_exfiltration(request: ActionRequest) -> bool:
+    if _local_readonly_browser_evidence(request):
+        return False
     text = f"{request.action} {request.tool_name or ''} {request.destination or ''}".lower()
     return any(
         marker in text
@@ -233,6 +236,21 @@ def _is_external_or_exfiltration(request: ActionRequest) -> bool:
             "exfil",
             "mcp.",
         )
+    )
+
+
+def _local_readonly_browser_evidence(request: ActionRequest) -> bool:
+    tool_name = (request.tool_name or "").lower()
+    destination = (request.destination or "").lower()
+    return tool_name in {
+        "browser.open",
+        "browser.search",
+        "browser.snapshot",
+        "browser.screenshot",
+    } and (
+        destination.startswith("http://127.0.0.1")
+        or destination.startswith("http://localhost")
+        or destination.startswith("https://localhost")
     )
 
 

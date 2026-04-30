@@ -80,6 +80,7 @@ class AssetHandleValidateRequest(ApiModel):
     action: str
     conversation_id: EntityId | None = None
     task_id: EntityId | None = None
+    approval_id: EntityId | None = None
 
 
 class AssetHandleValidateResponse(ApiModel):
@@ -94,6 +95,7 @@ class AssetResolveForToolRequest(ApiModel):
     tool_name: str
     task_id: EntityId | None = None
     conversation_id: EntityId | None = None
+    approval_id: EntityId | None = None
 
 
 class AssetResolveForToolResponse(ResolvedAsset):

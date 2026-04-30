@@ -178,9 +178,12 @@ class ChatExperienceService:
     ) -> dict[str, Any]:
         current = await self._chat_repo.get_working_state(turn["conversation_id"])
         now = utc_now_iso()
-        topic = _active_topic(user_text, current)
+        user_message = await self._chat_repo.get_message(turn["user_message_id"])
+        session_id = _session_id_from_message(user_message)
+        current_for_session = _same_session_state(current, session_id)
+        topic = _active_topic(user_text, current_for_session)
         constraints = _merge_limited(
-            current.get("known_constraints", []) if current else [],
+            current_for_session.get("known_constraints", []) if current_for_session else [],
             _constraints_from_text(user_text),
             limit=8,
         )
@@ -190,7 +193,7 @@ class ChatExperienceService:
             else []
         )
         decisions = _merge_limited(
-            current.get("decisions_made", []) if current else [],
+            current_for_session.get("decisions_made", []) if current_for_session else [],
             decision_candidates,
             limit=8,
         )
@@ -199,10 +202,22 @@ class ChatExperienceService:
             if clarification and clarification.needs_clarification
             else []
         )
-        if not questions and current and not current.get("pending_confirmation"):
-            questions = current.get("open_questions", [])
-        pending = current.get("pending_confirmation", {}) if current else {}
-        if clarification and clarification.needs_clarification:
+        if (
+            not questions
+            and current_for_session
+            and not current_for_session.get("pending_confirmation")
+        ):
+            questions = current_for_session.get("open_questions", [])
+        pending = (
+            current_for_session.get("pending_confirmation", {})
+            if current_for_session
+            else {}
+        )
+        response_pending = _pending_from_response_plan(response_plan or {})
+        if response_pending is not None:
+            pending = response_pending
+            questions = list(response_pending.get("questions") or [])
+        elif clarification and clarification.needs_clarification:
             pending = {
                 "turn_id": turn["turn_id"],
                 "questions": clarification.questions,
@@ -214,8 +229,9 @@ class ChatExperienceService:
         state = {
             "conversation_id": turn["conversation_id"],
             "organization_id": "org_default",
+            "session_id": session_id,
             "active_topic": topic,
-            "user_goal": _user_goal(user_text, current),
+            "user_goal": _user_goal(user_text, current_for_session),
             "known_constraints": constraints,
             "decisions_made": decisions,
             "open_questions": questions,
@@ -414,20 +430,49 @@ def _is_simple_chat(text: str) -> bool:
 
 
 def _is_execution_negated(text: str) -> bool:
+    if "创建任务" in text and "不要创建任务" not in text and "不创建任务" not in text:
+        return False
     return any(
         marker in text
         for marker in [
             "不要执行",
             "不执行",
             "别执行",
+            "不要创建任务",
+            "不要使用工具",
+            "不要使用浏览器",
+            "不要使用浏览器或工具",
+            "不要调用工具",
+            "不使用工具",
+            "不用工具",
+            "不要联网",
+            "不浏览",
             "只分析",
+            "只解释",
+            "请解释",
+            "解释",
             "只要方案",
             "只给方案",
             "只生成方案",
+            "只输出",
             "先给方案",
             "先写方案",
             "生成草稿",
             "只写草稿",
+            "严格 JSON",
+            "只用 JSON",
+            "术语表",
+            "科普",
+            "学习路线",
+            "路线图",
+            "翻译",
+            "表格比较",
+            "用表格",
+            "设计原则",
+            "五条原则",
+            "知识总结",
+            "压缩成",
+            "归纳为",
         ]
     )
 
@@ -437,6 +482,28 @@ def _needs_long_output(text: str) -> bool:
         marker in text
         for marker in ["长文", "完整文档", "详细展开", "详细方案", "写一篇", "报告", "不少于"]
     )
+
+
+def _session_id_from_message(message: dict[str, Any] | None) -> str | None:
+    if not isinstance(message, dict):
+        return None
+    content = message.get("content")
+    if not isinstance(content, dict):
+        return None
+    value = content.get("session_id")
+    return str(value) if value else None
+
+
+def _same_session_state(
+    current: dict[str, Any] | None,
+    session_id: str | None,
+) -> dict[str, Any] | None:
+    if not current or not session_id:
+        return current
+    current_session_id = current.get("session_id")
+    if not current_session_id or str(current_session_id) == str(session_id):
+        return current
+    return None
 
 
 def _filesystem_scope_is_ambiguous(text: str) -> bool:
@@ -474,6 +541,12 @@ def _looks_like_pending_answer(text: str) -> bool:
             "生成方案",
             "创建任务",
             "确认",
+            "拒绝",
+            "取消",
+            "允许",
+            "本会话",
+            "改成",
+            "修改",
         ]
     )
 
@@ -534,6 +607,40 @@ def _candidate_actions(text: str) -> list[str]:
 def _referenced_artifacts(response_plan: dict[str, Any]) -> list[dict[str, Any]]:
     refs = response_plan.get("artifact_refs") or []
     return [dict(item) for item in refs if isinstance(item, dict)][:8]
+
+
+def _pending_from_response_plan(response_plan: dict[str, Any]) -> dict[str, Any] | None:
+    structured = response_plan.get("structured_payload")
+    if not isinstance(structured, dict):
+        return None
+    natural = structured.get("natural_interaction")
+    if not isinstance(natural, dict):
+        return None
+    explicit = natural.get("pending_confirmation")
+    if isinstance(explicit, dict):
+        return explicit
+    if natural.get("clear_pending"):
+        session_grant = natural.get("session_grant")
+        if isinstance(session_grant, dict) and session_grant:
+            return {
+                "kind": "natural_pending_actions",
+                "session_id": session_grant.get("session_id"),
+                "actions": [],
+                "session_grants": [session_grant],
+                "questions": [],
+            }
+        return {}
+    actions = natural.get("pending_actions") or structured.get("pending_actions")
+    if isinstance(actions, list) and actions:
+        safe_actions = [dict(item) for item in actions if isinstance(item, dict)]
+        return {
+            "kind": "natural_pending_actions",
+            "session_id": safe_actions[0].get("session_id"),
+            "actions": safe_actions,
+            "questions": list(natural.get("natural_reply_options") or []),
+            "created_at": utc_now_iso(),
+        }
+    return None
 
 
 def _merge_limited(existing: list[Any], new_items: list[str], *, limit: int) -> list[str]:

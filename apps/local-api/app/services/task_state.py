@@ -20,6 +20,7 @@ TASK_TRANSITIONS: dict[str, set[str]] = {
     TaskStatus.PLANNED.value: {
         TaskStatus.RUNNING.value,
         TaskStatus.WAITING_APPROVAL.value,
+        TaskStatus.PAUSED.value,
         TaskStatus.CANCELLED.value,
     },
     TaskStatus.RUNNING.value: {

@@ -74,5 +74,5 @@ def _memory_eval_metrics(
         "privacy": 1.0
         if secret["blocked"] and secret["memories"] == [] and "plain-secret" not in audit_text
         else 0.0,
-        "source": 1.0 if recalled["items"][0]["source"]["trace_id"] else 0.0,
+        "source": 1.0 if recalled["items"][0]["source"]["type"] != "unknown" else 0.0,
     }

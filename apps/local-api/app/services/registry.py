@@ -17,6 +17,7 @@ from app.db.repositories.memory_repo import MemoryRepository
 from app.db.repositories.organization_repo import OrganizationRepository
 from app.db.repositories.release_repo import ReleaseRepository
 from app.db.repositories.retrieval_repo import RetrievalRepository
+from app.db.repositories.scheduled_task_repo import ScheduledTaskRepository
 from app.db.repositories.settings_repo import SettingsRepository
 from app.db.repositories.shell_repo import ShellRepository
 from app.db.repositories.skill_mcp_repo import SkillMcpRepository
@@ -46,6 +47,7 @@ from app.services.memory import MemoryService
 from app.services.model_routing import ModelRoutingService
 from app.services.release import ReleaseGateService
 from app.services.retrieval import RetrievalDiagnosticsService
+from app.services.scheduled_tasks import ScheduledTaskService
 from app.services.secrets import SecretStore
 from app.services.settings import SettingsService
 from app.services.shell_switch import ShellSwitchService
@@ -71,6 +73,7 @@ class ServiceRegistry:
     capability_service: CapabilityGraphService
     knowledge_service: KnowledgeService
     task_engine: TaskEngine
+    scheduled_task_service: ScheduledTaskService
     tool_runtime: ToolRuntime
     skill_plugin_service: SkillPluginService
     mcp_service: MCPService
@@ -99,6 +102,7 @@ class ServiceRegistry:
     assets: AssetRepository
     knowledge: KnowledgeRepository
     tasks: TaskRepository
+    scheduled_tasks: ScheduledTaskRepository
     skill_mcp: SkillMcpRepository
     release: ReleaseRepository
     retrieval: RetrievalRepository
@@ -118,6 +122,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     asset_repo = AssetRepository(db)
     knowledge_repo = KnowledgeRepository(db)
     task_repo = TaskRepository(db)
+    scheduled_task_repo = ScheduledTaskRepository(db)
     skill_mcp_repo = SkillMcpRepository(db)
     release_repo = ReleaseRepository(db)
     retrieval_repo = RetrievalRepository(db)
@@ -141,6 +146,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         capability=capability_service,
         trace_service=trace_service,
         audit_service=audit_service,
+        secret_store=secret_store,
+        task_repo=task_repo,
     )
     safety_decision_service = SafetyDecisionService(
         repo=design_alignment_repo,
@@ -295,6 +302,13 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         skill_mcp_repo=skill_mcp_repo,
         trace_service=trace_service,
     )
+    scheduled_task_service = ScheduledTaskService(
+        repo=scheduled_task_repo,
+        member_repo=member_repo,
+        task_engine=task_engine,
+        trace_service=trace_service,
+        audit_service=audit_service,
+    )
     return ServiceRegistry(
         config=config,
         db=db,
@@ -314,6 +328,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
             task_engine,
             chat_experience_service,
             brain_decision_service,
+            approval_service,
+            scheduled_task_service,
         ),
         chat_experience_service=chat_experience_service,
         memory_service=memory_service,
@@ -322,6 +338,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         capability_service=capability_service,
         knowledge_service=knowledge_service,
         task_engine=task_engine,
+        scheduled_task_service=scheduled_task_service,
         tool_runtime=tool_runtime,
         skill_plugin_service=skill_plugin_service,
         mcp_service=mcp_service,
@@ -350,6 +367,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         assets=asset_repo,
         knowledge=knowledge_repo,
         tasks=task_repo,
+        scheduled_tasks=scheduled_task_repo,
         skill_mcp=skill_mcp_repo,
         release=release_repo,
         retrieval=retrieval_repo,

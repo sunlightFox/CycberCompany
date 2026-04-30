@@ -14,10 +14,26 @@ SENSITIVE_KEY_PARTS = (
 )
 
 TEXT_PATTERNS = (
-    (re.compile(r"sk-[A-Za-z0-9_-]{12,}"), "[REDACTED_API_KEY]"),
+    (re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{12,}"), "[REDACTED_API_KEY]"),
     (
-        re.compile(r"(?i)(api[_-]?key|token|secret)\s*[:=]\s*['\"]?[^'\"\s,;]+"),
+        re.compile(
+            r"(?i)(api[_-]?key|token|secret|cookie|password|passwd|pwd)"
+            r"\s*[:=]\s*['\"]?[^'\"\s,;]+"
+        ),
         r"\1=[REDACTED_TOKEN]",
+    ),
+    (
+        re.compile(
+            r"(?i)(api[_-]?key|token|secret|cookie|password|passwd|pwd)%3[dD][^&\s,;]+"
+        ),
+        r"\1%3D[REDACTED_TOKEN]",
+    ),
+    (
+        re.compile(
+            r"(?i)([?&](?:api[_-]?key|token|secret|cookie|password|passwd|pwd)=)"
+            r"[^&\s,;]+"
+        ),
+        r"\1[REDACTED_TOKEN]",
     ),
     (
         re.compile(r"(?i)(private[_-]?key)\s*[:=]\s*['\"]?[^'\"\s,;]+"),

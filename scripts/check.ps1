@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("full", "fast", "api", "security", "release")]
+  [ValidateSet("full", "smoke", "fast", "api", "security", "release")]
   [string] $Profile = "full"
 )
 
@@ -69,14 +69,19 @@ function Write-CheckReport {
     }
     command_matrix = @{
       full = '.\scripts\check.ps1 -Profile full'
+      smoke = '.\scripts\check.ps1 -Profile smoke'
       fast = '.\scripts\check.ps1 -Profile fast'
       api = '.\scripts\check.ps1 -Profile api'
       security = '.\scripts\check.ps1 -Profile security'
       release = '.\scripts\check.ps1 -Profile release'
+      smoke_backend = '.venv\Scripts\python.exe -m pytest tests\test_response_composer_reasoning.py tests\test_phase2_routing_safety.py tests\test_phase32_cli_client.py tests\test_phase32_cli_commands.py tests\test_phase32_cli_redaction.py tests\test_phase32_cli_server_manager.py tests\test_phase32_cli_sse.py apps\local-api\tests\test_config.py apps\local-api\tests\test_db_migrations.py apps\local-api\tests\test_chat_trace_error.py'
       fast_backend = '.venv\Scripts\python.exe -m pytest tests apps\local-api\tests -m "not slow"'
       api_backend = '.venv\Scripts\python.exe -m pytest apps\local-api\tests -m "not slow"'
       eval_security = '.venv\Scripts\python.exe -m pytest tests\evals apps\local-api\tests -m "eval or security"'
       release_scale = '.venv\Scripts\python.exe -m pytest apps\local-api\tests\test_phase29_release_scale_verification.py'
+      release_real_chat_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-04-29\run_chat_main_chain*_cases.py'
+      release_power_chat_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-04-30\run_chat_main_chain_power_cases.py'
+      release_natural_chat_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-04-30\run_chat_natural_interaction_benchmark.py'
       release_full = '.\scripts\check.ps1 -Profile full'
     }
   }
@@ -120,9 +125,190 @@ function Invoke-PythonModule {
   }
 }
 
+function Invoke-PythonScript {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string] $Name,
+    [Parameter(Mandatory = $true)]
+    [string] $ScriptPath
+  )
+
+  $logPath = Join-Path $reportRoot "$runId-$Name.log"
+  $started = (Get-Date).ToUniversalTime()
+  & $pythonPath $ScriptPath 2>&1 | Tee-Object -FilePath $logPath
+  $exitCode = $LASTEXITCODE
+  $completed = (Get-Date).ToUniversalTime()
+  $status = if ($exitCode -eq 0) { "passed" } else { "failed" }
+  $script:checkResults += [ordered]@{
+    name = $Name
+    args = @($ScriptPath)
+    status = $status
+    exit_code = $exitCode
+    started_at = $started.ToString("o")
+    completed_at = $completed.ToString("o")
+    duration_seconds = [Math]::Round(($completed - $started).TotalSeconds, 3)
+    log_path = $logPath
+  }
+  if ($exitCode -ne 0) {
+    Write-CheckReport -OverallStatus "failed"
+    exit $exitCode
+  }
+}
+
+function Invoke-ChatMainChainIssueGate {
+  $logPath = Join-Path $reportRoot "$runId-chat_e2e_issue_gate.log"
+  $started = (Get-Date).ToUniversalTime()
+  $issueFiles = @(
+    "docs\测试\聊天主链路\2026-04-29\05-待修复问题.md",
+    "docs\测试\聊天主链路\2026-04-29\08-扩展待修复问题.md",
+    "docs\测试\聊天主链路\2026-04-29\11-深度待修复问题.md",
+    "docs\测试\聊天主链路\2026-04-29\15-稳定性回归待修复问题.md",
+    "docs\测试\聊天主链路\2026-04-29\18-恢复一致性待修复问题.md",
+    "docs\测试\聊天主链路\2026-04-29\21-知识总结待修复问题.md",
+    "docs\测试\聊天主链路\2026-04-29\24-多维场景待修复问题.md",
+    "docs\测试\聊天主链路\2026-04-29\27-任务执行待修复问题.md",
+    "docs\测试\聊天主链路\2026-04-29\30-浏览器专项待修复问题.md"
+  )
+  $openIssues = @()
+  foreach ($relativePath in $issueFiles) {
+    $path = Join-Path $root $relativePath
+    if (-not (Test-Path $path)) {
+      $openIssues += [ordered]@{ file = $relativePath; count = 1; reason = "missing_issue_file" }
+      continue
+    }
+    $matches = Select-String -Path $path -Pattern "^##\s+CHAT-E2E-[A-Z0-9-]+" -AllMatches
+    $count = @($matches).Count
+    if ($count -gt 0) {
+      $openIssues += [ordered]@{ file = $relativePath; count = $count; reason = "open_issue_records" }
+    }
+  }
+  $completed = (Get-Date).ToUniversalTime()
+  $status = if ($openIssues.Count -eq 0) { "passed" } else { "failed" }
+  $summary = [ordered]@{
+    status = $status
+    checked_files = $issueFiles
+    open_issues = $openIssues
+  }
+  $summary | ConvertTo-Json -Depth 8 | Set-Content -Path $logPath -Encoding UTF8
+  $script:checkResults += [ordered]@{
+    name = "chat_e2e_issue_gate"
+    args = $issueFiles
+    status = $status
+    exit_code = if ($openIssues.Count -eq 0) { 0 } else { 1 }
+    started_at = $started.ToString("o")
+    completed_at = $completed.ToString("o")
+    duration_seconds = [Math]::Round(($completed - $started).TotalSeconds, 3)
+    log_path = $logPath
+  }
+  if ($openIssues.Count -gt 0) {
+    Write-Host "Chat E2E issue gate failed. See: $logPath"
+    Write-CheckReport -OverallStatus "failed"
+    exit 1
+  }
+}
+
+function Invoke-PowerChatIssueGate {
+  $logPath = Join-Path $reportRoot "$runId-chat_e2e_power_issue_gate.log"
+  $started = (Get-Date).ToUniversalTime()
+  $relativePath = "docs\测试\聊天主链路\2026-04-30\08-重型压力待修复问题.md"
+  $path = Join-Path $root $relativePath
+  $openIssues = @()
+  if (-not (Test-Path $path)) {
+    $openIssues += [ordered]@{ file = $relativePath; count = 1; reason = "missing_issue_file" }
+  } else {
+    $matches = Select-String -Path $path -Pattern "^##\s+CHAT-E2E-POWER-FIX" -AllMatches
+    $count = @($matches).Count
+    if ($count -gt 0) {
+      $openIssues += [ordered]@{ file = $relativePath; count = $count; reason = "open_power_issue_records" }
+    }
+  }
+  $completed = (Get-Date).ToUniversalTime()
+  $status = if ($openIssues.Count -eq 0) { "passed" } else { "failed" }
+  $summary = [ordered]@{
+    status = $status
+    checked_files = @($relativePath)
+    open_issues = $openIssues
+  }
+  $summary | ConvertTo-Json -Depth 8 | Set-Content -Path $logPath -Encoding UTF8
+  $script:checkResults += [ordered]@{
+    name = "chat_e2e_power_issue_gate"
+    args = @($relativePath)
+    status = $status
+    exit_code = if ($openIssues.Count -eq 0) { 0 } else { 1 }
+    started_at = $started.ToString("o")
+    completed_at = $completed.ToString("o")
+    duration_seconds = [Math]::Round(($completed - $started).TotalSeconds, 3)
+    log_path = $logPath
+  }
+  if ($openIssues.Count -gt 0) {
+    Write-Host "POWER Chat E2E issue gate failed. See: $logPath"
+    Write-CheckReport -OverallStatus "failed"
+    exit 1
+  }
+}
+
+function Invoke-NaturalChatIssueGate {
+  $logPath = Join-Path $reportRoot "$runId-chat_e2e_natural_issue_gate.log"
+  $started = (Get-Date).ToUniversalTime()
+  $relativePath = "docs\测试\聊天主链路\2026-04-30\11-自然聊天待优化结论.md"
+  $path = Join-Path $root $relativePath
+  $openIssues = @()
+  if (-not (Test-Path $path)) {
+    $openIssues += [ordered]@{ file = $relativePath; count = 1; reason = "missing_conclusion_file" }
+  } else {
+    $content = Get-Content -Path $path -Raw -Encoding UTF8
+    if ($content -notmatch "PASS 12 / FAIL 0 / BLOCKED 0") {
+      $openIssues += [ordered]@{ file = $relativePath; count = 1; reason = "natural_runner_not_all_pass" }
+    }
+    $matches = Select-String -Path $path -Pattern '^\-\s+`NAT-' -AllMatches
+    if (@($matches).Count -gt 0) {
+      $openIssues += [ordered]@{ file = $relativePath; count = @($matches).Count; reason = "open_natural_findings" }
+    }
+  }
+  $completed = (Get-Date).ToUniversalTime()
+  $status = if ($openIssues.Count -eq 0) { "passed" } else { "failed" }
+  $summary = [ordered]@{
+    status = $status
+    checked_files = @($relativePath)
+    open_issues = $openIssues
+  }
+  $summary | ConvertTo-Json -Depth 8 | Set-Content -Path $logPath -Encoding UTF8
+  $script:checkResults += [ordered]@{
+    name = "chat_e2e_natural_issue_gate"
+    args = @($relativePath)
+    status = $status
+    exit_code = if ($openIssues.Count -eq 0) { 0 } else { 1 }
+    started_at = $started.ToString("o")
+    completed_at = $completed.ToString("o")
+    duration_seconds = [Math]::Round(($completed - $started).TotalSeconds, 3)
+    log_path = $logPath
+  }
+  if ($openIssues.Count -gt 0) {
+    Write-Host "Natural chat E2E issue gate failed. See: $logPath"
+    Write-CheckReport -OverallStatus "failed"
+    exit 1
+  }
+}
+
 Invoke-PythonModule -Name "ruff" -ModuleArgs @("ruff", "check", ".")
 Invoke-PythonModule -Name "mypy" -ModuleArgs @("mypy", ".")
 switch ($Profile) {
+  "smoke" {
+    Invoke-PythonModule -Name "pytest_smoke" -ModuleArgs @(
+      "pytest",
+      "tests\test_response_composer_reasoning.py",
+      "tests\test_phase2_routing_safety.py",
+      "tests\test_phase32_cli_client.py",
+      "tests\test_phase32_cli_commands.py",
+      "tests\test_phase32_cli_redaction.py",
+      "tests\test_phase32_cli_server_manager.py",
+      "tests\test_phase32_cli_sse.py",
+      "apps\local-api\tests\test_config.py",
+      "apps\local-api\tests\test_db_migrations.py",
+      "apps\local-api\tests\test_chat_trace_error.py",
+      "--durations=20"
+    )
+  }
   "fast" {
     Invoke-PythonModule -Name "pytest" -ModuleArgs @(
       "pytest",
@@ -173,6 +359,22 @@ switch ($Profile) {
       "release",
       "--durations=20"
     )
+    $chatRunnerRoot = Join-Path $root "docs\测试\聊天主链路\2026-04-29"
+    Invoke-PythonScript -Name "chat_e2e_base" -ScriptPath (Join-Path $chatRunnerRoot "run_chat_main_chain_cases.py")
+    Invoke-PythonScript -Name "chat_e2e_extra" -ScriptPath (Join-Path $chatRunnerRoot "run_chat_main_chain_extra_cases.py")
+    Invoke-PythonScript -Name "chat_e2e_deep" -ScriptPath (Join-Path $chatRunnerRoot "run_chat_main_chain_deep_cases.py")
+    Invoke-PythonScript -Name "chat_e2e_stability" -ScriptPath (Join-Path $chatRunnerRoot "run_chat_main_chain_stability_cases.py")
+    Invoke-PythonScript -Name "chat_e2e_recovery" -ScriptPath (Join-Path $chatRunnerRoot "run_chat_main_chain_recovery_cases.py")
+    Invoke-PythonScript -Name "chat_e2e_knowledge" -ScriptPath (Join-Path $chatRunnerRoot "run_chat_main_chain_knowledge_cases.py")
+    Invoke-PythonScript -Name "chat_e2e_multidimension" -ScriptPath (Join-Path $chatRunnerRoot "run_chat_main_chain_multidimension_cases.py")
+    Invoke-PythonScript -Name "chat_e2e_task_execution" -ScriptPath (Join-Path $chatRunnerRoot "run_chat_main_chain_task_execution_cases.py")
+    Invoke-PythonScript -Name "chat_e2e_browser_scenario" -ScriptPath (Join-Path $chatRunnerRoot "run_chat_main_chain_browser_scenario_cases.py")
+    Invoke-ChatMainChainIssueGate
+    $powerRunnerRoot = Join-Path $root "docs\测试\聊天主链路\2026-04-30"
+    Invoke-PythonScript -Name "chat_e2e_power" -ScriptPath (Join-Path $powerRunnerRoot "run_chat_main_chain_power_cases.py")
+    Invoke-PowerChatIssueGate
+    Invoke-PythonScript -Name "chat_e2e_natural" -ScriptPath (Join-Path $powerRunnerRoot "run_chat_natural_interaction_benchmark.py")
+    Invoke-NaturalChatIssueGate
   }
   default {
     Invoke-PythonModule -Name "pytest" -ModuleArgs @("pytest", "--durations=20")

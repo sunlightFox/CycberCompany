@@ -83,7 +83,11 @@ _DLP_PATTERNS = (
     (
         "api_key",
         RiskLevel.R5,
-        re.compile(r"sk-[A-Za-z0-9_-]{12,}|(?i:api[_-]?key)\s*[:=]\s*['\"]?[^'\"\s,;]+"),
+        re.compile(
+            r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{12,}"
+            r"|(?i:api[_-]?key)\s*[:=]\s*['\"]?[^'\"\s,;]+"
+            r"|(?i:api[_-]?key)%3[dD][^&\s,;]+"
+        ),
         "[REDACTED_API_KEY]",
     ),
     (
@@ -644,9 +648,7 @@ def _policy_for_tool(tool: dict[str, Any], now: str) -> dict[str, Any]:
     source = str(tool.get("source") or "builtin")
     risk = str((tool.get("risk_policy") or {}).get("default") or "R1")
     category = _category_from_tool_name(tool_name)
-    requires_task = tool_name.startswith(("file.", "browser.", "terminal.")) or tool_name in {
-        "account.create_draft_artifact"
-    }
+    requires_task = tool_name.startswith(("file.", "browser.", "terminal.", "account."))
     return {
         "policy_id": f"tap_{_safe_policy_id(tool_name)}",
         "tool_name": tool_name,
@@ -767,6 +769,10 @@ def _category_from_tool_name(tool_name: str) -> str:
         return "memory_write" if tool_name != "memory.search" else "memory_read"
     if tool_name.startswith("asset."):
         return "asset_broker"
+    if tool_name == "account.publish_post":
+        return "account_external_post"
+    if tool_name == "account.login":
+        return "account_login"
     if tool_name.startswith("account."):
         return "account_draft"
     if tool_name.startswith("hardware."):
@@ -783,6 +789,12 @@ def _action_category_for_request(
 ) -> str:
     action = str(args.get("action") or args.get("intent") or "").lower()
     destination = str(args.get("destination") or args.get("url") or "").lower()
+    if tool_name in {"browser.open", "browser.search", "browser.snapshot", "browser.screenshot"}:
+        return policy.action_category
+    if tool_name == "browser.download":
+        return "browser_download"
+    if tool_name == "browser.submit":
+        return "browser_submit"
     if tool_name.startswith("browser.") and any(
         marker in f"{action} {destination}"
         for marker in ("submit", "upload", "login", "payment", "pay", "checkout")
@@ -793,6 +805,8 @@ def _action_category_for_request(
             return "payment"
         return "browser_submit"
     if destination.startswith(("http://", "https://")) and action in {"post", "send", "upload"}:
+        return "network_write"
+    if tool_name == "account.publish_post":
         return "network_write"
     return policy.action_category
 

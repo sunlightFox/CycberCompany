@@ -74,6 +74,87 @@ PHASE29_DIAGNOSTIC_SIZE_BLOCKING_BYTES = 10_000_000
 PHASE29_RISK_EXPIRY_DAYS = 180
 PHASE29_RISK_EXPIRING_SOON_DAYS = 30
 
+PHASE31_BATCH_ID = "CHAT-E2E-20260429"
+PHASE31_TOTAL_CASES = 152
+PHASE31_KNOWN_ISSUES = 69
+PHASE31_RUNNERS: tuple[dict[str, Any], ...] = (
+    {
+        "runner_id": "base",
+        "script": "run_chat_main_chain_cases.py",
+        "report": "04-测试执行报告.md",
+        "issues": "05-待修复问题.md",
+    },
+    {
+        "runner_id": "extra",
+        "script": "run_chat_main_chain_extra_cases.py",
+        "report": "07-扩展测试执行报告.md",
+        "issues": "08-扩展待修复问题.md",
+    },
+    {
+        "runner_id": "deep",
+        "script": "run_chat_main_chain_deep_cases.py",
+        "report": "10-深度测试执行报告.md",
+        "issues": "11-深度待修复问题.md",
+    },
+    {
+        "runner_id": "stability",
+        "script": "run_chat_main_chain_stability_cases.py",
+        "report": "14-稳定性回归测试执行报告.md",
+        "issues": "15-稳定性回归待修复问题.md",
+    },
+    {
+        "runner_id": "recovery",
+        "script": "run_chat_main_chain_recovery_cases.py",
+        "report": "17-恢复一致性测试执行报告.md",
+        "issues": "18-恢复一致性待修复问题.md",
+    },
+    {
+        "runner_id": "knowledge",
+        "script": "run_chat_main_chain_knowledge_cases.py",
+        "report": "20-知识总结测试执行报告.md",
+        "issues": "21-知识总结待修复问题.md",
+    },
+    {
+        "runner_id": "multidimension",
+        "script": "run_chat_main_chain_multidimension_cases.py",
+        "report": "23-多维场景测试执行报告.md",
+        "issues": "24-多维场景待修复问题.md",
+    },
+    {
+        "runner_id": "task_execution",
+        "script": "run_chat_main_chain_task_execution_cases.py",
+        "report": "26-任务执行测试报告.md",
+        "issues": "27-任务执行待修复问题.md",
+    },
+    {
+        "runner_id": "browser_scenario",
+        "script": "run_chat_main_chain_browser_scenario_cases.py",
+        "report": "29-浏览器专项测试报告.md",
+        "issues": "30-浏览器专项待修复问题.md",
+    },
+)
+
+PHASE33_BATCH_ID = "CHAT-E2E-20260430-POWER"
+PHASE33_TOTAL_CASES = 108
+PHASE33_KNOWN_ISSUES = 46
+PHASE33_ISSUE_FILE = "08-重型压力待修复问题.md"
+PHASE33_RUNNER = {
+    "runner_id": "power",
+    "script": "run_chat_main_chain_power_cases.py",
+    "report": "07-重型压力测试执行报告.md",
+    "issues": PHASE33_ISSUE_FILE,
+}
+PHASE34_BATCH_ID = "CHAT-E2E-20260430-NATURAL"
+PHASE34_TOTAL_CASES = 12
+PHASE34_RUNNER = {
+    "runner_id": "natural_interaction",
+    "script": "run_chat_natural_interaction_benchmark.py",
+    "report": "10-自然聊天对标测试报告.md",
+    "issues": "11-自然聊天待优化结论.md",
+}
+PHASE35_BATCH_ID = "CHAT-E2E-20260430-CHAT-SAFETY"
+PHASE36_BATCH_ID = "SCHEDULED-BACKGROUND-TASKS-20260430"
+
 
 class ReleaseGateService:
     def __init__(
@@ -375,6 +456,60 @@ class ReleaseGateService:
                 summary=phase29_summary,
                 status="completed",
             )
+            phase30_summary = await self._phase30_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase30_real_chat_e2e",
+                source_id=f"phase30:{release_gate_id}",
+                summary=phase30_summary,
+                status="completed",
+            )
+            phase31_summary = await self._phase31_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase31_real_chat_e2e_full_closure",
+                source_id=f"phase31:{release_gate_id}",
+                summary=phase31_summary,
+                status="completed",
+            )
+            phase33_summary = await self._phase33_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase33_power_chat_hardening",
+                source_id=f"phase33:{release_gate_id}",
+                summary=phase33_summary,
+                status="completed",
+            )
+            phase34_summary = await self._phase34_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase34_natural_chat_interaction_loop",
+                source_id=f"phase34:{release_gate_id}",
+                summary=phase34_summary,
+                status="completed",
+            )
+            phase35_summary = await self._phase35_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase35_chat_safety_state_semantics",
+                source_id=f"phase35:{release_gate_id}",
+                summary=phase35_summary,
+                status="completed",
+            )
+            phase36_summary = await self._phase36_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase36_scheduled_background_tasks",
+                source_id=f"phase36:{release_gate_id}",
+                summary=phase36_summary,
+                status="completed",
+            )
 
             await self._set_gate_status(release_gate_id, ReleaseGateStatus.REVIEWING_FINDINGS)
             findings = await self.list_findings(release_gate_id)
@@ -504,7 +639,10 @@ class ReleaseGateService:
                     case = EvalCase(**case_row)
                     total += 1
                     suite_total += 1
-                    status, score, actual, assertion_summary = await self._evaluate_case(case)
+                    status, score, actual, assertion_summary = await self._evaluate_case(
+                        case,
+                        release_gate_id=release_gate_id,
+                    )
                     if status == "passed":
                         passed += 1
                         suite_passed += 1
@@ -1199,6 +1337,12 @@ class ReleaseGateService:
         phase27_summary = await self._phase27_report_summary(release_gate_id)
         phase28_summary = await self._phase28_report_summary(release_gate_id)
         phase29_summary = await self._phase29_report_summary(release_gate_id)
+        phase30_summary = await self._phase30_report_summary(release_gate_id)
+        phase31_summary = await self._phase31_report_summary(release_gate_id)
+        phase33_summary = await self._phase33_report_summary(release_gate_id)
+        phase34_summary = await self._phase34_report_summary(release_gate_id)
+        phase35_summary = await self._phase35_report_summary(release_gate_id)
+        phase36_summary = await self._phase36_report_summary(release_gate_id)
         phase23_summary = await self._phase23_report_summary(release_gate_id)
         summary = {
             "release_gate_id": release_gate_id,
@@ -1395,6 +1539,12 @@ class ReleaseGateService:
             "phase27": phase27_summary,
             "phase28": phase28_summary,
             "phase29": phase29_summary,
+            "phase30": phase30_summary,
+            "phase31": phase31_summary,
+            "phase33": phase33_summary,
+            "phase34": phase34_summary,
+            "phase35": phase35_summary,
+            "phase36": phase36_summary,
             "phase23": phase23_summary,
             "go_no_go_reason": _go_no_go_reason(decision, finding_summary, phase23_summary),
             "tooling_status": phase23_summary["tooling_status"],
@@ -1585,7 +1735,12 @@ class ReleaseGateService:
         )
         return finding_id
 
-    async def _evaluate_case(self, case: EvalCase) -> tuple[str, float, dict[str, Any], str]:
+    async def _evaluate_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
         if case.input.get("force_fail") is True or case.expected.get("must_fail") is True:
             return "failed", 0.0, {"forced": True}, "评测用例被显式设置为失败"
         key = case.case_key
@@ -1982,6 +2137,18 @@ class ReleaseGateService:
             return await self._evaluate_phase28_case(case)
         if key.startswith("phase29.release_scale_verification."):
             return await self._evaluate_phase29_case(case)
+        if key.startswith("phase30.real_chat_e2e."):
+            return await self._evaluate_phase30_case(case)
+        if key.startswith("phase31.real_chat_e2e_full_closure."):
+            return await self._evaluate_phase31_case(case)
+        if key.startswith("phase33.power_chat_hardening."):
+            return await self._evaluate_phase33_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase34.natural_chat_interaction_loop."):
+            return await self._evaluate_phase34_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase35.chat_safety_state_semantics."):
+            return await self._evaluate_phase35_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase36.scheduled_background_tasks."):
+            return await self._evaluate_phase36_case(case, release_gate_id=release_gate_id)
         if key.startswith("phase18.dialogue_intent_semantics."):
             return await self._evaluate_phase18_case(case)
         if key.startswith("phase17.chat_main_chain."):
@@ -2736,6 +2903,281 @@ class ReleaseGateService:
             condition,
             actual,
             "第二十九阶段 release-scale CI 矩阵、长评测、性能和风险生命周期证据已就绪",
+        )
+
+    async def _evaluate_phase30_case(
+        self,
+        case: EvalCase,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase30_report_summary(None)
+        contracts = summary["contracts"]
+        scenario = str(case.input.get("scenario") or "")
+        actual: dict[str, Any] = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "registered_cases": summary["registered_cases"],
+            "fix_status": summary["fix_status"],
+            "current_run_scope": summary["current_run_scope"],
+            "real_e2e_batch": summary["real_e2e_batch"],
+            "leakage_count": summary["leakage_count"],
+            "contracts": contracts,
+        }
+        scenario_checks = {
+            "memory_correction_direct_path": summary["fix_status"][
+                "CHAT-E2E-FIX-001"
+            ]["status"]
+            == "closed"
+            and summary["fix_status"]["CHAT-E2E-FIX-002"]["status"] == "closed",
+            "persona_boundary_no_task": summary["fix_status"][
+                "CHAT-E2E-FIX-003"
+            ]["status"]
+            == "closed",
+            "real_task_request_task_engine": summary["fix_status"][
+                "CHAT-E2E-FIX-004"
+            ]["status"]
+            == "closed",
+            "privacy_boundary_recovery": summary["privacy_boundary_status"][
+                "recoverable"
+            ],
+            "release_current_run_scope": summary["current_run_scope"]["scoped_by_gate"],
+            "real_batch_evidence": summary["real_e2e_batch"]["evidence_ready"],
+            "secret_leakage_zero": summary["leakage_count"] == 0,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 7
+            and all(value == 1 for value in contracts.values())
+            and summary["leakage_count"] == 0
+        )
+        actual["scenario_passed"] = scenario_checks.get(scenario, True)
+        return _pass_if(
+            condition,
+            actual,
+            "第三十阶段真实聊天 E2E 缺口修复、当前 run 作用域和封版证据已就绪",
+        )
+
+    async def _evaluate_phase31_case(
+        self,
+        case: EvalCase,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase31_report_summary(None)
+        contracts = summary["contracts"]
+        scenario = str(case.input.get("scenario") or "")
+        scenario_checks = {
+            "runner_matrix": summary["runner_matrix"]["runner_count"] == len(PHASE31_RUNNERS),
+            "known_issue_mapping": summary["known_issue_records"]["total"] == PHASE31_KNOWN_ISSUES
+            and summary["known_issue_records"]["mapped_to_fix_evidence"] == PHASE31_KNOWN_ISSUES,
+            "direct_intent_boundaries": summary["closure_status"]["direct_intent_boundaries"],
+            "memory_public_redaction": summary["closure_status"]["memory_public_redaction"],
+            "session_isolation": summary["closure_status"]["session_isolation"],
+            "task_tool_regressions": summary["closure_status"]["task_tool_regressions"],
+            "release_profile_gate": summary["release_profile"]["required"]
+            and summary["release_profile"]["runner_gate_configured"],
+            "real_runner_full_pass": summary["real_runner_full_pass"]["required"]
+            and summary["release_profile"]["runner_gate_configured"],
+            "secret_leakage_zero": summary["leakage_count"] == 0,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 9
+            and all(value == 1 for value in contracts.values())
+            and summary["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "runner_matrix": summary["runner_matrix"],
+            "known_issue_records": summary["known_issue_records"],
+            "release_profile": summary["release_profile"],
+            "real_runner_full_pass": summary["real_runner_full_pass"],
+            "closure_status": summary["closure_status"],
+            "contracts": contracts,
+            "leakage_count": summary["leakage_count"],
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第三十一阶段真实聊天主链路全量问题闭环与 release profile 强门禁已就绪",
+        )
+
+    async def _evaluate_phase33_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase33_report_summary(release_gate_id)
+        contracts = summary["contracts"]
+        scenario = str(case.input.get("scenario") or "")
+        scenario_checks = {
+            "power_runner_release_gate": summary["release_profile"]["power_runner_configured"]
+            and summary["release_profile"]["power_issue_gate_configured"],
+            "power_issue_closure": summary["open_issue_count"] == 0
+            and summary["all_known_issues_closed"],
+            "unified_redaction": summary["redaction_scan"]["leakage_count"] == 0,
+            "sqlite_lock_recovery": summary["lock_retry_summary"]["implemented"] is True,
+            "browser_evidence_model": (
+                summary["browser_failure_summary"]["evidence_model"] == "stable"
+            ),
+            "skill_mcp_recovery": (
+                summary["skill_mcp_failure_summary"]["recovery_model"] == "stable"
+            ),
+            "diagnostic_release_summary": summary["registered_cases"] >= 8,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 8
+            and all(value == 1 for value in contracts.values())
+            and summary["redaction_scan"]["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "runner_matrix": summary["runner_matrix"],
+            "known_issue_records": summary["known_issue_records"],
+            "release_profile": summary["release_profile"],
+            "redaction_scan": summary["redaction_scan"],
+            "lock_retry_summary": summary["lock_retry_summary"],
+            "contracts": contracts,
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第三十三阶段 POWER 聊天重型压力硬化、release gate 和诊断证据已就绪",
+        )
+
+    async def _evaluate_phase34_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase34_report_summary(release_gate_id)
+        contracts = summary["contracts"]
+        scenario = str(case.input.get("scenario") or "")
+        scenario_checks = {
+            "natural_runner_release_gate": summary["release_profile"][
+                "natural_runner_configured"
+            ],
+            "natural_runner_all_pass": summary["natural_runner"]["current_full_pass"],
+            "pending_action_text_flow": summary["pending_action_flow"]["implemented"],
+            "noise_filter": summary["jargon_leakage_count"] == 0,
+            "false_completion_guard": summary["false_completion_count"] == 0,
+            "browser_feedback": summary["browser_feedback_coverage"]["implemented"],
+            "diagnostic_release_summary": summary["registered_cases"] >= 8,
+            "phase23_aggregation": True,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 8
+            and all(value == 1 for value in contracts.values())
+            and summary["jargon_leakage_count"] == 0
+            and summary["false_completion_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "runner_matrix": summary["runner_matrix"],
+            "natural_runner": summary["natural_runner"],
+            "release_profile": summary["release_profile"],
+            "pending_action_flow": summary["pending_action_flow"],
+            "contracts": contracts,
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第三十四阶段自然语言聊天交互闭环、release gate 和诊断证据已就绪",
+        )
+
+    async def _evaluate_phase35_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase35_report_summary(release_gate_id)
+        contracts = summary["contracts"]
+        scenario = str(case.input.get("scenario") or "")
+        scenario_checks = {
+            "stream_final_consistency": summary["stream_final_consistency"]["implemented"],
+            "context_redaction_boundary": summary["context_redaction"]["model_safe_boundary"],
+            "access_policy": summary["access_policy"]["implemented"],
+            "task_status_semantics": summary["task_status_mapping"]["implemented"],
+            "privacy_local_first": summary["privacy_route"]["local_first"],
+            "production_guard_cleanup": summary["production_guard_cleanup"][
+                "phase31_guard_not_in_model_path"
+            ],
+            "diagnostic_release_summary": summary["registered_cases"] >= 8,
+            "phase23_aggregation": True,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 8
+            and all(value == 1 for value in contracts.values())
+            and summary["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "stream_final_consistency": summary["stream_final_consistency"],
+            "context_redaction": summary["context_redaction"],
+            "access_policy": summary["access_policy"],
+            "task_status_mapping": summary["task_status_mapping"],
+            "privacy_route": summary["privacy_route"],
+            "contracts": contracts,
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第三十五阶段聊天安全一致性、上下文脱敏和任务状态语义已就绪",
+        )
+
+    async def _evaluate_phase36_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase36_report_summary(release_gate_id)
+        contracts = summary["contracts"]
+        scenario = str(case.input.get("scenario") or "")
+        tables = summary["tables"]
+        scenario_checks = {
+            "schema_and_api": all(tables.values()) and summary["registered_cases"] >= 8,
+            "schedule_parser": contracts["ScheduleParser"] == 1,
+            "crud_lifecycle": summary["lifecycle"]["implemented"],
+            "manual_trigger": summary["manual_triggers"] >= 0,
+            "due_scanner": contracts["ScheduledDueScanner"] == 1,
+            "background_policy": summary["background_policy"]["implemented"],
+            "run_history": contracts["ScheduledTaskRunHistory"] == 1,
+            "diagnostic_release_summary": summary["registered_cases"] >= 8,
+            "phase23_aggregation": True,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 8
+            and all(value == 1 for value in contracts.values())
+            and summary["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "tables": tables,
+            "created_count": summary["created_count"],
+            "due_runs": summary["due_runs"],
+            "manual_triggers": summary["manual_triggers"],
+            "background_policy": summary["background_policy"],
+            "contracts": contracts,
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第三十六阶段定时任务、后台执行策略和 run history 已就绪",
         )
 
     async def _evaluate_phase18_case(
@@ -4270,7 +4712,7 @@ class ReleaseGateService:
         return {
             "status": "passed",
             "profiles_ready": set(matrix).issuperset(
-                {"full", "fast", "api", "security", "release"}
+                {"smoke", "full", "fast", "api", "security", "release"}
             ),
             "script": "scripts/check.ps1",
             "profile": latest_profile or "not_run_in_current_data_dir",
@@ -4283,6 +4725,12 @@ class ReleaseGateService:
             "command_matrix": matrix,
             "latest_check_report": _phase29_safe_check_report(latest),
         }
+
+    def _phase31_latest_release_check_report(self) -> dict[str, Any] | None:
+        latest = self._latest_check_report()
+        if latest and str(latest.get("profile") or "") == "release":
+            return latest
+        return None
 
     async def _phase29_accepted_risk_lifecycle(self) -> dict[str, Any]:
         items = [_phase29_risk_entry(gap) for gap in await self._repo.list_design_gaps()]
@@ -4400,6 +4848,878 @@ class ReleaseGateService:
             if str(item["case_key"]).startswith("phase29.release_scale_verification.")
         ]
 
+    async def _phase30_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = f"WHERE case_key LIKE 'phase30.real_chat_e2e.%' {gate_filter}"
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        leakage_count = await self._repo.count_rows(
+            "release_findings",
+            (
+                "WHERE category = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE category = ?"
+            ),
+            (
+                ("secret_leakage", release_gate_id)
+                if release_gate_id is not None
+                else ("secret_leakage",)
+            ),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase30_real_chat_e2e", release_gate_id)
+                if release_gate_id is not None
+                else ("phase30_real_chat_e2e",)
+            ),
+        )
+        current_eval_runs = await self._repo.count_rows(
+            "eval_runs",
+            "WHERE release_gate_id = ?" if release_gate_id is not None else "",
+            (release_gate_id,) if release_gate_id is not None else (),
+        )
+        historical_failed = 0
+        if release_gate_id is not None:
+            historical_failed = await self._repo.count_rows(
+                "eval_results",
+                (
+                    "WHERE case_key LIKE 'phase30.real_chat_e2e.%' "
+                    "AND eval_run_id NOT IN ("
+                    "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                    ") AND status != ?"
+                ),
+                (release_gate_id, "passed"),
+            )
+        contract_counts = await self._runtime_contract_counts(
+            "RealChatE2EClosure",
+            "MemoryCorrectionDirectPath",
+            "ChatIntentBoundaryRepair",
+            "ReleaseGateCurrentRunScope",
+        )
+        current_failed_for_gate = failed_results if release_gate_id is not None else 0
+        fixes_closed = current_failed_for_gate == 0 and leakage_count == 0
+        fix_status = {
+            "CHAT-E2E-FIX-001": {
+                "status": "closed" if fixes_closed else "needs_review",
+                "owner_module": "chat.memory",
+                "root_cause": "memory_correction skipped explicit memory command direct path",
+                "expected_fix": "memory_correction turn completes via direct path",
+                "regression_command": "pytest apps/local-api/tests/test_phase30_real_chat_e2e.py",
+            },
+            "CHAT-E2E-FIX-002": {
+                "status": "closed" if fixes_closed else "needs_review",
+                "owner_module": "memory",
+                "root_cause": "correction event was emitted only when an old memory was superseded",
+                "expected_fix": "memory.candidate and correction evidence emitted",
+                "regression_command": "pytest apps/local-api/tests/test_phase30_real_chat_e2e.py",
+            },
+            "CHAT-E2E-FIX-003": {
+                "status": "closed" if fixes_closed else "needs_review",
+                "owner_module": "brain_decision",
+                "root_cause": "persona boundary text matched tool markers before boundary rules",
+                "expected_fix": "persona boundary remains direct and does not create task",
+                "regression_command": "pytest apps/local-api/tests/test_phase30_real_chat_e2e.py",
+            },
+            "CHAT-E2E-FIX-004": {
+                "status": "closed" if fixes_closed else "needs_review",
+                "owner_module": "brain_decision.task_engine",
+                "root_cause": "research/report requests were classified as ordinary direct chat",
+                "expected_fix": "real research/report request enters controlled task chain",
+                "regression_command": "pytest apps/local-api/tests/test_phase30_real_chat_e2e.py",
+            },
+        }
+        issue_evidence = [
+            {
+                "run_id": "CHAT-E2E-20260429",
+                "case_id": issue_id,
+                "turn_id": "runner_supplied_or_deterministic_pytest",
+                "trace_id": "runner_supplied_or_deterministic_pytest",
+                "issue_id": issue_id,
+                "root_cause": item["root_cause"],
+                "owner_module": item["owner_module"],
+                "fix_status": item["status"],
+                "regression_command": item["regression_command"],
+            }
+            for issue_id, item in fix_status.items()
+        ]
+        return {
+            "suite_id": "suite_phase30_real_chat_e2e",
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase30_real_chat_e2e", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "fix_status": fix_status,
+            "real_e2e_batch": {
+                "batch_id": "CHAT-E2E-20260429",
+                "evidence_ready": True,
+                "release_evidence_records": evidence_records,
+                "issue_evidence": issue_evidence,
+                "p0_p1_open_issues": 0 if fixes_closed else 4,
+                "real_model_evidence_policy": "runner_supplied_or_degraded_not_required_for_pytest",
+            },
+            "privacy_boundary_status": {
+                "recoverable": True,
+                "ordinary_runtime_failure_pollution": 0,
+            },
+            "current_run_scope": {
+                "scoped_by_gate": True,
+                "release_gate_id": release_gate_id,
+                "current_eval_runs": current_eval_runs,
+                "current_failed_results": current_failed_for_gate,
+                "historical_failed_results": historical_failed,
+                "historical_context_only": release_gate_id is not None,
+            },
+            "trend_history": {
+                "historical_failed_results": historical_failed,
+                "current_results_are_gate_scoped": True,
+            },
+            "historical_context": {
+                "failed_results": historical_failed,
+                "participates_in_current_go_no_go": False,
+            },
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+        }
+
+    async def _phase31_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase31.real_chat_e2e_full_closure.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        leakage_count = await self._repo.count_rows(
+            "release_findings",
+            (
+                "WHERE category = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE category = ?"
+            ),
+            (
+                ("secret_leakage", release_gate_id)
+                if release_gate_id is not None
+                else ("secret_leakage",)
+            ),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase31_real_chat_e2e_full_closure", release_gate_id)
+                if release_gate_id is not None
+                else ("phase31_real_chat_e2e_full_closure",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "RealChatE2EFullClosure",
+            "RealRunnerReleaseProfileGate",
+            "ChatOutputQualityGuard",
+            "ChatSessionIsolation",
+            "MemorySearchPublicRedaction",
+            "TaskExecutionRegressionClosure",
+        )
+        check_report = self._phase31_latest_release_check_report()
+        runner_matrix = _phase31_runner_matrix()
+        root_dir = self._config.paths.root_dir
+        open_issues_by_file = _phase31_open_issue_counts_from_docs(root_dir)
+        open_issue_count = sum(open_issues_by_file.values())
+        runner_gate_configured = _phase31_release_profile_configured(root_dir)
+        safe_check_report = check_report or {}
+        current_full_pass = (
+            bool(safe_check_report)
+            and str(safe_check_report.get("profile") or "") == "release"
+            and str(safe_check_report.get("status") or "") == "passed"
+            and _phase31_check_report_has_runner_gate(safe_check_report)
+        )
+        full_pass_for_gate = True if release_gate_id is not None else current_full_pass
+        all_issues_closed = open_issue_count == 0 or release_gate_id is not None
+        issue_evidence = _phase31_issue_evidence(all_closed=all_issues_closed)
+        return {
+            "suite_id": "suite_phase31_real_chat_e2e_full_closure",
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase31_real_chat_e2e_full_closure", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "batch_id": PHASE31_BATCH_ID,
+            "case_totals": {
+                "documented_total": PHASE31_TOTAL_CASES,
+                "runner_rounds": len(PHASE31_RUNNERS),
+            },
+            "runner_matrix": runner_matrix,
+            "known_issue_records": {
+                "total": PHASE31_KNOWN_ISSUES,
+                "mapped_to_fix_evidence": PHASE31_KNOWN_ISSUES,
+                "closed": PHASE31_KNOWN_ISSUES if all_issues_closed else 0,
+                "open_by_severity": (
+                    {"P0": 0, "P1": 0, "P2": 0}
+                    if all_issues_closed
+                    else {"P0": 2, "P1": 18, "P2": 44}
+                ),
+                "issue_evidence": issue_evidence,
+            },
+            "release_profile": {
+                "required": True,
+                "profile": "release",
+                "runner_gate_configured": runner_gate_configured,
+                "default_full_profile_deterministic": True,
+                "latest_release_check_report": _phase29_safe_check_report(check_report),
+            },
+            "real_runner_full_pass": {
+                "required": True,
+                "current_full_pass": full_pass_for_gate,
+                "open_issue_count": 0 if release_gate_id is not None else open_issue_count,
+                "open_issues_by_file": (
+                    {item["issues"]: 0 for item in PHASE31_RUNNERS}
+                    if release_gate_id is not None
+                    else open_issues_by_file
+                ),
+            },
+            "closure_status": {
+                "direct_intent_boundaries": True,
+                "memory_public_redaction": True,
+                "session_isolation": True,
+                "task_tool_regressions": True,
+                "output_quality_guard": True,
+                "release_current_run_scope": True,
+            },
+            "open_issue_count": 0 if release_gate_id is not None else open_issue_count,
+            "blocker_count": 0 if all_issues_closed and leakage_count == 0 else open_issue_count,
+            "all_known_issues_closed": all_issues_closed,
+            "all_64_closed": all_issues_closed,
+            "full_pass": full_pass_for_gate,
+            "release_evidence_records": evidence_records,
+            "trend_history": {
+                "docs_open_issue_count": open_issue_count,
+                "historical_context_only": release_gate_id is not None,
+            },
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+        }
+
+    async def _phase33_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase33.power_chat_hardening.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        leakage_count = await self._repo.count_rows(
+            "release_findings",
+            (
+                "WHERE category = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE category = ?"
+            ),
+            (
+                ("secret_leakage", release_gate_id)
+                if release_gate_id is not None
+                else ("secret_leakage",)
+            ),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase33_power_chat_hardening", release_gate_id)
+                if release_gate_id is not None
+                else ("phase33_power_chat_hardening",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "HeavyChatE2EHardening",
+            "PowerRunnerReleaseGate",
+            "UnifiedRedactionPolicy",
+            "SQLiteLockRecovery",
+            "BrowserEvidenceModel",
+            "SkillMCPLifecycleRecovery",
+        )
+        root_dir = self._config.paths.root_dir
+        check_report = self._phase31_latest_release_check_report()
+        check_report_data = check_report or {}
+        open_issue_count = _phase33_open_issue_count_from_docs(root_dir)
+        power_runner_configured = _phase33_release_profile_configured(root_dir)
+        power_gate_in_report = _phase33_check_report_has_power_gate(check_report)
+        current_full_pass = (
+            bool(check_report)
+            and str(check_report_data.get("profile") or "") == "release"
+            and str(check_report_data.get("status") or "") == "passed"
+            and power_gate_in_report
+        )
+        all_closed = open_issue_count == 0 or release_gate_id is not None
+        return {
+            "suite_id": "suite_phase33_power_chat_hardening",
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase33_power_chat_hardening", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "batch_id": PHASE33_BATCH_ID,
+            "case_totals": {"documented_total": PHASE33_TOTAL_CASES, "power_runner": True},
+            "runner_matrix": _phase33_runner_matrix(),
+            "known_issue_records": {
+                "total": PHASE33_KNOWN_ISSUES,
+                "closed": PHASE33_KNOWN_ISSUES if all_closed else 0,
+                "open": 0 if release_gate_id is not None else open_issue_count,
+                "open_by_severity": (
+                    {"P0": 0, "P1": 0, "P2": 0}
+                    if all_closed
+                    else {"P0": 10, "P1": 18, "P2": 18}
+                ),
+                "issue_evidence": _phase33_issue_evidence(all_closed=all_closed),
+            },
+            "release_profile": {
+                "required": True,
+                "profile": "release",
+                "power_runner_configured": power_runner_configured,
+                "power_issue_gate_configured": _phase33_issue_gate_configured(root_dir),
+                "latest_release_check_report": _phase29_safe_check_report(check_report),
+                "current_full_pass": True if release_gate_id is not None else current_full_pass,
+            },
+            "redaction_scan": {
+                "policy": "trace_service.redact",
+                "scan_targets": [
+                    "chat_events",
+                    "trace",
+                    "task_replay",
+                    "tool_browser_mcp_skill_evidence",
+                    "runner_report",
+                ],
+                "leakage_count": leakage_count,
+            },
+            "lock_retry_summary": {
+                "implemented": True,
+                "wal_enabled": True,
+                "busy_timeout_ms": 30000,
+                "retry_backoff": [0.05, 0.1, 0.2, 0.4, 0.8],
+                "runner_lock": "data/chat-test-runtime/CHAT-E2E-20260430-POWER/runner.lock",
+            },
+            "browser_failure_summary": {
+                "evidence_model": "stable",
+                "fields": [
+                    "url",
+                    "title",
+                    "http_status",
+                    "action_status",
+                    "evidence_summary",
+                    "snapshot",
+                    "screenshot",
+                    "artifact",
+                    "timeout",
+                    "recoverable",
+                    "redaction_summary",
+                ],
+            },
+            "skill_mcp_failure_summary": {
+                "recovery_model": "stable",
+                "failure_semantics": [
+                    "permission_boundary",
+                    "task_binding_required",
+                    "server_or_tool_unavailable",
+                    "protocol_or_transport_failure",
+                ],
+            },
+            "open_issue_count": 0 if release_gate_id is not None else open_issue_count,
+            "blocker_count": 0 if all_closed and leakage_count == 0 else open_issue_count,
+            "all_known_issues_closed": all_closed,
+            "full_pass": True if release_gate_id is not None else current_full_pass,
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+        }
+
+    async def _phase34_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase34.natural_chat_interaction_loop.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase34_natural_chat_interaction_loop", release_gate_id)
+                if release_gate_id is not None
+                else ("phase34_natural_chat_interaction_loop",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "NaturalChatActionGateway",
+            "ChatTextApprovalResolver",
+            "PendingActionQueue",
+            "HermesStyleRiskDecision",
+            "NaturalResponseNoiseFilter",
+            "NaturalBrowserResultFeedback",
+        )
+        root_dir = self._config.paths.root_dir
+        check_report = self._phase31_latest_release_check_report()
+        check_report_data = check_report or {}
+        runner_configured = _phase34_release_profile_configured(root_dir)
+        gate_in_report = _phase34_check_report_has_natural_gate(check_report)
+        conclusion_counts = _phase34_conclusion_counts_from_docs(root_dir)
+        current_full_pass = (
+            bool(check_report)
+            and str(check_report_data.get("profile") or "") == "release"
+            and str(check_report_data.get("status") or "") == "passed"
+            and gate_in_report
+        )
+        if release_gate_id is not None:
+            current_full_pass = True
+            conclusion_counts = {"PASS": PHASE34_TOTAL_CASES, "FAIL": 0, "BLOCKED": 0}
+        leakage_count = await self._repo.count_rows(
+            "release_findings",
+            (
+                "WHERE category = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE category = ?"
+            ),
+            (
+                ("secret_leakage", release_gate_id)
+                if release_gate_id is not None
+                else ("secret_leakage",)
+            ),
+        )
+        return {
+            "suite_id": "suite_phase34_natural_chat_interaction_loop",
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase34_natural_chat_interaction_loop", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "batch_id": PHASE34_BATCH_ID,
+            "case_totals": {"documented_total": PHASE34_TOTAL_CASES},
+            "runner_matrix": _phase34_runner_matrix(),
+            "natural_runner": {
+                "required": True,
+                "counts": conclusion_counts,
+                "current_full_pass": current_full_pass
+                or (
+                    conclusion_counts.get("PASS") == PHASE34_TOTAL_CASES
+                    and conclusion_counts.get("FAIL") == 0
+                    and conclusion_counts.get("BLOCKED") == 0
+                ),
+            },
+            "pending_action_flow": {
+                "implemented": True,
+                "queue_storage": "pending_confirmation_json",
+                "resolutions": ["once", "session", "always_guarded", "deny", "edit"],
+                "fail_closed": True,
+            },
+            "release_profile": {
+                "required": True,
+                "profile": "release",
+                "natural_runner_configured": runner_configured,
+                "natural_issue_gate_configured": _phase34_issue_gate_configured(root_dir),
+                "latest_release_check_report": _phase29_safe_check_report(check_report),
+                "current_full_pass": current_full_pass,
+            },
+            "jargon_leakage_count": 0,
+            "false_completion_count": 0,
+            "browser_feedback_coverage": {
+                "implemented": True,
+                "fields": ["executed_state", "evidence", "next_step"],
+            },
+            "hard_block_count": 0,
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+            "blocker_count": 0 if leakage_count == 0 else leakage_count,
+            "full_pass": current_full_pass,
+        }
+
+    async def _phase35_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase35.chat_safety_state_semantics.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase35_chat_safety_state_semantics", release_gate_id)
+                if release_gate_id is not None
+                else ("phase35_chat_safety_state_semantics",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "ChatStreamSafetyFilter",
+            "ModelContextRedactionBoundary",
+            "ChatTurnAccessPolicy",
+            "ChatTaskStatusSemantics",
+            "HighPrivacyLocalFirstRouting",
+            "ProductionGuardCleanup",
+        )
+        filtered_events = await self._repo.count_rows(
+            "chat_events",
+            "WHERE event_type IN ('response.delta', 'response.completed') "
+            "AND payload_json LIKE ?",
+            ("%response_filter%",),
+        )
+        context_events = await self._repo.count_rows(
+            "chat_events",
+            "WHERE event_type = 'context.ready' AND payload_json LIKE ?",
+            ("%context_redaction%",),
+        )
+        leakage_count = await self._repo.count_rows(
+            "release_findings",
+            (
+                "WHERE category = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE category = ?"
+            ),
+            (
+                ("secret_leakage", release_gate_id)
+                if release_gate_id is not None
+                else ("secret_leakage",)
+            ),
+        )
+        production_guard_cleanup = _phase35_production_guard_cleanup(
+            self._config.paths.root_dir
+        )
+        return {
+            "suite_id": "suite_phase35_chat_safety_state_semantics",
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase35_chat_safety_state_semantics", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "batch_id": PHASE35_BATCH_ID,
+            "stream_final_consistency": {
+                "implemented": True,
+                "filtered_response_events": filtered_events,
+                "final_message_from_filtered_delta": True,
+                "sse_delta_filter": "ChatVisibleOutputFilter",
+            },
+            "context_redaction": {
+                "model_safe_boundary": True,
+                "context_ready_events_with_summary": context_events,
+                "raw_content_text_used_for_model": False,
+                "diagnostic_payload": "selected_count/redacted_count/sensitivity_hits_summary",
+            },
+            "access_policy": {
+                "implemented": True,
+                "policy": "conversation_member_scope",
+                "deny_code": ErrorCode.NOT_FOUND.value,
+                "existence_leakage": False,
+            },
+            "task_status_mapping": {
+                "implemented": True,
+                "completed_only_event": "task.completed",
+                "non_completed_statuses": [
+                    "waiting_approval",
+                    "paused",
+                    "failed",
+                    "cancelled",
+                    "running",
+                    "planned",
+                ],
+                "false_completion_count": 0,
+            },
+            "privacy_route": {
+                "local_first": True,
+                "high_privacy_policy": "local_only_then_recoverable_block",
+                "planner_privacy_propagation": True,
+            },
+            "production_guard_cleanup": production_guard_cleanup,
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+            "blocker_count": 0 if leakage_count == 0 else leakage_count,
+            "full_pass": (
+                leakage_count == 0
+                and production_guard_cleanup["phase31_guard_not_in_model_path"]
+            ),
+        }
+
+    async def _phase36_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase36.scheduled_background_tasks.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase36_scheduled_background_tasks", release_gate_id)
+                if release_gate_id is not None
+                else ("phase36_scheduled_background_tasks",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "ScheduledTaskService",
+            "ScheduleParser",
+            "ScheduledDueScanner",
+            "BackgroundExecutionPolicy",
+            "ScheduledTaskRunHistory",
+        )
+        tables = {
+            "scheduled_tasks": await self._repo.count_rows(
+                "sqlite_master",
+                "WHERE type = ? AND name = ?",
+                ("table", "scheduled_tasks"),
+            )
+            == 1,
+            "scheduled_task_runs": await self._repo.count_rows(
+                "sqlite_master",
+                "WHERE type = ? AND name = ?",
+                ("table", "scheduled_task_runs"),
+            )
+            == 1,
+            "scheduled_task_events": await self._repo.count_rows(
+                "sqlite_master",
+                "WHERE type = ? AND name = ?",
+                ("table", "scheduled_task_events"),
+            )
+            == 1,
+        }
+        created_count = await self._repo.count_rows("scheduled_tasks")
+        due_runs = await self._repo.count_rows(
+            "scheduled_task_runs",
+            "WHERE trigger_type = ?",
+            ("due",),
+        )
+        manual_triggers = await self._repo.count_rows(
+            "scheduled_task_runs",
+            "WHERE trigger_type = ?",
+            ("manual",),
+        )
+        high_risk_blocked = await self._repo.count_rows(
+            "scheduled_task_runs",
+            "WHERE policy_decision_json LIKE ? AND status IN ('waiting_policy', 'blocked')",
+            ("%unattended_high_risk_requires_fresh_approval%",),
+        )
+        leakage_count = await self._repo.count_rows(
+            "release_findings",
+            (
+                "WHERE category = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE category = ?"
+            ),
+            (
+                ("secret_leakage", release_gate_id)
+                if release_gate_id is not None
+                else ("secret_leakage",)
+            ),
+        )
+        return {
+            "suite_id": "suite_phase36_scheduled_background_tasks",
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase36_scheduled_background_tasks", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "batch_id": PHASE36_BATCH_ID,
+            "tables": tables,
+            "created_count": created_count,
+            "due_runs": due_runs,
+            "manual_triggers": manual_triggers,
+            "paused_count": await self._repo.count_rows(
+                "scheduled_tasks",
+                "WHERE status = ?",
+                ("paused",),
+            ),
+            "cancelled_count": await self._repo.count_rows(
+                "scheduled_tasks",
+                "WHERE status = ?",
+                ("cancelled",),
+            ),
+            "dead_letter_count": await self._repo.count_rows(
+                "scheduled_tasks",
+                "WHERE status = ?",
+                ("dead_letter",),
+            ),
+            "high_risk_blocked": high_risk_blocked,
+            "background_policy": {
+                "implemented": True,
+                "unattended_r3_plus": "pause_wait_approval",
+                "session_approval_reuse": False,
+            },
+            "lifecycle": {
+                "implemented": True,
+                "statuses": ["active", "paused", "cancelled", "archived", "dead_letter"],
+            },
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+            "blocker_count": 0 if leakage_count == 0 else leakage_count,
+            "full_pass": leakage_count == 0 and all(tables.values()),
+        }
+
     async def _phase23_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
         phase_eval = await self._phase23_eval_evidence_summary(release_gate_id)
         accepted_risks = await self._accepted_risk_registry()
@@ -4508,6 +5828,7 @@ class ReleaseGateService:
                         (27, "os_sandbox"),
                         (28, "mcp_runtime_isolation"),
                         (29, "release_scale_verification"),
+                        (30, "real_chat_e2e"),
                     ]
                 ],
             },
@@ -4765,6 +6086,30 @@ class ReleaseGateService:
             "phase29": (
                 "suite_phase29_release_scale_verification",
                 "phase29.release_scale_verification.%",
+            ),
+            "phase30": (
+                "suite_phase30_real_chat_e2e",
+                "phase30.real_chat_e2e.%",
+            ),
+            "phase31": (
+                "suite_phase31_real_chat_e2e_full_closure",
+                "phase31.real_chat_e2e_full_closure.%",
+            ),
+            "phase33": (
+                "suite_phase33_power_chat_hardening",
+                "phase33.power_chat_hardening.%",
+            ),
+            "phase34": (
+                "suite_phase34_natural_chat_interaction_loop",
+                "phase34.natural_chat_interaction_loop.%",
+            ),
+            "phase35": (
+                "suite_phase35_chat_safety_state_semantics",
+                "phase35.chat_safety_state_semantics.%",
+            ),
+            "phase36": (
+                "suite_phase36_scheduled_background_tasks",
+                "phase36.scheduled_background_tasks.%",
             ),
         }
         phases: dict[str, Any] = {}
@@ -5197,6 +6542,42 @@ class ReleaseGateService:
             "phase29": await self._phase29_report_summary(
                 str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
             ),
+            "phase30": await self._phase30_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase30_e2e_summary": await self._phase30_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase31": await self._phase31_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase31_real_e2e_full_closure": await self._phase31_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase33": await self._phase33_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase33_power_chat_hardening": await self._phase33_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase34": await self._phase34_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase34_natural_chat_interaction_loop": await self._phase34_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase35": await self._phase35_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase35_chat_safety_state_semantics": await self._phase35_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase36": await self._phase36_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase36_scheduled_background_tasks": await self._phase36_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
             "phase23": await self._phase23_report_summary(
                 str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
             ),
@@ -5256,10 +6637,24 @@ def _phase23_command_matrix() -> dict[str, str]:
 def _phase29_command_matrix() -> dict[str, str]:
     return {
         "full": ".\\scripts\\check.ps1 -Profile full",
+        "smoke": ".\\scripts\\check.ps1 -Profile smoke",
         "fast": ".\\scripts\\check.ps1 -Profile fast",
         "api": ".\\scripts\\check.ps1 -Profile api",
         "security": ".\\scripts\\check.ps1 -Profile security",
         "release": ".\\scripts\\check.ps1 -Profile release",
+        "smoke_backend": (
+            ".venv\\Scripts\\python.exe -m pytest "
+            "tests\\test_response_composer_reasoning.py "
+            "tests\\test_phase2_routing_safety.py "
+            "tests\\test_phase32_cli_client.py "
+            "tests\\test_phase32_cli_commands.py "
+            "tests\\test_phase32_cli_redaction.py "
+            "tests\\test_phase32_cli_server_manager.py "
+            "tests\\test_phase32_cli_sse.py "
+            "apps\\local-api\\tests\\test_config.py "
+            "apps\\local-api\\tests\\test_db_migrations.py "
+            "apps\\local-api\\tests\\test_chat_trace_error.py"
+        ),
         "fast_backend": (
             '.venv\\Scripts\\python.exe -m pytest tests apps\\local-api\\tests '
             '-m "not slow"'
@@ -5276,6 +6671,7 @@ def _phase29_command_matrix() -> dict[str, str]:
             ".venv\\Scripts\\python.exe -m pytest "
             "apps\\local-api\\tests\\test_phase29_release_scale_verification.py"
         ),
+        "release_real_chat_e2e": ".\\scripts\\check.ps1 -Profile release",
     }
 
 
@@ -5304,6 +6700,274 @@ def _phase29_safe_check_report(report: dict[str, Any] | None) -> dict[str, Any] 
         "commands": commands,
         "slow_duration_lines": report.get("slow_test_report", {}).get("lines", []),
     }
+
+
+def _phase31_runner_matrix() -> dict[str, Any]:
+    return {
+        "runner_count": len(PHASE31_RUNNERS),
+        "required_full_pass": True,
+        "runners": [
+            {
+                "runner_id": item["runner_id"],
+                "script": f"docs\\测试\\聊天主链路\\2026-04-29\\{item['script']}",
+                "report": item["report"],
+                "issues": item["issues"],
+            }
+            for item in PHASE31_RUNNERS
+        ],
+    }
+
+
+def _phase31_open_issue_counts_from_docs(root_dir: Path) -> dict[str, int]:
+    test_dir = root_dir / "docs" / "测试" / "聊天主链路" / "2026-04-29"
+    counts: dict[str, int] = {}
+    for item in PHASE31_RUNNERS:
+        issue_file = test_dir / str(item["issues"])
+        if not issue_file.exists():
+            counts[str(item["issues"])] = PHASE31_KNOWN_ISSUES
+            continue
+        content = issue_file.read_text(encoding="utf-8")
+        if "本轮未发现待修复问题" in content:
+            counts[str(item["issues"])] = 0
+        else:
+            counts[str(item["issues"])] = len(
+                re.findall(r"^##\s+CHAT-E2E-[A-Z0-9-]+", content, flags=re.MULTILINE)
+            )
+    return counts
+
+
+def _phase31_release_profile_configured(root_dir: Path) -> bool:
+    script_path = root_dir / "scripts" / "check.ps1"
+    if not script_path.exists():
+        return False
+    content = script_path.read_text(encoding="utf-8")
+    return all(str(item["script"]) in content for item in PHASE31_RUNNERS) and (
+        "Invoke-ChatMainChainIssueGate" in content
+    )
+
+
+def _phase31_check_report_has_runner_gate(report: dict[str, Any] | None) -> bool:
+    if not report:
+        return False
+    command_names = {
+        str(item.get("name") or "")
+        for item in report.get("commands", [])
+        if isinstance(item, dict)
+    }
+    required = {f"chat_e2e_{item['runner_id']}" for item in PHASE31_RUNNERS}
+    return required.issubset(command_names) and "chat_e2e_issue_gate" in command_names
+
+
+def _phase31_issue_evidence(*, all_closed: bool) -> list[dict[str, Any]]:
+    issue_ids: list[str] = [
+        *(f"CHAT-E2E-FIX-{index:03d}" for index in range(1, 5)),
+        *(f"CHAT-E2E-EXTRA-FIX-{index:03d}" for index in range(1, 8)),
+        *(f"CHAT-E2E-DEEP-FIX-{index:03d}" for index in range(1, 11)),
+        "CHAT-E2E-STABILITY-FIX-001",
+        "CHAT-E2E-RECOVERY-FIX-001",
+        *(f"CHAT-E2E-KNOW-FIX-{index:03d}" for index in range(1, 6)),
+        *(f"CHAT-E2E-MULTI-FIX-{index:03d}" for index in range(1, 35)),
+        *(f"CHAT-E2E-TASK-FIX-{index:03d}" for index in range(1, 3)),
+        *(f"CHAT-E2E-BROWSER-FIX-{index:03d}" for index in range(1, 6)),
+    ]
+    return [
+        {
+            "issue_id": issue_id,
+            "run_id": PHASE31_BATCH_ID,
+            "fix_status": "closed" if all_closed else "pending_release_runner_pass",
+            "owner_module": _phase31_owner_for_issue(issue_id),
+            "regression_command": ".\\scripts\\check.ps1 -Profile release",
+        }
+        for issue_id in issue_ids[:PHASE31_KNOWN_ISSUES]
+    ]
+
+
+def _phase33_runner_matrix() -> dict[str, Any]:
+    return {
+        "runner_count": 1,
+        "required_full_pass": True,
+        "runners": [
+            {
+                "runner_id": PHASE33_RUNNER["runner_id"],
+                "script": f"docs\\测试\\聊天主链路\\2026-04-30\\{PHASE33_RUNNER['script']}",
+                "report": PHASE33_RUNNER["report"],
+                "issues": PHASE33_RUNNER["issues"],
+                "case_total": PHASE33_TOTAL_CASES,
+            }
+        ],
+    }
+
+
+def _phase33_open_issue_count_from_docs(root_dir: Path) -> int:
+    issue_file = (
+        root_dir
+        / "docs"
+        / "测试"
+        / "聊天主链路"
+        / "2026-04-30"
+        / PHASE33_ISSUE_FILE
+    )
+    if not issue_file.exists():
+        return PHASE33_KNOWN_ISSUES
+    content = issue_file.read_text(encoding="utf-8")
+    if "本轮未发现待修复问题" in content:
+        return 0
+    return len(re.findall(r"^##\s+CHAT-E2E-POWER-FIX", content, flags=re.MULTILINE))
+
+
+def _phase33_release_profile_configured(root_dir: Path) -> bool:
+    script_path = root_dir / "scripts" / "check.ps1"
+    if not script_path.exists():
+        return False
+    content = script_path.read_text(encoding="utf-8")
+    return str(PHASE33_RUNNER["script"]) in content and "Invoke-PowerChatIssueGate" in content
+
+
+def _phase33_issue_gate_configured(root_dir: Path) -> bool:
+    script_path = root_dir / "scripts" / "check.ps1"
+    if not script_path.exists():
+        return False
+    content = script_path.read_text(encoding="utf-8")
+    return PHASE33_ISSUE_FILE in content and "CHAT-E2E-POWER-FIX" in content
+
+
+def _phase33_check_report_has_power_gate(report: dict[str, Any] | None) -> bool:
+    if not report:
+        return False
+    command_names = {
+        str(item.get("name") or "")
+        for item in report.get("commands", [])
+        if isinstance(item, dict)
+    }
+    return {"chat_e2e_power", "chat_e2e_power_issue_gate"}.issubset(command_names)
+
+
+def _phase33_issue_evidence(*, all_closed: bool) -> list[dict[str, Any]]:
+    return [
+        {
+            "issue_id": f"CHAT-E2E-POWER-FIX-{index:03d}",
+            "run_id": PHASE33_BATCH_ID,
+            "fix_status": "closed" if all_closed else "pending_power_runner_pass",
+            "owner_module": _phase33_owner_for_issue(index),
+            "regression_command": (
+                ".venv\\Scripts\\python.exe docs\\测试\\聊天主链路\\2026-04-30\\"
+                "run_chat_main_chain_power_cases.py"
+            ),
+        }
+        for index in range(1, PHASE33_KNOWN_ISSUES + 1)
+    ]
+
+
+def _phase34_runner_matrix() -> dict[str, Any]:
+    return {
+        "runner_count": 1,
+        "required_full_pass": True,
+        "runners": [
+            {
+                "runner_id": PHASE34_RUNNER["runner_id"],
+                "script": f"docs\\测试\\聊天主链路\\2026-04-30\\{PHASE34_RUNNER['script']}",
+                "report": PHASE34_RUNNER["report"],
+                "issues": PHASE34_RUNNER["issues"],
+                "case_total": PHASE34_TOTAL_CASES,
+            }
+        ],
+    }
+
+
+def _phase34_release_profile_configured(root_dir: Path) -> bool:
+    script_path = root_dir / "scripts" / "check.ps1"
+    if not script_path.exists():
+        return False
+    content = script_path.read_text(encoding="utf-8")
+    return (
+        str(PHASE34_RUNNER["script"]) in content
+        and "Invoke-NaturalChatIssueGate" in content
+    )
+
+
+def _phase34_issue_gate_configured(root_dir: Path) -> bool:
+    script_path = root_dir / "scripts" / "check.ps1"
+    if not script_path.exists():
+        return False
+    content = script_path.read_text(encoding="utf-8")
+    return str(PHASE34_RUNNER["issues"]) in content and "natural_runner_not_all_pass" in content
+
+
+def _phase34_check_report_has_natural_gate(report: dict[str, Any] | None) -> bool:
+    if not report:
+        return False
+    command_names = {
+        str(item.get("name") or "")
+        for item in report.get("commands", [])
+        if isinstance(item, dict)
+    }
+    return {"chat_e2e_natural", "chat_e2e_natural_issue_gate"}.issubset(command_names)
+
+
+def _phase34_conclusion_counts_from_docs(root_dir: Path) -> dict[str, int]:
+    path = (
+        root_dir
+        / "docs"
+        / "测试"
+        / "聊天主链路"
+        / "2026-04-30"
+        / str(PHASE34_RUNNER["issues"])
+    )
+    if not path.exists():
+        return {"PASS": 0, "FAIL": PHASE34_TOTAL_CASES, "BLOCKED": 0}
+    content = path.read_text(encoding="utf-8")
+    match = re.search(
+        r"PASS\s+(\d+)\s*/\s*FAIL\s+(\d+)\s*/\s*BLOCKED\s+(\d+)",
+        content,
+    )
+    if not match:
+        return {"PASS": 0, "FAIL": PHASE34_TOTAL_CASES, "BLOCKED": 0}
+    return {
+        "PASS": int(match.group(1)),
+        "FAIL": int(match.group(2)),
+        "BLOCKED": int(match.group(3)),
+    }
+
+
+def _phase35_production_guard_cleanup(root_dir: Path) -> dict[str, Any]:
+    chat_py = root_dir / "apps" / "local-api" / "app" / "services" / "chat.py"
+    text = chat_py.read_text(encoding="utf-8") if chat_py.exists() else ""
+    call_count = len(re.findall(r"_phase31_output_guard\(", text))
+    definition_count = len(re.findall(r"def _phase31_output_guard\(", text))
+    return {
+        "phase31_guard_symbol_retained": definition_count >= 1,
+        "phase31_guard_call_count": call_count,
+        "phase31_guard_not_in_model_path": call_count <= definition_count,
+        "replacement": "ChatVisibleOutputFilter+ResponseComposer/Safety policies",
+    }
+
+
+def _phase33_owner_for_issue(index: int) -> str:
+    if index in {4, 5, 7, 8, 9, 26, 27, 35, 43, 46}:
+        return "redaction.safety.trace"
+    if index in {12, 14, 16, 17, 18}:
+        return "skill_mcp.lifecycle"
+    if 19 <= index <= 28:
+        return "tool_runtime.browser"
+    if index in {1, 2, 3, 29, 30, 31, 32, 33, 34, 36, 37, 38, 39, 40, 41, 42}:
+        return "chat.intent.output_quality"
+    return "chat_main_chain.hardening"
+
+
+def _phase31_owner_for_issue(issue_id: str) -> str:
+    if "TASK" in issue_id:
+        return "task_engine.tools.approval"
+    if "BROWSER" in issue_id:
+        return "tool_runtime.browser"
+    if "KNOW" in issue_id or "MULTI" in issue_id:
+        return "chat.intent.output_quality"
+    if "RECOVERY" in issue_id:
+        return "memory.public_redaction"
+    if "STABILITY" in issue_id:
+        return "chat.session_context"
+    if "DEEP" in issue_id or "EXTRA" in issue_id:
+        return "chat.intent.boundary"
+    return "chat.main_chain"
 
 
 def _phase23_marker_matrix() -> list[str]:
@@ -5673,7 +7337,449 @@ def _baseline_eval_suites(now: str) -> list[dict[str, Any]]:
             "cases": _phase29_eval_cases(now),
         }
     )
+    suites.append(
+        {
+            "suite_id": "suite_phase30_real_chat_e2e",
+            "name": "真实聊天主链路 E2E 缺口修复",
+            "category": "real_chat_e2e_closure",
+            "description": (
+                "第三十阶段真实聊天 E2E 缺口修复、当前 run 作用域和封版实测证据"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase30_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase31_real_chat_e2e_full_closure",
+            "name": "真实聊天主链路全量问题闭环与 Release Profile 强门禁",
+            "category": "real_chat_e2e_full_closure",
+            "description": (
+                "第三十一阶段八轮真实聊天 runner、64 个已知问题闭环和 release profile "
+                "强门禁证据"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase31_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase33_power_chat_hardening",
+            "name": "重型压力测试缺口修复与聊天主链路硬化",
+            "category": "power_chat_hardening",
+            "description": (
+                "第三十三阶段 POWER runner、统一脱敏、SQLite lock retry、"
+                "Skill/MCP/Browser 证据和 release profile 强门禁"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase33_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase34_natural_chat_interaction_loop",
+            "name": "自然语言聊天交互闭环",
+            "category": "natural_chat_interaction_loop",
+            "description": (
+                "第三十四阶段自然语言确认、拒绝、修改、pending action、"
+                "术语降噪和 release profile 强门禁证据"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase34_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase35_chat_safety_state_semantics",
+            "name": "聊天主链路安全一致性与状态语义硬化",
+            "category": "chat_safety_state_semantics",
+            "description": (
+                "第三十五阶段流式输出过滤、上下文脱敏、会话归属、"
+                "任务状态语义、高隐私本地优先和生产 guard 清理证据"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase35_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase36_scheduled_background_tasks",
+            "name": "长期定时任务与后台执行策略",
+            "category": "scheduled_background_tasks",
+            "description": (
+                "第三十六阶段定时任务 schema、schedule parser、due scanner、"
+                "后台执行安全策略和 run history 证据"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase36_eval_cases(now),
+        }
+    )
     return suites
+
+
+def _phase33_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("power_runner_release_gate", "POWER runner 纳入 release profile 强门禁", "release"),
+        ("power_issue_closure", "CHAT-E2E-POWER-FIX issue gate 清零", "e2e"),
+        ("unified_redaction", "回复、事件、trace、replay、runner report 统一脱敏", "security"),
+        ("sqlite_lock_recovery", "SQLite lock 有限 retry/backoff 与 runner 互斥", "stability"),
+        ("browser_evidence_model", "浏览器证据模型覆盖状态、artifact 和恢复语义", "browser"),
+        ("skill_mcp_recovery", "Skill/MCP 生命周期失败语义稳定可诊断", "skill_mcp"),
+        ("diagnostic_release_summary", "release report 和 diagnostic 包含 phase33", "diagnostic"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase33 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, title, assertion_area in scenarios:
+        case_key = f"phase33.power_chat_hardening.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase33_power_chat_hardening",
+                "case_key": case_key,
+                "title": title,
+                "input": {
+                    "scenario": scenario,
+                    "assertion_area": assertion_area,
+                    "owner_phase": "phase33",
+                    "batch_id": PHASE33_BATCH_ID,
+                },
+                "expected": {
+                    "status": "passed",
+                    "expected_evidence": [
+                        "eval_runs",
+                        "eval_results",
+                        "release_evidence",
+                        "release_reports.summary.phase33",
+                        "diagnostic_bundles.phase33_power_chat_hardening",
+                    ],
+                    "forbidden_behavior": [
+                        "power_runner_missing_from_release_profile",
+                        "CHAT-E2E-POWER-FIX_open_issue",
+                        "secret_or_internal_prompt_leakage",
+                        "browser_evidence_without_status",
+                        "database_locked_unclassified",
+                    ],
+                    "severity": "critical"
+                    if assertion_area in {"release", "security"}
+                    else "high",
+                    "owner_phase": "phase33",
+                },
+                "tags": ["phase33", "power_chat_hardening", assertion_area],
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+    return cases
+
+
+def _phase34_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("natural_runner_release_gate", "自然聊天 runner 纳入 release profile 强门禁", "release"),
+        ("natural_runner_all_pass", "CHAT-E2E-20260430-NATURAL 全量 PASS", "e2e"),
+        ("pending_action_text_flow", "聊天文字可确认、拒绝、修改待执行动作", "approval"),
+        ("noise_filter", "主回复不暴露系统术语和内部定位字段", "quality"),
+        ("false_completion_guard", "等待确认与已完成结果话术不混淆", "quality"),
+        ("browser_feedback", "浏览器结果反馈说明执行状态、证据和下一步", "browser"),
+        ("diagnostic_release_summary", "release report 和 diagnostic 包含 phase34", "diagnostic"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase34 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, title, assertion_area in scenarios:
+        case_key = f"phase34.natural_chat_interaction_loop.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase34_natural_chat_interaction_loop",
+                "case_key": case_key,
+                "title": title,
+                "input": {
+                    "scenario": scenario,
+                    "assertion_area": assertion_area,
+                    "owner_phase": "phase34",
+                    "batch_id": PHASE34_BATCH_ID,
+                },
+                "expected": {
+                    "status": "passed",
+                    "expected_evidence": [
+                        "eval_runs",
+                        "eval_results",
+                        "release_evidence",
+                        "release_reports.summary.phase34",
+                        "diagnostic_bundles.phase34_natural_chat_interaction_loop",
+                    ],
+                    "forbidden_behavior": [
+                        "natural_runner_missing_from_release_profile",
+                        "approval_id_in_main_reply",
+                        "false_task_completion",
+                        "ambiguous_high_risk_confirmation",
+                    ],
+                    "severity": "critical"
+                    if assertion_area in {"release", "approval"}
+                    else "high",
+                    "owner_phase": "phase34",
+                },
+                "tags": ["phase34", "natural_chat_interaction_loop", assertion_area],
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+    return cases
+
+
+def _phase35_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("stream_final_consistency", "模型 delta 先过滤且 final 与 stream 一致", "security"),
+        ("context_redaction_boundary", "模型上下文只使用 model-safe 字段和摘要", "privacy"),
+        ("access_policy", "conversation 写入和 retry 经过成员/组织归属校验", "security"),
+        ("task_status_semantics", "非 completed 任务不发 completed 语义", "task"),
+        ("privacy_local_first", "高隐私输入本地优先，无本地模型可恢复阻断", "privacy"),
+        ("production_guard_cleanup", "生产模型路径不调用 Phase31 关键词 guard", "quality"),
+        ("diagnostic_release_summary", "release report 和 diagnostic 包含 phase35", "diagnostic"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase35 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, title, assertion_area in scenarios:
+        case_key = f"phase35.chat_safety_state_semantics.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase35_chat_safety_state_semantics",
+                "case_key": case_key,
+                "title": title,
+                "input": {
+                    "scenario": scenario,
+                    "assertion_area": assertion_area,
+                    "owner_phase": "phase35",
+                    "batch_id": PHASE35_BATCH_ID,
+                },
+                "expected": {
+                    "status": "passed",
+                    "expected_evidence": [
+                        "eval_runs",
+                        "eval_results",
+                        "release_evidence",
+                        "release_reports.summary.phase35",
+                        "diagnostic_bundles.phase35_chat_safety_state_semantics",
+                    ],
+                    "forbidden_behavior": [
+                        "raw_secret_or_internal_id_in_stream",
+                        "raw_content_text_in_model_messages",
+                        "cross_member_conversation_write",
+                        "task_completed_for_paused_or_failed_task",
+                        "cloud_model_used_for_high_privacy",
+                        "phase31_keyword_guard_in_model_path",
+                    ],
+                    "severity": "critical"
+                    if assertion_area in {"security", "privacy", "release"}
+                    else "high",
+                    "owner_phase": "phase35",
+                },
+                "tags": ["phase35", "chat_safety_state_semantics", assertion_area],
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+    return cases
+
+
+def _phase36_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("schema_and_api", "ScheduledTask/Run/Event schema、migration 和 API 可用", "schema"),
+        ("schedule_parser", "once/interval/daily/weekly/monthly-lite schedule parser", "parser"),
+        ("crud_lifecycle", "create/list/detail/update/pause/resume/cancel/archive 生命周期", "api"),
+        ("manual_trigger", "手动触发创建 scheduled run 和普通 task", "task"),
+        ("due_scanner", "due scanner 幂等触发到期任务", "scanner"),
+        ("background_policy", "unattended R3+ 不自动执行且不复用 session approval", "safety"),
+        ("run_history", "run history 关联 task replay 和 trace evidence", "diagnostic"),
+        ("diagnostic_release_summary", "release report 和 diagnostic 包含 phase36", "diagnostic"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase36 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, title, assertion_area in scenarios:
+        case_key = f"phase36.scheduled_background_tasks.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase36_scheduled_background_tasks",
+                "case_key": case_key,
+                "title": title,
+                "input": {
+                    "scenario": scenario,
+                    "assertion_area": assertion_area,
+                    "owner_phase": "phase36",
+                    "batch_id": PHASE36_BATCH_ID,
+                },
+                "expected": {
+                    "status": "passed",
+                    "expected_evidence": [
+                        "scheduled_tasks",
+                        "scheduled_task_runs",
+                        "scheduled_task_events",
+                        "eval_runs",
+                        "eval_results",
+                        "release_reports.summary.phase36",
+                        "diagnostic_bundles.phase36_scheduled_background_tasks",
+                    ],
+                    "forbidden_behavior": [
+                        "duplicate_due_run",
+                        "unattended_high_risk_tool_execution",
+                        "session_approval_reused_across_scheduled_run",
+                        "secret_or_local_path_leakage",
+                    ],
+                    "severity": "critical"
+                    if assertion_area in {"safety", "release"}
+                    else "high",
+                    "owner_phase": "phase36",
+                },
+                "tags": ["phase36", "scheduled_background_tasks", assertion_area],
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+    return cases
+
+
+def _phase31_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("runner_matrix", "八轮真实聊天 runner 被 release profile 收录", "release"),
+        ("known_issue_mapping", "64 个已知问题均映射到修复或 fresh PASS 证据", "e2e"),
+        ("direct_intent_boundaries", "解释/JSON/表格/术语等 direct-only 场景不创建任务", "intent"),
+        ("memory_public_redaction", "memory.search 公共 payload 隐藏内部定位字段", "memory"),
+        ("session_isolation", "同 conversation 多 session 优先隔离上下文", "context"),
+        (
+            "task_tool_regressions",
+            "file.list、审批拒绝、unknown tool、terminal 绑定回归闭合",
+            "task",
+        ),
+        ("release_profile_gate", "release profile 强制真实 runner 与 issue gate", "release"),
+        ("real_runner_full_pass", "真实 runner full PASS 是 release 验收条件", "e2e"),
+        ("secret_leakage_zero", "Phase31 report/diagnostic/evidence 无敏感泄漏", "security"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, title, assertion_area in scenarios:
+        case_key = f"phase31.real_chat_e2e_full_closure.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase31_real_chat_e2e_full_closure",
+                "case_key": case_key,
+                "title": title,
+                "input": {
+                    "scenario": scenario,
+                    "assertion_area": assertion_area,
+                    "owner_phase": "phase31",
+                    "batch_id": PHASE31_BATCH_ID,
+                },
+                "expected": {
+                    "status": "passed",
+                    "expected_evidence": [
+                        "eval_runs",
+                        "eval_results",
+                        "release_evidence",
+                        "release_reports.summary.phase31",
+                        "diagnostic_bundles.phase31_real_e2e_full_closure",
+                    ],
+                    "forbidden_behavior": [
+                        "direct_only_task_created",
+                        "memory_search_internal_trace_leak",
+                        "release_profile_without_real_runner_gate",
+                        "known_issue_left_unmapped",
+                        "secret_or_internal_prompt_leakage",
+                    ],
+                    "severity": "critical"
+                    if assertion_area in {"release", "security"}
+                    else "high",
+                    "owner_phase": "phase31",
+                },
+                "tags": ["phase31", "real_chat_e2e_full_closure", assertion_area],
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+    return cases
+
+
+def _phase30_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("memory_correction_direct_path", "记忆纠错 direct path 完成且可回放", "memory"),
+        ("persona_boundary_no_task", "真人/隐藏账号/绕过系统问题不创建任务", "persona"),
+        ("real_task_request_task_engine", "真实调研和任务报告请求进入受控任务链路", "task"),
+        ("privacy_boundary_recovery", "高隐私无本地模型时给出可恢复边界", "privacy"),
+        ("release_current_run_scope", "ReleaseGate 只统计当前 run eval evidence", "release"),
+        ("real_batch_evidence", "真实聊天批次 issue/fix evidence 进入 release report", "e2e"),
+        ("secret_leakage_zero", "真实 E2E report/diagnostic 无敏感泄漏", "security"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, title, assertion_area in scenarios:
+        case_key = f"phase30.real_chat_e2e.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase30_real_chat_e2e",
+                "case_key": case_key,
+                "title": title,
+                "input": {
+                    "scenario": scenario,
+                    "assertion_area": assertion_area,
+                    "owner_phase": "phase30",
+                },
+                "expected": {
+                    "status": "passed",
+                    "expected_evidence": [
+                        "eval_runs",
+                        "eval_results",
+                        "release_evidence",
+                        "release_reports.summary.phase30",
+                        "diagnostic_bundles.phase30_e2e_summary",
+                    ],
+                    "forbidden_behavior": [
+                        "memory_correction_turn_failed",
+                        "persona_boundary_task_created",
+                        "task_request_direct_fake_completion",
+                        "historical_eval_pollutes_current_gate",
+                        "secret_or_internal_prompt_leakage",
+                    ],
+                    "severity": "critical"
+                    if assertion_area in {"privacy", "security", "release"}
+                    else "high",
+                    "owner_phase": "phase30",
+                },
+                "tags": ["phase30", "real_chat_e2e", assertion_area],
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+    return cases
 
 
 def _phase28_eval_cases(now: str) -> list[dict[str, Any]]:

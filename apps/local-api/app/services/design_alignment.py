@@ -167,6 +167,236 @@ class RuntimeContractService:
         )
         contracts = [
             _contract("ChatRuntime", "implemented", "chat turn state machine and SSE replay"),
+            _contract(
+                "RealChatE2EClosure",
+                "implemented",
+                "real chat E2E gap closure evidence for memory, persona, task and privacy paths",
+                details={"phase": "phase_30", "suite_id": "suite_phase30_real_chat_e2e"},
+            ),
+            _contract(
+                "MemoryCorrectionDirectPath",
+                "implemented",
+                "explicit chat memory corrections complete without model dependency",
+                details={
+                    "phase": "phase_30",
+                    "events": ["memory.candidate", "memory.correction_applied"],
+                    "fallback": "correction_recorded_when_old_memory_not_found",
+                },
+            ),
+            _contract(
+                "ChatIntentBoundaryRepair",
+                "implemented",
+                "persona boundary questions stay direct while real task requests enter TaskEngine",
+                details={
+                    "phase": "phase_30",
+                    "persona_boundary": "direct_no_task",
+                    "task_request": "workflow_or_capability_boundary",
+                },
+            ),
+            _contract(
+                "ReleaseGateCurrentRunScope",
+                "implemented",
+                "release summaries scope eval results to the current gate run by default",
+                details={
+                    "phase": "phase_30",
+                    "historical_results": "trend_history_only",
+                    "current_scope": "release_gate_id_eval_runs",
+                },
+            ),
+            _contract(
+                "RealChatE2EFullClosure",
+                "implemented",
+                "all known CHAT-E2E-20260429 P0/P1/P2 issues are tracked through Phase 31 evidence",
+                details={
+                    "phase": "phase_31",
+                    "suite_id": "suite_phase31_real_chat_e2e_full_closure",
+                    "known_issue_records": 64,
+                    "runner_rounds": 8,
+                },
+            ),
+            _contract(
+                "RealRunnerReleaseProfileGate",
+                "implemented",
+                "release profile requires the real chat runner matrix and issue gate",
+                details={
+                    "phase": "phase_31",
+                    "profile": "release",
+                    "default_full_profile_deterministic": True,
+                },
+            ),
+            _contract(
+                "ChatOutputQualityGuard",
+                "implemented",
+                "deterministic response shape guard for JSON, tables, terms, "
+                "short labels and structured knowledge",
+                details={"phase": "phase_31", "candidate_only": False},
+            ),
+            _contract(
+                "ChatSessionIsolation",
+                "implemented",
+                "chat context selection prioritizes same-session recent state "
+                "when a session is present",
+                details={"phase": "phase_31", "scope": "chat_main_chain"},
+            ),
+            _contract(
+                "MemorySearchPublicRedaction",
+                "implemented",
+                "public memory search results omit turn/message/trace internals "
+                "while explicit source API remains available",
+                details={
+                    "phase": "phase_31",
+                    "source_debug_api": "/api/memory/{memory_id}/source",
+                },
+            ),
+            _contract(
+                "TaskExecutionRegressionClosure",
+                "implemented",
+                "file.list, delete approval denial, unknown tool and terminal task "
+                "binding regressions are covered",
+                details={
+                    "phase": "phase_31",
+                    "suite_id": "suite_phase31_real_chat_e2e_full_closure",
+                },
+            ),
+            _contract(
+                "HeavyChatE2EHardening",
+                "implemented",
+                "POWER chat E2E hardening tracks redaction, lock retry, browser, "
+                "Skill and MCP evidence",
+                details={
+                    "phase": "phase_33",
+                    "suite_id": "suite_phase33_power_chat_hardening",
+                    "runner": "CHAT-E2E-20260430-POWER",
+                    "case_total": 108,
+                },
+            ),
+            _contract(
+                "PowerRunnerReleaseGate",
+                "implemented",
+                "release profile runs POWER runner and blocks on CHAT-E2E-POWER-FIX issue records",
+                details={
+                    "phase": "phase_33",
+                    "profile": "release",
+                    "issue_gate": "08-重型压力待修复问题.md",
+                },
+            ),
+            _contract(
+                "UnifiedRedactionPolicy",
+                "implemented",
+                "trace_service.redact is the shared source for chat, trace, task, "
+                "tool, browser, MCP and reports",
+                details={"phase": "phase_33", "policy": "trace_service.redact"},
+            ),
+            _contract(
+                "SQLiteLockRecovery",
+                "implemented",
+                "database execute/fetch/commit paths use bounded retry/backoff with "
+                "WAL and busy_timeout",
+                details={
+                    "phase": "phase_33",
+                    "busy_timeout_ms": 30000,
+                    "retry_backoff": [0.05, 0.1, 0.2, 0.4, 0.8],
+                },
+            ),
+            _contract(
+                "BrowserEvidenceModel",
+                "implemented",
+                "browser tools return stable url/title/http_status/action_status/"
+                "evidence/artifact fields",
+                details={"phase": "phase_33", "payload_redacted": True},
+            ),
+            _contract(
+                "SkillMCPLifecycleRecovery",
+                "implemented",
+                "Skill and MCP lifecycle failures are represented as stable "
+                "permission/capability/protocol evidence",
+                details={"phase": "phase_33", "untrusted_outputs": True},
+            ),
+            _contract(
+                "NaturalChatActionGateway",
+                "implemented",
+                "chat text resolves pending actions through natural confirm, deny and edit intents",
+                details={
+                    "phase": "phase_34",
+                    "suite_id": "suite_phase34_natural_chat_interaction_loop",
+                },
+            ),
+            _contract(
+                "ChatTextApprovalResolver",
+                "implemented",
+                "natural language confirmation binds to the current pending approval "
+                "before execution",
+                details={"phase": "phase_34", "fail_closed": True},
+            ),
+            _contract(
+                "PendingActionQueue",
+                "implemented",
+                "conversation working state stores user-readable pending action summaries",
+                details={"phase": "phase_34", "storage": "pending_confirmation_json"},
+            ),
+            _contract(
+                "HermesStyleRiskDecision",
+                "implemented",
+                "once/session/always/deny scopes are represented with hard-block guardrails",
+                details={"phase": "phase_34", "high_risk_always": "denied"},
+            ),
+            _contract(
+                "NaturalResponseNoiseFilter",
+                "implemented",
+                "ordinary chat replies hide approval/tool/trace IDs and raw risk codes",
+                details={"phase": "phase_34", "main_reply_only": True},
+            ),
+            _contract(
+                "NaturalBrowserResultFeedback",
+                "implemented",
+                "browser action replies distinguish waiting, completed, failed and evidence states",
+                details={"phase": "phase_34", "runner": "CHAT-E2E-20260430-NATURAL"},
+            ),
+            _contract(
+                "ChatStreamSafetyFilter",
+                "implemented",
+                "model deltas are redacted and noise-filtered before SSE and "
+                "chat event persistence",
+                details={
+                    "phase": "phase_35",
+                    "component": "ChatVisibleOutputFilter",
+                    "final_from_filtered_delta": True,
+                },
+            ),
+            _contract(
+                "ModelContextRedactionBoundary",
+                "implemented",
+                "model context consumes model-safe recent messages, summaries and "
+                "redacted memory blocks",
+                details={"phase": "phase_35", "raw_content_text_used_for_model": False},
+            ),
+            _contract(
+                "ChatTurnAccessPolicy",
+                "implemented",
+                "chat turn creation and retry validate conversation/member/organization ownership",
+                details={"phase": "phase_35", "deny_code": "NOT_FOUND"},
+            ),
+            _contract(
+                "ChatTaskStatusSemantics",
+                "implemented",
+                "chat emits task.completed only for truly completed tasks and presents "
+                "other states distinctly",
+                details={"phase": "phase_35", "false_completion_guard": True},
+            ),
+            _contract(
+                "HighPrivacyLocalFirstRouting",
+                "implemented",
+                "high privacy chat routes to local brains first and otherwise returns "
+                "recoverable privacy block",
+                details={"phase": "phase_35", "cloud_planner_allowed": False},
+            ),
+            _contract(
+                "ProductionGuardCleanup",
+                "implemented",
+                "production model path uses policy components instead of Phase31 "
+                "keyword output guard",
+                details={"phase": "phase_35", "replacement": "ChatVisibleOutputFilter"},
+            ),
             _contract("ContextGateway", "implemented", "context build with memory/resources"),
             _contract(
                 "BrainDecisionService",
@@ -791,9 +1021,9 @@ class RuntimeContractService:
             _contract(
                 "EvalEvidenceAggregator",
                 "implemented",
-                "aggregates Phase 17-29 eval evidence into release reports and diagnostics",
+                "aggregates Phase 17-36 eval evidence into release reports and diagnostics",
                 blocker_level="none",
-                details={"phase": "phase_29", "phase_range": "17-29"},
+                details={"phase": "phase_36", "phase_range": "17-36"},
             ),
             _contract(
                 "AcceptedRiskRegistry",
@@ -813,12 +1043,15 @@ class RuntimeContractService:
             _contract(
                 "CIVerificationMatrix",
                 "implemented",
-                "local CI-ready check profiles for full, fast, api, security and release",
+                (
+                    "local CI-ready check profiles for smoke, full, fast, api, security "
+                    "and release"
+                ),
                 blocker_level="none",
                 details={
                     "phase": "phase_29",
                     "script": "scripts/check.ps1",
-                    "profiles": ["full", "fast", "api", "security", "release"],
+                    "profiles": ["smoke", "full", "fast", "api", "security", "release"],
                     "external_ci_provider": False,
                 },
             ),
@@ -865,10 +1098,14 @@ class RuntimeContractService:
                 "release gate includes local CI-ready profiles and release-scale evidence",
                 blocker_level="none",
                 details={
-                    "phase": "phase_29",
+                    "phase": "phase_33",
                     "local_ci_profile": True,
                     "external_ci_provider": False,
                     "release_profile": "implemented",
+                    "real_chat_runner_release_profile_required": True,
+                    "power_runner_release_profile_required": True,
+                    "natural_chat_runner_release_profile_required": True,
+                    "default_full_profile_deterministic": True,
                     "accepted_risk": True,
                     "scope": "single-node-local",
                 },
@@ -877,6 +1114,45 @@ class RuntimeContractService:
                 "SettingsAPI",
                 "implemented",
                 "runtime settings read/write contract with whitelist validation",
+            ),
+            _contract(
+                "ScheduledTaskService",
+                "implemented",
+                "long-running and scheduled task backend API creates normal TaskEngine tasks",
+                blocker_level="none",
+                details={"phase": "phase_36", "execution_entry": "TaskEngine.create_task"},
+            ),
+            _contract(
+                "ScheduleParser",
+                "implemented",
+                "structured once, interval, daily, weekly, and monthly-lite schedule parser",
+                blocker_level="none",
+                details={"phase": "phase_36", "timezone_default": "Asia/Shanghai"},
+            ),
+            _contract(
+                "ScheduledDueScanner",
+                "implemented",
+                "local due scanner with idempotency key protection",
+                blocker_level="none",
+                details={"phase": "phase_36", "distributed_scheduler": False},
+            ),
+            _contract(
+                "BackgroundExecutionPolicy",
+                "implemented",
+                "unattended R3+ scheduled runs pause for fresh approval instead of auto execution",
+                blocker_level="none",
+                details={
+                    "phase": "phase_36",
+                    "session_approval_reuse": False,
+                    "high_risk_action": "pause_wait_approval",
+                },
+            ),
+            _contract(
+                "ScheduledTaskRunHistory",
+                "implemented",
+                "scheduled run history links trigger, policy, task and replay references",
+                blocker_level="none",
+                details={"phase": "phase_36", "replay_ref": "/api/tasks/{task_id}/replay"},
             ),
         ]
         for item in contracts:
@@ -1209,6 +1485,26 @@ class RuntimeContractService:
                     "check.ps1 supports full, fast, api, security and release profiles",
                     "release report includes phase29 release-scale evidence",
                     "accepted risk lifecycle marks missing hosted CI as unexpired",
+                ],
+                "status": "accepted_risk",
+            },
+            {
+                "gap_id": "gap_phase31_real_runner_release_profile_only",
+                "module_name": "RealRunnerReleaseProfileGate",
+                "current_behavior": (
+                    "Phase 31 keeps the default full profile deterministic and requires the "
+                    "real chat runner full PASS only in the release profile."
+                ),
+                "design_gap": (
+                    "Real model E2E runs are slower and environment-dependent, so hosted CI "
+                    "and model availability validation remain future release infrastructure work."
+                ),
+                "blocker_level": "none",
+                "fix_phase": "future_hosted_real_model_ci",
+                "acceptance_tests": [
+                    "check.ps1 -Profile release runs the real chat runner matrix",
+                    "release report includes summary.phase31",
+                    "default check.ps1 remains deterministic and stable",
                 ],
                 "status": "accepted_risk",
             },

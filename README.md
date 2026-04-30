@@ -31,6 +31,19 @@ GET http://127.0.0.1:8765/health
 GET http://127.0.0.1:8765/docs
 ```
 
+## CLI 入口
+
+第三十二阶段提供本地命令行入口。默认会连接 `local-api`，未启动时可自动拉起后端服务。
+
+```powershell
+.\scripts\cli.ps1
+.\scripts\cli.ps1 chat -m "你好，帮我总结今天的测试结果"
+.\scripts\cli.ps1 status
+.\scripts\cli.ps1 doctor
+```
+
+CLI 只调用公开 HTTP/SSE API，不直接访问数据库、工具运行时、Skill、MCP 或 SecretStore；终端输出会先做本地脱敏。
+
 ## 质量检查
 
 ```powershell
@@ -42,10 +55,17 @@ GET http://127.0.0.1:8765/docs
 常用分层命令：
 
 ```powershell
+.\scripts\check.ps1 -Profile smoke
+.\scripts\check.ps1 -Profile fast
+.\scripts\check.ps1 -Profile api
+.\scripts\check.ps1 -Profile security
+.\scripts\check.ps1 -Profile release
 .\.venv\Scripts\python.exe -m pytest tests apps\local-api\tests -m "not slow"
 .\.venv\Scripts\python.exe -m pytest apps\local-api\tests -m chat_main_chain
 .\.venv\Scripts\python.exe -m pytest tests\evals apps\local-api\tests -m "eval or security"
 ```
+
+建议日常开发先跑 `smoke`，它覆盖模型路由、CLI、配置、migration、基础 API/trace/error 等高信号用例；模块改动再补对应测试文件或 `api`。`release` 会串行运行真实聊天主链路 runner 和 issue gate，适合封版或阶段验收，不适合每次小改后执行。
 
 ## 运行边界
 

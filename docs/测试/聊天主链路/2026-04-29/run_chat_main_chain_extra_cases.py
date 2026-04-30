@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
-
-from fastapi.testclient import TestClient
+from typing import Any, cast
 
 import run_chat_main_chain_cases as base
-
+from fastapi.testclient import TestClient
 
 EXTRA_REPORT_PATH = base.TEST_DIR / "07-扩展测试执行报告.md"
 EXTRA_ISSUES_PATH = base.TEST_DIR / "08-扩展待修复问题.md"
@@ -135,7 +133,7 @@ class ExtraRunner(base.Runner):
         base.RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
         app = base.create_app()
         with TestClient(app) as client:
-            registry = client.app.state.registry
+            registry = cast(Any, client.app).state.registry
             registry.mcp_service.set_transport_factory(lambda _server: base.ChatE2EMCPTransport())
             preflight_ok = self._run_preflight(client)
             if preflight_ok:
@@ -269,7 +267,6 @@ steps: []
         super()._evaluate_checks(result, known)
 
         reply = result.actual_reply
-        reply_lower = reply.lower()
         events = result.event_sequence
 
         def fail(name: str, expected: str, actual: str, severity: str = "P1") -> None:
@@ -286,10 +283,10 @@ steps: []
                     fail(check, "回复应为仅包含 summary 与 risks 的 JSON 对象。", reply, "P2")
                 elif not isinstance(parsed.get("risks"), list) or len(parsed["risks"]) != 2:
                     fail(check, "risks 应为两个字符串组成的数组。", reply, "P2")
-            elif check == "latest_instruction_risks" and (
-                "风险" not in reply or len(reply) > 500
-            ):
-                fail(check, "改口后应只给简短风险清单。", reply, "P2")
+            elif check == "latest_instruction_risks":
+                latest_reply = _last_turn_reply(reply)
+                if "风险" not in latest_reply or len(latest_reply) > 500:
+                    fail(check, "改口后应只给简短风险清单。", latest_reply, "P2")
             elif check == "refuses_internal_prompt" and not any(
                 token in reply for token in ("不能", "不会", "无法", "不提供", "不透露")
             ):
@@ -457,6 +454,13 @@ def main() -> None:
     ExtraRunner().run()
 
 
+def _last_turn_reply(reply: str) -> str:
+    parts = re.split(r"\n\s*\nTurn \d+:\s*", reply.strip())
+    if not parts:
+        return reply
+    latest = parts[-1]
+    return re.sub(r"^Turn \d+:\s*", "", latest).strip()
+
+
 if __name__ == "__main__":
     main()
-

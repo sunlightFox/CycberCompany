@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from core_types import (
@@ -139,16 +140,17 @@ class TaskEngine:
             trace_id,
             TraceSpanType.TASK_CREATE,
             "create task",
-            input_data={"goal": request.goal, "owner_member_id": request.owner_member_id},
+            input_data={"goal": redact(request.goal), "owner_member_id": request.owner_member_id},
         )
         if request.mode_hint in {TaskMode.DIRECT, TaskMode.DIRECT_WITH_MEMORY}:
             raise AppError(
                 ErrorCode.TASK_PLAN_FAILED,
                 "direct/direct_with_memory 不是可执行任务模式",
                 status_code=422,
-                details={"mode_hint": request.mode_hint.value},
+                details={"mode_hint": request.mode_hint.value if request.mode_hint else None},
             )
         plan = await self._plan(task_id, request, trace_id=trace_id)
+        plan.steps = _normalize_plan_steps(plan.steps)
         phase19_evidence = await self._model_planner.build_evidence(
             task_id=task_id,
             request=request,
@@ -156,7 +158,7 @@ class TaskEngine:
             trace_id=trace_id,
         )
         if phase19_evidence is not None:
-            plan.steps = phase19_evidence.final_steps
+            plan.steps = _normalize_plan_steps(phase19_evidence.final_steps)
             plan.required_capabilities = _required_capabilities_for_steps(plan.steps)
             high_risk_steps = [
                 step for step in plan.steps if _risk_order(step.get("risk_level", "R1")) >= 3
@@ -221,6 +223,18 @@ class TaskEngine:
                         for prune in phase19_evidence.prunes
                     ]
                 )
+        if request.planner_context.get("scheduled_task"):
+            plan.preflight["phase36"] = {
+                "scheduled_task": redact(request.planner_context.get("scheduled_task", {})),
+                "scheduled_run_id": request.planner_context.get("scheduled_task", {}).get(
+                    "run_id"
+                ),
+                "background_execution": redact(
+                    request.planner_context.get("background_execution_policy", {})
+                ),
+                "session_approval_reuse": False,
+                "candidate_only": False,
+            }
         async with self._repo.transaction():
             await self._repo.insert_task(
                 {
@@ -324,16 +338,17 @@ class TaskEngine:
                 )
             await self._transition_task(task_id, TaskStatus.PLANNING.value)
             for index, step in enumerate(plan.steps, start=1):
+                step_key = str(step.get("step_key") or f"step_{index}")
                 await self._repo.insert_step(
                     {
                         "step_id": new_id("step"),
                         "organization_id": "org_default",
                         "task_id": task_id,
-                        "step_key": step["step_key"],
-                        "idempotency_key": f"{task_id}:{step['step_key']}",
+                        "step_key": step_key,
+                        "idempotency_key": f"{task_id}:{step_key}",
                         "sequence": index,
-                        "step_type": step["step_type"],
-                        "title": step["title"],
+                        "step_type": step.get("step_type", "compose"),
+                        "title": step.get("title") or _title_for_step(step, index),
                         "status": "pending",
                         "input": step.get("input", {}),
                         "risk_level": step.get("risk_level", "R1"),
@@ -1922,7 +1937,7 @@ class TaskEngine:
             "select task planner",
             input_data={
                 "task_id": task_id,
-                "goal": request.goal,
+                "goal": redact(request.goal),
                 "mode_hint": request.mode_hint.value if request.mode_hint else None,
             },
         )
@@ -2384,6 +2399,8 @@ def _risk_for_goal(goal: str) -> RiskLevel:
     lowered = goal.lower()
     if any(word in lowered for word in ["删除", "delete", "terminal", "终端", "命令"]):
         return RiskLevel.R5
+    if any(word in lowered for word in ["发布", "发帖", "发送", "提交", "publish"]):
+        return RiskLevel.R4
     if any(word in lowered for word in ["浏览器", "download", "下载", "overwrite"]):
         return RiskLevel.R3
     return RiskLevel.R2
@@ -2464,7 +2481,40 @@ def _steps_for_goal(request: TaskCreateRequest, mode: TaskMode) -> list[dict[str
                 },
             }
         )
-    if any(word in goal for word in ["删除", "delete"]):
+    has_delete_request = any(word in goal for word in ["删除", "delete", "删掉"])
+    has_explicit_download_target = _first_url(request.goal) is not None
+    if any(word in goal for word in ["下载", "download"]) and (
+        has_explicit_download_target or not has_delete_request
+    ):
+        steps.append(
+            {
+                "step_key": "browser_download",
+                "step_type": "tool_call",
+                "title": "下载文件",
+                "risk_level": "R3",
+                "input": {
+                    "tool_name": "browser.download",
+                    "args": {
+                        "url": _first_url(request.goal) or "http://127.0.0.1/download.bin",
+                        "display_name": _download_display_name(request.goal),
+                    },
+                },
+            }
+        )
+    if any(word in goal for word in ["截图", "screenshot"]):
+        steps.append(
+            {
+                "step_key": "browser_screenshot",
+                "step_type": "tool_call",
+                "title": "保存页面截图",
+                "risk_level": "R3",
+                "input": {
+                    "tool_name": "browser.screenshot",
+                    "args": {"url": _first_url(request.goal) or "http://127.0.0.1/"},
+                },
+            }
+        )
+    if has_delete_request:
         steps.append(
             {
                 "step_key": "file_delete",
@@ -2489,6 +2539,44 @@ def _steps_for_goal(request: TaskCreateRequest, mode: TaskMode) -> list[dict[str
     return steps
 
 
+def _normalize_plan_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for index, step in enumerate(steps, start=1):
+        normalized.append(
+            {
+                **step,
+                "step_key": str(step.get("step_key") or f"step_{index}"),
+                "step_type": str(step.get("step_type") or "compose"),
+                "title": str(step.get("title") or _title_for_step(step, index)),
+                "risk_level": str(step.get("risk_level") or "R1"),
+                "input": step.get("input") if isinstance(step.get("input"), dict) else {},
+            }
+        )
+    return normalized
+
+
+def _title_for_step(step: dict[str, Any], index: int) -> str:
+    step_type = str(step.get("step_type") or "compose")
+    step_key = str(step.get("step_key") or f"step_{index}")
+    tool_name = ""
+    raw_input = step.get("input")
+    if isinstance(raw_input, dict):
+        tool_name = str(raw_input.get("tool_name") or "")
+    if tool_name:
+        return f"执行 {tool_name}"
+    if step_type == "tool_call":
+        return "执行受控工具"
+    if step_type == "mcp_call":
+        return "调用 MCP 工具"
+    if step_type == "skill_run":
+        return "执行匹配 Skill"
+    if step_type == "skill_match":
+        return "匹配可用 Skill"
+    if step_key != f"step_{index}":
+        return step_key.replace("_", " ")
+    return "生成任务报告"
+
+
 def _title_from_goal(goal: str) -> str:
     text = " ".join(goal.strip().split())
     return text[:32] or "新任务"
@@ -2496,6 +2584,19 @@ def _title_from_goal(goal: str) -> str:
 
 def _risk_order(value: str) -> int:
     return int(str(value).removeprefix("R"))
+
+
+def _first_url(text: str) -> str | None:
+    match = re.search(r"https?://[^\s，。；;）)]+", text, flags=re.IGNORECASE)
+    return match.group(0) if match else None
+
+
+def _download_display_name(text: str) -> str:
+    url = _first_url(text)
+    if not url:
+        return "download.bin"
+    name = url.rsplit("/", 1)[-1].split("?", 1)[0]
+    return name or "download.bin"
 
 
 def _merge_edited_step_input(

@@ -415,10 +415,18 @@ def _intent_decision(
     if _unknown_input(clean):
         primary = "unknown"
         rule_hits.append("low_information_input")
+    elif _log_data_extraction(clean):
+        primary = "simple_question"
+        secondary.append("data_extraction")
+        rule_hits.append("data_extraction_question")
     elif _safe_plan_only(clean):
         primary = "simple_question"
         secondary.append("make_plan")
         rule_hits.append("safe_plan_only")
+    elif _persona_boundary_question(clean):
+        primary = "boundary_question"
+        secondary.append("persona_capability_boundary")
+        rule_hits.append("persona_boundary_question")
     elif _memory_write(clean):
         primary = "memory_update"
         needs_memory = True
@@ -452,6 +460,10 @@ def _intent_decision(
         needs_mcp = mcp_available
         needs_task = mcp_available
         rule_hits.append("mcp_keyword")
+    elif _real_task_request(clean):
+        primary = "task_request"
+        needs_task = True
+        rule_hits.append("real_task_request")
     elif _tool_request(clean):
         primary = "task_request"
         needs_tool = True
@@ -493,6 +505,9 @@ def _intent_decision(
     if _filesystem_scope_action(clean):
         secondary.append("filesystem_scope")
         risks.append("filesystem_scope_required")
+    if any(word in clean for word in ["下载", "截图"]):
+        secondary.append("browser_side_effect")
+        risks.append("browser_artifact_or_download")
     if any(word in clean for word in ["发帖", "发布", "发送", "提交"]):
         secondary.append("external_submit")
         risks.append("external_side_effect")
@@ -509,7 +524,11 @@ def _intent_decision(
                 "memory_query",
                 "memory_update",
             }
-        if semantic.tool_intents and not _safe_plan_only(clean):
+        if (
+            semantic.tool_intents
+            and not _safe_plan_only(clean)
+            and not _persona_boundary_question(clean)
+        ):
             primary = "task_request"
             needs_tool = True
             needs_task = True
@@ -603,6 +622,9 @@ def _mode_decision(
     elif intent.primary_intent == "creative_writing":
         submode = "writing"
         reasons.append("writing_direct")
+    elif intent.primary_intent == "boundary_question":
+        submode = "boundary_answer"
+        reasons.append("persona_capability_boundary")
     elif intent.primary_intent == "system_settings":
         mode = TaskMode.WORKFLOW.value
         planner_hint = "settings_guarded"
@@ -722,6 +744,8 @@ def _clarification_decision(
 ) -> dict[str, Any]:
     del mode
     conflicts = set(semantic.conflicts if semantic else [])
+    if intent.primary_intent == "boundary_question":
+        return _no_clarification()
     if "ambiguous_reference" in conflicts:
         return _clarify(
             "ambiguous_reference",
@@ -729,6 +753,13 @@ def _clarification_decision(
             clarification_type="ambiguous_reference",
         )
     if "old_goal_vs_new_goal" in conflicts:
+        if any(marker in text for marker in ["不对", "改成", "只做", "换成"]):
+            high_risk_change = bool(
+                {"high_risk_financial_or_signature", "external_side_effect"}
+                & set(intent.risk_signals)
+            )
+            if not high_risk_change:
+                return _no_clarification()
         return _clarify(
             "conflicting_context",
             ["你是要替换上一轮目标，还是在原方案上调整约束？"],
@@ -828,21 +859,90 @@ def _confidence(primary: str, rule_hits: list[str], risks: list[str], text: str)
 
 
 def _safe_plan_only(text: str) -> bool:
+    if _explicit_task_creation(text):
+        return False
+    real_execution_markers = [
+        "调研",
+        "检查",
+        "整理",
+        "基于当前仓库",
+        "基于这个仓库",
+    ]
+    real_deliverable_markers = [
+        "任务报告",
+        "生成报告",
+        "输出报告",
+        "验收证据",
+        "测试日志",
+        "执行报告",
+        "回归报告",
+    ]
+    if any(marker in text for marker in real_execution_markers) and any(
+        marker in text for marker in real_deliverable_markers
+    ):
+        return False
     return any(
         marker in text
         for marker in [
             "不要执行",
             "不执行",
             "别执行",
+            "不要创建任务",
+            "不要使用工具",
+            "不要使用浏览器",
+            "不要使用浏览器或工具",
+            "不要调用工具",
+            "不使用工具",
+            "不用工具",
+            "不要联网",
+            "不浏览",
             "只分析",
+            "只解释",
+            "请解释",
+            "解释",
             "只要方案",
             "只给方案",
             "只生成方案",
+            "只输出",
             "先给方案",
             "先写方案",
             "生成草稿",
             "只写草稿",
+            "总结",
+            "严格 JSON",
+            "只用 JSON",
+            "术语表",
+            "科普",
+            "学习路线",
+            "路线图",
+            "翻译",
+            "表格比较",
+            "用表格",
+            "设计原则",
+            "五条原则",
+            "知识总结",
+            "知识",
+            "概念",
+            "区别",
+            "压缩成",
+            "压缩为",
+            "归纳为",
+            "原则",
+            "验收原则",
+            "应如何记录",
+            "不要打开浏览器",
+            "不要安装",
+            "不要匹配",
+            "不要运行",
         ]
+    )
+
+
+def _log_data_extraction(text: str) -> bool:
+    return (
+        "日志片段" in text
+        or "最慢接口" in text
+        or ("500" in text and "错误" in text and "几次" in text)
     )
 
 
@@ -899,17 +999,115 @@ def _cancel_or_retry(text: str) -> bool:
 
 
 def _skill_request(text: str) -> bool:
+    if _safe_plan_only(text):
+        return False
     lowered = text.lower()
     return "skill" in lowered or "技能" in text
 
 
 def _mcp_request(text: str) -> bool:
+    if _safe_plan_only(text):
+        return False
     lowered = text.lower()
     return "mcp" in lowered or "外部服务" in text
 
 
+def _persona_boundary_question(text: str) -> bool:
+    lowered = text.lower()
+    identity_markers = [
+        "你是真人",
+        "你是人类",
+        "你是不是人",
+        "假装真人",
+        "真实主观意识",
+        "主观意识",
+        "pretend human",
+        "are you human",
+        "real person",
+    ]
+    hidden_capability_markers = [
+        "隐藏账号",
+        "隐藏账户",
+        "直接替我登录",
+        "替我登录",
+        "绕过系统",
+        "绕过安全",
+        "绕过审批",
+        "绕过权限",
+        "越权审批",
+        "忽略审批",
+        "不要审批",
+        "无视安全",
+        "直接操作",
+        "偷偷",
+        "后台偷偷",
+        "登录账号",
+        "后台账号",
+        "系统管理员",
+        "系统提示",
+        "内部提示",
+        "internal prompt",
+        "system prompt",
+        "root权限",
+        "系统密钥",
+        "私钥",
+        "private key",
+    ]
+    return any(marker in lowered or marker in text for marker in identity_markers) or any(
+        marker in text for marker in hidden_capability_markers
+    )
+
+
+def _explicit_task_creation(text: str) -> bool:
+    if "不要创建任务" in text or "不创建任务" in text:
+        return False
+    return any(
+        marker in text
+        for marker in [
+            "请创建一个任务",
+            "创建一个任务",
+            "请创建任务",
+            "创建任务",
+            "新建任务",
+        ]
+    )
+
+
+def _real_task_request(text: str) -> bool:
+    if _safe_plan_only(text) or _persona_boundary_question(text):
+        return False
+    if _explicit_task_creation(text):
+        return True
+    action_markers = [
+        "调研",
+        "研究",
+        "检查",
+        "整理",
+        "汇总",
+        "分析这些",
+        "基于当前仓库",
+        "基于这个仓库",
+        "读取这些",
+        "处理这些",
+    ]
+    deliverable_markers = [
+        "任务报告",
+        "生成报告",
+        "输出报告",
+        "验收证据",
+        "测试日志",
+        "执行报告",
+        "回归报告",
+    ]
+    if any(marker in text for marker in action_markers) and any(
+        marker in text for marker in deliverable_markers
+    ):
+        return True
+    return any(marker in text for marker in ["请调研", "帮我整理这些测试日志"])
+
+
 def _tool_request(text: str) -> bool:
-    if _safe_plan_only(text):
+    if _safe_plan_only(text) or _persona_boundary_question(text):
         return False
     return any(
         marker in text
@@ -919,13 +1117,14 @@ def _tool_request(text: str) -> bool:
             "执行",
             "发送",
             "登录",
+            "下载",
+            "截图",
             "浏览器",
             "文件夹",
             "删除",
             "清空",
             "覆盖",
             "移动",
-            "整理",
             "发帖",
             "发布",
             "购买",
@@ -940,7 +1139,9 @@ def _tool_request(text: str) -> bool:
 def _filesystem_scope_action(text: str) -> bool:
     if _safe_plan_only(text):
         return False
-    return any(marker in text for marker in ["文件夹", "目录", "文件", "整理", "移动"])
+    return any(marker in text for marker in ["文件夹", "目录", "文件", "移动"]) or any(
+        marker in text for marker in ["整理文件", "整理目录", "整理这些测试日志"]
+    )
 
 
 def _ambiguous_scope(text: str) -> bool:

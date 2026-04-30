@@ -111,8 +111,12 @@ class RuntimeContextGateway:
             if include_recent
             else []
         )
-        trimmed_messages = self._trim_messages(recent_messages)
         user_message = await self._chat_repo.get_message(turn["user_message_id"])
+        session_id = _session_id_from_message(user_message)
+        trimmed_messages = _same_session_messages(
+            self._trim_messages(recent_messages),
+            user_message,
+        )
         query_text = str(redact(user_message.get("content_text") if user_message else ""))
         memory_blocks = []
         if include_memory:
@@ -180,6 +184,7 @@ class RuntimeContextGateway:
                 recent_summary=_summary_with_working_state(
                     summary["summary_text"] if summary else None,
                     working_state,
+                    session_id,
                 ),
                 last_messages=trimmed_messages,
             ),
@@ -268,7 +273,8 @@ class RuntimeContextGateway:
         selected: list[dict[str, Any]] = []
         token_total = 0
         for item in reversed(messages):
-            redacted_text = str(redact(item.get("content_text") or ""))
+            raw_text = str(item.get("content_text") or "")
+            redacted_text = str(redact(raw_text))
             token_total += estimate_text_tokens(redacted_text)
             if token_total > self._token_budget and selected:
                 break
@@ -276,7 +282,18 @@ class RuntimeContextGateway:
                 {
                     "author_type": item["author_type"],
                     "content_text": redacted_text,
+                    "model_safe_content_text": redacted_text,
+                    "redaction_summary": {
+                        "applied": redacted_text != raw_text,
+                        "raw_chars": len(raw_text),
+                        "model_safe_chars": len(redacted_text),
+                    },
                     "created_at": item["created_at"],
+                    "session_id": (
+                        item.get("content", {}).get("session_id")
+                        if isinstance(item.get("content"), dict)
+                        else None
+                    ),
                 }
             )
         return list(reversed(selected))
@@ -284,6 +301,27 @@ class RuntimeContextGateway:
 
 def _keywords(text: str) -> list[str]:
     return [part for part in text.replace("：", " ").replace(":", " ").split()[:8] if part]
+
+
+def _same_session_messages(
+    messages: list[dict[str, Any]],
+    user_message: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    session_id = _session_id_from_message(user_message)
+    if not session_id:
+        return messages
+    filtered = [
+        message
+        for message in messages
+        if message.get("session_id") in {None, session_id}
+    ]
+    return filtered or messages[-2:]
+
+
+def _session_id_from_message(message: dict[str, Any] | None) -> str | None:
+    content = message.get("content") if message else {}
+    value = content.get("session_id") if isinstance(content, dict) else None
+    return str(value) if value else None
 
 
 def _memory_limit(context_decision: ContextDecision | None) -> int:
@@ -310,8 +348,12 @@ def _memory_layers(context_decision: ContextDecision | None) -> list[Any]:
 def _summary_with_working_state(
     summary_text: str | None,
     working_state: dict[str, Any] | None,
+    session_id: str | None = None,
 ) -> str | None:
     if not working_state:
+        return summary_text
+    state_session_id = working_state.get("session_id")
+    if session_id and state_session_id and str(state_session_id) != str(session_id):
         return summary_text
     lines = []
     if summary_text:

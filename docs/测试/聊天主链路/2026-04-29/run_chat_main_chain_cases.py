@@ -11,7 +11,7 @@ import traceback
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import anyio
 from fastapi.testclient import TestClient
@@ -326,7 +326,7 @@ class Runner:
         RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
         app = create_app()
         with TestClient(app) as client:
-            registry = client.app.state.registry
+            registry = cast(Any, client.app).state.registry
             registry.mcp_service.set_transport_factory(lambda _server: ChatE2EMCPTransport())
             preflight_ok = self._run_preflight(client)
             if preflight_ok:
@@ -483,7 +483,7 @@ class Runner:
 
     def _run_memory_source_case(self, client: TestClient, case: dict[str, Any]) -> CaseResult:
         memory_id = self.memory_ids[0] if self.memory_ids else None
-        source = (
+        source: dict[str, Any] = (
             self._request(client, "GET", f"/api/memory/{memory_id}/source")
             if memory_id
             else {"status_code": 0, "data": {"error": "no memory id from previous cases"}}
@@ -502,7 +502,8 @@ class Runner:
             expected=", ".join(case["checks"]),
             evidence={"memory_id": memory_id, "source": redact_value(source)},
         )
-        if source.get("status_code") != 200 or not source.get("data", {}).get("source"):
+        source_data = cast(dict[str, Any], source.get("data", {}))
+        if source.get("status_code") != 200 or not source_data.get("source"):
             self._fail_case(
                 result,
                 "P1",
@@ -568,7 +569,7 @@ class Runner:
         approval_id = first.get("data", {}).get("approval", {}).get("approval_id")
         if approval_id:
             self._approve_direct(registry, approval_id)
-        second = (
+        second: dict[str, Any] = (
             self._request(
                 client,
                 "POST",
@@ -578,8 +579,10 @@ class Runner:
             if approval_id
             else {"status_code": 0, "data": {"error": "approval not created"}}
         )
-        tool_call_id = second.get("data", {}).get("tool_call", {}).get("tool_call_id")
-        dlp = (
+        second_data = cast(dict[str, Any], second.get("data", {}))
+        tool_call = cast(dict[str, Any], second_data.get("tool_call", {}))
+        tool_call_id = tool_call.get("tool_call_id")
+        dlp: dict[str, Any] = (
             self._request(client, "GET", f"/api/tools/calls/{tool_call_id}/dlp")
             if tool_call_id
             else {"status_code": 0, "data": {"items": []}}
@@ -610,7 +613,8 @@ class Runner:
                 "审批后 terminal.run 应在沙箱内完成。",
                 json.dumps(second, ensure_ascii=False),
             )
-        if not dlp.get("data", {}).get("items"):
+        dlp_data = cast(dict[str, Any], dlp.get("data", {}))
+        if not dlp_data.get("items"):
             self._fail_case(
                 result,
                 "P2",
@@ -1162,7 +1166,7 @@ class Runner:
         )
         trace = self._request_optional(client, "GET", f"/api/traces/{data['trace_id']}")
         events = stream_events or [item.get("payload", {}) for item in persisted.get("items", [])]
-        context_ready = next(
+        context_ready: dict[str, Any] = next(
             (event.get("payload", {}) for event in events if event.get("event") == "context.ready"),
             {},
         )
@@ -1593,7 +1597,7 @@ def redact_value(value: Any) -> Any:
 
 def redact_text(text: str) -> str:
     patterns = [
-        (re.compile(r"sk-[A-Za-z0-9_-]{8,}"), "[REDACTED_API_KEY]"),
+        (re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{8,}"), "[REDACTED_API_KEY]"),
         (
             re.compile(
                 r"(?i)(api[_-]?key|token|password|passwd|pwd|cookie|private[_-]?key)\s*[:=]\s*['\"]?[^'\"\s,;}]+"

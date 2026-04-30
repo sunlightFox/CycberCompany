@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
@@ -16,6 +17,7 @@ from trace_service import TraceService, redact
 from app.core.errors import AppError
 from app.core.time import new_id, utc_now, utc_now_iso
 from app.db.repositories.asset_repo import AssetRepository
+from app.db.repositories.task_repo import TaskRepository
 from app.schemas.assets import (
     AssetHandleValidateRequest,
     AssetHandleValidateResponse,
@@ -26,6 +28,13 @@ from app.schemas.assets import (
 )
 from app.services.audit import AuditEventService
 from app.services.capability import CapabilityGraphService, capability_request
+from app.services.secrets import SecretStore
+
+
+@dataclass(frozen=True)
+class ToolResolvedAsset:
+    resolved: AssetResolveForToolResponse
+    secret_value: str | None
 
 
 class AssetBrokerService:
@@ -36,11 +45,15 @@ class AssetBrokerService:
         capability: CapabilityGraphService,
         trace_service: TraceService,
         audit_service: AuditEventService,
+        secret_store: SecretStore | None = None,
+        task_repo: TaskRepository | None = None,
     ) -> None:
         self._repo = repo
         self._capability = capability
         self._trace = trace_service
         self._audit = audit_service
+        self._secret_store = secret_store
+        self._task_repo = task_repo
 
     async def query(
         self,
@@ -201,7 +214,11 @@ class AssetBrokerService:
                     "资产句柄授权已失效",
                     status_code=403,
                 )
-            if action_requires_approval or decision.approval_required:
+            approved_for_action = await self._approval_covers_handle_action(
+                handle,
+                request,
+            )
+            if (action_requires_approval or decision.approval_required) and not approved_for_action:
                 raise AppError(
                     ErrorCode.APPROVAL_REQUIRED,
                     "该动作需要确认后才能执行",
@@ -276,6 +293,7 @@ class AssetBrokerService:
                 action=request.action,
                 conversation_id=request.conversation_id,
                 task_id=request.task_id,
+                approval_id=request.approval_id,
             ),
             trace_id=trace_id,
         )
@@ -331,10 +349,70 @@ class AssetBrokerService:
             expires_at=handle["expires_at"],
         )
 
+    async def resolve_secret_for_tool(
+        self,
+        handle_id: str,
+        request: AssetResolveForToolRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> ToolResolvedAsset:
+        resolved = await self.resolve_for_tool(handle_id, request, trace_id=trace_id)
+        asset = await self._repo.get_asset(resolved.asset_id)
+        secret_value = None
+        if asset is not None and asset.get("secret_ref") and self._secret_store is not None:
+            secret_value = self._secret_store.get_secret(str(asset["secret_ref"]))
+        await self._audit.write_event(
+            actor_type="member",
+            actor_id=request.subject_id,
+            action="asset.secret.resolved_for_tool",
+            object_type="asset_handle",
+            object_id=handle_id,
+            summary="资产密钥已在工具执行边界内解析",
+            risk_level=RiskLevel.R2,
+            payload={
+                "handle_id": handle_id,
+                "asset_id": resolved.asset_id,
+                "tool_name": request.tool_name,
+                "action": request.action,
+                "has_secret": secret_value is not None,
+            },
+            trace_id=trace_id,
+        )
+        return ToolResolvedAsset(resolved=resolved, secret_value=secret_value)
+
     async def list_handle_events(self, handle_id: str) -> list[dict[str, Any]]:
         if await self._repo.get_handle(handle_id) is None:
             raise AppError(ErrorCode.ASSET_HANDLE_INVALID, "资产句柄不存在", status_code=404)
         return await self._repo.list_handle_events(handle_id)
+
+    async def _approval_covers_handle_action(
+        self,
+        handle: dict[str, Any],
+        request: AssetHandleValidateRequest,
+    ) -> bool:
+        if self._task_repo is None or not request.approval_id:
+            return False
+        approval = await self._task_repo.get_approval(request.approval_id)
+        if approval is None or approval.get("status") not in {"approved", "edited"}:
+            return False
+        if request.task_id and approval.get("task_id") != request.task_id:
+            return False
+        if handle.get("task_id") and approval.get("task_id") != handle.get("task_id"):
+            return False
+        payload = approval.get("edited_payload") or approval.get("payload_redacted") or {}
+        normalized = _normalize_approval_payload(payload)
+        handle_id = str(handle["handle_id"])
+        handle_matches = normalized.get("handle_id") == handle_id or handle_id in {
+            str(item) for item in normalized.get("handle_ids", [])
+        }
+        requested_action = str(approval.get("requested_action") or "")
+        action_matches = normalized.get("action") == request.action or requested_action in {
+            request.action,
+            f"account.{request.action}",
+        }
+        if not action_matches and requested_action.endswith(f".{request.action}"):
+            action_matches = True
+        return handle_matches and action_matches
 
     async def _candidate_assets(self, request: AssetQueryRequest) -> list[dict[str, Any]]:
         rows = await self._repo.list_assets(
@@ -349,11 +427,7 @@ class AssetBrokerService:
         return [
             row
             for row in rows
-            if any(
-                keyword in str(row.get("display_name", "")).lower()
-                or keyword in str(row.get("summary_text", "")).lower()
-                for keyword in keywords
-            )
+            if any(keyword in _asset_search_text(row) for keyword in keywords)
         ]
 
     async def _issue_handle_for_asset(
@@ -608,6 +682,27 @@ def _asset_handle_summary(asset: dict[str, Any]) -> str:
     return asset.get("summary_text") or f"{asset['display_name']} ({asset['asset_type']})"
 
 
+def _asset_search_text(asset: dict[str, Any]) -> str:
+    parts = [
+        str(asset.get("display_name") or ""),
+        str(asset.get("summary_text") or ""),
+        str(asset.get("provider") or ""),
+    ]
+    config = asset.get("config")
+    if isinstance(config, dict):
+        for key in ("platform", "username", "account", "label", "provider"):
+            value = config.get(key)
+            if value is not None:
+                parts.append(str(value))
+    metadata = asset.get("metadata")
+    if isinstance(metadata, dict):
+        for key in ("platform", "label"):
+            value = metadata.get(key)
+            if value is not None:
+                parts.append(str(value))
+    return " ".join(parts).lower()
+
+
 def _minimal_config(asset: dict[str, Any], action: str) -> dict[str, Any]:
     config = dict(asset.get("config", {}))
     allowed_keys = {
@@ -645,3 +740,14 @@ def _max_risk(left: RiskLevel, right: RiskLevel) -> RiskLevel:
 
 def _handle_detail_data(data: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in data.items() if key != "summary_text"}
+
+
+def _normalize_approval_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    nested = payload.get("args")
+    if isinstance(nested, dict):
+        normalized = dict(nested)
+        for key, value in payload.items():
+            if key != "args" and key not in normalized:
+                normalized[key] = value
+        return normalized
+    return dict(payload)

@@ -133,6 +133,7 @@ from core_types.release import (
     SecurityAuditRun,
 )
 from core_types.safety import ApprovalSummary, SafetyDecision
+from core_types.scheduled_task import ScheduledTask, ScheduledTaskEvent, ScheduledTaskRun
 from core_types.shell import AssetCategoryItem, MenuItem, ShellConfig, ShellConstraints
 from core_types.skill import (
     MCPCallRecord,
@@ -349,6 +350,9 @@ __all__ = [
     "RiskLevel",
     "SafetyNote",
     "SafetyDecision",
+    "ScheduledTask",
+    "ScheduledTaskEvent",
+    "ScheduledTaskRun",
     "ShellConfig",
     "ShellConstraints",
     "ShellSwitchPreview",

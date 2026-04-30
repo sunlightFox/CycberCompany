@@ -6,7 +6,8 @@ import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import quote_plus
 
 import httpx
 from core_types import (
@@ -35,7 +36,7 @@ from app.schemas.memory import MemorySearchApiRequest
 from app.schemas.tasks import ToolExecuteRequest, ToolExecuteResponse
 from app.services.approvals import ApprovalService
 from app.services.artifacts import ArtifactStore
-from app.services.asset_broker import AssetBrokerService
+from app.services.asset_broker import AssetBrokerService, ToolResolvedAsset
 from app.services.audit import AuditEventService
 from app.services.design_alignment import SafetyDecisionService
 from app.services.knowledge import KnowledgeService
@@ -109,6 +110,20 @@ def _redact_browser_failure(reason: str) -> str:
     if executable_path:
         text = text.replace(executable_path, "[REDACTED_BROWSER_PATH]")
     return str(redact(text))
+
+
+def _browser_http_error_reason(exc: httpx.HTTPError) -> str:
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout while fetching browser resource"
+    reason = str(exc) or exc.__class__.__name__
+    return str(redact(reason))
+
+
+def _html_title(text: str) -> str | None:
+    match = re.search(r"<title[^>]*>(.*?)</title>", text, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return None
+    return str(redact(re.sub(r"\s+", " ", match.group(1)).strip()))[:200]
 
 
 class ToolRuntime:
@@ -344,11 +359,16 @@ class ToolRuntime:
                 "policy_sources": safety_decision.policy_sources,
                 "decision": safety_decision.decision,
             }
+            safety_decision_payload = redact(safety_decision.model_dump(mode="json"))
             await self._repo.update_tool_call(
                 tool_call_id,
                 {
                     "safety_decision_id": safety_decision.safety_decision_id,
-                    "safety_decision": safety_decision.model_dump(mode="json"),
+                    "safety_decision": (
+                        safety_decision_payload
+                        if isinstance(safety_decision_payload, dict)
+                        else {}
+                    ),
                     "policy_snapshot": policy_snapshot,
                     "risk_level": risk_level.value,
                     "updated_at": utc_now_iso(),
@@ -436,6 +456,8 @@ class ToolRuntime:
                     trace_id=trace_id,
                 )
                 redacted_result = dict(redact(dlp.redacted_value))
+            if request.tool_name == "memory.search":
+                redacted_result = _strip_internal_trace_fields(redacted_result)
             await self._repo.update_tool_call(
                 tool_call_id,
                 {
@@ -463,8 +485,11 @@ class ToolRuntime:
                 span_id,
                 output_data={"status": "completed", "artifact_count": len(outcome.artifacts)},
             )
+            record = await self._tool_call_record(tool_call_id, request.task_id)
+            if request.tool_name == "memory.search":
+                record = _public_memory_search_tool_call(record)
             return ToolExecuteResponse(
-                tool_call=await self._tool_call_record(tool_call_id, request.task_id),
+                tool_call=record,
                 artifacts=outcome.artifacts,
                 result=redacted_result,
             )
@@ -574,16 +599,12 @@ class ToolRuntime:
                 organization_id=organization_id,
                 trace_id=trace_id,
             )
-        if name == "account.create_draft_artifact":
-            return await self._write_artifact_result(
+        if name.startswith("account."):
+            return await self._execute_account_tool(
                 request,
                 tool_call_id=tool_call_id,
                 organization_id=organization_id,
-                content=str(request.args.get("draft") or request.args.get("content") or ""),
-                display_name=str(request.args.get("display_name") or "account-draft.md"),
-                artifact_type="markdown",
                 trace_id=trace_id,
-                result_key="draft_artifact",
             )
         if name == "hardware.query_status":
             return ToolRunOutcome(
@@ -646,6 +667,161 @@ class ToolRuntime:
             trace_id=trace_id,
         )
         return ToolRunOutcome(result={"skill_run": run.model_dump(mode="json")}, artifacts=[])
+
+    async def _execute_account_tool(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        if request.tool_name == "account.create_draft_artifact":
+            return await self._write_artifact_result(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                content=str(request.args.get("draft") or request.args.get("content") or ""),
+                display_name=str(request.args.get("display_name") or "account-draft.md"),
+                artifact_type="markdown",
+                trace_id=trace_id,
+                result_key="draft_artifact",
+            )
+        if request.tool_name == "account.login":
+            return await self._account_login(request, trace_id=trace_id)
+        if request.tool_name == "account.publish_post":
+            return await self._account_publish_post(request, trace_id=trace_id)
+        raise AppError(ErrorCode.TOOL_NOT_FOUND, "账号工具不存在", status_code=404)
+
+    async def _account_login(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        resolved = await self._resolve_account_secret(
+            request,
+            action="login",
+            trace_id=trace_id,
+        )
+        login_url = _required_http_url(request.args, "login_url")
+        username = _resolved_username(resolved.resolved.resource)
+        if not username or not resolved.secret_value:
+            raise AppError(
+                ErrorCode.ASSET_HANDLE_INVALID,
+                "账号资产缺少用户名或密钥",
+                status_code=422,
+            )
+        login_status = await _post_login(
+            login_url=login_url,
+            username=username,
+            password=resolved.secret_value,
+            args=request.args,
+        )
+        return ToolRunOutcome(
+            result={
+                "status": "authenticated",
+                "login": login_status,
+                "asset": _resolved_account_summary(resolved.resolved),
+                "redaction_summary": {"policy": "trace_service.redact"},
+            },
+            artifacts=[],
+        )
+
+    async def _account_publish_post(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        resolved = await self._resolve_account_secret(
+            request,
+            action="publish_post",
+            trace_id=trace_id,
+        )
+        login_url = _required_http_url(request.args, "login_url")
+        publish_url = _required_http_url(request.args, "publish_url")
+        title = str(request.args.get("title") or "").strip()
+        body = str(request.args.get("body") or request.args.get("content") or "").strip()
+        if not title or not body:
+            raise AppError(
+                ErrorCode.TOOL_SCHEMA_INVALID,
+                "发布文章需要 title 和 body",
+                status_code=422,
+            )
+        username = _resolved_username(resolved.resolved.resource)
+        if not username or not resolved.secret_value:
+            raise AppError(
+                ErrorCode.ASSET_HANDLE_INVALID,
+                "账号资产缺少用户名或密钥",
+                status_code=422,
+            )
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            login_response = await _post_login(
+                login_url=login_url,
+                username=username,
+                password=resolved.secret_value,
+                args=request.args,
+                client=client,
+            )
+            publish_response = await client.post(
+                publish_url,
+                data={
+                    str(request.args.get("title_field") or "title"): title,
+                    str(request.args.get("body_field") or "body"): body,
+                },
+            )
+        if publish_response.status_code >= 400:
+            raise AppError(
+                ErrorCode.TOOL_EXECUTION_FAILED,
+                "账号发布失败",
+                status_code=502,
+                details={
+                    "http_status": publish_response.status_code,
+                    "response": _http_response_preview(publish_response),
+                },
+            )
+        publish_payload = _http_response_preview(publish_response)
+        return ToolRunOutcome(
+            result={
+                "status": "published",
+                "asset": _resolved_account_summary(resolved.resolved),
+                "login": login_response,
+                "publish": {
+                    "url": str(redact(str(publish_response.url))),
+                    "http_status": publish_response.status_code,
+                    "response": publish_payload,
+                },
+                "title": str(redact(title)),
+                "body_preview": str(redact(body[:160])),
+                "redaction_summary": {"policy": "trace_service.redact"},
+                "untrusted_external_content": True,
+            },
+            artifacts=[],
+        )
+
+    async def _resolve_account_secret(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        action: str,
+        trace_id: str | None,
+    ) -> ToolResolvedAsset:
+        handle_id = str(request.args.get("handle_id") or "")
+        if not handle_id:
+            raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "handle_id 必填", status_code=422)
+        return await self._asset_broker.resolve_secret_for_tool(
+            handle_id,
+            AssetResolveForToolRequest(
+                subject_id=request.member_id,
+                action=action,
+                tool_name=request.tool_name,
+                task_id=request.task_id,
+                conversation_id=None,
+                approval_id=request.approval_id,
+            ),
+            trace_id=trace_id,
+        )
 
     async def _execute_file_tool(
         self,
@@ -838,28 +1014,171 @@ class ToolRuntime:
         organization_id: str,
         trace_id: str | None,
     ) -> ToolRunOutcome:
-        url = str(request.args.get("url") or "")
-        if not url.startswith(("http://", "https://")):
-            raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "url 必须是 http(s)", status_code=422)
-        if request.tool_name == "browser.open":
-            return ToolRunOutcome(result={"url": url, "status": "opened"}, artifacts=[])
-        if request.tool_name == "browser.snapshot":
+        if request.tool_name == "browser.search":
+            query = str(request.args.get("query") or "").strip()
+            if not query:
+                raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "query 必填", status_code=422)
+            url = str(request.args.get("url") or "").strip() or (
+                "https://www.bing.com/search?q=" + quote_plus(query)
+            )
+            if not url.startswith(("http://", "https://")):
+                raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "url 必须是 http(s)", status_code=422)
             try:
-                async with httpx.AsyncClient(timeout=15) as client:
+                async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                     response = await client.get(url)
                     response.raise_for_status()
+            except httpx.TimeoutException as exc:
+                raise AppError(
+                    ErrorCode.TOOL_TIMEOUT,
+                    "浏览器搜索超时",
+                    status_code=504,
+                    details={"reason": "timeout while fetching search results"},
+                ) from exc
+            except httpx.HTTPError as exc:
+                raise AppError(
+                    ErrorCode.TOOL_EXECUTION_FAILED,
+                    "浏览器搜索失败",
+                    status_code=502,
+                    details={"reason": _browser_http_error_reason(exc)},
+                ) from exc
+            text = response.text[:5000]
+            return ToolRunOutcome(
+                result={
+                    "query": str(redact(query)),
+                    "url": str(redact(str(response.url))),
+                    "title": _html_title(text),
+                    "http_status": response.status_code,
+                    "action_status": "completed",
+                    "evidence_summary": "browser.search fetched untrusted search content",
+                    "content_preview": str(redact(text)),
+                    "snapshot": str(redact(text)),
+                    "recoverable": False,
+                    "redaction_summary": {"policy": "trace_service.redact"},
+                    "retrieval_source": "browser.search",
+                    "untrusted_external_content": True,
+                },
+                artifacts=[],
+            )
+        url = str(request.args.get("url") or "")
+        if not url.startswith(("http://", "https://")):
+            if url.lower().startswith("file:"):
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "file URL 被安全策略阻断",
+                    status_code=403,
+                    details={"reason": "browser_file_url_denied"},
+                )
+            raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "url 必须是 http(s)", status_code=422)
+        if request.tool_name == "browser.open":
+            return ToolRunOutcome(
+                result={
+                    "url": str(redact(url)),
+                    "title": None,
+                    "http_status": None,
+                    "action_status": "opened",
+                    "evidence_summary": "browser.open recorded the requested URL",
+                    "snapshot": None,
+                    "screenshot": None,
+                    "artifact": None,
+                    "timeout": False,
+                    "recoverable": True,
+                    "redaction_summary": {"policy": "trace_service.redact"},
+                    "untrusted_external_content": True,
+                },
+                artifacts=[],
+            )
+        if request.tool_name == "browser.snapshot":
+            try:
+                async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+                    response = await client.get(url)
+            except httpx.TimeoutException as exc:
+                raise AppError(
+                    ErrorCode.TOOL_TIMEOUT,
+                    "浏览器快照获取超时",
+                    status_code=504,
+                    details={"reason": "timeout while fetching browser snapshot"},
+                ) from exc
             except httpx.HTTPError as exc:
                 raise AppError(
                     ErrorCode.TOOL_EXECUTION_FAILED,
                     "浏览器快照获取失败",
                     status_code=502,
-                    details={"reason": str(redact(str(exc)))},
+                    details={"reason": _browser_http_error_reason(exc)},
                 ) from exc
             text = response.text[:5000]
             return ToolRunOutcome(
                 result={
-                    "url": url,
+                    "url": str(redact(str(response.url))),
+                    "title": _html_title(text),
+                    "http_status": response.status_code,
+                    "action_status": (
+                        "completed" if response.status_code < 400 else "http_error"
+                    ),
+                    "evidence_summary": (
+                        f"browser.snapshot captured HTTP {response.status_code} "
+                        "untrusted page evidence"
+                    ),
                     "content_preview": str(redact(text)),
+                    "snapshot": str(redact(text)),
+                    "screenshot": None,
+                    "artifact": None,
+                    "timeout": False,
+                    "recoverable": response.status_code >= 400,
+                    "redaction_summary": {"policy": "trace_service.redact"},
+                    "untrusted_external_content": True,
+                },
+                artifacts=[],
+            )
+        if request.tool_name in {"browser.fill", "browser.type"}:
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "浏览器交互必须绑定任务",
+                    status_code=422,
+                )
+            selector = str(request.args.get("selector") or "")
+            value = str(request.args.get("value") or request.args.get("text") or "")
+            if not selector:
+                raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "selector 必填", status_code=422)
+            return ToolRunOutcome(
+                result={
+                    "url": str(redact(url)),
+                    "selector": str(redact(selector)),
+                    "action": "type" if request.tool_name == "browser.type" else "fill",
+                    "status": "interaction_recorded",
+                    "action_status": "interaction_recorded",
+                    "evidence_summary": (
+                        "browser interaction recorded without executing hidden side effects"
+                    ),
+                    "value_preview": str(redact(value[:80])),
+                    "timeout": False,
+                    "recoverable": True,
+                    "redaction_summary": {"policy": "trace_service.redact"},
+                    "untrusted_external_content": True,
+                },
+                artifacts=[],
+            )
+        if request.tool_name in {"browser.click", "browser.submit"}:
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "浏览器交互必须绑定任务",
+                    status_code=422,
+                )
+            selector = str(request.args.get("selector") or "")
+            if request.tool_name == "browser.click" and not selector:
+                raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "selector 必填", status_code=422)
+            return ToolRunOutcome(
+                result={
+                    "url": str(redact(url)),
+                    "selector": str(redact(selector)),
+                    "action": "submit" if request.tool_name == "browser.submit" else "click",
+                    "status": "interaction_recorded",
+                    "action_status": "interaction_recorded",
+                    "evidence_summary": "browser interaction recorded under task binding",
+                    "timeout": False,
+                    "recoverable": True,
+                    "redaction_summary": {"policy": "trace_service.redact"},
                     "untrusted_external_content": True,
                 },
                 artifacts=[],
@@ -888,7 +1207,7 @@ class ToolRuntime:
                     ErrorCode.TOOL_EXECUTION_FAILED,
                     "浏览器下载失败",
                     status_code=502,
-                    details={"reason": str(redact(str(exc)))},
+                    details={"reason": _browser_http_error_reason(exc)},
                 ) from exc
             artifact = await self._artifacts.write_bytes(
                 task_id=request.task_id,
@@ -900,11 +1219,32 @@ class ToolRuntime:
                 artifact_type="download",
                 content_type=response.headers.get("content-type") or "application/octet-stream",
                 subdir="quarantine",
-                metadata={"url": url, "untrusted_external_content": True},
+                metadata={
+                    "url": str(redact(str(response.url))),
+                    "http_status": response.status_code,
+                    "untrusted_external_content": True,
+                    "redaction_summary": {"policy": "trace_service.redact"},
+                },
                 trace_id=trace_id,
             )
             return ToolRunOutcome(
-                result={"download": artifact.model_dump(mode="json")},
+                result={
+                    "url": str(redact(str(response.url))),
+                    "title": None,
+                    "http_status": response.status_code,
+                    "action_status": "completed",
+                    "evidence_summary": (
+                        "browser.download stored untrusted content as a task artifact"
+                    ),
+                    "snapshot": None,
+                    "screenshot": None,
+                    "artifact": artifact.model_dump(mode="json"),
+                    "download": artifact.model_dump(mode="json"),
+                    "timeout": False,
+                    "recoverable": False,
+                    "redaction_summary": {"policy": "trace_service.redact"},
+                    "untrusted_external_content": True,
+                },
                 artifacts=[artifact],
             )
         raise AppError(ErrorCode.TOOL_NOT_FOUND, "浏览器工具不存在", status_code=404)
@@ -958,7 +1298,21 @@ class ToolRuntime:
             trace_id=trace_id,
         )
         return ToolRunOutcome(
-            result={"artifact_id": artifact.artifact_id, "url": url},
+            result={
+                "url": str(redact(url)),
+                "title": None,
+                "http_status": None,
+                "action_status": "completed",
+                "evidence_summary": "browser.screenshot captured a task artifact",
+                "snapshot": None,
+                "screenshot": artifact.model_dump(mode="json"),
+                "artifact": artifact.model_dump(mode="json"),
+                "artifact_id": artifact.artifact_id,
+                "timeout": False,
+                "recoverable": False,
+                "redaction_summary": {"policy": "trace_service.redact"},
+                "untrusted_external_content": True,
+            },
             artifacts=[artifact],
         )
 
@@ -1228,6 +1582,7 @@ class ToolRuntime:
                     tool_name=request.tool_name,
                     task_id=request.task_id,
                     conversation_id=None,
+                    approval_id=request.approval_id,
                 ),
                 trace_id=trace_id,
             )
@@ -1325,6 +1680,97 @@ def _risk_for(tool: ToolDefinition, args: dict[str, Any]) -> RiskLevel:
     return RiskLevel(policy.get("default", "R1"))
 
 
+def _required_http_url(args: dict[str, Any], key: str) -> str:
+    url = str(args.get(key) or "").strip()
+    if not url:
+        raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, f"{key} 必填", status_code=422)
+    if url.lower().startswith("file:"):
+        raise AppError(
+            ErrorCode.TOOL_PERMISSION_DENIED,
+            "file URL 被安全策略阻断",
+            status_code=403,
+            details={"reason": "account_file_url_denied", "field": key},
+        )
+    if not url.startswith(("http://", "https://")):
+        raise AppError(
+            ErrorCode.TOOL_SCHEMA_INVALID,
+            f"{key} 必须是 http(s)",
+            status_code=422,
+        )
+    return url
+
+
+def _resolved_username(resource: dict[str, Any]) -> str:
+    raw_config = resource.get("config")
+    config = cast(dict[str, Any], raw_config) if isinstance(raw_config, dict) else {}
+    return str(config.get("username") or "").strip()
+
+
+def _resolved_account_summary(resolved: Any) -> dict[str, Any]:
+    resource = resolved.resource if isinstance(resolved.resource, dict) else {}
+    raw_config = resource.get("config")
+    config = cast(dict[str, Any], raw_config) if isinstance(raw_config, dict) else {}
+    return {
+        "handle_id": resolved.handle_id,
+        "asset_id": resolved.asset_id,
+        "asset_type": resolved.asset_type.value,
+        "platform": config.get("platform"),
+        "username": config.get("username"),
+        "has_secret": resolved.has_secret,
+    }
+
+
+async def _post_login(
+    *,
+    login_url: str,
+    username: str,
+    password: str,
+    args: dict[str, Any],
+    client: httpx.AsyncClient | None = None,
+) -> dict[str, Any]:
+    data = {
+        str(args.get("username_field") or "username"): username,
+        str(args.get("password_field") or "password"): password,
+    }
+    if client is None:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as owned_client:
+            response = await owned_client.post(login_url, data=data)
+    else:
+        response = await client.post(login_url, data=data)
+    if response.status_code >= 400:
+        raise AppError(
+            ErrorCode.TOOL_EXECUTION_FAILED,
+            "账号登录失败",
+            status_code=502,
+            details={
+                "http_status": response.status_code,
+                "response": _http_response_preview(response),
+            },
+        )
+    return {
+        "url": str(redact(str(response.url))),
+        "http_status": response.status_code,
+        "response": _http_response_preview(response),
+    }
+
+
+def _http_response_preview(response: httpx.Response) -> dict[str, Any]:
+    content_type = response.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = None
+        if isinstance(payload, dict):
+            return dict(redact(payload))
+        if payload is not None:
+            return {"json": redact(payload)}
+    return {
+        "content_type": content_type,
+        "text_preview": str(redact(response.text[:500])),
+    }
+
+
 def _safety_request_for_tool(
     *,
     request: ToolExecuteRequest,
@@ -1395,6 +1841,10 @@ def _asset_action_for_tool(tool_name: str, args: dict[str, Any]) -> str:
         return "read_knowledge"
     if tool_name == "asset.validate_handle":
         return str(args.get("action") or "read")
+    if tool_name == "account.login":
+        return "login"
+    if tool_name == "account.publish_post":
+        return "publish_post"
     if tool_name.startswith("account."):
         return "draft_post"
     if tool_name.startswith("hardware."):
@@ -1466,6 +1916,28 @@ def _dangerous_command(command: str) -> bool:
 
 def _relative_to_task(path: Path, task_id: str, store: ArtifactStore) -> str:
     return path.relative_to(store.task_dir(task_id)).as_posix()
+
+
+def _public_memory_search_tool_call(record: ToolCallRecord) -> ToolCallRecord:
+    return record.model_copy(
+        update={
+            "trace_id": None,
+            "safety_decision": _strip_internal_trace_fields(record.safety_decision),
+            "result_redacted": _strip_internal_trace_fields(record.result_redacted),
+        }
+    )
+
+
+def _strip_internal_trace_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _strip_internal_trace_fields(item)
+            for key, item in value.items()
+            if key not in {"trace_id", "turn_id", "message_id"}
+        }
+    if isinstance(value, list):
+        return [_strip_internal_trace_fields(item) for item in value]
+    return value
 
 
 BUILTIN_TOOLS: list[dict[str, Any]] = [
@@ -1569,13 +2041,20 @@ BUILTIN_TOOLS: list[dict[str, Any]] = [
             "asset.request_handle": "R1",
             "asset.validate_handle": "R1",
             "browser.open": "R2",
+            "browser.search": "R2",
             "browser.snapshot": "R2",
+            "browser.fill": "R2",
+            "browser.type": "R2",
+            "browser.click": "R2",
+            "browser.submit": "R5",
             "browser.screenshot": "R3",
             "browser.download": "R3",
             "terminal.run": "R5",
             "terminal.stop": "R2",
             "terminal.read_log": "R1",
+            "account.login": "R2",
             "account.create_draft_artifact": "R2",
+            "account.publish_post": "R4",
             "hardware.query_status": "R1",
         }.items()
     ],

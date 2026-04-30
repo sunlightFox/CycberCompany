@@ -45,6 +45,7 @@ markers = [
   "chat_main_chain: chat main-chain acceptance and related response-plan tests",
 ]
 pythonpath = [
+  "apps/local-cli",
   "apps/local-api",
   "packages/core-types",
   "services/asset-broker",

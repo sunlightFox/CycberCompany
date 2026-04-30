@@ -38,9 +38,23 @@ def _markers_for(nodeid: str) -> set[str]:
         or "diagnostic" in nodeid
         or "benchmark" in nodeid
         or "phase29" in nodeid
+        or "phase30" in nodeid
+        or "phase31" in nodeid
+        or "phase33" in nodeid
+        or "phase34" in nodeid
+        or "phase35" in nodeid
+        or "phase36" in nodeid
     ):
         markers.add("release")
-    if "phase17" in nodeid or "chat_main_chain" in nodeid:
+    if (
+        "phase17" in nodeid
+        or "phase30" in nodeid
+        or "phase31" in nodeid
+        or "phase33" in nodeid
+        or "phase34" in nodeid
+        or "phase35" in nodeid
+        or "chat_main_chain" in nodeid
+    ):
         markers.add("chat_main_chain")
     if any(
         token in nodeid
@@ -56,6 +70,12 @@ def _markers_for(nodeid: str) -> set[str]:
             "phase27",
             "phase28",
             "phase29",
+            "phase30",
+            "phase31",
+            "phase33",
+            "phase34",
+            "phase35",
+            "phase36",
         ]
     ):
         markers.add("security")
@@ -75,6 +95,12 @@ def _markers_for(nodeid: str) -> set[str]:
             "phase27",
             "phase28",
             "phase29",
+            "phase30",
+            "phase31",
+            "phase33",
+            "phase34",
+            "phase35",
+            "phase36",
         ]
     ):
         markers.add("slow")

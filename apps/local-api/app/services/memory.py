@@ -543,7 +543,7 @@ class MemoryService:
                         requires_user_confirmation=bool(
                             row.get("requires_user_confirmation", False)
                         ),
-                        source=row["source"],
+                        source=_public_memory_source(row["source"]),
                     )
                     for row in rows
                 ],
@@ -1063,6 +1063,15 @@ class MemoryService:
         trace_id: str,
         root_span_id: str | None,
     ) -> MemoryCommandResult:
+        if _is_explicit_forget_command(text):
+            return MemoryCommandResult(
+                handled=True,
+                response_text=(
+                    "我不会假装已经删除长期记忆。当前只能记录/纠正记忆；"
+                    "遗忘或删除需要通过明确的记忆管理接口和权限边界处理。"
+                ),
+                reason="forget_requires_memory_management_boundary",
+            )
         if not _is_explicit_memory_command(text):
             return MemoryCommandResult(handled=False)
         command = self._classify_command(text)
@@ -1076,11 +1085,17 @@ class MemoryService:
             message_id=message_id,
             trace_id=trace_id,
             root_span_id=root_span_id,
+            create_job=False,
         )
         if result.blocked:
             response = "这条内容涉及敏感信息，我不会写入长期记忆。"
         elif command.kind == "block":
             response = "好的，这条不会写入长期记忆。"
+        elif command.kind == "correction" and result.memories:
+            if any(memory.supersedes for memory in result.memories):
+                response = "已纠正记忆，并用新记录取代了旧记录。"
+            else:
+                response = "已记录这次纠正；没有找到可精确取代的旧记忆。"
         elif result.memories:
             response = "记住了。"
         elif result.candidates and result.candidates[0].decision == "discarded_duplicate":
@@ -1378,6 +1393,15 @@ class MemoryService:
         if decision != "auto_written":
             return MemoryCommandResult(handled=True, candidates=[candidate], reason=decision)
 
+        correction_span = None
+        if command.kind == "correction":
+            correction_span = await self._start_span(
+                trace_id,
+                TraceSpanType.MEMORY_CORRECTION,
+                "apply explicit memory correction",
+                parent_span_id=root_span_id,
+                metadata={"candidate_id": candidate.candidate_id},
+            )
         memory = await self._insert_memory_from_candidate(
             _candidate_row(candidate),
             decision="auto_written",
@@ -1385,6 +1409,15 @@ class MemoryService:
             now=now,
             supersede_query=command.supersede_query,
         )
+        if correction_span is not None:
+            await self._end_span(
+                correction_span,
+                output_data={
+                    "memory_id": memory.memory_id,
+                    "supersedes": memory.supersedes,
+                    "correction_status": "applied" if memory.supersedes else "not_found",
+                },
+            )
         return MemoryCommandResult(handled=True, candidates=[candidate], memories=[memory])
 
     async def _insert_candidate(
@@ -1643,7 +1676,7 @@ class MemoryService:
             actor_type="system",
             action=(
                 "memory.correction_applied"
-                if old_memory is not None
+                if candidate["proposed_kind"] == "correction"
                 else "memory.created"
             ),
             object_type="memory",
@@ -1949,6 +1982,17 @@ def _source_reliability(row: dict[str, Any]) -> float:
     return 0.65
 
 
+def _public_memory_source(source_value: Any) -> dict[str, Any]:
+    source = source_value if isinstance(source_value, dict) else {}
+    return {
+        "type": str(source.get("type") or "unknown"),
+        "conversation_id": source.get("conversation_id"),
+        "turn_id": None,
+        "message_id": None,
+        "trace_id": None,
+    }
+
+
 def _explicitness_score(row: dict[str, Any]) -> float:
     metadata_value = row.get("metadata")
     metadata = metadata_value if isinstance(metadata_value, dict) else {}
@@ -2069,18 +2113,35 @@ def _clean_summary(text: str) -> str:
 
 
 def _parse_correction(text: str) -> dict[str, str] | None:
-    match = re.search(r"不是(.+?)是(.+)", text)
+    stripped = text.strip()
+    for prefix in (
+        "纠正记忆",
+        "纠正记忆：",
+        "纠正记忆:",
+        "memory correction:",
+        "Memory correction:",
+    ):
+        if stripped.startswith(prefix):
+            stripped = stripped.removeprefix(prefix).strip(" ：:，,。")
+            break
+    match = re.search(r"^(?P<context>.*?)不是(?P<old>.+?)[，,、\s]*是(?P<new>.+)", stripped)
     if match:
-        old = match.group(1).strip(" ，,。:：")
-        new = match.group(2).strip(" ，,。:：")
-        return {"old": old, "summary": f"用户纠正：不是{old}，是{new}"}
-    if "改成" in text:
-        before, after = text.split("改成", 1)
+        context = match.group("context").strip(" ，,。:：")
+        old = match.group("old").strip(" ，,。:：")
+        new = match.group("new").strip(" ，,。:：")
+        old_query = " ".join(part for part in [context, old] if part).strip() or old
+        if context:
+            summary = f"用户纠正：{context} 不是{old}，是{new}"
+        else:
+            summary = f"用户纠正：不是{old}，是{new}"
+        return {"old": old_query, "summary": str(redact(summary))}
+    if "改成" in stripped:
+        before, after = stripped.split("改成", 1)
         old = before.strip("把将 的偏好记忆，,。:：")
         new = after.strip(" ，,。:：")
-        return {"old": old or before, "summary": f"用户将相关偏好改成：{new}"}
-    if "以后不" in text:
-        summary = _clean_summary(text)
+        return {"old": old or before, "summary": str(redact(f"用户将相关偏好改成：{new}"))}
+    if "以后不" in stripped:
+        summary = _clean_summary(stripped)
         return {"old": summary, "summary": f"用户更新偏好：{summary}"}
     return None
 
@@ -2093,6 +2154,12 @@ def _is_explicit_memory_command(text: str) -> bool:
         any(marker in stripped for marker in BLOCK_MARKERS)
         or _parse_correction(stripped) is not None
         or _is_explicit_remember_command(stripped)
+    )
+
+
+def _is_explicit_forget_command(text: str) -> bool:
+    return "忘记" in text and any(
+        marker in text for marker in ["记忆", "长期记忆", "偏好", "本批次"]
     )
 
 
