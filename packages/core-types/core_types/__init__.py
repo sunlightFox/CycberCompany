@@ -10,6 +10,14 @@ from core_types.assets import (
     ResolvedAsset,
 )
 from core_types.audit import AuditEventListResponse, AuditEventResponse
+from core_types.browser import (
+    BrowserConsoleEvent,
+    BrowserEvidence,
+    BrowserNetworkEvent,
+    BrowserProfile,
+    BrowserProfileEvent,
+    BrowserSession,
+)
 from core_types.capability import (
     CapabilityDecision,
     CapabilityDecisionLog,
@@ -232,6 +240,12 @@ __all__ = [
     "BenchmarkRun",
     "BenchmarkRunStatus",
     "BrainSummary",
+    "BrowserConsoleEvent",
+    "BrowserEvidence",
+    "BrowserNetworkEvent",
+    "BrowserProfile",
+    "BrowserProfileEvent",
+    "BrowserSession",
     "BrainDecisionBundle",
     "BrainProvider",
     "BrainStatus",

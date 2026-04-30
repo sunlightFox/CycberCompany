@@ -768,6 +768,7 @@ class TaskReplay(ApiModel):
     planner_capability_candidates: list[PlannerCapabilityCandidate] = Field(default_factory=list)
     agent_next_action_decisions: list[AgentNextActionDecision] = Field(default_factory=list)
     tool_failure_recovery_plans: list[ToolFailureRecoveryPlan] = Field(default_factory=list)
+    browser_evidence: list[dict[str, Any]] = Field(default_factory=list)
     collaboration_plan: CollaborationPlan | None = None
     participants: list[TaskParticipant] = Field(default_factory=list)
     subtasks: list[TaskSubtask] = Field(default_factory=list)
