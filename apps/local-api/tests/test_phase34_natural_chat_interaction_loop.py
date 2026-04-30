@@ -17,7 +17,7 @@ def test_phase34_suite_contracts_release_profile_and_no_new_migration(
     by_module = {item["name"]: item for item in contracts}
     check_script = (ROOT_DIR / "scripts" / "check.ps1").read_text(encoding="utf-8")
 
-    assert _latest_migration() == "024_scheduled_tasks.sql"
+    assert _latest_migration() == "025_browser_sessions.sql"
     assert "suite_phase34_natural_chat_interaction_loop" in {
         item["suite_id"] for item in suites
     }

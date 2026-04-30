@@ -48,6 +48,7 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     assert "022_model_semantic_verifier.sql" in first
     assert "023_mcp_runtime_isolation_protocol_hardening.sql" in first
     assert "024_scheduled_tasks.sql" in first
+    assert "025_browser_sessions.sql" in first
     assert second == []
     assert {
         "shells",
@@ -189,6 +190,12 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "scheduled_tasks",
         "scheduled_task_runs",
         "scheduled_task_events",
+        "browser_profiles",
+        "browser_sessions",
+        "browser_profile_events",
+        "browser_evidence",
+        "browser_network_events",
+        "browser_console_events",
     }.issubset(table_names)
 
     db = Database(tmp_path / "app.db")

@@ -38,7 +38,7 @@ def test_phase35_suite_contracts_release_summary_and_no_new_migration(
     diagnostic = json.loads(diagnostic_path.read_text(encoding="utf-8"))
     phase35 = report["summary"]["phase35"]
 
-    assert _latest_migration() == "024_scheduled_tasks.sql"
+    assert _latest_migration() == "025_browser_sessions.sql"
     assert "suite_phase35_chat_safety_state_semantics" in {
         item["suite_id"] for item in suites
     }

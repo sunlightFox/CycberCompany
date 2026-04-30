@@ -209,7 +209,7 @@ def test_phase36_suite_contracts_release_summary_and_diagnostic(client: TestClie
     diagnostic = json.loads(diagnostic_path.read_text(encoding="utf-8"))
     phase36 = report["summary"]["phase36"]
 
-    assert _latest_migration() == "024_scheduled_tasks.sql"
+    assert _latest_migration() == "025_browser_sessions.sql"
     assert "suite_phase36_scheduled_background_tasks" in {item["suite_id"] for item in suites}
     for module in [
         "ScheduledTaskService",

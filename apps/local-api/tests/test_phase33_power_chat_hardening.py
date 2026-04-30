@@ -29,7 +29,7 @@ def test_phase33_suite_contracts_and_release_profile_gate(client: TestClient) ->
     by_module = {item["name"]: item for item in contracts}
     check_script = (ROOT_DIR / "scripts" / "check.ps1").read_text(encoding="utf-8")
 
-    assert _latest_migration() == "024_scheduled_tasks.sql"
+    assert _latest_migration() == "025_browser_sessions.sql"
     assert "suite_phase33_power_chat_hardening" in {item["suite_id"] for item in suites}
     for module in [
         "HeavyChatE2EHardening",

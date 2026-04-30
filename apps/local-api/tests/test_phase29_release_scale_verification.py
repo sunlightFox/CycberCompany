@@ -30,7 +30,7 @@ def test_phase29_suite_contracts_profiles_and_no_new_migration(
     )[-1]
     check_script = (ROOT_DIR / "scripts/check.ps1").read_text(encoding="utf-8")
 
-    assert latest_migration == "024_scheduled_tasks.sql"
+    assert latest_migration == "025_browser_sessions.sql"
     assert {"slow", "release", "security", "eval"}.issubset(markers)
     assert "suite_phase29_release_scale_verification" in {
         item["suite_id"] for item in suites

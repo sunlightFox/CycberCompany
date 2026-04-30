@@ -17,7 +17,7 @@ def test_phase30_suite_contracts_and_no_new_migration(client: TestClient) -> Non
     assert by_module["MemoryCorrectionDirectPath"]["status"] == "implemented"
     assert by_module["ChatIntentBoundaryRepair"]["status"] == "implemented"
     assert by_module["ReleaseGateCurrentRunScope"]["status"] == "implemented"
-    assert _latest_migration() == "024_scheduled_tasks.sql"
+    assert _latest_migration() == "025_browser_sessions.sql"
 
 
 def test_phase30_memory_correction_direct_path_emits_replayable_evidence(
