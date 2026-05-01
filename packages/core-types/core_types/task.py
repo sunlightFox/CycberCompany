@@ -769,6 +769,9 @@ class TaskReplay(ApiModel):
     agent_next_action_decisions: list[AgentNextActionDecision] = Field(default_factory=list)
     tool_failure_recovery_plans: list[ToolFailureRecoveryPlan] = Field(default_factory=list)
     browser_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    media_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    checkpoints: list[dict[str, Any]] = Field(default_factory=list)
+    rollback_events: list[dict[str, Any]] = Field(default_factory=list)
     collaboration_plan: CollaborationPlan | None = None
     participants: list[TaskParticipant] = Field(default_factory=list)
     subtasks: list[TaskSubtask] = Field(default_factory=list)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta, timezone, tzinfo
 from typing import Any
@@ -159,6 +160,10 @@ class ScheduledTaskService:
         self._trace = trace_service
         self._audit = audit_service
         self._parser = ScheduleParser()
+        self._notification_callback: Callable[..., Awaitable[Any]] | None = None
+
+    def set_notification_callback(self, callback: Callable[..., Awaitable[Any]]) -> None:
+        self._notification_callback = callback
 
     async def create(
         self,
@@ -418,29 +423,64 @@ class ScheduledTaskService:
                 client_request_id=idempotency_key,
             )
             created_task = await self._task_engine.create_task(task_request, trace_id=trace_id)
-            run_status = "waiting_policy" if policy["action"] != "execute" else "completed"
+            task_status = created_task.status.value
+            if policy["action"] != "execute":
+                run_status = "waiting_policy"
+            elif task_status == "failed":
+                run_status = "failed"
+            else:
+                run_status = "completed"
             result = {
                 "task_id": created_task.task_id,
-                "task_status": created_task.status.value,
+                "task_status": task_status,
                 "policy_action": policy["action"],
                 "auto_start": policy["auto_start"],
             }
-            await self._repo.update_run(
-                run_id,
-                {
-                    "task_id": created_task.task_id,
-                    "status": run_status,
-                    "result": result,
-                    "completed_at": utc_now_iso(),
-                    "updated_at": utc_now_iso(),
-                },
-            )
-            await self._after_successful_trigger(task, trigger_type=trigger_type, run_for=run_for)
+            if run_status == "failed":
+                await self._record_failure(
+                    task,
+                    run_id=run_id,
+                    trigger_type=trigger_type,
+                    failure_reason=f"linked_task_failed:{created_task.task_id}",
+                    trace_id=trace_id,
+                )
+                await self._repo.update_run(
+                    run_id,
+                    {
+                        "task_id": created_task.task_id,
+                        "result": result,
+                        "updated_at": utc_now_iso(),
+                    },
+                )
+            else:
+                await self._repo.update_run(
+                    run_id,
+                    {
+                        "task_id": created_task.task_id,
+                        "status": run_status,
+                        "result": result,
+                        "completed_at": utc_now_iso(),
+                        "updated_at": utc_now_iso(),
+                    },
+                )
+                await self._after_successful_trigger(
+                    task,
+                    trigger_type=trigger_type,
+                    run_for=run_for,
+                )
             await self._event(
                 scheduled_task_id,
                 "scheduled_task.run_linked_task",
                 result,
                 run_id=run_id,
+                trace_id=trace_id,
+            )
+            await self._notify_run_update(
+                scheduled_task_id=scheduled_task_id,
+                run_id=run_id,
+                task_id=created_task.task_id,
+                status=run_status,
+                summary=f"已创建普通任务，当前状态 {created_task.status.value}",
                 trace_id=trace_id,
             )
             await self._trace.end_span(span_id, output_data=result)
@@ -460,6 +500,14 @@ class ScheduledTaskService:
             )
             if own_trace:
                 await self._trace.end_trace(trace_id, status=TraceStatus.FAILED)
+            await self._notify_run_update(
+                scheduled_task_id=scheduled_task_id,
+                run_id=run_id,
+                task_id=None,
+                status="failed",
+                summary=str(redact(str(exc))),
+                trace_id=trace_id,
+            )
             raise
         if own_trace:
             await self._trace.end_trace(trace_id)
@@ -467,6 +515,36 @@ class ScheduledTaskService:
         if run is None:
             raise AppError(ErrorCode.NOT_FOUND, "定时任务 run 不存在", status_code=404)
         return ScheduledTaskRun(**run)
+
+    async def _notify_run_update(
+        self,
+        *,
+        scheduled_task_id: str,
+        run_id: str,
+        task_id: str | None,
+        status: str,
+        summary: str,
+        trace_id: str | None,
+    ) -> None:
+        if self._notification_callback is None:
+            return
+        try:
+            await self._notification_callback(
+                scheduled_task_id=scheduled_task_id,
+                scheduled_run_id=run_id,
+                task_id=task_id,
+                status=status,
+                summary=summary,
+                trace_id=trace_id,
+            )
+        except Exception:
+            await self._event(
+                scheduled_task_id,
+                "scheduled_task.notification_failed",
+                {"run_id": run_id, "status": status},
+                run_id=run_id,
+                trace_id=trace_id,
+            )
 
     async def scan_due(
         self,
@@ -512,6 +590,29 @@ class ScheduledTaskService:
             ScheduledTaskEvent(**row)
             for row in await self._repo.list_events(scheduled_task_id)
         ]
+
+    async def recover_stale_runs(
+        self,
+        *,
+        stale_after_minutes: int = 30,
+        trace_id: str | None = None,
+    ) -> int:
+        recovered = await self._repo.recover_stale_runs(
+            stale_before=(utc_now() - timedelta(minutes=stale_after_minutes)).isoformat(),
+            updated_at=utc_now_iso(),
+        )
+        if recovered:
+            await self._audit.write_event(
+                actor_type="system",
+                action="scheduled_task_runs.recovered_stale",
+                object_type="scheduled_task_run",
+                object_id="batch",
+                summary="stale scheduled run 已恢复为失败状态",
+                risk_level=RiskLevel.R1,
+                payload={"recovered_count": recovered},
+                trace_id=trace_id,
+            )
+        return recovered
 
     async def _set_status(
         self,

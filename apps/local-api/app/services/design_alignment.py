@@ -397,6 +397,390 @@ class RuntimeContractService:
                 "keyword output guard",
                 details={"phase": "phase_35", "replacement": "ChatVisibleOutputFilter"},
             ),
+            _contract(
+                "ChatQualityRegressionSuite",
+                "implemented",
+                "CHAT-E2E-20260430-QUALITY known quality gaps are mapped to release eval cases",
+                details={
+                    "phase": "phase_41",
+                    "suite_id": "suite_phase41_chat_quality_experience",
+                    "batch_id": "CHAT-E2E-20260430-QUALITY",
+                    "case_total": 96,
+                    "known_issue_records": 10,
+                },
+            ),
+            _contract(
+                "LatestInstructionPriority",
+                "implemented",
+                "stop/change/latest instruction markers can complete direct without "
+                "reusing superseded goals",
+                details={"phase": "phase_41", "superseded_goal": "background_only"},
+            ),
+            _contract(
+                "MemoryPersonaRefusalQualityComposer",
+                "implemented",
+                "memory write/forget, persona boundary and internal prompt refusals "
+                "use natural replies with next steps",
+                details={
+                    "phase": "phase_41",
+                    "covers": [
+                        "memory_write",
+                        "forget_boundary",
+                        "persona_boundary",
+                        "system_prompt_refusal",
+                    ],
+                },
+            ),
+            _contract(
+                "TaskResultHonestyPresenter",
+                "implemented",
+                "task and pending-action replies distinguish waiting, cancelled, "
+                "failed and completed states",
+                details={"phase": "phase_41", "false_completion_guard": True},
+            ),
+            _contract(
+                "RecoverablePrivacyBlockResponse",
+                "implemented",
+                "high-privacy token/password chat inputs return visible recovery "
+                "guidance without model route",
+                details={"phase": "phase_41", "cloud_model_called": False},
+            ),
+            _contract(
+                "DesktopCapabilityBoundary",
+                "implemented",
+                "desktop.* native window/mouse/keyboard control is declared not "
+                "implemented with safe fallbacks",
+                details={
+                    "phase": "phase_41",
+                    "tool_namespace": "desktop",
+                    "status": "not_implemented",
+                    "safe_fallbacks": ["browser.*", "file.*", "terminal.*"],
+                },
+            ),
+            _contract(
+                "RealChatQualityRunnerGate",
+                "implemented",
+                "release profile records the quality runner gate and blocks on "
+                "known quality issues",
+                details={
+                    "phase": "phase_41",
+                    "profile": "release",
+                    "runner": "run_chat_main_chain_quality_cases.py",
+                },
+            ),
+            _contract(
+                "ExternalPlatformActionResolver",
+                "implemented",
+                "natural external platform requests are normalized into target/action/"
+                "content intents",
+                details={
+                    "phase": "phase_42",
+                    "suite_id": "suite_phase42_external_platform_actions",
+                    "platform_source": "external_platform_targets",
+                },
+            ),
+            _contract(
+                "PlatformTargetRegistry",
+                "implemented",
+                "external platform targets, aliases, actions and risk defaults are "
+                "configurable records",
+                details={"phase": "phase_42", "migration": "030_external_platform_actions.sql"},
+            ),
+            _contract(
+                "AccountAssetCandidateResolver",
+                "implemented",
+                "account candidates are resolved through Asset Broker handles without "
+                "secret exposure",
+                details={
+                    "phase": "phase_42",
+                    "asset_type": "account",
+                    "secret_material_visible": False,
+                },
+            ),
+            _contract(
+                "ExternalPlatformActionOrchestrator",
+                "implemented",
+                "external platform action plans support clarification, approval, "
+                "execution and recovery",
+                details={
+                    "phase": "phase_42",
+                    "statuses": [
+                        "awaiting_account",
+                        "awaiting_clarification",
+                        "awaiting_approval",
+                        "running",
+                        "completed",
+                        "cancelled",
+                    ],
+                },
+            ),
+            _contract(
+                "ExternalPlatformFakeProvider",
+                "implemented",
+                "local fake provider validates the orchestration path without real platform access",
+                details={"phase": "phase_42", "real_external_platform_integration": False},
+            ),
+            _contract(
+                "ExternalPlatformApprovalBinding",
+                "implemented",
+                "publish/send external state changes bind plan, asset, task and approval "
+                "before submit",
+                details={"phase": "phase_42", "approval_before_submit": True},
+            ),
+            _contract(
+                "ExternalPlatformTraceEvidence",
+                "implemented",
+                "resolver, candidate, plan, approval and execution evidence is redacted "
+                "before storage",
+                details={"phase": "phase_42", "redaction_policy": "trace_service.redact"},
+            ),
+            _contract(
+                "MediaArtifactRegistry",
+                "implemented",
+                "task artifacts can be registered as media assets with derivative "
+                "and analysis indexes",
+                details={"phase": "phase_43", "migration": "031_media_runtime.sql"},
+            ),
+            _contract(
+                "MediaRuntimeBackend",
+                "implemented",
+                "ffmpeg/ffprobe backend is optional and reports degraded/unavailable honestly",
+                details={"phase": "phase_43", "fallback": "MEDIA_BACKEND_UNAVAILABLE"},
+            ),
+            _contract(
+                "MediaProbeTool",
+                "implemented",
+                "media.probe reads structured metadata without exposing local filesystem paths",
+                details={"phase": "phase_43", "tool": "media.probe"},
+            ),
+            _contract(
+                "MediaTimelineAnalysis",
+                "implemented",
+                "frame, scene and transcript summaries are represented as timeline "
+                "analysis records",
+                details={"phase": "phase_43", "context_injection": "summary_only"},
+            ),
+            _contract(
+                "MediaEditPlanService",
+                "implemented",
+                "media.plan_edit creates validated EDL records without modifying source media",
+                details={"phase": "phase_43", "render_separate": True},
+            ),
+            _contract(
+                "MediaRenderApprovalBinding",
+                "implemented",
+                "media.render_edit is an R3 tool and must pass ToolRuntime approval controls",
+                details={"phase": "phase_43", "tool": "media.render_edit"},
+            ),
+            _contract(
+                "MediaReplayEvidence",
+                "implemented",
+                "media source, derivatives, analysis and render outputs are linked "
+                "to task artifacts",
+                details={"phase": "phase_43", "diagnostic": "phase43_media_runtime"},
+            ),
+            _contract(
+                "ChatTurnOrchestrator",
+                "implemented",
+                "chat turn stage order is explicit and delegates policy branches "
+                "to focused coordinators",
+                details={
+                    "phase": "phase_45",
+                    "stages": [
+                        "privacy",
+                        "context",
+                        "quality_policy",
+                        "memory",
+                        "scheduled_task",
+                        "task_or_capability",
+                        "model",
+                    ],
+                },
+            ),
+            _contract(
+                "ChatModelCoordinator",
+                "implemented",
+                "model-safe messages and route failure semantics are outside ChatService",
+                details={"phase": "phase_45", "raw_content_text_for_model": False},
+            ),
+            _contract(
+                "ChatTaskCoordinator",
+                "implemented",
+                "chat-to-task helpers including media and task intent boundaries "
+                "are isolated from route handlers",
+                details={
+                    "phase": "phase_45",
+                    "scheduled_intent": "delegated",
+                    "task_status_presenter": "delegated",
+                },
+            ),
+            _contract(
+                "ChatContextCoordinator",
+                "implemented",
+                "context redaction diagnostics are delegated from the turn orchestrator",
+                details={"phase": "phase_45", "diagnostic": "redaction_summary"},
+            ),
+            _contract(
+                "ChatResponseCoordinator",
+                "implemented",
+                "visible output filtering and response-plan text cleanup are "
+                "delegated from ChatService",
+                details={"phase": "phase_45", "filter": "ChatVisibleOutputFilter"},
+            ),
+            _contract(
+                "ChatMemoryCoordinator",
+                "implemented",
+                "direct memory command boundaries and notices are isolated as policy",
+                details={"phase": "phase_45", "explicit_forget_boundary": "generic"},
+            ),
+            _contract(
+                "ChatPrivacyCoordinator",
+                "implemented",
+                "privacy classification, planner privacy propagation and local-first "
+                "route failure policy share one coordinator",
+                details={"phase": "phase_45", "cloud_on_high_privacy": False},
+            ),
+            _contract(
+                "ChatQualityPolicy",
+                "implemented",
+                "quality responses are generic policy templates rather than "
+                "test-case-id production patches",
+                details={"phase": "phase_45", "test_case_ids_in_payload": False},
+            ),
+            _contract(
+                "ChatProductionPatchRetirement",
+                "implemented",
+                "_phase31_output_guard and fixed knowledge padding are removed "
+                "from production chat service",
+                details={"phase": "phase_45", "phase31_output_guard": "removed"},
+            ),
+            _contract(
+                "WorkerSupervisor",
+                "implemented",
+                "local API lifespan owns background worker start, stop, heartbeat and manual tick",
+                blocker_level="none",
+                details={
+                    "phase": "phase_46",
+                    "default_enabled": False,
+                    "manual_tick_api": "/api/system/background-workers/tick",
+                    "per_worker_timeout": True,
+                },
+            ),
+            _contract(
+                "BackgroundWorkerService",
+                "implemented",
+                "single-process worker registry runs bounded service ticks with trace and audit",
+                blocker_level="none",
+                details={"phase": "phase_46", "external_queue": False},
+            ),
+            _contract(
+                "ScheduledDueWorker",
+                "implemented",
+                "scheduled due scanner triggers existing ScheduledTaskService without direct tools",
+                blocker_level="none",
+                details={"phase": "phase_46", "idempotent": True},
+            ),
+            _contract(
+                "NotificationRetryWorker",
+                "implemented",
+                "queued and failed notification messages retry within max_retries/backoff",
+                blocker_level="none",
+                details={"phase": "phase_46", "bounded_retry": True},
+            ),
+            _contract(
+                "CheckpointCleanupWorker",
+                "implemented",
+                "expired checkpoints are marked expired instead of deleting user artifacts",
+                blocker_level="none",
+                details={"phase": "phase_46", "cleanup_mode": "mark_expired"},
+            ),
+            _contract(
+                "StaleRecoveryWorker",
+                "implemented",
+                "stale task jobs, memory jobs and scheduled runs recover through existing services",
+                blocker_level="none",
+                details={"phase": "phase_46", "tool_execution": "not_direct"},
+            ),
+            _contract(
+                "WorkerHealthDiagnostics",
+                "implemented",
+                "worker status exposes redacted last result, trace id, failures and heartbeat",
+                blocker_level="none",
+                details={
+                    "phase": "phase_46",
+                    "health_api": True,
+                    "last_duration_ms": True,
+                    "consecutive_failure_count": True,
+                },
+            ),
+            _contract(
+                "BrowserExecutor",
+                "implemented",
+                "browser tools route through a controlled executor instead of direct ad-hoc "
+                "HTTP/shell calls",
+                blocker_level="none",
+                details={"phase": "phase_47", "tools": "browser.*", "default_mode": "auto"},
+            ),
+            _contract(
+                "PlaywrightBrowserExecutor",
+                "implemented_with_fallback",
+                "Playwright backend is available as a local executor and falls back honestly "
+                "when the runtime is unavailable",
+                blocker_level="none",
+                details={
+                    "phase": "phase_47",
+                    "fallback": "http_fallback",
+                    "fallback_cached": True,
+                    "cookie_material_visible": False,
+                },
+            ),
+            _contract(
+                "BrowserContextLifecycle",
+                "implemented",
+                "profile/session validation gates browser context use and revoked sessions "
+                "fail closed",
+                blocker_level="none",
+                details={"phase": "phase_47", "storage_state_redacted": True},
+            ),
+            _contract(
+                "BrowserDomInteractionEvidence",
+                "implemented",
+                "fill, type, click and submit produce DOM interaction evidence under task binding",
+                blocker_level="none",
+                details={"phase": "phase_47", "task_binding_required": True},
+            ),
+            _contract(
+                "BrowserStorageStateRedaction",
+                "implemented",
+                "browser evidence stores profile/session references without raw cookies or tokens",
+                blocker_level="none",
+                details={"phase": "phase_47", "secret_material_visible": False},
+            ),
+            _contract(
+                "ExternalPlatformProviderRegistry",
+                "implemented",
+                "external platform execution is routed through provider registry entries",
+                blocker_level="none",
+                details={"phase": "phase_47", "provider_api": "/api/external-platform/providers"},
+            ),
+            _contract(
+                "FakeExternalPlatformProviderModule",
+                "implemented",
+                "fake provider lives in provider module/registry for local tests and evidence",
+                blocker_level="none",
+                details={"phase": "phase_47", "core_service_provider_logic": False},
+            ),
+            _contract(
+                "ExternalPlatformExecutionModeRouter",
+                "implemented",
+                "action plan execution chooses provider by executor or execution_mode",
+                blocker_level="none",
+                details={
+                    "phase": "phase_47",
+                    "browser_mode_degraded_without_adapter": True,
+                    "unknown_provider_fail_closed": True,
+                },
+            ),
             _contract("ContextGateway", "implemented", "context build with memory/resources"),
             _contract(
                 "BrainDecisionService",
@@ -1021,9 +1405,9 @@ class RuntimeContractService:
             _contract(
                 "EvalEvidenceAggregator",
                 "implemented",
-                "aggregates Phase 17-36 eval evidence into release reports and diagnostics",
+                "aggregates Phase 17-37 eval evidence into release reports and diagnostics",
                 blocker_level="none",
-                details={"phase": "phase_36", "phase_range": "17-36"},
+                details={"phase": "phase_37", "phase_range": "17-37"},
             ),
             _contract(
                 "AcceptedRiskRegistry",
@@ -1105,6 +1489,7 @@ class RuntimeContractService:
                     "real_chat_runner_release_profile_required": True,
                     "power_runner_release_profile_required": True,
                     "natural_chat_runner_release_profile_required": True,
+                    "browser_session_release_evidence_required": True,
                     "default_full_profile_deterministic": True,
                     "accepted_risk": True,
                     "scope": "single-node-local",
@@ -1153,6 +1538,386 @@ class RuntimeContractService:
                 "scheduled run history links trigger, policy, task and replay references",
                 blocker_level="none",
                 details={"phase": "phase_36", "replay_ref": "/api/tasks/{task_id}/replay"},
+            ),
+            _contract(
+                "BrowserProfileService",
+                "implemented",
+                "persistent browser profiles and session lifecycle are managed as backend state",
+                blocker_level="none",
+                details={
+                    "phase": "phase_37",
+                    "api": "/api/browser/profiles",
+                    "migration": "025_browser_sessions.sql",
+                },
+            ),
+            _contract(
+                "BrowserSessionAssetBroker",
+                "implemented",
+                "browser session account assets resolve through Asset Broker short handles",
+                blocker_level="none",
+                details={"phase": "phase_37", "cookie_material_exposed": False},
+            ),
+            _contract(
+                "BrowserURLSafetyPolicy",
+                "implemented",
+                "browser tools fail closed for unsupported schemes, metadata and private URLs",
+                blocker_level="none",
+                details={
+                    "phase": "phase_37",
+                    "file_url": "deny",
+                    "metadata_url": "deny",
+                    "private_network_default": "deny",
+                },
+            ),
+            _contract(
+                "BrowserEvidenceBundle",
+                "implemented",
+                "browser actions persist redacted URL, status, network, console and artifact refs",
+                blocker_level="none",
+                details={"phase": "phase_37", "untrusted_external_content": True},
+            ),
+            _contract(
+                "BrowserSessionHandleRedaction",
+                "implemented",
+                "browser tools accept session handles without returning cookies or localStorage",
+                blocker_level="none",
+                details={"phase": "phase_37", "secret_resolution": "browser_boundary_only"},
+            ),
+            _contract(
+                "BrowserReplayEvidence",
+                "implemented",
+                "task replay and task browser evidence API include browser evidence bundles",
+                blocker_level="none",
+                details={
+                    "phase": "phase_37",
+                    "task_api": "/api/tasks/{task_id}/browser-evidence",
+                },
+            ),
+            _contract(
+                "SkillGovernanceService",
+                "implemented",
+                (
+                    "Skill bundle source, version, permission preview, grants "
+                    "and taint evidence are governed"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_38", "migration": "026_skill_governance.sql"},
+            ),
+            _contract(
+                "SkillPermissionPreview",
+                "implemented",
+                "manifest v2 install preview reports tools, assets, network, filesystem and risk",
+                blocker_level="none",
+                details={"phase": "phase_38", "api": "/api/skills/preview-install"},
+            ),
+            _contract(
+                "SkillGrantEnforcement",
+                "implemented",
+                "manifest v2 Skill runs require active member grants before ToolRuntime execution",
+                blocker_level="none",
+                details={"phase": "phase_38", "install_is_not_grant": True},
+            ),
+            _contract(
+                "SkillStaticAnalyzer",
+                "implemented",
+                (
+                    "static analyzer blocks hardcoded secrets, sensitive paths "
+                    "and wildcard dangerous tools"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_38", "fail_closed": True},
+            ),
+            _contract(
+                "SkillVersionRollback",
+                "implemented",
+                "Skill upgrades persist rollback points and restore prior skill/bundle snapshots",
+                blocker_level="none",
+                details={"phase": "phase_38", "api": "/api/skills/{skill_id}/rollback"},
+            ),
+            _contract(
+                "SkillEvalBinding",
+                "implemented",
+                "Skill eval runs are bound to bundle revision, manifest hash and capability scope",
+                blocker_level="none",
+                details={"phase": "phase_38", "high_risk_unreviewed_default": "restricted"},
+            ),
+            _contract(
+                "SkillExecutionPolicy",
+                "implemented",
+                "unattended high-risk Skill execution is blocked before tool invocation",
+                blocker_level="none",
+                details={"phase": "phase_38", "scheduled_task_grant_reuse": False},
+            ),
+            _contract(
+                "SkillOutputTaintGuard",
+                "implemented",
+                (
+                    "Skill outputs are treated as untrusted and persisted with "
+                    "redacted DLP taint evidence"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_38", "untrusted_external_content": True},
+            ),
+            _contract(
+                "TaskCheckpointService",
+                "implemented",
+                "task and step checkpoint creation persists task artifact snapshot evidence",
+                blocker_level="none",
+                details={"phase": "phase_39", "migration": "027_task_checkpoints.sql"},
+            ),
+            _contract(
+                "WorkspaceSnapshotPolicy",
+                "implemented",
+                "checkpoint paths are constrained to controlled task artifact workspaces",
+                blocker_level="none",
+                details={"phase": "phase_39", "scope": "task_artifacts"},
+            ),
+            _contract(
+                "FileMutationCheckpoint",
+                "implemented",
+                "file write overwrite, copy, move and delete create pre-mutation checkpoints",
+                blocker_level="none",
+                details={
+                    "phase": "phase_39",
+                    "tools": ["file.write", "file.copy", "file.move", "file.delete"],
+                },
+            ),
+            _contract(
+                "RollbackService",
+                "implemented",
+                "rollback restores task artifacts with checksum conflict detection",
+                blocker_level="none",
+                details={"phase": "phase_39", "external_side_effects_restorable": False},
+            ),
+            _contract(
+                "CheckpointReplayEvidence",
+                "implemented",
+                "task replay includes checkpoint and rollback timelines",
+                blocker_level="none",
+                details={"phase": "phase_39", "api": "/api/tasks/{task_id}/replay"},
+            ),
+            _contract(
+                "RollbackApprovalEvidence",
+                "implemented",
+                "high-risk approval payloads include rollback availability or unrecoverable notes",
+                blocker_level="none",
+                details={"phase": "phase_39", "approval_payload": "rollback_availability"},
+            ),
+            _contract(
+                "NotificationGatewayService",
+                "implemented",
+                (
+                    "notification channels, outbound messages and inbound replies "
+                    "are managed centrally"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_40", "migration": "028_notification_gateway.sql"},
+            ),
+            _contract(
+                "ChannelProviderRuntime",
+                "implemented_with_fallback",
+                (
+                    "local_mock provider is active; webhook and email contracts "
+                    "degrade safely by default"
+                ),
+                blocker_level="none",
+                details={
+                    "phase": "phase_40",
+                    "local_mock": "implemented",
+                    "webhook": "disabled_contract",
+                    "email_smtp": "disabled_contract",
+                },
+            ),
+            _contract(
+                "MessageChannelAssetHandle",
+                "implemented",
+                (
+                    "notification channels are backed by account assets with "
+                    "message_channel capability"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_40", "asset_provider": "message_channel"},
+            ),
+            _contract(
+                "NotificationOutboundDLP",
+                "implemented",
+                "outbound notification subject/body are redacted before persistence or delivery",
+                blocker_level="none",
+                details={"phase": "phase_40", "secret_policy": "block_or_redact"},
+            ),
+            _contract(
+                "InboundMessageParser",
+                "implemented",
+                "external replies are untrusted and parsed into a finite intent set",
+                blocker_level="none",
+                details={
+                    "phase": "phase_40",
+                    "intents": [
+                        "approval_once",
+                        "approval_session",
+                        "approval_deny",
+                        "approval_edit",
+                        "task_cancel",
+                        "unknown",
+                    ],
+                },
+            ),
+            _contract(
+                "NotificationPendingActionResolver",
+                "implemented",
+                "inbound approvals match only one pending action and fail closed on ambiguity",
+                blocker_level="none",
+                details={"phase": "phase_40", "ambiguous_high_risk": "clarification_required"},
+            ),
+            _contract(
+                "NotificationRetryQueue",
+                "implemented",
+                "failed outbound messages record attempts and bounded retry metadata",
+                blocker_level="none",
+                details={"phase": "phase_40", "max_retries": 3},
+            ),
+            _contract(
+                "NotificationTraceAudit",
+                "implemented",
+                "channels, messages, attempts and inbound parsing are trace/audit safe",
+                blocker_level="none",
+                details={"phase": "phase_40", "untrusted_external_content": True},
+            ),
+            _contract(
+                "GovernanceClosureMatrix",
+                "implemented",
+                (
+                    "Skill, notification, checkpoint, approval and task governance "
+                    "are reported as one matrix"
+                ),
+                blocker_level="none",
+                details={
+                    "phase": "phase_48",
+                    "suite_id": "suite_phase48_governance_closure",
+                },
+            ),
+            _contract(
+                "SkillCapabilityPreflight",
+                "implemented",
+                "Skill runs create and consult Capability Graph skill.run edges before ToolRuntime",
+                blocker_level="none",
+                details={"phase": "phase_48", "fact_source": "capability_graph"},
+            ),
+            _contract(
+                "SkillGrantCapabilitySync",
+                "implemented",
+                (
+                    "Skill grant creation and revocation synchronize skill.run "
+                    "Capability Graph edges"
+                ),
+                blocker_level="none",
+                details={
+                    "phase": "phase_48",
+                    "edge_source_types": ["skill_grant", "skill_grant_sync"],
+                },
+            ),
+            _contract(
+                "SkillCheckpointPolicy",
+                "implemented",
+                "Skill file mutation steps carry checkpoint requirements or non-restorable reasons",
+                blocker_level="none",
+                details={
+                    "phase": "phase_48",
+                    "tools": ["file.write", "file.delete", "file.move", "media.render_edit"],
+                },
+            ),
+            _contract(
+                "UnattendedSkillGovernanceGate",
+                "implemented",
+                (
+                    "unattended Skill execution requires manifest allow, active grant "
+                    "and passed eval binding"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_48", "session_approval_reuse": False},
+            ),
+            _contract(
+                "NotificationTaskResumeBridge",
+                "implemented",
+                (
+                    "inbound notification approval resolution attempts TaskEngine "
+                    "resume through the bound approval"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_48", "fail_closed": True},
+            ),
+            _contract(
+                "RollbackNotificationSummary",
+                "implemented",
+                "checkpoint rollback completion can enqueue a local redacted summary notification",
+                blocker_level="none",
+                details={"phase": "phase_48", "message_type": "checkpoint_rollback_summary"},
+            ),
+            _contract(
+                "CapabilityGraphGovernanceSource",
+                "implemented",
+                (
+                    "Capability Graph is the shared permission fact source for Skill "
+                    "and notification assets"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_48", "skill_action": "skill.run"},
+            ),
+            _contract(
+                "RealModelReleaseClosure",
+                "implemented",
+                "real-model quality smoke and release-profile runner evidence are summarized",
+                blocker_level="none",
+                details={
+                    "phase": "phase_49",
+                    "suite_id": "suite_phase49_release_closure",
+                    "default_full_profile_deterministic": True,
+                },
+            ),
+            _contract(
+                "ReleaseClosureEvidenceMatrix",
+                "implemented",
+                "Phase35-48 summaries, eval suites, contracts and evidence are readable",
+                blocker_level="none",
+                details={"phase": "phase_49", "phase_range": "phase35-phase48"},
+            ),
+            _contract(
+                "CompositeBackendE2EReplay",
+                "implemented",
+                (
+                    "scheduled, browser, media, skill, approval, notification, "
+                    "checkpoint and replay evidence can be composed without bypassing policies"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_49", "direct_tool_execution": False},
+            ),
+            _contract(
+                "ProductionCaseIdDependencyScan",
+                "implemented",
+                "production chat and response-composer paths are scanned for test case-id patches",
+                blocker_level="none",
+                details={"phase": "phase_49", "case_id_fixed_reply_allowed": False},
+            ),
+            _contract(
+                "ReleaseLeakageScanMatrix",
+                "implemented",
+                "release reports, diagnostics, traces and artifact metadata use strict redaction",
+                blocker_level="none",
+                details={"phase": "phase_49", "redaction_source": "trace_service.redact"},
+            ),
+            _contract(
+                "AcceptedRiskClosureRegistry",
+                "implemented",
+                "accepted risks include owner phase, recheck trigger and closure condition",
+                blocker_level="none",
+                details={"phase": "phase_49", "source": "design_gaps"},
+            ),
+            _contract(
+                "BackendSealingReport",
+                "implemented",
+                "backend release closure report records pass/fail, risk and next-stage evidence",
+                blocker_level="none",
+                details={"phase": "phase_49", "no_ui_scope": True},
             ),
         ]
         for item in contracts:
@@ -1505,6 +2270,33 @@ class RuntimeContractService:
                     "check.ps1 -Profile release runs the real chat runner matrix",
                     "release report includes summary.phase31",
                     "default check.ps1 remains deterministic and stable",
+                ],
+                "status": "accepted_risk",
+            },
+            {
+                "gap_id": "gap_phase49_real_model_release_environment_dependent",
+                "module_name": "RealModelReleaseClosure",
+                "current_behavior": (
+                    "Phase 49 records deterministic closure evidence locally and treats "
+                    "real-model runner full PASS as a release-profile requirement."
+                ),
+                "design_gap": (
+                    "Real model availability, provider credentials and long runner duration "
+                    "remain environment-specific, so default full checks do not require them."
+                ),
+                "blocker_level": "none",
+                "fix_phase": "future_hosted_real_model_release_ci",
+                "acceptance_tests": [
+                    (
+                        "suite_phase49_release_closure is required and passes "
+                        "deterministic evidence checks"
+                    ),
+                    (
+                        "release report includes summary.phase49 real model smoke "
+                        "and quality runner matrix"
+                    ),
+                    "production chat paths are scanned for test case-id fixed replies",
+                    "accepted risk closure registry lists owner phase and promotion rule",
                 ],
                 "status": "accepted_risk",
             },

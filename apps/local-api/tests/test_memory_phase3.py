@@ -143,7 +143,13 @@ def test_memory_006_chat_explicit_memory_command_emits_events_and_trace(
     assert "memory.candidate" in event_names
     assert "memory.written" in event_names
     assert "turn.failed" not in event_names
-    assert any(event["payload"].get("text") == "记住了。" for event in events)
+    visible_reply = "".join(
+        event["payload"].get("text", "")
+        for event in events
+        if event["event"] == "response.delta"
+    )
+    assert "记好" in visible_reply or "记住了" in visible_reply
+    assert "以后开发计划要非常详细" in visible_reply
     assert memories[0]["summary_text"] == "以后开发计划要非常详细"
     assert {
         "memory.extract",

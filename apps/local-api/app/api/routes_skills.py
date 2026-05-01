@@ -3,6 +3,20 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 
 from app.api.dependencies import get_registry
+from app.schemas.skill_governance import (
+    SkillAnalysisResponse,
+    SkillEvalBindingsResponse,
+    SkillGrantCreateRequest,
+    SkillGrantListResponse,
+    SkillInstallPreviewRequest,
+    SkillInstallPreviewResponse,
+    SkillOutputTaintResponse,
+    SkillRevokeRequest,
+    SkillRollbackRequest,
+    SkillRollbackResponse,
+    SkillUpgradeRequest,
+    SkillUpgradeResponse,
+)
 from app.schemas.skills import (
     BundleInstallRequest,
     BundleInstallResponse,
@@ -17,6 +31,18 @@ from app.schemas.skills import (
 from app.services.registry import ServiceRegistry
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
+
+
+@router.post("/preview-install", response_model=SkillInstallPreviewResponse)
+async def preview_skill_bundle_install(
+    payload: SkillInstallPreviewRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillInstallPreviewResponse:
+    return await registry.skill_governance_service.preview_install(
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
 
 
 @router.post("/install", response_model=BundleInstallResponse)
@@ -149,6 +175,104 @@ async def match_skills(
             payload,
             trace_id=getattr(request.state, "trace_id", None),
         )
+    )
+
+
+@router.post("/{skill_id}/grants", response_model=SkillGrantListResponse)
+async def create_skill_grant(
+    skill_id: str,
+    payload: SkillGrantCreateRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillGrantListResponse:
+    grant = await registry.skill_governance_service.create_grant(
+        skill_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return SkillGrantListResponse(items=[grant])
+
+
+@router.get("/{skill_id}/grants", response_model=SkillGrantListResponse)
+async def list_skill_grants(
+    skill_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillGrantListResponse:
+    return SkillGrantListResponse(
+        items=await registry.skill_governance_service.list_grants(skill_id)
+    )
+
+
+@router.post("/{skill_id}/revoke")
+async def revoke_skill(
+    skill_id: str,
+    payload: SkillRevokeRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+):
+    return await registry.skill_governance_service.revoke_skill(
+        skill_id,
+        actor_member_id=payload.actor_member_id,
+        reason=payload.reason,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.post("/{skill_id}/upgrade", response_model=SkillUpgradeResponse)
+async def upgrade_skill(
+    skill_id: str,
+    payload: SkillUpgradeRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillUpgradeResponse:
+    return await registry.skill_governance_service.upgrade_skill(
+        skill_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.post("/{skill_id}/rollback", response_model=SkillRollbackResponse)
+async def rollback_skill(
+    skill_id: str,
+    payload: SkillRollbackRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillRollbackResponse:
+    return await registry.skill_governance_service.rollback_skill(
+        skill_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.get("/{skill_id}/analysis", response_model=SkillAnalysisResponse)
+async def get_skill_analysis(
+    skill_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillAnalysisResponse:
+    return SkillAnalysisResponse(
+        items=await registry.skill_governance_service.list_analysis(skill_id)
+    )
+
+
+@router.get("/{skill_id}/eval-bindings", response_model=SkillEvalBindingsResponse)
+async def get_skill_eval_bindings(
+    skill_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillEvalBindingsResponse:
+    return SkillEvalBindingsResponse(
+        items=await registry.skill_governance_service.list_eval_bindings(skill_id)
+    )
+
+
+@router.get("/{skill_id}/output-taints", response_model=SkillOutputTaintResponse)
+async def get_skill_output_taints(
+    skill_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillOutputTaintResponse:
+    return SkillOutputTaintResponse(
+        items=await registry.skill_governance_service.list_output_taints(skill_id)
     )
 
 

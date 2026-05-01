@@ -9,6 +9,7 @@ from typing import Any, cast
 import anyio
 from core_types import EvidenceType
 from fastapi.testclient import TestClient
+from phase_contracts import assert_phase_migration_contract
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 
@@ -25,12 +26,10 @@ def test_phase29_suite_contracts_profiles_and_no_new_migration(
     contracts = client.get("/api/system/runtime-contracts").json()["items"]
     gaps = client.get("/api/system/design-gaps").json()["items"]
     by_module = {item["name"]: item for item in contracts}
-    latest_migration = sorted(
-        path.name for path in (ROOT_DIR / "apps/local-api/app/db/migrations").glob("*.sql")
-    )[-1]
     check_script = (ROOT_DIR / "scripts/check.ps1").read_text(encoding="utf-8")
 
-    assert latest_migration == "025_browser_sessions.sql"
+    migration_contract = assert_phase_migration_contract(client, "phase29")
+    assert migration_contract["current_at_least_required"] is True
     assert {"slow", "release", "security", "eval"}.issubset(markers)
     assert "suite_phase29_release_scale_verification" in {
         item["suite_id"] for item in suites

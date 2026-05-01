@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
 from app.services.scheduled_tasks import ScheduleParser
 from fastapi.testclient import TestClient
+from phase_contracts import assert_phase_migration_contract
 
 
 def test_phase36_schedule_parser_daily_interval_once_weekly() -> None:
@@ -209,7 +209,8 @@ def test_phase36_suite_contracts_release_summary_and_diagnostic(client: TestClie
     diagnostic = json.loads(diagnostic_path.read_text(encoding="utf-8"))
     phase36 = report["summary"]["phase36"]
 
-    assert _latest_migration() == "025_browser_sessions.sql"
+    migration_contract = assert_phase_migration_contract(client, "phase36")
+    assert migration_contract["required_migration"] == "024_scheduled_tasks.sql"
     assert "suite_phase36_scheduled_background_tasks" in {item["suite_id"] for item in suites}
     for module in [
         "ScheduledTaskService",
@@ -255,11 +256,6 @@ def _run_async(client: TestClient, func: Any, *args: Any, **kwargs: Any) -> Any:
         return await func(*args, **kwargs)
 
     return cast(Any, client).portal.call(runner)
-
-
-def _latest_migration() -> str:
-    migrations = Path("apps/local-api/app/db/migrations").glob("*.sql")
-    return sorted(path.name for path in migrations)[-1]
 
 
 def _payload_leakage_count(payload: Any) -> int:

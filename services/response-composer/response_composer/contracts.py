@@ -386,8 +386,9 @@ class ResponseComposer:
 
     def compose_privacy_block(self) -> str:
         return (
-            "这段内容包含敏感信息。为了避免外发，我不会把它发送到云端模型；"
-            "请配置可用的本地大脑后再继续，或删去敏感内容。"
+            "我看到了疑似敏感信息，所以不会复述或继续处理这些值，也不会把它发送到云端模型。"
+            "建议你立即轮换真实 token/password/private key；如果只是测试，"
+            "请用 [REDACTED_SECRET] 或示例占位符继续描述你想验证的流程。"
         )
 
     def compose_model_not_configured(self) -> str:

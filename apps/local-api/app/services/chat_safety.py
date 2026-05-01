@@ -223,8 +223,20 @@ class ChatTaskStatusPresenter:
         payload = {"task_id": task_id, "status": status}
         if status == "completed":
             return TaskStatusPresentation(
-                text=f"任务已创建并完成：{title}。可以在任务回放中查看步骤和工件。",
-                task_status={**base_status, "user_visible_text": "completed"},
+                text=(
+                    f"任务已创建并完成：{title}。"
+                    "结果应能通过任务回放、步骤记录、工件或页面状态证据复核；"
+                    "没有这些证据时，我不会额外声称完成了外部动作。"
+                ),
+                task_status={
+                    **base_status,
+                    "user_visible_text": "completed",
+                    "evidence_requirements": [
+                        "task_replay",
+                        "step_records",
+                        "artifact_or_page_state",
+                    ],
+                },
                 event_type=ChatEventType.TASK_COMPLETED,
                 event_payload=payload,
             )

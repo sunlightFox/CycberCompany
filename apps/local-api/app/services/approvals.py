@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import Any
 
@@ -23,6 +24,15 @@ class ApprovalService:
         self._repo = repo
         self._trace = trace_service
         self._audit = audit_service
+        self._notification_callback: (
+            Callable[[ApprovalDetail], Awaitable[Any]] | None
+        ) = None
+
+    def set_notification_callback(
+        self,
+        callback: Callable[[ApprovalDetail], Awaitable[Any]],
+    ) -> None:
+        self._notification_callback = callback
 
     async def create_approval(
         self,
@@ -116,7 +126,22 @@ class ApprovalService:
             trace_id=trace_id,
         )
         await self._end_span(span_id, output_data={"approval_id": approval_id})
-        return ApprovalDetail(**data)
+        approval = ApprovalDetail(**data)
+        if self._notification_callback is not None:
+            try:
+                await self._notification_callback(approval)
+            except Exception:
+                await self._audit.write_event(
+                    actor_type="system",
+                    action="notification.approval_callback_failed",
+                    object_type="approval",
+                    object_id=approval_id,
+                    summary="审批通知创建失败，审批本身保持有效",
+                    risk_level=RiskLevel.R1,
+                    payload={"approval_id": approval_id},
+                    trace_id=trace_id,
+                )
+        return approval
 
     async def get(self, approval_id: str) -> ApprovalDetail:
         row = await self._repo.get_approval(approval_id)

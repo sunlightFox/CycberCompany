@@ -1067,8 +1067,9 @@ class MemoryService:
             return MemoryCommandResult(
                 handled=True,
                 response_text=(
-                    "我不会假装已经删除长期记忆。当前只能记录/纠正记忆；"
-                    "遗忘或删除需要通过明确的记忆管理接口和权限边界处理。"
+                    "我不能在聊天里假装已经删除长期记忆，因为删除需要走明确的记忆管理权限和审计。"
+                    "我现在能做的是：后续不再主动使用这条临时偏好；"
+                    "如果要真正删除，需要通过记忆管理接口处理。"
                 ),
                 reason="forget_requires_memory_management_boundary",
             )
@@ -1088,20 +1089,39 @@ class MemoryService:
             create_job=False,
         )
         if result.blocked:
-            response = "这条内容涉及敏感信息，我不会写入长期记忆。"
+            response = (
+                "这条内容涉及敏感信息，我不会写入长期记忆。"
+                "如果你只是想让我记住处理方式，请用占位符描述，不要贴真实 token、密码或私钥。"
+            )
         elif command.kind == "block":
-            response = "好的，这条不会写入长期记忆。"
+            response = "好的，这条不会写入长期记忆；后续我也不会把它当作偏好或事实主动使用。"
         elif command.kind == "correction" and result.memories:
             if any(memory.supersedes for memory in result.memories):
-                response = "已纠正记忆，并用新记录取代了旧记录。"
+                response = (
+                    f"已纠正记忆：{_memory_summary_for_reply(result.memories)}\n"
+                    "我会用这条新记录替代旧说法；如果你在当前对话里再次改口，我会以最新要求为准。"
+                )
             else:
-                response = "已记录这次纠正；没有找到可精确取代的旧记忆。"
+                response = (
+                    f"已记录这次纠正：{_memory_summary_for_reply(result.memories)}\n"
+                    "没有找到可精确取代的旧记忆，所以我把它作为新的可追溯记录保存。"
+                )
         elif result.memories:
-            response = "记住了。"
+            response = (
+                f"记好了：{_memory_summary_for_reply(result.memories)}\n"
+                "后面同一批聊天里，我会优先按这条偏好或事实组织回复；"
+                "如果你临时改口，我会以新的要求为准。"
+            )
         elif result.candidates and result.candidates[0].decision == "discarded_duplicate":
-            response = "这条我已经记过了，不会重复写入。"
+            response = (
+                "这条我已经记过了，不会重复写入。"
+                "后续仍会按已有记录使用；如果要改写它，可以直接说“纠正记忆：...”"
+            )
         else:
-            response = "我没有把这条写入长期记忆。"
+            response = (
+                "我没有把这条写入长期记忆。"
+                "通常是因为它更像临时对话内容，或缺少足够明确的偏好、事实或纠正对象。"
+            )
         return MemoryCommandResult(
             handled=True,
             response_text=response,
@@ -1889,6 +1909,18 @@ def _memory_item(row: dict[str, Any]) -> MemoryItem:
         created_at=row.get("created_at"),
         updated_at=row.get("updated_at"),
     )
+
+
+def _memory_summary_for_reply(memories: list[MemoryItem]) -> str:
+    summaries: list[str] = []
+    for memory in memories[:2]:
+        summary = str(redact(memory.summary_text)).strip()
+        if summary:
+            summaries.append(summary)
+    if not summaries:
+        return "这条新记忆"
+    joined = "；".join(summaries)
+    return joined[:220] + ("..." if len(joined) > 220 else "")
 
 
 def _memory_row_allowed(

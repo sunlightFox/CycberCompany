@@ -246,6 +246,17 @@ class ArtifactStore:
         task_id, _, rest = relative.partition("/")
         return (self.task_dir(task_id) / rest).resolve()
 
+    def path_for_artifact(self, artifact: TaskArtifact) -> Path:
+        path = self._path_from_uri(artifact.uri)
+        root = self.task_dir(artifact.task_id)
+        if root not in [path, *path.parents]:
+            raise AppError(
+                ErrorCode.ARTIFACT_NOT_FOUND,
+                "工件路径不合法",
+                status_code=404,
+            )
+        return path
+
     async def _start_span(self, trace_id: str | None, *, metadata: dict[str, Any]) -> str | None:
         if trace_id is None:
             return None

@@ -30,6 +30,7 @@ from app.schemas.skills import BundleInstallRequest, SkillMatchRequest
 from app.schemas.tasks import ToolExecuteRequest
 from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
+from app.services.skill_governance import SkillGovernanceService
 from app.services.tools import ToolRuntime
 
 REQUIRED_SKILL_SECTIONS = ["用途", "何时使用", "输入", "输出", "步骤", "禁止"]
@@ -45,6 +46,7 @@ class SkillPluginService:
         artifact_store: ArtifactStore,
         trace_service: TraceService,
         audit_service: AuditEventService,
+        governance_service: SkillGovernanceService | None = None,
     ) -> None:
         self._repo = repo
         self._task_repo = task_repo
@@ -52,7 +54,11 @@ class SkillPluginService:
         self._artifacts = artifact_store
         self._trace = trace_service
         self._audit = audit_service
+        self._governance = governance_service
         self._safety = SafetyService()
+
+    def set_governance_service(self, governance_service: SkillGovernanceService) -> None:
+        self._governance = governance_service
 
     async def install_bundle(
         self,
@@ -201,6 +207,17 @@ class SkillPluginService:
                     ErrorCode.PLUGIN_INSTALL_FAILED,
                     "插件安装后无法读取",
                     status_code=500,
+                )
+            if self._governance is not None:
+                await self._governance.persist_install_governance(
+                    request=request,
+                    bundle=bundle_row,
+                    skills=skills,
+                    manifest=manifest,
+                    skill_md=skill_md,
+                    manifest_hash=manifest_hash,
+                    preview=preview.model_copy(update={"bundle_id": bundle_id}),
+                    trace_id=trace_id,
                 )
             return (
                 PluginBundle(**bundle_row),
@@ -536,6 +553,18 @@ class SkillPluginService:
         bundle = await self.get_bundle(skill.bundle_id)
         if bundle.status != "enabled":
             raise AppError(ErrorCode.PLUGIN_DISABLED, "插件包未启用", status_code=409)
+        steps = skill.steps or _default_skill_steps(skill)
+        policy_snapshot: dict[str, Any] = {}
+        if self._governance is not None:
+            policy_snapshot = await self._governance.ensure_skill_run_allowed(
+                skill=skill,
+                bundle=bundle.model_dump(mode="json"),
+                owner_member_id=owner_member_id,
+                steps=steps,
+                input_data=input_data,
+                task_id=task_id,
+                trace_id=trace_id,
+            )
         span_id = await self._start_span(
             trace_id,
             TraceSpanType.SKILL_RUN,
@@ -561,6 +590,7 @@ class SkillPluginService:
                     "started_at": now,
                     "error_code": None,
                     "error_summary": None,
+                    "policy_snapshot": policy_snapshot,
                 },
             )
         else:
@@ -578,6 +608,7 @@ class SkillPluginService:
                     "input_redacted": redact(input_data),
                     "matched_reason": matched_reason,
                     "confidence": confidence,
+                    "policy_snapshot": policy_snapshot,
                     "trace_id": trace_id,
                     "started_at": now,
                     "created_at": now,
@@ -597,7 +628,6 @@ class SkillPluginService:
         artifact_ids: list[str] = []
         output: dict[str, Any] = {"steps": []}
         try:
-            steps = skill.steps or _default_skill_steps(skill)
             for index, step in enumerate(steps, start=1):
                 tool_name = str(step.get("tool_name") or step.get("tool") or "")
                 if not tool_name:
@@ -640,6 +670,7 @@ class SkillPluginService:
                             "approval_id": result.approval.approval_id,
                             "artifact_ids": artifact_ids,
                             "output_redacted": output,
+                            "policy_snapshot": policy_snapshot,
                         },
                     )
                     await self._end_span(
@@ -655,9 +686,19 @@ class SkillPluginService:
                     "status": "completed",
                     "output_redacted": output,
                     "artifact_ids": artifact_ids,
+                    "policy_snapshot": policy_snapshot,
                     "completed_at": utc_now_iso(),
                 },
             )
+            if self._governance is not None:
+                await self._governance.record_skill_output_taint(
+                    skill=skill,
+                    skill_run_id=skill_run_id,
+                    task_id=task_id,
+                    output=output,
+                    policy_snapshot=policy_snapshot,
+                    trace_id=trace_id,
+                )
             await self._event(
                 "skill.completed",
                 bundle_id=skill.bundle_id,
@@ -754,6 +795,13 @@ class SkillPluginService:
                 "created_at": now,
             }
         )
+        if self._governance is not None:
+            await self._governance.record_eval_binding(
+                skill=skill,
+                eval_run_id=eval_run_id,
+                status=status,
+                trace_id=trace_id,
+            )
         await self._repo.update_skill(
             skill_id,
             {
@@ -988,7 +1036,7 @@ class SkillPluginService:
                         "bundle 路径逃逸",
                         status_code=422,
                     )
-            for tool_name in manifest.get("required_tools", []):
+            for tool_name in _manifest_tool_names(manifest):
                 if str(tool_name).startswith("mcp."):
                     continue
                 if await self._task_repo.get_tool(str(tool_name)) is None:
@@ -1019,13 +1067,17 @@ class SkillPluginService:
             input_data={"bundle_id": bundle_id or manifest.get("id")},
         )
         required_tools = []
-        for tool_name in manifest.get("required_tools", []):
+        manifest_risks = _manifest_tool_risks(manifest)
+        for tool_name in _manifest_tool_names(manifest):
             tool = await self._task_repo.get_tool(str(tool_name))
             risk_policy = (tool or {}).get("risk_policy", {"default": "R2"})
             required_tools.append(
                 {
                     "tool_name": str(tool_name),
-                    "risk_level": risk_policy.get("default", "R2"),
+                    "risk_level": manifest_risks.get(
+                        str(tool_name),
+                        risk_policy.get("default", "R2"),
+                    ),
                 }
             )
         high_risk = [
@@ -1033,15 +1085,28 @@ class SkillPluginService:
             for action in manifest.get("risk_policy", {}).get("confirmation_required_for", [])
         ]
         permissions = manifest.get("permissions", {})
+        network = (
+            manifest.get("network")
+            or permissions.get("network")
+            or permissions.get("net")
+            or {}
+        )
+        filesystem = (
+            manifest.get("filesystem")
+            or permissions.get("filesystem")
+            or permissions.get("fs")
+            or {}
+        )
+        assets = permissions.get("assets") or manifest.get("required_assets", [])
         preview = PermissionPreview(
             bundle_id=bundle_id,
             summary=f"{manifest.get('display_name') or manifest.get('id')} 需要 "
             f"{len(required_tools)} 个工具和 "
             f"{len(manifest.get('required_assets', []))} 类资产声明。",
             required_tools=required_tools,
-            required_assets=manifest.get("required_assets", []),
-            network=permissions.get("net", {}),
-            filesystem=permissions.get("fs", {}),
+            required_assets=assets if isinstance(assets, list) else [],
+            network=network if isinstance(network, dict) else {},
+            filesystem=filesystem if isinstance(filesystem, dict) else {},
             high_risk_actions=high_risk,
             blocked_actions=["wallet.sign_transaction", "hardware.control_device"],
             trust={"signature_status": "unsigned", "trust_level": _trust_for_manifest(manifest)},
@@ -1175,7 +1240,7 @@ def _skills_from_manifest(
                 "trigger": entry.get("triggers") or manifest.get("triggers", {}),
                 "input_schema": entry.get("input_schema") or manifest.get("input_schema", {}),
                 "output_schema": entry.get("output_schema") or manifest.get("output_schema", {}),
-                "required_tools": entry.get("required_tools") or manifest.get("required_tools", []),
+                "required_tools": entry.get("required_tools") or _manifest_tool_names(manifest),
                 "required_assets": entry.get("required_assets")
                 or manifest.get("required_assets", []),
                 "permission": entry.get("permissions") or manifest.get("permissions", {}),
@@ -1188,7 +1253,7 @@ def _skills_from_manifest(
 
 
 def _validate_manifest_tool_contract(manifest: dict[str, Any]) -> None:
-    manifest_tools = _declared_tool_set(manifest.get("required_tools"), "required_tools")
+    manifest_tools = set(_manifest_tool_names(manifest))
     root_steps = _declared_steps(manifest.get("steps"), "steps")
     for tool_name in _step_tool_names(root_steps, "steps"):
         if tool_name not in manifest_tools:
@@ -1281,6 +1346,29 @@ def _step_tool_names(steps: list[dict[str, Any]], field_name: str) -> list[str]:
             )
         names.append(tool_name)
     return names
+
+
+def _manifest_tool_names(manifest: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    for item in manifest.get("required_tools") or []:
+        if isinstance(item, str):
+            names.append(item)
+    permissions = manifest.get("permissions") or {}
+    for item in permissions.get("tools") or []:
+        if isinstance(item, dict) and item.get("name"):
+            names.append(str(item["name"]))
+        elif isinstance(item, str):
+            names.append(item)
+    return sorted(set(names))
+
+
+def _manifest_tool_risks(manifest: dict[str, Any]) -> dict[str, str]:
+    risks: dict[str, str] = {}
+    permissions = manifest.get("permissions") or {}
+    for item in permissions.get("tools") or []:
+        if isinstance(item, dict) and item.get("name"):
+            risks[str(item["name"])] = str(item.get("risk") or "R2")
+    return risks
 
 
 def _eval_cases_from_manifest(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1379,9 +1467,18 @@ def _trust_for_manifest(manifest: dict[str, Any]) -> str:
     risk_policy = manifest.get("risk_policy", {})
     high_risk = risk_policy.get("confirmation_required_for", [])
     permissions = manifest.get("permissions", {})
-    if permissions.get("net") or high_risk:
+    network = manifest.get("network") or permissions.get("network") or permissions.get("net")
+    manifest_risks = _manifest_tool_risks(manifest)
+    if network or high_risk or any(_risk_value(risk) >= 3 for risk in manifest_risks.values()):
         return "restricted"
     return "local"
+
+
+def _risk_value(risk: str) -> int:
+    try:
+        return int(str(risk).upper().removeprefix("R"))
+    except ValueError:
+        return 1
 
 
 def _safe_id(value: str) -> str:

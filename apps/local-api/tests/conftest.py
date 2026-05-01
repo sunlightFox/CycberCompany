@@ -44,6 +44,19 @@ def _markers_for(nodeid: str) -> set[str]:
         or "phase34" in nodeid
         or "phase35" in nodeid
         or "phase36" in nodeid
+        or "phase37" in nodeid
+        or "phase38" in nodeid
+        or "phase39" in nodeid
+        or "phase40" in nodeid
+        or "phase41" in nodeid
+        or "phase42" in nodeid
+        or "phase43" in nodeid
+        or "phase44" in nodeid
+        or "phase45" in nodeid
+        or "phase46" in nodeid
+        or "phase47" in nodeid
+        or "phase48" in nodeid
+        or "phase49" in nodeid
     ):
         markers.add("release")
     if (
@@ -53,6 +66,11 @@ def _markers_for(nodeid: str) -> set[str]:
         or "phase33" in nodeid
         or "phase34" in nodeid
         or "phase35" in nodeid
+        or "phase41" in nodeid
+        or "phase42" in nodeid
+        or "phase43" in nodeid
+        or "phase45" in nodeid
+        or "phase47" in nodeid
         or "chat_main_chain" in nodeid
     ):
         markers.add("chat_main_chain")
@@ -76,6 +94,19 @@ def _markers_for(nodeid: str) -> set[str]:
             "phase34",
             "phase35",
             "phase36",
+            "phase37",
+            "phase38",
+            "phase39",
+            "phase40",
+            "phase41",
+            "phase42",
+            "phase43",
+            "phase44",
+            "phase45",
+            "phase46",
+            "phase47",
+            "phase48",
+            "phase49",
         ]
     ):
         markers.add("security")
@@ -101,6 +132,19 @@ def _markers_for(nodeid: str) -> set[str]:
             "phase34",
             "phase35",
             "phase36",
+            "phase37",
+            "phase38",
+            "phase39",
+            "phase40",
+            "phase41",
+            "phase42",
+            "phase43",
+            "phase44",
+            "phase45",
+            "phase46",
+            "phase47",
+            "phase48",
+            "phase49",
         ]
     ):
         markers.add("slow")

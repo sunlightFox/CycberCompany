@@ -34,6 +34,7 @@ from core_types.chat import (
     ChatTurnResponse,
     ClientContext,
 )
+from core_types.checkpoint import CheckpointItem, RollbackEvent, RollbackItem, TaskCheckpoint
 from core_types.common import ApiModel, EntityId, ErrorEnvelope, ErrorPayload, Timestamp
 from core_types.context import (
     BrainSummary,
@@ -89,12 +90,21 @@ from core_types.enums import (
     TraceStatus,
     TurnStatus,
 )
+from core_types.external_platform import (
+    AccountAssetCandidate,
+    ExternalPlatformActionIntent,
+    ExternalPlatformActionPlan,
+    ExternalPlatformExecution,
+    ExternalPlatformPlanEvent,
+    ExternalPlatformTarget,
+)
 from core_types.knowledge import (
     KnowledgeChunk,
     KnowledgeSearchHit,
     KnowledgeSearchResponse,
     KnowledgeSource,
 )
+from core_types.media import MediaAnalysis, MediaAsset, MediaDerivative, MediaEditPlan
 from core_types.memory import (
     MemoryCandidate,
     MemoryItem,
@@ -120,6 +130,14 @@ from core_types.model import (
     SemanticReviewRequest,
     SemanticReviewResult,
     SemanticReviewSuggestion,
+)
+from core_types.notification import (
+    InboundMessage,
+    InboundMessageEvent,
+    NotificationChannel,
+    NotificationDeliveryAttempt,
+    NotificationMessage,
+    NotificationSubscription,
 )
 from core_types.placeholder import CapabilityPlaceholder
 from core_types.release import (
@@ -163,6 +181,16 @@ from core_types.skill import (
     SkillMatch,
     SkillRecord,
     SkillRunRecord,
+)
+from core_types.skill_governance import (
+    SkillBundleSource,
+    SkillBundleVersion,
+    SkillEvalBinding,
+    SkillGrantRecord,
+    SkillOutputTaintRecord,
+    SkillPermissionPreviewRecord,
+    SkillRollbackPoint,
+    SkillStaticAnalysisReport,
 )
 from core_types.task import (
     AgentLoopIteration,
@@ -217,6 +245,7 @@ __all__ = [
     "ApiModel",
     "AgentNextActionDecision",
     "AgentLoopIteration",
+    "AccountAssetCandidate",
     "ApprovalStatus",
     "ApprovalDetail",
     "ApprovalSummary",
@@ -263,6 +292,7 @@ __all__ = [
     "ChatInput",
     "ChatTurnRequest",
     "ChatTurnResponse",
+    "CheckpointItem",
     "ClientContext",
     "CollaborationOutput",
     "CollaborationPlan",
@@ -284,6 +314,11 @@ __all__ = [
     "EvalRunStatus",
     "EvalSuite",
     "EvidenceType",
+    "ExternalPlatformActionIntent",
+    "ExternalPlatformActionPlan",
+    "ExternalPlatformExecution",
+    "ExternalPlatformPlanEvent",
+    "ExternalPlatformTarget",
     "FindingSeverity",
     "FindingStatus",
     "FinishReason",
@@ -309,6 +344,10 @@ __all__ = [
     "MemoryBlockItem",
     "MemoryCandidate",
     "MemorySource",
+    "MediaAnalysis",
+    "MediaAsset",
+    "MediaDerivative",
+    "MediaEditPlan",
     "MemorySearchHit",
     "MemorySearchFilteredItem",
     "MemorySearchRankingItem",
@@ -335,6 +374,12 @@ __all__ = [
     "ModeDecision",
     "PrivacyLevel",
     "ModelParams",
+    "InboundMessage",
+    "InboundMessageEvent",
+    "NotificationChannel",
+    "NotificationDeliveryAttempt",
+    "NotificationMessage",
+    "NotificationSubscription",
     "PermissionPreview",
     "PersonaSummary",
     "PersonaConsistencyProfile",
@@ -360,6 +405,8 @@ __all__ = [
     "ResponseQualityEvaluation",
     "RestoreJob",
     "RestoreJobStatus",
+    "RollbackEvent",
+    "RollbackItem",
     "RiskPreview",
     "RiskLevel",
     "SafetyNote",
@@ -379,13 +426,22 @@ __all__ = [
     "SemanticReviewResult",
     "SemanticReviewSuggestion",
     "SkillPolicy",
+    "SkillBundleSource",
+    "SkillBundleVersion",
     "SkillCandidateRecord",
+    "SkillEvalBinding",
     "SkillEvalRun",
+    "SkillGrantRecord",
     "SkillMatch",
+    "SkillOutputTaintRecord",
+    "SkillPermissionPreviewRecord",
     "SkillRecord",
+    "SkillRollbackPoint",
     "SkillRunRecord",
+    "SkillStaticAnalysisReport",
     "TaskMode",
     "TaskArtifact",
+    "TaskCheckpoint",
     "TaskBudget",
     "TaskDetail",
     "TaskEvent",

@@ -19,6 +19,10 @@ class EnvironmentSettings(BaseSettings):
     data_dir: Path | None = None
     api_host: str = "127.0.0.1"
     api_port: int = 8765
+    background_workers_enabled: bool = False
+    background_worker_interval_seconds: float = 5.0
+    background_worker_startup_tick: bool = False
+    background_worker_timeout_seconds: float = 60.0
 
 
 class AppSection(BaseModel):
@@ -54,6 +58,13 @@ class RuntimePaths(BaseModel):
     migrations_dir: Path
 
 
+class WorkerSection(BaseModel):
+    enabled: bool = False
+    interval_seconds: float = 5.0
+    startup_tick: bool = False
+    timeout_seconds: float = 60.0
+
+
 class AppConfig(BaseModel):
     app: AppSection
     desktop: DesktopSection
@@ -62,6 +73,7 @@ class AppConfig(BaseModel):
     model_routing: dict[str, Any] = Field(default_factory=dict)
     safety: dict[str, Any] = Field(default_factory=dict)
     mcp: dict[str, Any] = Field(default_factory=dict)
+    workers: WorkerSection = Field(default_factory=WorkerSection)
     paths: RuntimePaths
 
 
@@ -103,6 +115,12 @@ def load_app_config(root_dir: Path | None = None) -> AppConfig:
         model_routing=model_routing,
         safety=safety,
         mcp=mcp,
+        workers=WorkerSection(
+            enabled=env.background_workers_enabled,
+            interval_seconds=max(0.5, float(env.background_worker_interval_seconds)),
+            startup_tick=env.background_worker_startup_tick,
+            timeout_seconds=max(1.0, float(env.background_worker_timeout_seconds)),
+        ),
         paths=RuntimePaths(
             root_dir=root,
             config_dir=config_dir,

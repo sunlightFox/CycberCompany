@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from core_types import (
@@ -90,6 +91,16 @@ class TaskEngine:
         self._skills: SkillPluginService | None = None
         self._mcp: MCPService | None = None
         self._supervisor: SupervisorService | None = None
+        self._browser_evidence_provider: (
+            Callable[[str], Awaitable[list[Any]]] | None
+        ) = None
+        self._checkpoint_replay_provider: (
+            Callable[[str], Awaitable[tuple[list[dict[str, Any]], list[dict[str, Any]]]]]
+            | None
+        ) = None
+        self._media_replay_provider: Callable[[str], Awaitable[list[dict[str, Any]]]] | None = (
+            None
+        )
         planner_adapter = (
             BrainModelPlannerAdapter(
                 brain_repo=brain_repo,
@@ -117,6 +128,27 @@ class TaskEngine:
 
     def set_supervisor_service(self, supervisor_service: SupervisorService) -> None:
         self._supervisor = supervisor_service
+
+    def set_browser_evidence_provider(
+        self,
+        provider: Callable[[str], Awaitable[list[Any]]],
+    ) -> None:
+        self._browser_evidence_provider = provider
+
+    def set_checkpoint_replay_provider(
+        self,
+        provider: Callable[
+            [str],
+            Awaitable[tuple[list[dict[str, Any]], list[dict[str, Any]]]],
+        ],
+    ) -> None:
+        self._checkpoint_replay_provider = provider
+
+    def set_media_replay_provider(
+        self,
+        provider: Callable[[str], Awaitable[list[dict[str, Any]]]],
+    ) -> None:
+        self._media_replay_provider = provider
 
     def set_model_planner_adapter(self, adapter: Any | None) -> None:
         self._model_planner.set_adapter(adapter)
@@ -653,6 +685,21 @@ class TaskEngine:
                 if self._skills is not None
                 else []
             )
+            browser_evidence = (
+                await self._browser_evidence_provider(task_id)
+                if self._browser_evidence_provider is not None
+                else []
+            )
+            checkpoint_data = (
+                await self._checkpoint_replay_provider(task_id)
+                if self._checkpoint_replay_provider is not None
+                else ([], [])
+            )
+            media_evidence = (
+                await self._media_replay_provider(task_id)
+                if self._media_replay_provider is not None
+                else []
+            )
             replay = TaskReplay(
                 task=task,
                 steps=[TaskStep(**row) for row in await self._repo.list_steps(task_id)],
@@ -667,6 +714,13 @@ class TaskEngine:
                 skill_runs=skill_runs,
                 mcp_calls=mcp_calls,
                 plugin_events=plugin_events,
+                browser_evidence=[
+                    item.model_dump(mode="json") if hasattr(item, "model_dump") else item
+                    for item in browser_evidence
+                ],
+                media_evidence=media_evidence,
+                checkpoints=checkpoint_data[0],
+                rollback_events=checkpoint_data[1],
                 trace={"trace_id": task.trace_id, "span_refs": []},
                 planner_decisions=[
                     PlannerDecision(**row)
@@ -1532,12 +1586,30 @@ class TaskEngine:
                         "Skill Engine 未初始化",
                         status_code=500,
                     )
+                skill_input = step["input"].get("input", {"goal": task["goal"]})
+                if not isinstance(skill_input, dict):
+                    skill_input = {"input": skill_input, "goal": task["goal"]}
+                phase36 = task.get("preflight", {}).get("phase36", {})
+                background_policy = (
+                    phase36.get("background_execution")
+                    if isinstance(phase36, dict)
+                    else None
+                )
+                if isinstance(background_policy, dict):
+                    execution_context = dict(skill_input.get("execution_context") or {})
+                    execution_context.setdefault(
+                        "attendance",
+                        background_policy.get("attendance", "unattended"),
+                    )
+                    execution_context["session_approval_reuse"] = False
+                    execution_context["scheduled_task"] = phase36.get("scheduled_task")
+                    skill_input["execution_context"] = execution_context
                 skill_run = await self._skills.run_skill(
                     str(step["input"]["skill_id"]),
                     task_id=task["task_id"],
                     step_id=step["step_id"],
                     owner_member_id=task["owner_member_id"],
-                    input_data=step["input"].get("input", {"goal": task["goal"]}),
+                    input_data=skill_input,
                     matched_reason=str(step["input"].get("matched_reason") or "task_plan"),
                     confidence=step["input"].get("confidence"),
                     approval_id=step.get("approval_id"),

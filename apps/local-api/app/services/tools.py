@@ -38,13 +38,22 @@ from app.services.approvals import ApprovalService
 from app.services.artifacts import ArtifactStore
 from app.services.asset_broker import AssetBrokerService, ToolResolvedAsset
 from app.services.audit import AuditEventService
+from app.services.browser_executor import (
+    BrowserExecutionRequest,
+    BrowserExecutionResult,
+    BrowserExecutor,
+)
+from app.services.checkpoints import rollback_availability_for_tool
 from app.services.design_alignment import SafetyDecisionService
 from app.services.knowledge import KnowledgeService
 from app.services.memory import MemoryService
 
 if TYPE_CHECKING:
+    from app.services.browser_sessions import BrowserSessionService
+    from app.services.checkpoints import CheckpointService
     from app.services.execution_boundary import ExecutionBoundaryService
     from app.services.mcp import MCPService
+    from app.services.media import MediaService
     from app.services.skill_plugin import SkillPluginService
 
 
@@ -140,6 +149,10 @@ class ToolRuntime:
         audit_service: AuditEventService,
         safety_decision_service: SafetyDecisionService,
         execution_boundary_service: ExecutionBoundaryService | None = None,
+        browser_session_service: BrowserSessionService | None = None,
+        browser_executor: BrowserExecutor | None = None,
+        checkpoint_service: CheckpointService | None = None,
+        media_service: MediaService | None = None,
     ) -> None:
         self._repo = repo
         self._artifacts = artifact_store
@@ -151,6 +164,10 @@ class ToolRuntime:
         self._audit = audit_service
         self._safety_decisions = safety_decision_service
         self._boundary = execution_boundary_service
+        self._browser_sessions = browser_session_service
+        self._browser_executor = browser_executor or BrowserExecutor()
+        self._checkpoints = checkpoint_service
+        self._media = media_service
         self._skill_plugin: SkillPluginService | None = None
         self._mcp: MCPService | None = None
 
@@ -162,6 +179,9 @@ class ToolRuntime:
     ) -> None:
         self._skill_plugin = skill_plugin_service
         self._mcp = mcp_service
+
+    async def close(self) -> None:
+        await self._browser_executor.close()
 
     async def ensure_builtin_tools(self) -> None:
         now = utc_now_iso()
@@ -358,6 +378,10 @@ class ToolRuntime:
                 "required_controls": safety_decision.required_controls,
                 "policy_sources": safety_decision.policy_sources,
                 "decision": safety_decision.decision,
+                "rollback_availability": rollback_availability_for_tool(
+                    tool.tool_name,
+                    request.args,
+                ),
             }
             safety_decision_payload = redact(safety_decision.model_dump(mode="json"))
             await self._repo.update_tool_call(
@@ -551,6 +575,12 @@ class ToolRuntime:
                 "高风险工具必须绑定任务并创建审批",
                 status_code=409,
             )
+        rollback = rollback_availability_for_tool(tool.tool_name, request.args)
+        summary_suffix = (
+            "；本地 checkpoint 可用于回滚受控任务工件"
+            if rollback.get("rollback_available")
+            else "；该动作无法由本地 checkpoint 自动撤销"
+        )
         return await self._approvals.create_approval(
             task_id=task_id,
             organization_id=organization_id,
@@ -558,8 +588,8 @@ class ToolRuntime:
             tool_call_id=tool_call_id,
             requested_action=tool.tool_name,
             risk_level=risk_level,
-            summary=f"需要确认执行 {tool.tool_name}",
-            payload=redact(request.args),
+            summary=f"需要确认执行 {tool.tool_name}{summary_suffix}",
+            payload=redact({**request.args, "rollback_availability": rollback}),
             trace_id=trace_id,
         )
 
@@ -599,6 +629,8 @@ class ToolRuntime:
                 organization_id=organization_id,
                 trace_id=trace_id,
             )
+        if name.startswith("media."):
+            return await self._execute_media_tool(request, trace_id=trace_id)
         if name.startswith("account."):
             return await self._execute_account_tool(
                 request,
@@ -843,19 +875,44 @@ class ToolRuntime:
         if name == "file.write":
             if path.exists() and not bool(request.args.get("overwrite")):
                 raise AppError(ErrorCode.CONFLICT, "文件已存在，覆盖需要审批", status_code=409)
+            checkpoint_service = self._checkpoints
+            checkpoint = None
+            if checkpoint_service is not None and bool(request.args.get("overwrite")):
+                checkpoint = await checkpoint_service.create_checkpoint(
+                    task_id=request.task_id,
+                    paths=[path_arg],
+                    checkpoint_type="pre_mutation",
+                    step_id=request.step_id,
+                    tool_call_id=tool_call_id,
+                    reason="file.write overwrite pre-mutation",
+                    metadata={"tool_name": name},
+                    trace_id=trace_id,
+                )
             content = str(request.args.get("content") or "")
-            artifact = await self._artifacts.write_text(
-                task_id=request.task_id,
-                organization_id=organization_id,
-                step_id=request.step_id,
-                tool_call_id=tool_call_id,
-                display_name=path.name,
-                content=content,
-                artifact_type="text",
-                subdir=path.parent.relative_to(self._artifacts.task_dir(request.task_id)).as_posix(),
-                trace_id=trace_id,
-            )
-            return ToolRunOutcome(result={"uri": artifact.uri}, artifacts=[artifact])
+            try:
+                artifact = await self._artifacts.write_text(
+                    task_id=request.task_id,
+                    organization_id=organization_id,
+                    step_id=request.step_id,
+                    tool_call_id=tool_call_id,
+                    display_name=path.name,
+                    content=content,
+                    artifact_type="text",
+                    subdir=path.parent.relative_to(
+                        self._artifacts.task_dir(request.task_id)
+                    ).as_posix(),
+                    trace_id=trace_id,
+                )
+            finally:
+                if checkpoint is not None and checkpoint_service is not None:
+                    checkpoint = await checkpoint_service.finalize_checkpoint(
+                        checkpoint.checkpoint_id
+                    )
+            result = {
+                "uri": artifact.uri,
+                **_checkpoint_result(checkpoint),
+            }
+            return ToolRunOutcome(result=result, artifacts=[artifact])
         if name == "file.read":
             if not path.exists() or not path.is_file():
                 raise AppError(ErrorCode.NOT_FOUND, "文件不存在", status_code=404)
@@ -885,19 +942,63 @@ class ToolRuntime:
                 request.task_id,
                 destination_arg,
             )
+            checkpoint_service = self._checkpoints
+            checkpoint = None
+            if checkpoint_service is not None:
+                checkpoint = await checkpoint_service.create_checkpoint(
+                    task_id=request.task_id,
+                    paths=[path_arg, destination_arg],
+                    checkpoint_type="pre_mutation",
+                    step_id=request.step_id,
+                    tool_call_id=tool_call_id,
+                    reason=f"{name} pre-mutation",
+                    metadata={"tool_name": name},
+                    trace_id=trace_id,
+                )
             destination.parent.mkdir(parents=True, exist_ok=True)
-            if name == "file.copy":
-                shutil.copy2(path, destination)
-            else:
-                shutil.move(str(path), str(destination))
+            try:
+                if name == "file.copy":
+                    shutil.copy2(path, destination)
+                else:
+                    shutil.move(str(path), str(destination))
+            finally:
+                if checkpoint is not None and checkpoint_service is not None:
+                    checkpoint = await checkpoint_service.finalize_checkpoint(
+                        checkpoint.checkpoint_id
+                    )
             return ToolRunOutcome(
-                result={"path": _relative_to_task(destination, request.task_id, self._artifacts)},
+                result={
+                    "path": _relative_to_task(destination, request.task_id, self._artifacts),
+                    **_checkpoint_result(checkpoint),
+                },
                 artifacts=[],
             )
         if name == "file.delete":
+            checkpoint_service = self._checkpoints
+            checkpoint = None
+            if checkpoint_service is not None and path.exists():
+                checkpoint = await checkpoint_service.create_checkpoint(
+                    task_id=request.task_id,
+                    paths=[path_arg],
+                    checkpoint_type="pre_mutation",
+                    step_id=request.step_id,
+                    tool_call_id=tool_call_id,
+                    reason="file.delete pre-mutation",
+                    metadata={"tool_name": name},
+                    trace_id=trace_id,
+                )
             if path.exists():
-                path.unlink()
-            return ToolRunOutcome(result={"deleted": True, "path": path_arg}, artifacts=[])
+                try:
+                    path.unlink()
+                finally:
+                    if checkpoint is not None and checkpoint_service is not None:
+                        checkpoint = await checkpoint_service.finalize_checkpoint(
+                            checkpoint.checkpoint_id
+                        )
+            return ToolRunOutcome(
+                result={"deleted": True, "path": path_arg, **_checkpoint_result(checkpoint)},
+                artifacts=[],
+            )
         raise AppError(ErrorCode.TOOL_NOT_FOUND, "文件工具不存在", status_code=404)
 
     async def _execute_knowledge_tool(
@@ -1006,6 +1107,298 @@ class ToolRuntime:
             return ToolRunOutcome(result=validate_response.model_dump(mode="json"), artifacts=[])
         raise AppError(ErrorCode.TOOL_NOT_FOUND, "资产工具不存在", status_code=404)
 
+    async def _execute_media_tool(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        if self._media is None:
+            raise AppError(
+                ErrorCode.MEDIA_BACKEND_UNAVAILABLE,
+                "媒体服务未初始化",
+                status_code=503,
+            )
+        from app.schemas.media import (
+            MediaEditPlanCreateRequest,
+            MediaExportArtifactRequest,
+            MediaExtractAudioRequest,
+            MediaExtractFramesRequest,
+            MediaImportArtifactRequest,
+            MediaProbeRequest,
+            MediaRenderEditRequest,
+            MediaSceneDetectRequest,
+            MediaTimelineRequest,
+            MediaTranscribeAudioRequest,
+        )
+
+        name = request.tool_name
+        args = request.args
+        if name == "media.import_artifact":
+            if request.task_id and not args.get("task_id"):
+                args = {**args, "task_id": request.task_id}
+            response = await self._media.import_artifact(
+                MediaImportArtifactRequest(**args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(result=response.model_dump(mode="json"), artifacts=[])
+        media_id = str(args.get("media_id") or "")
+        if name != "media.render_edit" and not media_id:
+            raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "media_id 必填", status_code=422)
+        media_args = {
+            key: value
+            for key, value in args.items()
+            if key not in {"media_id", "edit_plan_id"}
+        }
+        if name == "media.probe":
+            response = await self._media.probe(
+                media_id,
+                MediaProbeRequest(**media_args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(result=response.model_dump(mode="json"), artifacts=[])
+        if name == "media.extract_frames":
+            response = await self._media.extract_frames(
+                media_id,
+                MediaExtractFramesRequest(**media_args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(
+                result=response.model_dump(mode="json"),
+                artifacts=response.artifacts,
+            )
+        if name == "media.extract_audio":
+            response = await self._media.extract_audio(
+                media_id,
+                MediaExtractAudioRequest(**media_args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(
+                result=response.model_dump(mode="json"),
+                artifacts=response.artifacts,
+            )
+        if name == "media.transcribe_audio":
+            response = await self._media.transcribe_audio(
+                media_id,
+                MediaTranscribeAudioRequest(**media_args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(
+                result=response.model_dump(mode="json"),
+                artifacts=response.artifacts,
+            )
+        if name == "media.scene_detect":
+            response = await self._media.scene_detect(
+                media_id,
+                MediaSceneDetectRequest(**media_args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(result=response.model_dump(mode="json"), artifacts=[])
+        if name == "media.timeline_summarize":
+            response = await self._media.timeline(
+                media_id,
+                MediaTimelineRequest(**media_args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(result=response.model_dump(mode="json"), artifacts=[])
+        if name == "media.plan_edit":
+            plan_response = await self._media.create_edit_plan(
+                media_id,
+                MediaEditPlanCreateRequest(**media_args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(result=plan_response.model_dump(mode="json"), artifacts=[])
+        if name == "media.render_edit":
+            edit_plan_id = str(args.get("edit_plan_id") or "")
+            render_response = await self._media.render_edit(
+                edit_plan_id,
+                MediaRenderEditRequest(**media_args),
+                trace_id=trace_id,
+            )
+            artifacts = (
+                [render_response.artifact] if render_response.artifact is not None else []
+            )
+            return ToolRunOutcome(
+                result=render_response.model_dump(mode="json"),
+                artifacts=artifacts,
+            )
+        if name == "media.export_artifact":
+            response = await self._media.export_artifact(
+                media_id,
+                MediaExportArtifactRequest(**media_args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(result=response.model_dump(mode="json"), artifacts=[])
+        raise AppError(ErrorCode.TOOL_NOT_FOUND, "媒体工具不存在", status_code=404)
+
+    async def _browser_session_context(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        if self._browser_sessions is None:
+            return {}
+        handle_id = str(
+            request.args.get("session_handle_id")
+            or request.args.get("browser_session_handle_id")
+            or ""
+        )
+        if handle_id:
+            resolved = await self._asset_broker.resolve_for_tool(
+                handle_id,
+                AssetResolveForToolRequest(
+                    subject_id=request.member_id,
+                    action=_asset_action_for_tool(request.tool_name, request.args),
+                    tool_name=request.tool_name,
+                    task_id=request.task_id,
+                    conversation_id=None,
+                    approval_id=request.approval_id,
+                ),
+                trace_id=trace_id,
+            )
+            resource = resolved.resource if isinstance(resolved.resource, dict) else {}
+            raw_config = resource.get("config")
+            config = raw_config if isinstance(raw_config, dict) else {}
+            context = await self._browser_sessions.validate_session_context(
+                browser_profile_id=str(
+                    config.get("browser_profile_id") or config.get("profile_id") or ""
+                )
+                or None,
+                browser_session_id=str(config.get("browser_session_id") or "") or None,
+            )
+            return {
+                **context,
+                "asset_handle_id": handle_id,
+                "asset_id": resolved.asset_id,
+                "asset_summary": resolved.summary,
+                "session_handle_resolved": True,
+                "cookie_material_exposed": False,
+            }
+        if request.args.get("browser_profile_id") or request.args.get("browser_session_id"):
+            return await self._browser_sessions.validate_session_context(
+                browser_profile_id=str(request.args.get("browser_profile_id") or "") or None,
+                browser_session_id=str(request.args.get("browser_session_id") or "") or None,
+            )
+        return {}
+
+    async def _ensure_browser_url_allowed(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        url: str,
+        action: str,
+        session_context: dict[str, Any],
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        if self._browser_sessions is None:
+            if not url.startswith(("http://", "https://")):
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "浏览器 URL 被安全策略阻断",
+                    status_code=403,
+                    details={"reason_codes": ["browser_session_service_unavailable"]},
+                )
+            return {
+                "allowed": True,
+                "url": str(redact(url)),
+                "reason_codes": ["browser_url_allowed_without_profile"],
+            }
+        decision = self._browser_sessions.classify_url(
+            url,
+            session_context=session_context,
+        )
+        payload = decision.as_dict()
+        if decision.allowed:
+            return payload
+        await self._browser_sessions.record_evidence(
+            task_id=request.task_id,
+            tool_call_id=tool_call_id,
+            organization_id=organization_id,
+            action=action,
+            action_status="blocked",
+            url=decision.redacted_url,
+            title=None,
+            http_status=None,
+            evidence_summary="browser URL blocked by safety policy before navigation",
+            network_summary={"request_count": 0, "failed_count": 0},
+            console_summary={"error_count": 0, "warning_count": 0},
+            redaction_summary={"blocked_before_navigation": True},
+            safety_decision=payload,
+            session_context=session_context,
+            trace_id=trace_id,
+        )
+        raise AppError(
+            ErrorCode.TOOL_PERMISSION_DENIED,
+            "浏览器 URL 被安全策略阻断",
+            status_code=403,
+            details={
+                "reason_codes": decision.reason_codes,
+                "blocked_reason": decision.blocked_reason,
+                "url": decision.redacted_url,
+            },
+        )
+
+    async def _attach_browser_evidence(
+        self,
+        result: dict[str, Any],
+        *,
+        request: ToolExecuteRequest,
+        tool_call_id: str,
+        organization_id: str,
+        action: str,
+        url: str | None,
+        title: str | None,
+        http_status: int | None,
+        snapshot_preview: str | None,
+        safety: dict[str, Any],
+        session_context: dict[str, Any],
+        trace_id: str | None,
+        screenshot_artifact_id: str | None = None,
+        download_artifact_id: str | None = None,
+        artifact_ids: list[str] | None = None,
+    ) -> None:
+        if self._browser_sessions is None:
+            return
+        evidence = await self._browser_sessions.record_evidence(
+            task_id=request.task_id,
+            tool_call_id=tool_call_id,
+            organization_id=organization_id,
+            action=action,
+            action_status=str(result.get("action_status") or "completed"),
+            url=url,
+            title=title,
+            http_status=http_status,
+            evidence_summary=str(result.get("evidence_summary") or "browser evidence"),
+            snapshot_preview=snapshot_preview,
+            screenshot_artifact_id=screenshot_artifact_id,
+            download_artifact_id=download_artifact_id,
+            artifact_ids=artifact_ids,
+            network_summary=dict(
+                result.get("network_summary")
+                or {
+                    "request_count": 1 if url else 0,
+                    "failed_count": 1 if result.get("action_status") == "http_error" else 0,
+                    "http_status": http_status,
+                }
+            ),
+            console_summary=dict(
+                result.get("console_summary") or {"error_count": 0, "warning_count": 0}
+            ),
+            redaction_summary={
+                "session_handle_redacted": True,
+                "executor_backend": result.get("backend"),
+                "backend_status": result.get("backend_status"),
+            },
+            safety_decision=safety,
+            session_context=session_context,
+            trace_id=trace_id,
+        )
+        result["browser_evidence_id"] = evidence.browser_evidence_id
+        result["browser_evidence"] = evidence.model_dump(mode="json")
+
     async def _execute_browser_tool(
         self,
         request: ToolExecuteRequest,
@@ -1014,6 +1407,7 @@ class ToolRuntime:
         organization_id: str,
         trace_id: str | None,
     ) -> ToolRunOutcome:
+        session_context = await self._browser_session_context(request, trace_id=trace_id)
         if request.tool_name == "browser.search":
             query = str(request.args.get("query") or "").strip()
             if not query:
@@ -1021,8 +1415,15 @@ class ToolRuntime:
             url = str(request.args.get("url") or "").strip() or (
                 "https://www.bing.com/search?q=" + quote_plus(query)
             )
-            if not url.startswith(("http://", "https://")):
-                raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "url 必须是 http(s)", status_code=422)
+            safety = await self._ensure_browser_url_allowed(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                url=url,
+                action="search",
+                session_context=session_context,
+                trace_id=trace_id,
+            )
             try:
                 async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                     response = await client.get(url)
@@ -1042,92 +1443,71 @@ class ToolRuntime:
                     details={"reason": _browser_http_error_reason(exc)},
                 ) from exc
             text = response.text[:5000]
+            title = _html_title(text)
+            result = {
+                "query": str(redact(query)),
+                "url": str(redact(str(response.url))),
+                "title": title,
+                "http_status": response.status_code,
+                "action_status": "completed",
+                "evidence_summary": "browser.search fetched untrusted search content",
+                "content_preview": str(redact(text)),
+                "snapshot": str(redact(text)),
+                "recoverable": False,
+                "redaction_summary": {"policy": "trace_service.redact"},
+                "retrieval_source": "browser.search",
+                "untrusted_external_content": True,
+            }
+            await self._attach_browser_evidence(
+                result,
+                request=request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action="search",
+                url=str(response.url),
+                title=title,
+                http_status=response.status_code,
+                snapshot_preview=text,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
+            )
             return ToolRunOutcome(
-                result={
-                    "query": str(redact(query)),
-                    "url": str(redact(str(response.url))),
-                    "title": _html_title(text),
-                    "http_status": response.status_code,
-                    "action_status": "completed",
-                    "evidence_summary": "browser.search fetched untrusted search content",
-                    "content_preview": str(redact(text)),
-                    "snapshot": str(redact(text)),
-                    "recoverable": False,
-                    "redaction_summary": {"policy": "trace_service.redact"},
-                    "retrieval_source": "browser.search",
-                    "untrusted_external_content": True,
-                },
+                result=result,
                 artifacts=[],
             )
         url = str(request.args.get("url") or "")
-        if not url.startswith(("http://", "https://")):
-            if url.lower().startswith("file:"):
-                raise AppError(
-                    ErrorCode.TOOL_PERMISSION_DENIED,
-                    "file URL 被安全策略阻断",
-                    status_code=403,
-                    details={"reason": "browser_file_url_denied"},
-                )
-            raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "url 必须是 http(s)", status_code=422)
+        action = _browser_action_for_tool(request.tool_name)
+        safety = await self._ensure_browser_url_allowed(
+            request,
+            tool_call_id=tool_call_id,
+            organization_id=organization_id,
+            url=url,
+            action=action,
+            session_context=session_context,
+            trace_id=trace_id,
+        )
         if request.tool_name == "browser.open":
-            return ToolRunOutcome(
-                result={
-                    "url": str(redact(url)),
-                    "title": None,
-                    "http_status": None,
-                    "action_status": "opened",
-                    "evidence_summary": "browser.open recorded the requested URL",
-                    "snapshot": None,
-                    "screenshot": None,
-                    "artifact": None,
-                    "timeout": False,
-                    "recoverable": True,
-                    "redaction_summary": {"policy": "trace_service.redact"},
-                    "untrusted_external_content": True,
-                },
-                artifacts=[],
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action="open",
+                url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
             )
         if request.tool_name == "browser.snapshot":
-            try:
-                async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-                    response = await client.get(url)
-            except httpx.TimeoutException as exc:
-                raise AppError(
-                    ErrorCode.TOOL_TIMEOUT,
-                    "浏览器快照获取超时",
-                    status_code=504,
-                    details={"reason": "timeout while fetching browser snapshot"},
-                ) from exc
-            except httpx.HTTPError as exc:
-                raise AppError(
-                    ErrorCode.TOOL_EXECUTION_FAILED,
-                    "浏览器快照获取失败",
-                    status_code=502,
-                    details={"reason": _browser_http_error_reason(exc)},
-                ) from exc
-            text = response.text[:5000]
-            return ToolRunOutcome(
-                result={
-                    "url": str(redact(str(response.url))),
-                    "title": _html_title(text),
-                    "http_status": response.status_code,
-                    "action_status": (
-                        "completed" if response.status_code < 400 else "http_error"
-                    ),
-                    "evidence_summary": (
-                        f"browser.snapshot captured HTTP {response.status_code} "
-                        "untrusted page evidence"
-                    ),
-                    "content_preview": str(redact(text)),
-                    "snapshot": str(redact(text)),
-                    "screenshot": None,
-                    "artifact": None,
-                    "timeout": False,
-                    "recoverable": response.status_code >= 400,
-                    "redaction_summary": {"policy": "trace_service.redact"},
-                    "untrusted_external_content": True,
-                },
-                artifacts=[],
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action="snapshot",
+                url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
             )
         if request.tool_name in {"browser.fill", "browser.type"}:
             if not request.task_id:
@@ -1137,26 +1517,17 @@ class ToolRuntime:
                     status_code=422,
                 )
             selector = str(request.args.get("selector") or "")
-            value = str(request.args.get("value") or request.args.get("text") or "")
             if not selector:
                 raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "selector 必填", status_code=422)
-            return ToolRunOutcome(
-                result={
-                    "url": str(redact(url)),
-                    "selector": str(redact(selector)),
-                    "action": "type" if request.tool_name == "browser.type" else "fill",
-                    "status": "interaction_recorded",
-                    "action_status": "interaction_recorded",
-                    "evidence_summary": (
-                        "browser interaction recorded without executing hidden side effects"
-                    ),
-                    "value_preview": str(redact(value[:80])),
-                    "timeout": False,
-                    "recoverable": True,
-                    "redaction_summary": {"policy": "trace_service.redact"},
-                    "untrusted_external_content": True,
-                },
-                artifacts=[],
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action="type" if request.tool_name == "browser.type" else "fill",
+                url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
             )
         if request.tool_name in {"browser.click", "browser.submit"}:
             if not request.task_id:
@@ -1168,27 +1539,31 @@ class ToolRuntime:
             selector = str(request.args.get("selector") or "")
             if request.tool_name == "browser.click" and not selector:
                 raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "selector 必填", status_code=422)
-            return ToolRunOutcome(
-                result={
-                    "url": str(redact(url)),
-                    "selector": str(redact(selector)),
-                    "action": "submit" if request.tool_name == "browser.submit" else "click",
-                    "status": "interaction_recorded",
-                    "action_status": "interaction_recorded",
-                    "evidence_summary": "browser interaction recorded under task binding",
-                    "timeout": False,
-                    "recoverable": True,
-                    "redaction_summary": {"policy": "trace_service.redact"},
-                    "untrusted_external_content": True,
-                },
-                artifacts=[],
-            )
-        if request.tool_name == "browser.screenshot":
-            return await self._browser_screenshot(
+            return await self._run_browser_executor(
                 request,
                 tool_call_id=tool_call_id,
                 organization_id=organization_id,
+                action="submit" if request.tool_name == "browser.submit" else "click",
                 url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
+            )
+        if request.tool_name == "browser.screenshot":
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "截图必须绑定任务",
+                    status_code=422,
+                )
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action="screenshot",
+                url=url,
+                safety=safety,
+                session_context=session_context,
                 trace_id=trace_id,
             )
         if request.tool_name == "browser.download":
@@ -1198,56 +1573,116 @@ class ToolRuntime:
                     "下载必须绑定任务",
                     status_code=422,
                 )
-            try:
-                async with httpx.AsyncClient(timeout=30) as client:
-                    response = await client.get(url)
-                    response.raise_for_status()
-            except httpx.HTTPError as exc:
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action="download",
+                url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
+            )
+        raise AppError(ErrorCode.TOOL_NOT_FOUND, "浏览器工具不存在", status_code=404)
+
+    async def _run_browser_executor(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        action: str,
+        url: str,
+        safety: dict[str, Any],
+        session_context: dict[str, Any],
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        execution = await self._browser_executor.execute(
+            BrowserExecutionRequest(
+                action=action,
+                url=url,
+                selector=str(request.args.get("selector") or "") or None,
+                value=str(request.args.get("value") or request.args.get("text") or ""),
+                timeout_seconds=float(request.args.get("timeout_seconds") or 15),
+                context_key=_browser_context_key(request, session_context),
+                session_context=session_context,
+                display_name=str(request.args.get("display_name") or "") or None,
+            )
+        )
+        result = execution.public_result()
+        artifacts: list[TaskArtifact] = []
+        artifact_ids: list[str] = []
+        screenshot_artifact_id: str | None = None
+        download_artifact_id: str | None = None
+        if action == "screenshot" and execution.screenshot_bytes is not None:
+            if not request.task_id:
                 raise AppError(
-                    ErrorCode.TOOL_EXECUTION_FAILED,
-                    "浏览器下载失败",
-                    status_code=502,
-                    details={"reason": _browser_http_error_reason(exc)},
-                ) from exc
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "截图必须绑定任务",
+                    status_code=422,
+                )
             artifact = await self._artifacts.write_bytes(
                 task_id=request.task_id,
                 organization_id=organization_id,
                 step_id=request.step_id,
                 tool_call_id=tool_call_id,
-                display_name=str(request.args.get("display_name") or "download.bin"),
-                content=response.content,
-                artifact_type="download",
-                content_type=response.headers.get("content-type") or "application/octet-stream",
-                subdir="quarantine",
-                metadata={
-                    "url": str(redact(str(response.url))),
-                    "http_status": response.status_code,
-                    "untrusted_external_content": True,
-                    "redaction_summary": {"policy": "trace_service.redact"},
-                },
+                display_name=execution.filename or "screenshot.png",
+                content=execution.screenshot_bytes,
+                artifact_type="screenshot",
+                content_type=execution.content_type or "image/png",
+                subdir="screenshots",
+                metadata=_browser_artifact_metadata(execution),
                 trace_id=trace_id,
             )
-            return ToolRunOutcome(
-                result={
-                    "url": str(redact(str(response.url))),
-                    "title": None,
-                    "http_status": response.status_code,
-                    "action_status": "completed",
-                    "evidence_summary": (
-                        "browser.download stored untrusted content as a task artifact"
-                    ),
-                    "snapshot": None,
-                    "screenshot": None,
-                    "artifact": artifact.model_dump(mode="json"),
-                    "download": artifact.model_dump(mode="json"),
-                    "timeout": False,
-                    "recoverable": False,
-                    "redaction_summary": {"policy": "trace_service.redact"},
-                    "untrusted_external_content": True,
-                },
-                artifacts=[artifact],
+            artifacts.append(artifact)
+            artifact_ids.append(artifact.artifact_id)
+            screenshot_artifact_id = artifact.artifact_id
+            result["screenshot"] = artifact.model_dump(mode="json")
+            result["artifact"] = artifact.model_dump(mode="json")
+            result["artifact_id"] = artifact.artifact_id
+        if action == "download" and execution.download_bytes is not None:
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "下载必须绑定任务",
+                    status_code=422,
+                )
+            artifact = await self._artifacts.write_bytes(
+                task_id=request.task_id,
+                organization_id=organization_id,
+                step_id=request.step_id,
+                tool_call_id=tool_call_id,
+                display_name=execution.filename or "download.bin",
+                content=execution.download_bytes,
+                artifact_type="download",
+                content_type=execution.content_type or "application/octet-stream",
+                subdir="quarantine",
+                metadata=_browser_artifact_metadata(execution),
+                trace_id=trace_id,
             )
-        raise AppError(ErrorCode.TOOL_NOT_FOUND, "浏览器工具不存在", status_code=404)
+            artifacts.append(artifact)
+            artifact_ids.append(artifact.artifact_id)
+            download_artifact_id = artifact.artifact_id
+            result["artifact"] = artifact.model_dump(mode="json")
+            result["download"] = artifact.model_dump(mode="json")
+        await self._attach_browser_evidence(
+            result,
+            request=request,
+            tool_call_id=tool_call_id,
+            organization_id=organization_id,
+            action=action,
+            url=execution.url,
+            title=execution.title,
+            http_status=execution.http_status,
+            snapshot_preview=execution.snapshot,
+            screenshot_artifact_id=screenshot_artifact_id,
+            download_artifact_id=download_artifact_id,
+            artifact_ids=artifact_ids,
+            safety=safety,
+            session_context=session_context,
+            trace_id=trace_id,
+        )
+        return ToolRunOutcome(result=result, artifacts=artifacts)
 
     async def _browser_screenshot(
         self,
@@ -1256,6 +1691,8 @@ class ToolRuntime:
         tool_call_id: str,
         organization_id: str,
         url: str,
+        safety: dict[str, Any],
+        session_context: dict[str, Any],
         trace_id: str | None,
     ) -> ToolRunOutcome:
         if not request.task_id:
@@ -1294,25 +1731,46 @@ class ToolRuntime:
             artifact_type="screenshot",
             content_type="image/png",
             subdir="screenshots",
-            metadata={"url": url, "untrusted_external_content": True},
+            metadata={
+                "url": str(redact(url)),
+                "untrusted_external_content": True,
+                "redaction_summary": {"policy": "trace_service.redact"},
+            },
+            trace_id=trace_id,
+        )
+        result = {
+            "url": str(redact(url)),
+            "title": None,
+            "http_status": None,
+            "action_status": "completed",
+            "evidence_summary": "browser.screenshot captured a task artifact",
+            "snapshot": None,
+            "screenshot": artifact.model_dump(mode="json"),
+            "artifact": artifact.model_dump(mode="json"),
+            "artifact_id": artifact.artifact_id,
+            "timeout": False,
+            "recoverable": False,
+            "redaction_summary": {"policy": "trace_service.redact"},
+            "untrusted_external_content": True,
+        }
+        await self._attach_browser_evidence(
+            result,
+            request=request,
+            tool_call_id=tool_call_id,
+            organization_id=organization_id,
+            action="screenshot",
+            url=url,
+            title=None,
+            http_status=None,
+            snapshot_preview=None,
+            screenshot_artifact_id=artifact.artifact_id,
+            artifact_ids=[artifact.artifact_id],
+            safety=safety,
+            session_context=session_context,
             trace_id=trace_id,
         )
         return ToolRunOutcome(
-            result={
-                "url": str(redact(url)),
-                "title": None,
-                "http_status": None,
-                "action_status": "completed",
-                "evidence_summary": "browser.screenshot captured a task artifact",
-                "snapshot": None,
-                "screenshot": artifact.model_dump(mode="json"),
-                "artifact": artifact.model_dump(mode="json"),
-                "artifact_id": artifact.artifact_id,
-                "timeout": False,
-                "recoverable": False,
-                "redaction_summary": {"policy": "trace_service.redact"},
-                "untrusted_external_content": True,
-            },
+            result=result,
             artifacts=[artifact],
         )
 
@@ -1680,6 +2138,19 @@ def _risk_for(tool: ToolDefinition, args: dict[str, Any]) -> RiskLevel:
     return RiskLevel(policy.get("default", "R1"))
 
 
+def _checkpoint_result(checkpoint: Any | None) -> dict[str, Any]:
+    if checkpoint is None:
+        return {
+            "checkpoint_id": None,
+            "rollback_available": False,
+        }
+    return {
+        "checkpoint_id": checkpoint.checkpoint_id,
+        "rollback_available": checkpoint.restorable,
+        "checkpoint_status": checkpoint.status,
+    }
+
+
 def _required_http_url(args: dict[str, Any], key: str) -> str:
     url = str(args.get(key) or "").strip()
     if not url:
@@ -1831,9 +2302,13 @@ def _handle_ids_from_args(args: dict[str, Any]) -> list[str]:
     ids: list[str] = []
     if args.get("handle_id"):
         ids.append(str(args["handle_id"]))
+    if args.get("session_handle_id"):
+        ids.append(str(args["session_handle_id"]))
+    if args.get("browser_session_handle_id"):
+        ids.append(str(args["browser_session_handle_id"]))
     for value in args.get("handle_ids") or []:
         ids.append(str(value))
-    return ids
+    return list(dict.fromkeys(ids))
 
 
 def _asset_action_for_tool(tool_name: str, args: dict[str, Any]) -> str:
@@ -1847,9 +2322,48 @@ def _asset_action_for_tool(tool_name: str, args: dict[str, Any]) -> str:
         return "publish_post"
     if tool_name.startswith("account."):
         return "draft_post"
+    if tool_name == "browser.download":
+        return "download"
+    if tool_name == "browser.screenshot":
+        return "capture"
+    if tool_name in {"browser.fill", "browser.type", "browser.click", "browser.submit"}:
+        return str(args.get("action") or "interact")
+    if tool_name.startswith("browser."):
+        return str(args.get("action") or "read")
     if tool_name.startswith("hardware."):
         return "query_status"
     return str(args.get("action") or "read")
+
+
+def _browser_action_for_tool(tool_name: str) -> str:
+    return tool_name.removeprefix("browser.")
+
+
+def _browser_context_key(
+    request: ToolExecuteRequest,
+    session_context: dict[str, Any],
+) -> str:
+    profile_id = session_context.get("browser_profile_id") or "no_profile"
+    session_id = session_context.get("browser_session_id") or "no_session"
+    task_id = request.task_id or "no_task"
+    return f"{profile_id}:{session_id}:{task_id}"
+
+
+def _browser_artifact_metadata(execution: BrowserExecutionResult) -> dict[str, Any]:
+    return {
+        "url": str(redact(execution.url)),
+        "http_status": execution.http_status,
+        "browser_backend": execution.backend,
+        "backend_status": execution.backend_status,
+        "fallback_chain": execution.fallback_chain,
+        "degraded_reason": execution.degraded_reason,
+        "untrusted_external_content": True,
+        "redaction_summary": {
+            "policy": "trace_service.redact",
+            "storage_state_redacted": True,
+            "session_material_visible": False,
+        },
+    }
 
 
 def _normalize_approval_args(payload: dict[str, Any]) -> dict[str, Any]:
@@ -2055,6 +2569,16 @@ BUILTIN_TOOLS: list[dict[str, Any]] = [
             "account.login": "R2",
             "account.create_draft_artifact": "R2",
             "account.publish_post": "R4",
+            "media.import_artifact": "R2",
+            "media.probe": "R1",
+            "media.extract_frames": "R2",
+            "media.extract_audio": "R2",
+            "media.transcribe_audio": "R2",
+            "media.scene_detect": "R2",
+            "media.timeline_summarize": "R2",
+            "media.plan_edit": "R2",
+            "media.render_edit": "R3",
+            "media.export_artifact": "R3",
             "hardware.query_status": "R1",
         }.items()
     ],

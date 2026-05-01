@@ -82,6 +82,7 @@ function Write-CheckReport {
       release_real_chat_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-04-29\run_chat_main_chain*_cases.py'
       release_power_chat_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-04-30\run_chat_main_chain_power_cases.py'
       release_natural_chat_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-04-30\run_chat_natural_interaction_benchmark.py'
+      release_quality_chat_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-04-30-quality\run_chat_main_chain_quality_cases.py'
       release_full = '.\scripts\check.ps1 -Profile full'
     }
   }
@@ -290,6 +291,46 @@ function Invoke-NaturalChatIssueGate {
   }
 }
 
+function Invoke-QualityChatIssueGate {
+  $logPath = Join-Path $reportRoot "$runId-chat_e2e_quality_issue_gate.log"
+  $started = (Get-Date).ToUniversalTime()
+  $relativePath = "docs\测试\聊天主链路\2026-04-30-quality\08-高质量体验待修复问题.md"
+  $path = Join-Path $root $relativePath
+  $openIssues = @()
+  if (-not (Test-Path $path)) {
+    $openIssues += [ordered]@{ file = $relativePath; count = 1; reason = "missing_issue_file" }
+  } else {
+    $matches = Select-String -Path $path -Pattern "^##\s+CHAT-E2E-QUALITY-FIX" -AllMatches
+    $count = @($matches).Count
+    if ($count -gt 0) {
+      $openIssues += [ordered]@{ file = $relativePath; count = $count; reason = "open_quality_issue_records" }
+    }
+  }
+  $completed = (Get-Date).ToUniversalTime()
+  $status = if ($openIssues.Count -eq 0) { "passed" } else { "failed" }
+  $summary = [ordered]@{
+    status = $status
+    checked_files = @($relativePath)
+    open_issues = $openIssues
+  }
+  $summary | ConvertTo-Json -Depth 8 | Set-Content -Path $logPath -Encoding UTF8
+  $script:checkResults += [ordered]@{
+    name = "chat_e2e_quality_issue_gate"
+    args = @($relativePath)
+    status = $status
+    exit_code = if ($openIssues.Count -eq 0) { 0 } else { 1 }
+    started_at = $started.ToString("o")
+    completed_at = $completed.ToString("o")
+    duration_seconds = [Math]::Round(($completed - $started).TotalSeconds, 3)
+    log_path = $logPath
+  }
+  if ($openIssues.Count -gt 0) {
+    Write-Host "Quality chat E2E issue gate failed. See: $logPath"
+    Write-CheckReport -OverallStatus "failed"
+    exit 1
+  }
+}
+
 Invoke-PythonModule -Name "ruff" -ModuleArgs @("ruff", "check", ".")
 Invoke-PythonModule -Name "mypy" -ModuleArgs @("mypy", ".")
 switch ($Profile) {
@@ -375,6 +416,9 @@ switch ($Profile) {
     Invoke-PowerChatIssueGate
     Invoke-PythonScript -Name "chat_e2e_natural" -ScriptPath (Join-Path $powerRunnerRoot "run_chat_natural_interaction_benchmark.py")
     Invoke-NaturalChatIssueGate
+    $qualityRunnerRoot = Join-Path $root "docs\测试\聊天主链路\2026-04-30-quality"
+    Invoke-PythonScript -Name "chat_e2e_quality" -ScriptPath (Join-Path $qualityRunnerRoot "run_chat_main_chain_quality_cases.py")
+    Invoke-QualityChatIssueGate
   }
   default {
     Invoke-PythonModule -Name "pytest" -ModuleArgs @("pytest", "--durations=20")

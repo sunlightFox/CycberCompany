@@ -17,6 +17,7 @@ from core_types import (
     TaskStatus,
 )
 from fastapi.testclient import TestClient
+from phase_contracts import assert_phase_migration_contract
 
 
 def test_phase35_suite_contracts_release_summary_and_no_new_migration(
@@ -38,7 +39,8 @@ def test_phase35_suite_contracts_release_summary_and_no_new_migration(
     diagnostic = json.loads(diagnostic_path.read_text(encoding="utf-8"))
     phase35 = report["summary"]["phase35"]
 
-    assert _latest_migration() == "025_browser_sessions.sql"
+    migration_contract = assert_phase_migration_contract(client, "phase35")
+    assert migration_contract["current_at_least_required"] is True
     assert "suite_phase35_chat_safety_state_semantics" in {
         item["suite_id"] for item in suites
     }
@@ -342,12 +344,4 @@ def _task(status: TaskStatus) -> SimpleNamespace:
         status=status,
         mode=TaskMode.WORKFLOW,
     )
-
-
-def _latest_migration() -> str:
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[3]
-    migrations = root / "apps/local-api/app/db/migrations"
-    return sorted(path.name for path in migrations.glob("*.sql"))[-1]
 

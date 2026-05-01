@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.dependencies import get_registry
+from app.schemas.browser import BrowserEvidenceListResponse
 from app.schemas.tasks import (
     AgentLoopListResponse,
     AgentNextActionDecisionListResponse,
@@ -183,6 +184,17 @@ async def task_replay(
                 trace_id=getattr(request.state, "trace_id", None),
             )
         ).model_dump(mode="json")
+    )
+
+
+@router.get("/{task_id}/browser-evidence", response_model=BrowserEvidenceListResponse)
+async def task_browser_evidence(
+    task_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> BrowserEvidenceListResponse:
+    await registry.task_engine.detail(task_id)
+    return BrowserEvidenceListResponse(
+        items=await registry.browser_session_service.list_task_evidence(task_id)
     )
 
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from fastapi.testclient import TestClient
+from phase_contracts import assert_phase_migration_contract
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 
@@ -17,7 +18,8 @@ def test_phase34_suite_contracts_release_profile_and_no_new_migration(
     by_module = {item["name"]: item for item in contracts}
     check_script = (ROOT_DIR / "scripts" / "check.ps1").read_text(encoding="utf-8")
 
-    assert _latest_migration() == "025_browser_sessions.sql"
+    migration_contract = assert_phase_migration_contract(client, "phase34")
+    assert migration_contract["current_at_least_required"] is True
     assert "suite_phase34_natural_chat_interaction_loop" in {
         item["suite_id"] for item in suites
     }
@@ -254,9 +256,4 @@ def _jargon_count(text: str) -> int:
         "r3",
     ]
     return sum(1 for item in forbidden if item in lowered)
-
-
-def _latest_migration() -> str:
-    migrations = ROOT_DIR / "apps/local-api/app/db/migrations"
-    return sorted(path.name for path in migrations.glob("*.sql"))[-1]
 

@@ -679,6 +679,10 @@ class AssetBrokerService:
 
 
 def _asset_handle_summary(asset: dict[str, Any]) -> str:
+    if asset.get("provider") == "browser_session":
+        return asset.get("summary_text") or (
+            f"{asset['display_name']} (browser session handle, credentials redacted)"
+        )
     return asset.get("summary_text") or f"{asset['display_name']} ({asset['asset_type']})"
 
 
@@ -690,7 +694,14 @@ def _asset_search_text(asset: dict[str, Any]) -> str:
     ]
     config = asset.get("config")
     if isinstance(config, dict):
-        for key in ("platform", "username", "account", "label", "provider"):
+        for key in (
+            "platform",
+            "username",
+            "account",
+            "label",
+            "provider",
+            "login_domain",
+        ):
             value = config.get(key)
             if value is not None:
                 parts.append(str(value))
@@ -716,6 +727,10 @@ def _minimal_config(asset: dict[str, Any], action: str) -> dict[str, Any]:
         "provider",
         "device_type",
         "model_name",
+        "profile_id",
+        "browser_profile_id",
+        "browser_session_id",
+        "login_domain",
     }
     if action in {"read_knowledge", "index_knowledge"}:
         allowed_keys |= {"source_uri"}
@@ -724,6 +739,8 @@ def _minimal_config(asset: dict[str, Any], action: str) -> dict[str, Any]:
 
 def _ttl_for(asset: dict[str, Any], actions: list[str]) -> timedelta:
     asset_type = asset["asset_type"]
+    if asset.get("provider") == "browser_session":
+        return timedelta(minutes=15)
     if asset_type == AssetCategory.WALLET.value:
         return timedelta(minutes=5)
     if any(action in {"publish_post", "sign_transaction", "delete_content"} for action in actions):

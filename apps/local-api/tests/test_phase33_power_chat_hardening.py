@@ -10,6 +10,7 @@ from typing import Any, cast
 import anyio
 from app.db.session import Database
 from fastapi.testclient import TestClient
+from phase_contracts import assert_phase_migration_contract
 from trace_service import redact
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
@@ -29,7 +30,8 @@ def test_phase33_suite_contracts_and_release_profile_gate(client: TestClient) ->
     by_module = {item["name"]: item for item in contracts}
     check_script = (ROOT_DIR / "scripts" / "check.ps1").read_text(encoding="utf-8")
 
-    assert _latest_migration() == "025_browser_sessions.sql"
+    migration_contract = assert_phase_migration_contract(client, "phase33")
+    assert migration_contract["current_at_least_required"] is True
     assert "suite_phase33_power_chat_hardening" in {item["suite_id"] for item in suites}
     for module in [
         "HeavyChatE2EHardening",
@@ -211,11 +213,6 @@ def _create_task(client: TestClient, goal: str) -> dict[str, Any]:
     )
     assert response.status_code == 200, response.text
     return response.json()
-
-
-def _latest_migration() -> str:
-    migrations = ROOT_DIR / "apps/local-api/app/db/migrations"
-    return sorted(path.name for path in migrations.glob("*.sql"))[-1]
 
 
 def _load_power_runner() -> Any:

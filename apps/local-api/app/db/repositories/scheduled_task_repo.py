@@ -218,6 +218,21 @@ class ScheduledTaskRepository:
         )
         return _run_from_row(dict(row)) if row else None
 
+    async def recover_stale_runs(self, *, stale_before: str, updated_at: str) -> int:
+        return await self._db.execute(
+            """
+            UPDATE scheduled_task_runs
+            SET status = 'failed',
+                failure_reason = 'worker_recovered_stale_scheduled_run',
+                completed_at = ?,
+                updated_at = ?
+            WHERE status IN ('created', 'running')
+              AND started_at IS NOT NULL
+              AND started_at < ?
+            """,
+            (updated_at, updated_at, stale_before),
+        )
+
     async def list_runs(self, scheduled_task_id: str, *, limit: int = 100) -> list[dict[str, Any]]:
         rows = await self._db.fetch_all(
             """

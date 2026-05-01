@@ -15,15 +15,20 @@ from app.api import (
     routes_assets,
     routes_audit,
     routes_brains,
+    routes_browser,
     routes_capabilities,
     routes_chat,
+    routes_checkpoints,
     routes_execution_boundary,
+    routes_external_platform,
     routes_health,
     routes_knowledge,
     routes_mcp,
+    routes_media,
     routes_members,
     routes_memory,
     routes_model_routing,
+    routes_notifications,
     routes_org_policies,
     routes_organization,
     routes_persona,
@@ -113,14 +118,19 @@ def create_app() -> FastAPI:
     app.include_router(routes_brains.decision_router)
     app.include_router(routes_model_routing.router)
     app.include_router(routes_assets.router)
+    app.include_router(routes_browser.router)
     app.include_router(routes_capabilities.router)
     app.include_router(routes_knowledge.router)
     app.include_router(routes_tasks.router)
+    app.include_router(routes_checkpoints.router)
     app.include_router(routes_scheduled_tasks.router)
     app.include_router(routes_scheduled_tasks.run_router)
+    app.include_router(routes_notifications.router)
     app.include_router(routes_approvals.router)
     app.include_router(routes_tools.router)
     app.include_router(routes_execution_boundary.router)
+    app.include_router(routes_external_platform.router)
+    app.include_router(routes_media.router)
     app.include_router(routes_skills.router)
     app.include_router(routes_plugins.router)
     app.include_router(routes_mcp.router)

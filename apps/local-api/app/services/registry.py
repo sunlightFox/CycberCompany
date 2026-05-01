@@ -8,18 +8,24 @@ from trace_service import TraceService
 from app.core.config import AppConfig
 from app.db.repositories.asset_repo import AssetRepository
 from app.db.repositories.brain_repo import BrainRepository
+from app.db.repositories.browser_repo import BrowserRepository
 from app.db.repositories.chat_repo import ChatRepository
+from app.db.repositories.checkpoint_repo import CheckpointRepository
 from app.db.repositories.design_alignment_repo import DesignAlignmentRepository
 from app.db.repositories.execution_boundary_repo import ExecutionBoundaryRepository
+from app.db.repositories.external_platform_repo import ExternalPlatformRepository
 from app.db.repositories.knowledge_repo import KnowledgeRepository
+from app.db.repositories.media_repo import MediaRepository
 from app.db.repositories.member_repo import MemberRepository
 from app.db.repositories.memory_repo import MemoryRepository
+from app.db.repositories.notification_repo import NotificationRepository
 from app.db.repositories.organization_repo import OrganizationRepository
 from app.db.repositories.release_repo import ReleaseRepository
 from app.db.repositories.retrieval_repo import RetrievalRepository
 from app.db.repositories.scheduled_task_repo import ScheduledTaskRepository
 from app.db.repositories.settings_repo import SettingsRepository
 from app.db.repositories.shell_repo import ShellRepository
+from app.db.repositories.skill_governance_repo import SkillGovernanceRepository
 from app.db.repositories.skill_mcp_repo import SkillMcpRepository
 from app.db.repositories.task_repo import TaskRepository
 from app.db.session import Database
@@ -28,12 +34,15 @@ from app.services.artifacts import ArtifactStore
 from app.services.asset import AssetService
 from app.services.asset_broker import AssetBrokerService
 from app.services.audit import AuditEventService
+from app.services.background_workers import BackgroundWorkerService
 from app.services.bootstrap import BootstrapService
 from app.services.brain import BrainService
 from app.services.brain_decision import BrainDecisionService
+from app.services.browser_sessions import BrowserSessionService
 from app.services.capability import CapabilityGraphService
 from app.services.chat import ChatService
 from app.services.chat_experience import ChatExperienceService
+from app.services.checkpoints import CheckpointService
 from app.services.design_alignment import (
     PersonaHeartService,
     RuntimeContractService,
@@ -41,16 +50,20 @@ from app.services.design_alignment import (
     VectorService,
 )
 from app.services.execution_boundary import ExecutionBoundaryService
+from app.services.external_platform_actions import ExternalPlatformActionService
 from app.services.knowledge import KnowledgeService
 from app.services.mcp import MCPService
+from app.services.media import MediaService
 from app.services.memory import MemoryService
 from app.services.model_routing import ModelRoutingService
+from app.services.notifications import NotificationGatewayService
 from app.services.release import ReleaseGateService
 from app.services.retrieval import RetrievalDiagnosticsService
 from app.services.scheduled_tasks import ScheduledTaskService
 from app.services.secrets import SecretStore
 from app.services.settings import SettingsService
 from app.services.shell_switch import ShellSwitchService
+from app.services.skill_governance import SkillGovernanceService
 from app.services.skill_plugin import SkillPluginService
 from app.services.supervisor import SupervisorService
 from app.services.tasks import TaskEngine
@@ -68,13 +81,20 @@ class ServiceRegistry:
     chat_service: ChatService
     chat_experience_service: ChatExperienceService
     memory_service: MemoryService
+    media_service: MediaService
     asset_service: AssetService
     asset_broker_service: AssetBrokerService
     capability_service: CapabilityGraphService
     knowledge_service: KnowledgeService
     task_engine: TaskEngine
+    background_worker_service: BackgroundWorkerService
     scheduled_task_service: ScheduledTaskService
+    checkpoint_service: CheckpointService
+    notification_gateway_service: NotificationGatewayService
+    browser_session_service: BrowserSessionService
+    external_platform_action_service: ExternalPlatformActionService
     tool_runtime: ToolRuntime
+    skill_governance_service: SkillGovernanceService
     skill_plugin_service: SkillPluginService
     mcp_service: MCPService
     supervisor_service: SupervisorService
@@ -99,10 +119,16 @@ class ServiceRegistry:
     chat: ChatRepository
     brains: BrainRepository
     memory: MemoryRepository
+    media: MediaRepository
     assets: AssetRepository
     knowledge: KnowledgeRepository
     tasks: TaskRepository
     scheduled_tasks: ScheduledTaskRepository
+    checkpoints: CheckpointRepository
+    notifications: NotificationRepository
+    browser: BrowserRepository
+    external_platform: ExternalPlatformRepository
+    skill_governance: SkillGovernanceRepository
     skill_mcp: SkillMcpRepository
     release: ReleaseRepository
     retrieval: RetrievalRepository
@@ -119,10 +145,16 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     chat_repo = ChatRepository(db)
     member_repo = MemberRepository(db)
     memory_repo = MemoryRepository(db)
+    media_repo = MediaRepository(db)
     asset_repo = AssetRepository(db)
+    browser_repo = BrowserRepository(db)
+    external_platform_repo = ExternalPlatformRepository(db)
     knowledge_repo = KnowledgeRepository(db)
     task_repo = TaskRepository(db)
     scheduled_task_repo = ScheduledTaskRepository(db)
+    checkpoint_repo = CheckpointRepository(db)
+    notification_repo = NotificationRepository(db)
+    skill_governance_repo = SkillGovernanceRepository(db)
     skill_mcp_repo = SkillMcpRepository(db)
     release_repo = ReleaseRepository(db)
     retrieval_repo = RetrievalRepository(db)
@@ -190,14 +222,34 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
     )
+    media_service = MediaService(
+        repo=media_repo,
+        task_repo=task_repo,
+        artifact_store=artifact_store,
+        trace_service=trace_service,
+        audit_service=audit_service,
+    )
     approval_service = ApprovalService(
         repo=task_repo,
+        trace_service=trace_service,
+        audit_service=audit_service,
+    )
+    checkpoint_service = CheckpointService(
+        repo=checkpoint_repo,
+        task_repo=task_repo,
+        artifact_store=artifact_store,
         trace_service=trace_service,
         audit_service=audit_service,
     )
     execution_boundary_service = ExecutionBoundaryService(
         repo=execution_boundary_repo,
         trace_service=trace_service,
+    )
+    browser_session_service = BrowserSessionService(
+        repo=browser_repo,
+        asset_repo=asset_repo,
+        trace_service=trace_service,
+        audit_service=audit_service,
     )
     tool_runtime = ToolRuntime(
         repo=task_repo,
@@ -210,6 +262,9 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         audit_service=audit_service,
         safety_decision_service=safety_decision_service,
         execution_boundary_service=execution_boundary_service,
+        browser_session_service=browser_session_service,
+        checkpoint_service=checkpoint_service,
+        media_service=media_service,
     )
     task_engine = TaskEngine(
         repo=task_repo,
@@ -223,6 +278,14 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         model_routing_service=model_routing_service,
         secret_store=secret_store,
     )
+    skill_governance_service = SkillGovernanceService(
+        repo=skill_governance_repo,
+        skill_repo=skill_mcp_repo,
+        task_repo=task_repo,
+        trace_service=trace_service,
+        audit_service=audit_service,
+        capability_service=capability_service,
+    )
     skill_plugin_service = SkillPluginService(
         repo=skill_mcp_repo,
         task_repo=task_repo,
@@ -230,6 +293,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         artifact_store=artifact_store,
         trace_service=trace_service,
         audit_service=audit_service,
+        governance_service=skill_governance_service,
     )
     mcp_service = MCPService(
         repo=skill_mcp_repo,
@@ -246,6 +310,25 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     task_engine.set_extension_services(
         skill_plugin_service=skill_plugin_service,
         mcp_service=mcp_service,
+    )
+    task_engine.set_browser_evidence_provider(browser_session_service.list_task_evidence)
+    task_engine.set_checkpoint_replay_provider(checkpoint_service.replay_checkpoint_data)
+    task_engine.set_media_replay_provider(media_service.replay_task_media)
+    notification_gateway_service = NotificationGatewayService(
+        repo=notification_repo,
+        asset_service=asset_service,
+        asset_broker=asset_broker_service,
+        capability=capability_service,
+        approval_service=approval_service,
+        trace_service=trace_service,
+        audit_service=audit_service,
+        task_engine=task_engine,
+    )
+    approval_service.set_notification_callback(
+        notification_gateway_service.notify_approval_required
+    )
+    checkpoint_service.set_rollback_notification_callback(
+        notification_gateway_service.notify_checkpoint_rollback
     )
     supervisor_service = SupervisorService(
         repo=task_repo,
@@ -309,6 +392,30 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
     )
+    scheduled_task_service.set_notification_callback(
+        notification_gateway_service.notify_scheduled_run
+    )
+    background_worker_service = BackgroundWorkerService(
+        scheduled_tasks=scheduled_task_service,
+        notifications=notification_gateway_service,
+        checkpoints=checkpoint_service,
+        task_engine=task_engine,
+        memory_service=memory_service,
+        trace_service=trace_service,
+        audit_service=audit_service,
+        enabled=config.workers.enabled,
+        interval_seconds=config.workers.interval_seconds,
+        timeout_seconds=config.workers.timeout_seconds,
+    )
+    external_platform_action_service = ExternalPlatformActionService(
+        repo=external_platform_repo,
+        asset_repo=asset_repo,
+        asset_broker=asset_broker_service,
+        task_engine=task_engine,
+        approval_service=approval_service,
+        trace_service=trace_service,
+        audit_service=audit_service,
+    )
     return ServiceRegistry(
         config=config,
         db=db,
@@ -333,13 +440,20 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         ),
         chat_experience_service=chat_experience_service,
         memory_service=memory_service,
+        media_service=media_service,
         asset_service=asset_service,
         asset_broker_service=asset_broker_service,
         capability_service=capability_service,
         knowledge_service=knowledge_service,
         task_engine=task_engine,
+        background_worker_service=background_worker_service,
         scheduled_task_service=scheduled_task_service,
+        checkpoint_service=checkpoint_service,
+        notification_gateway_service=notification_gateway_service,
+        browser_session_service=browser_session_service,
+        external_platform_action_service=external_platform_action_service,
         tool_runtime=tool_runtime,
+        skill_governance_service=skill_governance_service,
         skill_plugin_service=skill_plugin_service,
         mcp_service=mcp_service,
         supervisor_service=supervisor_service,
@@ -364,10 +478,16 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         chat=chat_repo,
         brains=brain_repo,
         memory=memory_repo,
+        media=media_repo,
         assets=asset_repo,
         knowledge=knowledge_repo,
         tasks=task_repo,
         scheduled_tasks=scheduled_task_repo,
+        checkpoints=checkpoint_repo,
+        notifications=notification_repo,
+        browser=browser_repo,
+        external_platform=external_platform_repo,
+        skill_governance=skill_governance_repo,
         skill_mcp=skill_mcp_repo,
         release=release_repo,
         retrieval=retrieval_repo,

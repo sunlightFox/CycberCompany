@@ -93,7 +93,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await registry.trace_service.end_trace(startup_trace_id)
 
     app.state.registry = registry
+    if registry.config.workers.startup_tick:
+        await registry.background_worker_service.manual_tick()
+    await registry.background_worker_service.start()
     try:
         yield
     finally:
+        await registry.background_worker_service.stop()
+        await registry.tool_runtime.close()
         await db.close()

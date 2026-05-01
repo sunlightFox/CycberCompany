@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from app.db.migrator import MigrationError, run_migrations
 from app.db.session import Database
+from app.services.release import PHASE_MIGRATION_REQUIREMENTS
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 MIGRATIONS_DIR = ROOT_DIR / "apps" / "local-api" / "app" / "db" / "migrations"
@@ -49,6 +50,14 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     assert "023_mcp_runtime_isolation_protocol_hardening.sql" in first
     assert "024_scheduled_tasks.sql" in first
     assert "025_browser_sessions.sql" in first
+    assert "026_skill_governance.sql" in first
+    assert "027_task_checkpoints.sql" in first
+    assert "028_notification_gateway.sql" in first
+    assert "030_external_platform_actions.sql" in first
+    assert "031_media_runtime.sql" in first
+    for phase, contract in PHASE_MIGRATION_REQUIREMENTS.items():
+        assert contract["required_migration"] in first, phase
+        assert set(contract.get("tables") or ()).issubset(table_names), phase
     assert second == []
     assert {
         "shells",
@@ -196,6 +205,33 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "browser_evidence",
         "browser_network_events",
         "browser_console_events",
+        "skill_bundle_sources",
+        "skill_bundle_versions",
+        "skill_permission_previews",
+        "skill_grants",
+        "skill_static_analysis_reports",
+        "skill_eval_bindings",
+        "skill_rollback_points",
+        "skill_output_taint_records",
+        "task_checkpoints",
+        "checkpoint_items",
+        "rollback_events",
+        "rollback_items",
+        "notification_channels",
+        "notification_messages",
+        "notification_delivery_attempts",
+        "inbound_messages",
+        "inbound_message_events",
+        "notification_subscriptions",
+        "external_platform_targets",
+        "external_platform_action_intents",
+        "external_platform_action_plans",
+        "external_platform_executions",
+        "external_platform_plan_events",
+        "media_assets",
+        "media_derivatives",
+        "media_analysis",
+        "media_edit_plans",
     }.issubset(table_names)
 
     db = Database(tmp_path / "app.db")
@@ -416,6 +452,86 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         mcp_taint_columns = {
             row["name"]
             for row in await db.fetch_all("PRAGMA table_info(mcp_output_taint_records)")
+        }
+        skill_preview_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(skill_permission_previews)")
+        }
+        skill_grant_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(skill_grants)")
+        }
+        skill_taint_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(skill_output_taint_records)")
+        }
+        task_checkpoint_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(task_checkpoints)")
+        }
+        checkpoint_item_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(checkpoint_items)")
+        }
+        rollback_event_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(rollback_events)")
+        }
+        rollback_item_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(rollback_items)")
+        }
+        notification_channel_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(notification_channels)")
+        }
+        notification_message_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(notification_messages)")
+        }
+        notification_attempt_columns = {
+            row["name"]
+            for row in await db.fetch_all(
+                "PRAGMA table_info(notification_delivery_attempts)"
+            )
+        }
+        inbound_message_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(inbound_messages)")
+        }
+        external_target_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(external_platform_targets)")
+        }
+        external_intent_columns = {
+            row["name"]
+            for row in await db.fetch_all(
+                "PRAGMA table_info(external_platform_action_intents)"
+            )
+        }
+        external_plan_columns = {
+            row["name"]
+            for row in await db.fetch_all(
+                "PRAGMA table_info(external_platform_action_plans)"
+            )
+        }
+        external_execution_columns = {
+            row["name"]
+            for row in await db.fetch_all(
+                "PRAGMA table_info(external_platform_executions)"
+            )
+        }
+        external_event_columns = {
+            row["name"]
+            for row in await db.fetch_all(
+                "PRAGMA table_info(external_platform_plan_events)"
+            )
+        }
+        media_asset_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(media_assets)")
+        }
+        media_derivative_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(media_derivatives)")
+        }
+        media_analysis_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(media_analysis)")
+        }
+        media_edit_plan_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(media_edit_plans)")
         }
     finally:
         await db.close()
@@ -777,6 +893,158 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "guard_decision",
         "reason_codes_json",
     }.issubset(mcp_taint_columns)
+    assert {
+        "preview_id",
+        "manifest_hash",
+        "risk_level",
+        "permission_summary_json",
+        "requires_user_grant",
+    }.issubset(skill_preview_columns)
+    assert {
+        "skill_grant_id",
+        "skill_id",
+        "subject_id",
+        "allowed_tools_json",
+        "denied_actions_json",
+        "status",
+    }.issubset(skill_grant_columns)
+    assert {
+        "taint_record_id",
+        "skill_id",
+        "skill_run_id",
+        "output_hash",
+        "dlp_findings_json",
+        "guard_decision",
+    }.issubset(skill_taint_columns)
+    assert {
+        "checkpoint_id",
+        "task_id",
+        "tool_call_id",
+        "checkpoint_type",
+        "scope",
+        "status",
+        "restorable",
+        "policy_snapshot_json",
+    }.issubset(task_checkpoint_columns)
+    assert {
+        "checkpoint_item_id",
+        "checkpoint_id",
+        "target_uri",
+        "exists_before",
+        "before_checksum",
+        "after_checksum",
+        "snapshot_artifact_id",
+        "restorable",
+    }.issubset(checkpoint_item_columns)
+    assert {
+        "rollback_id",
+        "checkpoint_id",
+        "task_id",
+        "status",
+        "restored_items",
+        "skipped_items",
+        "conflict_items",
+    }.issubset(rollback_event_columns)
+    assert {
+        "rollback_item_id",
+        "rollback_id",
+        "checkpoint_item_id",
+        "target_uri",
+        "action",
+        "status",
+    }.issubset(rollback_item_columns)
+    assert {
+        "channel_id",
+        "asset_id",
+        "provider",
+        "display_name",
+        "channel_type",
+        "policy_json",
+        "provider_config_json",
+    }.issubset(notification_channel_columns)
+    assert {
+        "notification_id",
+        "channel_id",
+        "task_id",
+        "approval_id",
+        "message_type",
+        "body_redacted",
+        "dlp_summary_json",
+        "status",
+    }.issubset(notification_message_columns)
+    assert {
+        "attempt_id",
+        "notification_id",
+        "provider",
+        "attempt_index",
+        "status",
+        "response_summary_json",
+    }.issubset(notification_attempt_columns)
+    assert {
+        "inbound_message_id",
+        "channel_id",
+        "content_redacted",
+        "parsed_intent",
+        "binding_status",
+        "untrusted_external_content",
+    }.issubset(inbound_message_columns)
+    assert {
+        "target_id",
+        "platform_key",
+        "aliases_json",
+        "supported_actions_json",
+        "risk_defaults_json",
+        "status",
+    }.issubset(external_target_columns)
+    assert {
+        "intent_id",
+        "platform_key",
+        "action_type",
+        "content_redacted",
+        "missing_fields_json",
+        "resolver_evidence_json",
+    }.issubset(external_intent_columns)
+    assert {
+        "plan_id",
+        "intent_id",
+        "task_id",
+        "approval_id",
+        "selected_asset_id",
+        "selected_handle_id",
+        "steps_json",
+        "evidence_json",
+    }.issubset(external_plan_columns)
+    assert {
+        "execution_id",
+        "plan_id",
+        "executor",
+        "step_type",
+        "request_summary_json",
+        "response_summary_json",
+    }.issubset(external_execution_columns)
+    assert {
+        "event_id",
+        "plan_id",
+        "event_type",
+        "payload_redacted_json",
+    }.issubset(external_event_columns)
+    assert {
+        "media_id",
+        "task_id",
+        "source_artifact_id",
+        "media_type",
+        "checksum",
+        "metadata_json",
+    }.issubset(media_asset_columns)
+    assert {"derivative_id", "media_id", "artifact_id", "derivative_type"}.issubset(
+        media_derivative_columns
+    )
+    assert {"analysis_id", "media_id", "analysis_type", "segments_json"}.issubset(
+        media_analysis_columns
+    )
+    assert {"edit_plan_id", "media_id", "operations_json", "requires_approval"}.issubset(
+        media_edit_plan_columns
+    )
 
 
 @pytest.mark.asyncio

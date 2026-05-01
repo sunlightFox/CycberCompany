@@ -184,7 +184,10 @@ class NaturalChatActionGateway:
                         trace_id=trace_id,
                     )
                 return _outcome(
-                    f"已取消这次{label}，这一步没有执行。你可以修改目标后重新发起，或让我只给方案。",
+                    (
+                        f"已取消这次{label}，这一步没有执行，也不会继续下载、删除、登录或外发。"
+                        "相关任务会停在安全状态；你可以修改目标后重新发起，或让我只给方案。"
+                    ),
                     status="denied",
                     reason_codes=["natural_language_deny"],
                     action=action,
@@ -470,17 +473,17 @@ def _multiple_pending_text(pending: list[dict[str, Any]]) -> str:
 def _after_resolution_text(label: str, resolution: str, *, detail: Any | None) -> str:
     status = str(getattr(detail, "status", "") or "")
     if resolution == "edited":
-        prefix = f"已按新的目标修改{label}，并重新交给受控执行链路处理。"
+        prefix = f"已按新的目标修改{label}，并重新交给受控执行链路检查。"
     elif resolution == "session":
         prefix = f"已确认这次{label}；本会话内同类、同范围、同风险的操作可以少问一次。"
     else:
-        prefix = f"已确认这次{label}，我会继续执行。"
+        prefix = f"已确认这次{label}，我会把它交回受控任务链路继续处理。"
     if not status:
-        return prefix
+        return f"{prefix}如果后续仍等待、失败或完成，我会按真实状态说明，不会把未完成说成完成。"
     if status == "completed":
-        return f"{prefix}当前任务已完成；结果会以证据、工件或页面状态说明。"
+        return f"{prefix}任务链路返回已完成；结果应能通过工件、页面状态或任务回放证据复核。"
     if status in {"paused", "waiting_approval"}:
-        return f"{prefix}当前还有步骤在等待确认；我不会跳过安全边界。"
+        return f"{prefix}当前还有步骤在等待确认；确认前相关动作仍未执行，我不会跳过安全边界。"
     if status == "failed":
         return f"{prefix}但执行没有完成；你可以修改目标后重试，或让我只给方案。"
     return f"{prefix}当前状态是 {status}，下一步我会按实际结果说明。"
@@ -545,7 +548,10 @@ def _hard_block_text(reason: str) -> str:
             "我不能访问 metadata 或私网敏感地址；"
             "这可能泄露本机或云环境信息。没有执行任何网络或浏览器动作。"
         )
-    return "这个请求涉及敏感凭据或越权内容，我不能读取、展示或外发这些信息。"
+    return (
+        "这个请求涉及敏感凭据或越权内容，我不能读取、展示或外发这些信息。"
+        "我可以改为帮你做凭据轮换清单、脱敏示例，或解释安全处理流程。"
+    )
 
 
 def _looks_like_resolution(text: str) -> bool:

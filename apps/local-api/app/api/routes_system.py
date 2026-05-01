@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from typing import Any
+
+from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import get_registry
 from app.schemas.system import BootstrapStatus, DesignGapsResponse, RuntimeContractsResponse
@@ -64,6 +66,21 @@ async def design_gaps(
     registry: ServiceRegistry = Depends(get_registry),
 ) -> DesignGapsResponse:
     return DesignGapsResponse(items=await registry.runtime_contract_service.list_design_gaps())
+
+
+@router.get("/background-workers/health")
+async def background_worker_health(
+    registry: ServiceRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    return registry.background_worker_service.health()
+
+
+@router.post("/background-workers/tick")
+async def background_worker_tick(
+    worker_name: str | None = Query(default=None),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    return await registry.background_worker_service.manual_tick(worker_name=worker_name)
 
 
 async def _exists(registry: ServiceRegistry, sql: str, params: tuple[str, ...]) -> bool:

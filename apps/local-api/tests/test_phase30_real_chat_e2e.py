@@ -5,6 +5,7 @@ from typing import Any, cast
 
 import anyio
 from fastapi.testclient import TestClient
+from phase_contracts import assert_phase_migration_contract
 
 
 def test_phase30_suite_contracts_and_no_new_migration(client: TestClient) -> None:
@@ -17,7 +18,8 @@ def test_phase30_suite_contracts_and_no_new_migration(client: TestClient) -> Non
     assert by_module["MemoryCorrectionDirectPath"]["status"] == "implemented"
     assert by_module["ChatIntentBoundaryRepair"]["status"] == "implemented"
     assert by_module["ReleaseGateCurrentRunScope"]["status"] == "implemented"
-    assert _latest_migration() == "025_browser_sessions.sql"
+    migration_contract = assert_phase_migration_contract(client, "phase30")
+    assert migration_contract["current_at_least_required"] is True
 
 
 def test_phase30_memory_correction_direct_path_emits_replayable_evidence(
@@ -232,14 +234,6 @@ def _parse_sse(raw: str) -> list[dict[str, Any]]:
             if line.startswith("data: "):
                 events.append(json.loads(line[6:]))
     return events
-
-
-def _latest_migration() -> str:
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[3]
-    migrations = root / "apps/local-api/app/db/migrations"
-    return sorted(path.name for path in migrations.glob("*.sql"))[-1]
 
 
 async def _insert_historical_phase30_failure(registry: Any) -> None:
