@@ -9,6 +9,12 @@ from trace_service import TraceService, redact
 
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.chat_repo import ChatRepository
+from app.services.chat_intent_router import (
+    is_explicit_download_request,
+    is_host_filesystem_list_request,
+    is_office_document_request,
+    is_webpage_read_request,
+)
 from app.services.model_semantic_verifier import (
     ModelAssistedVerifierService,
     SemanticReviewOutcome,
@@ -188,7 +194,7 @@ class SemanticIntentAnalyzer:
             memory.append("memory_query")
             non_actionable.append("memory_query")
             reasons.append("explicit_memory_query")
-        if _skill_request(text):
+        if _skill_request(text) and not is_office_document_request(text):
             skills.append("skill_request")
             reasons.append("skill_keyword")
             if not _skill_available(capability_snapshot):
@@ -204,6 +210,17 @@ class SemanticIntentAnalyzer:
             non_actionable.append("boundary_question")
             conversation.append("boundary_question")
             reasons.append("persona_boundary_question")
+        if _advice_strategy_direct(text):
+            non_actionable.append("advice_strategy_direct")
+            reasons.append("phase51_advice_strategy_direct")
+        if is_host_filesystem_list_request(text):
+            non_actionable.append("system_filesystem_read")
+            secondary.append("filesystem_readonly")
+            reasons.append("host_filesystem_list_readonly")
+        if is_webpage_read_request(text):
+            non_actionable.append("browser_read")
+            secondary.append("webpage_readonly")
+            reasons.append("browser_read_page_readonly")
         if _log_data_extraction(text):
             reasons.append("data_extraction_question")
         elif _real_task_request(text):
@@ -217,8 +234,11 @@ class SemanticIntentAnalyzer:
         if _safe_plan_only(text):
             non_actionable.append("safe_plan_only")
             reasons.append("safe_plan_only")
-        if any(word in text for word in ["删除", "清空", "覆盖"]):
+        advice_strategy_direct = _advice_strategy_direct(text)
+        if any(word in text for word in ["删除", "清空", "覆盖"]) and not advice_strategy_direct:
             risks.append("destructive_action")
+        if is_explicit_download_request(text):
+            risks.append("browser_artifact_or_download")
         if any(word in text for word in ["发帖", "发布", "发送", "提交"]):
             risks.append("external_side_effect")
         if any(word in text for word in ["购买", "下单", "转账", "支付", "签名"]):
@@ -618,6 +638,10 @@ def _semantic_primary(
         return "memory_update"
     if "memory_query" in memory:
         return "memory_query"
+    if "browser_read" in non_actionable:
+        return "browser_read"
+    if "system_filesystem_read" in non_actionable:
+        return "system_filesystem_read"
     if "continue_previous_topic" in conversation:
         return "complex_dialogue"
     if "safe_plan_only" in non_actionable:
@@ -716,6 +740,8 @@ def _memory_correction(text: str) -> bool:
 def _skill_request(text: str) -> bool:
     if _safe_plan_only(text):
         return False
+    if is_office_document_request(text):
+        return False
     return "skill" in text.lower() or "技能" in text
 
 
@@ -787,7 +813,7 @@ def _explicit_task_creation(text: str) -> bool:
 
 
 def _real_task_request(text: str) -> bool:
-    if _safe_plan_only(text) or _persona_boundary_question(text):
+    if _safe_plan_only(text) or _persona_boundary_question(text) or _advice_strategy_direct(text):
         return False
     if _explicit_task_creation(text):
         return True
@@ -820,8 +846,14 @@ def _real_task_request(text: str) -> bool:
 
 
 def _tool_request(text: str) -> bool:
-    if _safe_plan_only(text) or _persona_boundary_question(text):
+    if _safe_plan_only(text) or _persona_boundary_question(text) or _advice_strategy_direct(text):
         return False
+    if is_host_filesystem_list_request(text):
+        return False
+    if is_webpage_read_request(text):
+        return False
+    if ("下载" in text or "download" in text.lower()) and not is_explicit_download_request(text):
+        text = text.replace("下载", "").replace("download", "")
     return any(
         marker in text
         for marker in [
@@ -845,6 +877,54 @@ def _tool_request(text: str) -> bool:
             "转账",
             "支付",
             "签名",
+        ]
+    )
+
+
+def _advice_strategy_direct(text: str) -> bool:
+    if _explicit_task_creation(text):
+        return False
+    execution_markers = [
+        "运行命令",
+        "执行命令",
+        "打开网页",
+        "打开浏览器",
+        "下载",
+        "删除",
+        "登录",
+        "截图",
+        "发帖",
+        "发布",
+        "转账",
+        "支付",
+        "签名",
+        "基于当前仓库",
+        "基于这个仓库",
+        "读取文件",
+        "写文件",
+    ]
+    if any(marker in text for marker in execution_markers):
+        return False
+    return any(
+        marker in text
+        for marker in [
+            "建议",
+            "取舍",
+            "策略",
+            "对比",
+            "方案",
+            "解释",
+            "总结",
+            "优缺点",
+            "利弊",
+            "权衡",
+            "成本",
+            "覆盖率",
+            "速度",
+            "如何选择",
+            "怎么选",
+            "医疗建议",
+            "金融建议",
         ]
     )
 

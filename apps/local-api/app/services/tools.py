@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote_plus
@@ -54,6 +55,7 @@ if TYPE_CHECKING:
     from app.services.execution_boundary import ExecutionBoundaryService
     from app.services.mcp import MCPService
     from app.services.media import MediaService
+    from app.services.office_tools import OfficeToolService
     from app.services.skill_plugin import SkillPluginService
 
 
@@ -63,8 +65,30 @@ class ToolRunOutcome:
     artifacts: list[TaskArtifact]
 
 
+@dataclass(frozen=True)
+class HostFilesystemTarget:
+    location: str
+    path: Path
+
+
 _BROWSER_EXECUTABLE_PATH_ENV = "CYCBER_BROWSER_EXECUTABLE_PATH"
 _BROWSER_CHANNEL_ENV = "CYCBER_BROWSER_CHANNEL"
+HOST_FS_DEFAULT_LIMIT = 50
+HOST_FS_MAX_LIMIT = 100
+HOST_FS_ALLOWED_LOCATIONS = {"desktop", "downloads", "documents", "home", "authorized"}
+HOST_FS_SECRET_NAME_RE = re.compile(
+    r"(^|[._-])(?:secret|token|password|passwd|pwd|apikey|api_key|private[_-]?key|"
+    r"mnemonic|cookie|wallet|master\.key|local_secrets)([._-]|$)"
+    r"|(?:\.env(?:\.local)?$|id_rsa$|id_dsa$|id_ecdsa$|id_ed25519$)",
+    re.IGNORECASE,
+)
+HOST_FS_DENIED_PATH_RE = re.compile(
+    r"(^|[\\/])(?:windows|program files|program files \(x86\)|programdata|"
+    r"\.ssh|\.gnupg|browser profiles?|user data|wallet|secrets?)([\\/]|$)"
+    r"|(^|[\\/])(?:google[\\/]chrome|chromium|mozilla[\\/]firefox)([\\/]|$)"
+    r"|(^|[\\/])(?:cookies|login data|local state|master\.key|local_secrets\.json)$",
+    re.IGNORECASE,
+)
 
 
 def _browser_launch_options() -> dict[str, Any]:
@@ -153,6 +177,7 @@ class ToolRuntime:
         browser_executor: BrowserExecutor | None = None,
         checkpoint_service: CheckpointService | None = None,
         media_service: MediaService | None = None,
+        office_tool_service: OfficeToolService | None = None,
     ) -> None:
         self._repo = repo
         self._artifacts = artifact_store
@@ -168,6 +193,7 @@ class ToolRuntime:
         self._browser_executor = browser_executor or BrowserExecutor()
         self._checkpoints = checkpoint_service
         self._media = media_service
+        self._office = office_tool_service
         self._skill_plugin: SkillPluginService | None = None
         self._mcp: MCPService | None = None
 
@@ -629,8 +655,22 @@ class ToolRuntime:
                 organization_id=organization_id,
                 trace_id=trace_id,
             )
+        if name.startswith(("project.", "runtime.", "host.")):
+            return await self._execute_deployment_tool(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                trace_id=trace_id,
+            )
         if name.startswith("media."):
             return await self._execute_media_tool(request, trace_id=trace_id)
+        if name.startswith("office."):
+            return await self._execute_office_tool(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                trace_id=trace_id,
+            )
         if name.startswith("account."):
             return await self._execute_account_tool(
                 request,
@@ -724,6 +764,24 @@ class ToolRuntime:
         if request.tool_name == "account.publish_post":
             return await self._account_publish_post(request, trace_id=trace_id)
         raise AppError(ErrorCode.TOOL_NOT_FOUND, "账号工具不存在", status_code=404)
+
+    async def _execute_office_tool(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        if self._office is None:
+            raise AppError(ErrorCode.TOOL_EXECUTION_FAILED, "Office 工具未初始化", status_code=500)
+        result, artifacts = await self._office.execute(
+            request,
+            tool_call_id=tool_call_id,
+            organization_id=organization_id,
+            trace_id=trace_id,
+        )
+        return ToolRunOutcome(result=result, artifacts=artifacts)
 
     async def _account_login(
         self,
@@ -1267,20 +1325,78 @@ class ToolRuntime:
                 or None,
                 browser_session_id=str(config.get("browser_session_id") or "") or None,
             )
-            return {
+            return _merge_browser_page_args({
                 **context,
                 "asset_handle_id": handle_id,
                 "asset_id": resolved.asset_id,
                 "asset_summary": resolved.summary,
                 "session_handle_resolved": True,
                 "cookie_material_exposed": False,
-            }
+            }, request.args)
         if request.args.get("browser_profile_id") or request.args.get("browser_session_id"):
-            return await self._browser_sessions.validate_session_context(
+            context = await self._browser_sessions.validate_session_context(
                 browser_profile_id=str(request.args.get("browser_profile_id") or "") or None,
                 browser_session_id=str(request.args.get("browser_session_id") or "") or None,
             )
-        return {}
+            return _merge_browser_page_args(context, request.args)
+        return _merge_browser_page_args({}, request.args)
+
+    async def _resolve_browser_page_url(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        action: str,
+        session_context: dict[str, Any],
+    ) -> str:
+        direct_url = str(
+            request.args.get("url")
+            or request.args.get("current_url")
+            or request.args.get("expected_url")
+            or ""
+        ).strip()
+        if direct_url:
+            session_context.setdefault("current_url", direct_url)
+            return direct_url
+        context_url = str(session_context.get("current_url") or "").strip()
+        if context_url:
+            return context_url
+        if request.task_id and self._browser_sessions is not None:
+            evidence = await self._latest_browser_page_evidence(request.task_id)
+            if evidence is not None:
+                evidence_url = str(evidence.get("url") or "").strip()
+                if evidence_url:
+                    session_context.update(
+                        {
+                            "current_url": evidence_url,
+                            "last_browser_evidence_id": evidence.get("browser_evidence_id"),
+                            "last_browser_evidence_action": evidence.get("action"),
+                            "last_browser_evidence_status": evidence.get("action_status"),
+                            "page_id": evidence.get("page_id") or session_context.get("page_id"),
+                        }
+                    )
+                    return evidence_url
+        if action in _BROWSER_PAGE_STATE_ACTIONS:
+            raise AppError(
+                "BROWSER_SESSION_REQUIRED",
+                "请先打开页面，或提供 current_url/browser_session_id 后再执行浏览器交互。",
+                status_code=409,
+                details={
+                    "reason_code": "BROWSER_SESSION_REQUIRED",
+                    "recoverable": True,
+                    "next_step": "先执行 browser.open，或在参数中提供 current_url。",
+                    "action": action,
+                },
+            )
+        return ""
+
+    async def _latest_browser_page_evidence(self, task_id: str) -> dict[str, Any] | None:
+        if self._browser_sessions is None:
+            return None
+        rows = await self._browser_sessions.list_task_evidence(task_id)
+        for row in reversed(rows):
+            if row.url:
+                return row.model_dump(mode="json")
+        return None
 
     async def _ensure_browser_url_allowed(
         self,
@@ -1476,8 +1592,12 @@ class ToolRuntime:
                 result=result,
                 artifacts=[],
             )
-        url = str(request.args.get("url") or "")
         action = _browser_action_for_tool(request.tool_name)
+        url = await self._resolve_browser_page_url(
+            request,
+            action=action,
+            session_context=session_context,
+        )
         safety = await self._ensure_browser_url_allowed(
             request,
             tool_call_id=tool_call_id,
@@ -1509,7 +1629,29 @@ class ToolRuntime:
                 session_context=session_context,
                 trace_id=trace_id,
             )
-        if request.tool_name in {"browser.fill", "browser.type"}:
+        if request.tool_name == "browser.wait":
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "浏览器等待必须绑定任务",
+                    status_code=422,
+                )
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action="wait",
+                url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
+            )
+        if request.tool_name in {
+            "browser.fill",
+            "browser.type",
+            "browser.select",
+            "browser.check",
+        }:
             if not request.task_id:
                 raise AppError(
                     ErrorCode.TOOL_PERMISSION_DENIED,
@@ -1519,11 +1661,12 @@ class ToolRuntime:
             selector = str(request.args.get("selector") or "")
             if not selector:
                 raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "selector 必填", status_code=422)
+            action = request.tool_name.removeprefix("browser.")
             return await self._run_browser_executor(
                 request,
                 tool_call_id=tool_call_id,
                 organization_id=organization_id,
-                action="type" if request.tool_name == "browser.type" else "fill",
+                action=action,
                 url=url,
                 safety=safety,
                 session_context=session_context,
@@ -1549,6 +1692,23 @@ class ToolRuntime:
                 session_context=session_context,
                 trace_id=trace_id,
             )
+        if request.tool_name in {"browser.dialog", "browser.tabs", "browser.frame_action"}:
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "浏览器交互必须绑定任务",
+                    status_code=422,
+                )
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action=request.tool_name.removeprefix("browser."),
+                url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
+            )
         if request.tool_name == "browser.screenshot":
             if not request.task_id:
                 raise AppError(
@@ -1561,6 +1721,40 @@ class ToolRuntime:
                 tool_call_id=tool_call_id,
                 organization_id=organization_id,
                 action="screenshot",
+                url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
+            )
+        if request.tool_name == "browser.vision_snapshot":
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "视觉快照必须绑定任务",
+                    status_code=422,
+                )
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action="vision_snapshot",
+                url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
+            )
+        if request.tool_name in {"browser.console", "browser.network_summary"}:
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "浏览器观测必须绑定任务",
+                    status_code=422,
+                )
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action=request.tool_name.removeprefix("browser."),
                 url=url,
                 safety=safety,
                 session_context=session_context,
@@ -1583,7 +1777,74 @@ class ToolRuntime:
                 session_context=session_context,
                 trace_id=trace_id,
             )
+        if request.tool_name == "browser.upload":
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "上传必须绑定任务",
+                    status_code=422,
+                )
+            selector = str(request.args.get("selector") or "")
+            if not selector:
+                raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "selector 必填", status_code=422)
+            if request.args.get("path") or request.args.get("file_path"):
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "上传文件必须来自任务工件或文件资产，不允许任意本地路径",
+                    status_code=403,
+                )
+            file_path = await self._artifact_upload_path(request)
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action="upload",
+                url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
+                file_path=file_path,
+            )
+        if request.tool_name == "browser.extract":
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "浏览器抽取必须绑定任务",
+                    status_code=422,
+                )
+            return await self._run_browser_executor(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action="extract",
+                url=url,
+                safety=safety,
+                session_context=session_context,
+                trace_id=trace_id,
+            )
         raise AppError(ErrorCode.TOOL_NOT_FOUND, "浏览器工具不存在", status_code=404)
+
+    async def _artifact_upload_path(self, request: ToolExecuteRequest) -> str | None:
+        artifact_id = str(request.args.get("artifact_id") or "").strip()
+        if not artifact_id:
+            if request.args.get("asset_handle_id") or request.args.get("file_asset_handle_id"):
+                return None
+            raise AppError(
+                ErrorCode.TOOL_SCHEMA_INVALID,
+                "artifact_id 或文件资产句柄必填",
+                status_code=422,
+            )
+        row = await self._repo.get_artifact(artifact_id)
+        if row is None:
+            raise AppError(ErrorCode.ARTIFACT_NOT_FOUND, "工件不存在", status_code=404)
+        artifact = TaskArtifact(**row)
+        if artifact.task_id != request.task_id:
+            raise AppError(
+                ErrorCode.TOOL_PERMISSION_DENIED,
+                "只能上传当前任务绑定的工件",
+                status_code=403,
+            )
+        return str(self._artifacts.path_for_artifact(artifact))
 
     async def _run_browser_executor(
         self,
@@ -1596,6 +1857,7 @@ class ToolRuntime:
         safety: dict[str, Any],
         session_context: dict[str, Any],
         trace_id: str | None,
+        file_path: str | None = None,
     ) -> ToolRunOutcome:
         execution = await self._browser_executor.execute(
             BrowserExecutionRequest(
@@ -1607,14 +1869,33 @@ class ToolRuntime:
                 context_key=_browser_context_key(request, session_context),
                 session_context=session_context,
                 display_name=str(request.args.get("display_name") or "") or None,
+                file_path=file_path,
+                provider_mode=str(request.args.get("provider_mode") or "auto"),
+                viewport_profile=str(request.args.get("viewport_profile") or "desktop"),
+                target_ref=str(request.args.get("target_ref") or "") or None,
+                frame_ref=str(request.args.get("frame_ref") or "") or None,
+                tab_ref=str(request.args.get("tab_ref") or "") or None,
+                wait_until=str(request.args.get("wait_until") or "") or None,
+                wait_for_text=str(request.args.get("wait_for_text") or "") or None,
+                wait_for_url=str(request.args.get("wait_for_url") or "") or None,
+                action_strategy=str(request.args.get("action_strategy") or "css"),
             )
         )
         result = execution.public_result()
+        result["browser_page_state"] = {
+            "url_source": _browser_url_source(request.args, session_context),
+            "current_url": str(redact(url)),
+            "browser_session_id": session_context.get("browser_session_id"),
+            "browser_profile_id": session_context.get("browser_profile_id"),
+            "page_id": session_context.get("page_id") or request.args.get("page_id"),
+            "last_browser_evidence_id": session_context.get("last_browser_evidence_id"),
+            "recoverable": False,
+        }
         artifacts: list[TaskArtifact] = []
         artifact_ids: list[str] = []
         screenshot_artifact_id: str | None = None
         download_artifact_id: str | None = None
-        if action == "screenshot" and execution.screenshot_bytes is not None:
+        if action in {"screenshot", "vision_snapshot"} and execution.screenshot_bytes is not None:
             if not request.task_id:
                 raise AppError(
                     ErrorCode.TOOL_PERMISSION_DENIED,
@@ -1626,7 +1907,9 @@ class ToolRuntime:
                 organization_id=organization_id,
                 step_id=request.step_id,
                 tool_call_id=tool_call_id,
-                display_name=execution.filename or "screenshot.png",
+                display_name=execution.filename or (
+                    "vision-snapshot.png" if action == "vision_snapshot" else "screenshot.png"
+                ),
                 content=execution.screenshot_bytes,
                 artifact_type="screenshot",
                 content_type=execution.content_type or "image/png",
@@ -1964,16 +2247,26 @@ class ToolRuntime:
                 )
             return ToolRunOutcome(
                 result={
+                    "status": "completed",
+                    "reason_code": "terminal_log_available",
                     "log_artifact_id": artifact.artifact_id,
                     "content_preview": preview,
+                    "recoverable": False,
+                    "next_step": None,
                 },
                 artifacts=[],
             )
         if not request.task_id:
-            raise AppError(
-                ErrorCode.TOOL_SCHEMA_INVALID,
-                "读取终端日志需要 task_id 或 artifact_id",
-                status_code=422,
+            return ToolRunOutcome(
+                result={
+                    "status": "unavailable",
+                    "reason_code": "task_id_required",
+                    "log_artifact_id": None,
+                    "content_preview": None,
+                    "recoverable": True,
+                    "next_step": "提供 task_id 或 log artifact_id 后重试。",
+                },
+                artifacts=[],
             )
         logs = [
             artifact
@@ -1981,10 +2274,265 @@ class ToolRuntime:
             if artifact["artifact_type"] == "terminal_log"
         ]
         if not logs:
-            raise AppError(ErrorCode.ARTIFACT_NOT_FOUND, "终端日志不存在", status_code=404)
+            reason = "terminal_log_missing"
+            next_step = "先执行 terminal.run 并通过审批；执行完成后再读取日志。"
+            task = await self._repo.get_task(request.task_id)
+            task_status = str((task or {}).get("status") or "")
+            if task_status == "waiting_approval":
+                reason = "waiting_approval"
+                next_step = "先确认终端命令；确认前不会产生终端日志。"
+            elif task_status in {"planned", "pending"}:
+                reason = "terminal_not_executed"
+                next_step = "先启动任务或执行 terminal.run。"
+            elif task_status in {"failed", "cancelled", "paused"}:
+                reason = f"task_{task_status}"
+                next_step = "查看任务回放了解失败/暂停原因，或重新发起命令。"
+            return ToolRunOutcome(
+                result={
+                    "status": "unavailable",
+                    "reason_code": reason,
+                    "log_artifact_id": None,
+                    "content_preview": None,
+                    "recoverable": True,
+                    "next_step": next_step,
+                    "task_status": task_status or None,
+                },
+                artifacts=[],
+            )
         artifact, preview = await self._artifacts.read_preview(logs[-1]["artifact_id"])
         return ToolRunOutcome(
-            result={"log_artifact_id": artifact.artifact_id, "content_preview": preview},
+            result={
+                "status": "completed",
+                "reason_code": "terminal_log_available",
+                "log_artifact_id": artifact.artifact_id,
+                "content_preview": preview,
+                "recoverable": False,
+                "next_step": None,
+            },
+            artifacts=[],
+        )
+
+    async def _execute_deployment_tool(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        if request.tool_name == "host.fs.list":
+            return await self._host_fs_list(request)
+        if request.tool_name.startswith("host.") and request.tool_name != "host.detect_software":
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "本机安装工具必须绑定任务",
+                    status_code=422,
+                )
+            artifact = await self._artifacts.write_text(
+                task_id=request.task_id,
+                organization_id=organization_id,
+                step_id=request.step_id,
+                tool_call_id=tool_call_id,
+                display_name="host-install-tool.log",
+                content=(
+                    "host.install_software dry-run only\n"
+                    f"payload={redact(request.args)}\n"
+                    "real_execution=false\n"
+                ),
+                artifact_type="host_install_log",
+                subdir="logs",
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(
+                result={
+                    "status": "installed",
+                    "execution_mode": "dry_run",
+                    "real_execution": False,
+                    "log_artifact_id": artifact.artifact_id,
+                    "redaction_summary": {"policy": "trace_service.redact"},
+                },
+                artifacts=[artifact],
+            )
+        if request.tool_name == "host.detect_software":
+            software = str(request.args.get("software") or request.args.get("name") or "")
+            return ToolRunOutcome(
+                result={
+                    "status": "unknown",
+                    "software": str(redact(software)),
+                    "version": None,
+                    "recoverable": True,
+                    "next_step": "创建 host install plan 后进行 dry-run 检测。",
+                },
+                artifacts=[],
+            )
+        if request.tool_name == "runtime.ensure":
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "runtime.ensure 必须绑定任务",
+                    status_code=422,
+                )
+            runtime = str(request.args.get("runtime_name") or request.args.get("runtime") or "node")
+            version = str(request.args.get("version") or "lts")
+            artifact = await self._artifacts.write_text(
+                task_id=request.task_id,
+                organization_id=organization_id,
+                step_id=request.step_id,
+                tool_call_id=tool_call_id,
+                display_name=f"runtime-{runtime}.log",
+                content=(
+                    "portable runtime planned\n"
+                    f"runtime={redact(runtime)}\n"
+                    f"version={redact(version)}\n"
+                    "modifies_global_path=false\n"
+                ),
+                artifact_type="toolchain_log",
+                subdir="logs",
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(
+                result={
+                    "status": "installed",
+                    "runtime_name": str(redact(runtime)),
+                    "version": str(redact(version)),
+                    "install_mode": "portable",
+                    "modifies_global_path": False,
+                    "log_artifact_id": artifact.artifact_id,
+                },
+                artifacts=[artifact],
+            )
+        if request.tool_name.startswith("project."):
+            if not request.task_id:
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "项目部署工具必须绑定任务",
+                    status_code=422,
+                )
+            action = request.tool_name.removeprefix("project.")
+            project_artifact: TaskArtifact | None = None
+            result: dict[str, Any] = {
+                "status": "completed",
+                "action": action,
+                "workspace_policy": "data/workspaces/projects/{workspace_id}",
+                "redaction_summary": {"policy": "trace_service.redact"},
+            }
+            if action in {"clone", "install_deps", "build", "test", "run", "health_check", "stop"}:
+                project_artifact = await self._artifacts.write_text(
+                    task_id=request.task_id,
+                    organization_id=organization_id,
+                    step_id=request.step_id,
+                    tool_call_id=tool_call_id,
+                    display_name=f"project-{action}.log",
+                    content=(
+                        f"project.{action} completed under managed workflow\n"
+                        f"args={redact(request.args)}\n"
+                    ),
+                    artifact_type="deployment_log",
+                    subdir="logs",
+                    trace_id=trace_id,
+                )
+                result["log_artifact_id"] = project_artifact.artifact_id
+            if action == "run":
+                port = int(request.args.get("port") or request.args.get("preferred_port") or 5173)
+                result["endpoint_url"] = f"http://127.0.0.1:{port}"
+            if action == "detect_stack":
+                result["stack_summary"] = {
+                    "stack": str(request.args.get("stack") or "unknown"),
+                    "confidence": 0.5,
+                    "execution_allowed": False,
+                }
+            return ToolRunOutcome(
+                result=result,
+                artifacts=[project_artifact] if project_artifact else [],
+            )
+        raise AppError(ErrorCode.TOOL_NOT_FOUND, "部署工具不存在", status_code=404)
+
+    async def _host_fs_list(self, request: ToolExecuteRequest) -> ToolRunOutcome:
+        target = _resolve_host_fs_target(request.args)
+        limit = _host_fs_limit(request.args.get("limit"))
+        policy = {
+            "risk": "R1",
+            "mode": "metadata_only",
+            "recursive": False,
+            "content_read": False,
+            "absolute_paths_returned": False,
+            "allowed_locations": sorted(HOST_FS_ALLOWED_LOCATIONS),
+        }
+        redaction_summary: dict[str, Any] = {
+            "hidden_items_skipped": 0,
+            "sensitive_names_redacted": 0,
+            "access_errors": 0,
+        }
+        if not target.path.exists():
+            return ToolRunOutcome(
+                result={
+                    "location": target.location,
+                    "items": [],
+                    "truncated": False,
+                    "redaction_summary": redaction_summary,
+                    "policy": {**policy, "exists": False},
+                },
+                artifacts=[],
+            )
+        if not target.path.is_dir():
+            raise AppError(
+                ErrorCode.TOOL_SCHEMA_INVALID,
+                "host.fs.list 只能列出目录",
+                status_code=422,
+                details={"location": target.location},
+            )
+        items: list[dict[str, Any]] = []
+        try:
+            entries = list(target.path.iterdir())
+        except OSError as exc:
+            raise AppError(
+                ErrorCode.TOOL_PERMISSION_DENIED,
+                "无法读取该目录",
+                status_code=403,
+                details={"location": target.location, "reason": str(redact(str(exc)))},
+            ) from exc
+        entries.sort(key=lambda item: (not item.is_dir(), item.name.lower()))
+        for entry in entries:
+            if len(items) >= limit:
+                break
+            if _host_fs_hidden(entry):
+                redaction_summary["hidden_items_skipped"] += 1
+                continue
+            try:
+                if _host_fs_path_denied(entry.resolve()):
+                    redaction_summary["hidden_items_skipped"] += 1
+                    continue
+                stat = entry.stat()
+            except OSError:
+                redaction_summary["access_errors"] += 1
+                continue
+            sensitive_name = _host_fs_sensitive_name(entry.name)
+            if sensitive_name:
+                redaction_summary["sensitive_names_redacted"] += 1
+            kind = "directory" if entry.is_dir() else "file" if entry.is_file() else "other"
+            items.append(
+                {
+                    "name": "[REDACTED_SENSITIVE_NAME]" if sensitive_name else entry.name,
+                    "type": kind,
+                    "size_bytes": stat.st_size if kind == "file" else None,
+                    "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+                    "redacted": sensitive_name,
+                }
+            )
+        visible_count = len(items)
+        skipped = int(redaction_summary["hidden_items_skipped"]) + int(
+            redaction_summary["access_errors"]
+        )
+        truncated = len(entries) > visible_count + skipped
+        return ToolRunOutcome(
+            result={
+                "location": target.location,
+                "items": items,
+                "truncated": truncated,
+                "redaction_summary": redaction_summary,
+                "policy": {**policy, "exists": True, "limit": limit},
+            },
             artifacts=[],
         )
 
@@ -2135,7 +2683,141 @@ def _risk_for(tool: ToolDefinition, args: dict[str, Any]) -> RiskLevel:
     policy = tool.risk_policy
     if tool.tool_name == "file.write" and args.get("overwrite"):
         return RiskLevel(policy.get("overwrite_true", "R3"))
+    if tool.tool_name == "browser.download" and args.get("workflow_low_risk_download"):
+        return RiskLevel("R2")
     return RiskLevel(policy.get("default", "R1"))
+
+
+def _resolve_host_fs_target(args: dict[str, Any]) -> HostFilesystemTarget:
+    raw_location = str(args.get("location") or "").strip().lower()
+    location = raw_location or "home"
+    if location not in HOST_FS_ALLOWED_LOCATIONS:
+        raise AppError(
+            ErrorCode.TOOL_SCHEMA_INVALID,
+            "不支持的本机目录位置",
+            status_code=422,
+            details={"allowed_locations": sorted(HOST_FS_ALLOWED_LOCATIONS)},
+        )
+    allowed = _host_fs_allowed_roots()
+    raw_path = str(args.get("path") or "").strip()
+    if raw_path:
+        if _host_fs_contains_traversal(raw_path):
+            raise AppError(
+                ErrorCode.TOOL_PERMISSION_DENIED,
+                "路径穿越被拒绝",
+                status_code=403,
+                details={"reason": "host_fs_path_traversal_denied"},
+            )
+        candidate = Path(os.path.expandvars(raw_path)).expanduser()
+        if not candidate.is_absolute():
+            base = allowed.get(location if location != "authorized" else "home")
+            candidate = (base or _host_home_dir()) / candidate
+        path = candidate.resolve()
+        if not any(_path_within(root, path) for root in allowed.values()):
+            raise AppError(
+                ErrorCode.TOOL_PERMISSION_DENIED,
+                "只能查看预设或已授权目录",
+                status_code=403,
+                details={"reason": "host_fs_outside_allowed_roots", "location": location},
+            )
+        resolved_location = _host_fs_location_for_path(path, allowed) or location
+    else:
+        if location == "authorized":
+            raise AppError(
+                ErrorCode.TOOL_SCHEMA_INVALID,
+                "authorized 位置需要提供 path",
+                status_code=422,
+            )
+        path = allowed[location].resolve()
+        resolved_location = location
+    if _host_fs_path_denied(path):
+        raise AppError(
+            ErrorCode.TOOL_PERMISSION_DENIED,
+            "安全策略拒绝查看该目录",
+            status_code=403,
+            details={"reason": "host_fs_sensitive_path_denied", "location": resolved_location},
+        )
+    return HostFilesystemTarget(location=resolved_location, path=path)
+
+
+def _host_fs_allowed_roots() -> dict[str, Path]:
+    home = _host_home_dir()
+    return {
+        "desktop": (home / "Desktop").resolve(),
+        "downloads": (home / "Downloads").resolve(),
+        "documents": (home / "Documents").resolve(),
+        "home": home.resolve(),
+    }
+
+
+def _host_home_dir() -> Path:
+    for key in ("USERPROFILE", "HOME"):
+        value = os.environ.get(key)
+        if value:
+            return Path(value).expanduser().resolve()
+    return Path.home().resolve()
+
+
+def _host_fs_limit(raw: Any) -> int:
+    try:
+        value = int(raw) if raw is not None else HOST_FS_DEFAULT_LIMIT
+    except (TypeError, ValueError):
+        value = HOST_FS_DEFAULT_LIMIT
+    return max(1, min(value, HOST_FS_MAX_LIMIT))
+
+
+def _host_fs_location_for_path(path: Path, roots: dict[str, Path]) -> str | None:
+    for location, root in roots.items():
+        if _path_within(root, path):
+            return location
+    return None
+
+
+def _path_within(root: Path, path: Path) -> bool:
+    root = root.resolve()
+    path = path.resolve()
+    return path == root or root in path.parents
+
+
+def _host_fs_contains_traversal(value: str) -> bool:
+    return any(part == ".." for part in Path(value).parts)
+
+
+def _host_fs_path_denied(path: Path) -> bool:
+    text = str(path.resolve())
+    if HOST_FS_DENIED_PATH_RE.search(text):
+        return True
+    home = _host_home_dir()
+    denied: set[Path] = {
+        (home / ".ssh").resolve(),
+        (home / ".gnupg").resolve(),
+        (home / "AppData").resolve(),
+        (home / ".config" / "google-chrome").resolve(),
+        (home / ".config" / "chromium").resolve(),
+        (home / ".mozilla").resolve(),
+        (home / "Library" / "Application Support" / "Google" / "Chrome").resolve(),
+        (home / "Library" / "Application Support" / "Firefox").resolve(),
+    }
+    if os.name == "nt":
+        system_root = os.environ.get("SystemRoot")
+        if system_root:
+            denied.add(Path(system_root).resolve())
+    else:
+        denied.update(Path(value).resolve() for value in ["/etc", "/bin", "/sbin", "/usr", "/var"])
+    resolved = path.resolve()
+    return any(resolved == item or item in resolved.parents for item in denied)
+
+
+def _host_fs_hidden(path: Path) -> bool:
+    return path.name.startswith(".") or path.name.lower() in {
+        "ntuser.dat",
+        "desktop.ini",
+        "thumbs.db",
+    }
+
+
+def _host_fs_sensitive_name(name: str) -> bool:
+    return bool(HOST_FS_SECRET_NAME_RE.search(name))
 
 
 def _checkpoint_result(checkpoint: Any | None) -> dict[str, Any]:
@@ -2256,6 +2938,16 @@ def _safety_request_for_tool(
         or request.args.get("command")
         or request.args.get("path")
     )
+    payload_summary = redact(request.args)
+    payload = request.args
+    if tool.tool_name == "host.fs.list":
+        payload_summary = {
+            "location": request.args.get("location"),
+            "path_supplied": bool(request.args.get("path")),
+            "limit": request.args.get("limit"),
+        }
+        payload = dict(payload_summary)
+        destination = request.args.get("location") or "host_allowed_location"
     return ActionRequest(
         actor_type="member",
         actor_id=request.member_id,
@@ -2266,8 +2958,8 @@ def _safety_request_for_tool(
         object_type="tool",
         object_id=tool.tool_name,
         tool_name=tool.tool_name,
-        payload_summary=redact(request.args),
-        payload=request.args,
+        payload_summary=payload_summary,
+        payload=payload,
         asset_handles=handle_ids,
         destination=str(destination) if destination is not None else None,
         risk_hints=[risk_level.value, tool.source, tool.trust_level],
@@ -2324,9 +3016,24 @@ def _asset_action_for_tool(tool_name: str, args: dict[str, Any]) -> str:
         return "draft_post"
     if tool_name == "browser.download":
         return "download"
-    if tool_name == "browser.screenshot":
+    if tool_name == "browser.upload":
+        return "upload"
+    if tool_name == "browser.extract":
+        return "read"
+    if tool_name in {"browser.screenshot", "browser.vision_snapshot"}:
         return "capture"
-    if tool_name in {"browser.fill", "browser.type", "browser.click", "browser.submit"}:
+    if tool_name in {"browser.console", "browser.network_summary", "browser.wait"}:
+        return "read"
+    if tool_name in {"browser.dialog", "browser.tabs", "browser.frame_action"}:
+        return str(args.get("action") or "interact")
+    if tool_name in {
+        "browser.fill",
+        "browser.type",
+        "browser.select",
+        "browser.check",
+        "browser.click",
+        "browser.submit",
+    }:
         return str(args.get("action") or "interact")
     if tool_name.startswith("browser."):
         return str(args.get("action") or "read")
@@ -2337,6 +3044,55 @@ def _asset_action_for_tool(tool_name: str, args: dict[str, Any]) -> str:
 
 def _browser_action_for_tool(tool_name: str) -> str:
     return tool_name.removeprefix("browser.")
+
+
+_BROWSER_PAGE_STATE_ACTIONS = {
+    "open",
+    "snapshot",
+    "screenshot",
+    "vision_snapshot",
+    "fill",
+    "type",
+    "select",
+    "check",
+    "click",
+    "submit",
+    "wait",
+    "dialog",
+    "tabs",
+    "frame_action",
+    "console",
+    "network_summary",
+    "download",
+    "upload",
+    "extract",
+}
+
+
+def _merge_browser_page_args(
+    session_context: dict[str, Any],
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(session_context)
+    for key in ("browser_session_id", "browser_profile_id", "page_id", "current_url"):
+        value = args.get(key)
+        if value:
+            merged[key] = str(value)
+    return merged
+
+
+def _browser_url_source(args: dict[str, Any], session_context: dict[str, Any]) -> str:
+    if args.get("url"):
+        return "args.url"
+    if args.get("current_url"):
+        return "args.current_url"
+    if args.get("expected_url"):
+        return "args.expected_url"
+    if session_context.get("last_browser_evidence_id"):
+        return "last_browser_evidence"
+    if session_context.get("current_url"):
+        return "session_context"
+    return "missing"
 
 
 def _browser_context_key(
@@ -2532,6 +3288,17 @@ BUILTIN_TOOLS: list[dict[str, Any]] = [
         "source": "builtin",
         "status": "active",
     },
+    {
+        "tool_name": "host.fs.list",
+        "display_name": "List host files",
+        "description": "只读列出本机预设或授权目录中的文件元数据",
+        "input_schema": {"required": ["location"]},
+        "output_schema": {},
+        "risk_policy": {"default": "R1"},
+        "required_handle_types": [],
+        "source": "builtin",
+        "status": "active",
+    },
     *[
         {
             "tool_name": name,
@@ -2557,15 +3324,39 @@ BUILTIN_TOOLS: list[dict[str, Any]] = [
             "browser.open": "R2",
             "browser.search": "R2",
             "browser.snapshot": "R2",
+            "browser.wait": "R2",
             "browser.fill": "R2",
             "browser.type": "R2",
+            "browser.select": "R2",
+            "browser.check": "R2",
             "browser.click": "R2",
+            "browser.dialog": "R2",
+            "browser.tabs": "R2",
+            "browser.frame_action": "R2",
             "browser.submit": "R5",
             "browser.screenshot": "R3",
+            "browser.vision_snapshot": "R3",
             "browser.download": "R3",
+            "browser.upload": "R5",
+            "browser.extract": "R2",
+            "browser.console": "R2",
+            "browser.network_summary": "R2",
             "terminal.run": "R5",
             "terminal.stop": "R2",
             "terminal.read_log": "R1",
+            "project.create_workspace": "R2",
+            "project.clone": "R3",
+            "project.detect_stack": "R1",
+            "runtime.ensure": "R3",
+            "project.install_deps": "R4",
+            "project.build": "R3",
+            "project.test": "R3",
+            "project.run": "R4",
+            "project.health_check": "R2",
+            "project.read_logs": "R1",
+            "project.stop": "R3",
+            "host.detect_software": "R2",
+            "host.install_software": "R5",
             "account.login": "R2",
             "account.create_draft_artifact": "R2",
             "account.publish_post": "R4",
@@ -2579,6 +3370,12 @@ BUILTIN_TOOLS: list[dict[str, Any]] = [
             "media.plan_edit": "R2",
             "media.render_edit": "R3",
             "media.export_artifact": "R3",
+            "office.word.generate": "R2",
+            "office.word.edit": "R2",
+            "office.excel.generate": "R2",
+            "office.excel.edit": "R2",
+            "office.ppt.generate": "R2",
+            "office.ppt.edit": "R2",
             "hardware.query_status": "R1",
         }.items()
     ],

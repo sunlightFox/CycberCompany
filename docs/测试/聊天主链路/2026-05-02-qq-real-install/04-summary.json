@@ -1,0 +1,15 @@
+{
+  "run_id": "qq-real-install-20260502-0001",
+  "plan_id": "hip_b9865fa08a4a4edbab94d8dce8c69f7e",
+  "approval_id": "apr_27d5cafc8f1e4c1da903c4990e236d37",
+  "risk_level": "R6",
+  "source_type": "package_manager_bootstrap",
+  "package_manager": "winget",
+  "package_id": "Tencent.QQ.NT",
+  "status": "failed",
+  "exit_code": 1,
+  "failure_reason": "\u001b[91mInvoke-WebRequest: \u001b[91mUnable to read data from the transport connection: �������ӷ���һ��ʱ���û����ȷ�𸴻����ӵ�����û�з�Ӧ�����ӳ���ʧ�ܡ�.\u001b[0m",
+  "version_detected": null,
+  "install_path_summary": "not_installed",
+  "log_artifact_id": "art_06692286bb1e483f86453c461dacad8a"
+}

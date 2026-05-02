@@ -1,0 +1,138 @@
+{
+  "host_install_plan_id": "hip_bf89b5ec68b941279efc07c063f06ece",
+  "organization_id": "org_default",
+  "task_id": "tsk_b97fd269c2c34442844ff3361b9c1825",
+  "requested_software": "QQ",
+  "install_source": {
+    "bootstrap_source": {
+      "download_url": "https://aka.ms/getwinget",
+      "fallback_dependencies_url": "https://github.com/microsoft/winget-cli/releases/latest/download/DesktopAppInstaller_Dependencies.zip",
+      "fallback_download_url": "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle",
+      "fallback_license_url": "https://github.com/microsoft/winget-cli/releases/latest/download/e53e159d00e04f729cc2180cffd1c02e_License1.xml",
+      "installer_type": "msixbundle",
+      "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+      "package_manager": "winget",
+      "publisher": "Microsoft",
+      "source_type": "official_package_manager_bootstrap",
+      "trust": "official_vendor_url"
+    },
+    "match_confidence": 0.99,
+    "match_reason": "known_winget_package_bootstrap_required",
+    "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+    "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/t/Tencent/QQ/NT/9.9.29.47354/Tencent.QQ.NT.installer.yaml",
+    "package_id": "Tencent.QQ.NT",
+    "package_manager": "winget",
+    "publisher": "Tencent",
+    "source_type": "package_manager_bootstrap",
+    "target_source_type": "winget",
+    "trust": "official_package_manager_bootstrap",
+    "version": "9.9.29.47354"
+  },
+  "command_preview": {
+    "action": "bootstrap_package_manager",
+    "args": [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-winget-bootstrap'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $bundle=Join-Path $work 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle'; $deps=Join-Path $work 'DesktopAppInstaller_Dependencies.zip'; $license=Join-Path $work 'License.xml'; $depDir=Join-Path $work 'dependencies'; $installed=$false; try {   Install-PackageProvider -Name NuGet -Force -Scope CurrentUser | Out-Null;   Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery -Scope CurrentUser;   Repair-WinGetPackageManager -Latest -AllUsers;   $installed=$true; } catch { Write-Host ('Microsoft.WinGet.Client repair failed: ' + $_.Exception.Message) }; if (-not $installed) {   try { Invoke-WebRequest -Uri 'https://aka.ms/getwinget' -OutFile $bundle -UseBasicParsing }   catch {     Write-Host ('aka.ms bootstrap download failed: ' + $_.Exception.Message);     Invoke-WebRequest -Uri 'https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle' -OutFile $bundle -UseBasicParsing;   };   Invoke-WebRequest -Uri 'https://github.com/microsoft/winget-cli/releases/latest/download/DesktopAppInstaller_Dependencies.zip' -OutFile $deps -UseBasicParsing;   Invoke-WebRequest -Uri 'https://github.com/microsoft/winget-cli/releases/latest/download/e53e159d00e04f729cc2180cffd1c02e_License1.xml' -OutFile $license -UseBasicParsing;   if (Test-Path $depDir) { Remove-Item -Recurse -Force $depDir };   Expand-Archive -Path $deps -DestinationPath $depDir -Force;   $dependencyPackages = Get-ChildItem -Path $depDir -Recurse -Include '*.appx','*.msix' |     Where-Object { $_.Name -match 'x64|neutral' } | Select-Object -ExpandProperty FullName;   foreach ($dependency in $dependencyPackages) {     try { Add-AppxPackage -Path $dependency -ErrorAction Stop }     catch { Write-Host ('dependency already installed or unsupported: ' + $_.Exception.Message) }   };   try { Add-AppxProvisionedPackage -Online -PackagePath $bundle -LicensePath $license -ErrorAction Stop | Out-Null }   catch { Write-Host ('provisioned package install failed: ' + $_.Exception.Message) };   Add-AppxPackage -Path $bundle; }; $wingetCommand = Get-Command winget -ErrorAction SilentlyContinue; if (-not $wingetCommand) {   $candidate = Get-ChildItem -Path 'C:\\Program Files\\WindowsApps' -Recurse -Filter winget.exe -ErrorAction SilentlyContinue |     Sort-Object LastWriteTime -Descending | Select-Object -First 1;   if ($candidate) { $env:PATH = $candidate.Directory.FullName + ';' + $env:PATH } }; winget --version"
+    ],
+    "cwd": "host_default",
+    "env_policy": "minimal",
+    "executable": "pwsh",
+    "steps": [
+      {
+        "action": "bootstrap_package_manager",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-winget-bootstrap'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $bundle=Join-Path $work 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle'; $deps=Join-Path $work 'DesktopAppInstaller_Dependencies.zip'; $license=Join-Path $work 'License.xml'; $depDir=Join-Path $work 'dependencies'; $installed=$false; try {   Install-PackageProvider -Name NuGet -Force -Scope CurrentUser | Out-Null;   Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery -Scope CurrentUser;   Repair-WinGetPackageManager -Latest -AllUsers;   $installed=$true; } catch { Write-Host ('Microsoft.WinGet.Client repair failed: ' + $_.Exception.Message) }; if (-not $installed) {   try { Invoke-WebRequest -Uri 'https://aka.ms/getwinget' -OutFile $bundle -UseBasicParsing }   catch {     Write-Host ('aka.ms bootstrap download failed: ' + $_.Exception.Message);     Invoke-WebRequest -Uri 'https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle' -OutFile $bundle -UseBasicParsing;   };   Invoke-WebRequest -Uri 'https://github.com/microsoft/winget-cli/releases/latest/download/DesktopAppInstaller_Dependencies.zip' -OutFile $deps -UseBasicParsing;   Invoke-WebRequest -Uri 'https://github.com/microsoft/winget-cli/releases/latest/download/e53e159d00e04f729cc2180cffd1c02e_License1.xml' -OutFile $license -UseBasicParsing;   if (Test-Path $depDir) { Remove-Item -Recurse -Force $depDir };   Expand-Archive -Path $deps -DestinationPath $depDir -Force;   $dependencyPackages = Get-ChildItem -Path $depDir -Recurse -Include '*.appx','*.msix' |     Where-Object { $_.Name -match 'x64|neutral' } | Select-Object -ExpandProperty FullName;   foreach ($dependency in $dependencyPackages) {     try { Add-AppxPackage -Path $dependency -ErrorAction Stop }     catch { Write-Host ('dependency already installed or unsupported: ' + $_.Exception.Message) }   };   try { Add-AppxProvisionedPackage -Online -PackagePath $bundle -LicensePath $license -ErrorAction Stop | Out-Null }   catch { Write-Host ('provisioned package install failed: ' + $_.Exception.Message) };   Add-AppxPackage -Path $bundle; }; $wingetCommand = Get-Command winget -ErrorAction SilentlyContinue; if (-not $wingetCommand) {   $candidate = Get-ChildItem -Path 'C:\\Program Files\\WindowsApps' -Recurse -Filter winget.exe -ErrorAction SilentlyContinue |     Sort-Object LastWriteTime -Descending | Select-Object -First 1;   if ($candidate) { $env:PATH = $candidate.Directory.FullName + ';' + $env:PATH } }; winget --version"
+        ],
+        "cwd": "host_default",
+        "env_policy": "minimal",
+        "executable": "pwsh",
+        "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+        "official_fallback_sources": [
+          "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle",
+          "https://github.com/microsoft/winget-cli/releases/latest/download/DesktopAppInstaller_Dependencies.zip",
+          "https://github.com/microsoft/winget-cli/releases/latest/download/e53e159d00e04f729cc2180cffd1c02e_License1.xml"
+        ],
+        "official_source": "https://aka.ms/getwinget",
+        "package_manager": "winget",
+        "step_key": "bootstrap_winget_official_app_installer",
+        "step_type": "package_manager_bootstrap",
+        "timeout_seconds": 600
+      },
+      {
+        "action": "verify",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "$ErrorActionPreference='Stop'; $winget = Get-Command winget -ErrorAction SilentlyContinue; if (-not $winget) {   $candidate = Get-ChildItem -Path 'C:\\Program Files\\WindowsApps' -Recurse -Filter winget.exe -ErrorAction SilentlyContinue |     Sort-Object LastWriteTime -Descending | Select-Object -First 1;   if ($candidate) { $winget = $candidate.FullName } }; if (-not $winget) { throw 'winget not found after bootstrap' }; $wingetPath = if ($winget -is [string]) { $winget } else { $winget.Source }; & $wingetPath --version"
+        ],
+        "cwd": "host_default",
+        "env_policy": "minimal",
+        "executable": "pwsh",
+        "package_manager": "winget",
+        "step_key": "verify_winget_available",
+        "step_type": "verify_package_manager",
+        "timeout_seconds": 60
+      },
+      {
+        "action": "install",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "$ErrorActionPreference='Stop'; $winget = Get-Command winget -ErrorAction SilentlyContinue; if (-not $winget) {   $candidate = Get-ChildItem -Path 'C:\\Program Files\\WindowsApps' -Recurse -Filter winget.exe -ErrorAction SilentlyContinue |     Sort-Object LastWriteTime -Descending | Select-Object -First 1;   if ($candidate) { $winget = $candidate.FullName } }; if (-not $winget) { throw 'winget not found after bootstrap' }; $wingetPath = if ($winget -is [string]) { $winget } else { $winget.Source }; & $wingetPath install --id Tencent.QQ.NT --source winget --accept-package-agreements --accept-source-agreements --silent --disable-interactivity"
+        ],
+        "cwd": "host_default",
+        "env_policy": "minimal",
+        "executable": "pwsh",
+        "package_manager": "winget",
+        "step_key": "winget_install_tencent_qq_nt",
+        "step_type": "package_manager_install",
+        "target_package_id": "Tencent.QQ.NT",
+        "timeout_seconds": 1800
+      }
+    ]
+  },
+  "impact_summary": {
+    "bootstrap_fallback_sources": [
+      "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle",
+      "https://github.com/microsoft/winget-cli/releases/latest/download/DesktopAppInstaller_Dependencies.zip",
+      "https://github.com/microsoft/winget-cli/releases/latest/download/e53e159d00e04f729cc2180cffd1c02e_License1.xml"
+    ],
+    "bootstrap_official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+    "bootstrap_package_manager": "winget",
+    "bootstrap_reason": "package_manager_missing",
+    "bootstrap_required": true,
+    "bootstrap_source": "https://aka.ms/getwinget",
+    "installs_package_manager": true,
+    "may_require_admin": true,
+    "modifies_global_environment": true,
+    "modifies_path_or_registry": true,
+    "package_resolution": {
+      "match_confidence": 0.99,
+      "match_reason": "known_winget_package_bootstrap_required",
+      "source_type": "winget",
+      "target_package_id": "Tencent.QQ.NT"
+    },
+    "preserve_preexisting_install": true,
+    "real_execution_default": false,
+    "risk_level": "R6",
+    "rollback": "winget uninstall --id Tencent.QQ.NT",
+    "writes_system_locations": true
+  },
+  "risk_level": "R6",
+  "status": "waiting_approval",
+  "approval_id": "apr_5f732febabe74f89907e99f320490645",
+  "trace_id": "trc_2e068fd803c64a19acc97bd687b9f95a",
+  "created_at": "2026-05-01T16:13:39.494169Z",
+  "updated_at": "2026-05-01T16:13:39.547125Z"
+}

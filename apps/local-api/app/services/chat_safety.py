@@ -57,6 +57,20 @@ _SAFETY_PHRASE_REPLACEMENTS: tuple[tuple[re.Pattern[str], str, str], ...] = (
     ),
 )
 
+_INTERNAL_TOOL_LEAK_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"<\s*/?\s*minimax:tool_call\b[^>]*>", re.IGNORECASE), "model_tool_xml"),
+    (re.compile(r"<\s*/?\s*invoke\b[^>]*>", re.IGNORECASE), "model_tool_xml"),
+    (re.compile(r"<\s*/?\s*tool_call\b[^>]*>", re.IGNORECASE), "model_tool_xml"),
+    (
+        re.compile(
+            r"```(?:json|python|javascript|ts|typescript)?\s*"
+            r"<\s*(?:invoke|minimax:tool_call|tool_call)\b.*?```",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        "model_tool_code_fence",
+    ),
+)
+
 
 @dataclass
 class ChatVisibleOutputFilter:
@@ -128,6 +142,10 @@ class ChatVisibleOutputFilter:
             return ""
         original = text
         filtered = visible_text_guard(str(redact(text)))
+        for pattern, label in _INTERNAL_TOOL_LEAK_PATTERNS:
+            if pattern.search(filtered):
+                self.blocked_terms.add(label)
+                filtered = pattern.sub("", filtered)
         for pattern, replacement, label in _SAFETY_PHRASE_REPLACEMENTS:
             if pattern.search(filtered):
                 self.blocked_terms.add(label)
@@ -243,7 +261,7 @@ class ChatTaskStatusPresenter:
         if status == "waiting_approval":
             return TaskStatusPresentation(
                 text=(
-                    "任务已创建，但有一步操作需要你确认后才会继续；"
+                    "任务已创建，但有一步操作正在等待确认，尚未完成；"
                     "确认前我不会声称已经执行。"
                 ),
                 task_status={**base_status, "user_visible_text": "waiting_approval"},

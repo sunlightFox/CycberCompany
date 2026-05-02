@@ -322,6 +322,10 @@ class ChatEventType(StrEnum):
     MEMORY_ARCHIVED = "memory.archived"
     MEMORY_CORRECTION_APPLIED = "memory.correction_applied"
     TURN_CANCELLED = "turn.cancelled"
+    TURN_RECOVERY_STARTED = "turn.recovery_started"
+    TURN_RECOVERY_DIAGNOSED = "turn.recovery_diagnosed"
+    TURN_RECOVERY_ACTION = "turn.recovery_action"
+    TURN_RECOVERY_COMPLETED = "turn.recovery_completed"
     TURN_COMPLETED = "turn.completed"
     TURN_FAILED = "turn.failed"
 
@@ -508,6 +512,7 @@ class TraceSpanType(StrEnum):
     CONVERSATION_TITLE = "conversation.title"
     TURN_CANCEL = "turn.cancel"
     TURN_FAILED = "turn.failed"
+    TURN_RECOVERY = "turn.recovery"
     MEMORY_SEARCH = "memory.search"
     MEMORY_EXTRACT = "memory.extract"
     MEMORY_SCORE = "memory.score"

@@ -1,0 +1,50 @@
+{
+  "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+  "conversation_id": "conv_default_xiaoyao",
+  "member_id": "mem_xiaoyao",
+  "user_message_id": "msg_772b88b0c56a4d62a2dc64944c128ec7",
+  "assistant_message_id": "msg_4723fa0c9c4c47e2a71333b0d93378f1",
+  "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+  "status": "completed",
+  "intent": "host_software_install_request",
+  "mode": "workflow",
+  "privacy_level": "medium",
+  "route": {
+    "brain_id": null,
+    "fallback_used": false
+  },
+  "usage": {},
+  "experience": {
+    "conversation_depth": 2,
+    "complexity_score": 0.02,
+    "chat_style": "simple_qa",
+    "route_profile": "simple_qa",
+    "context_selection_reason": [
+      "current_input",
+      "recent_messages",
+      "capability_boundary_summary"
+    ],
+    "recoverable": true,
+    "needs_strong_reasoning": false,
+    "needs_long_output": false,
+    "needs_tool_or_task": false,
+    "chat_route_decision": {
+      "route_type": "host_software_install",
+      "confidence": 0.9,
+      "reason_code": "explicit_host_software_install",
+      "requires_confirmation": true,
+      "task_goal": "帮我安装微信",
+      "safe_user_summary": "帮我安装微信",
+      "office_request": null,
+      "metadata": {}
+    }
+  },
+  "error_code": null,
+  "error_message": null,
+  "retry_of_turn_id": null,
+  "brain_decision_id": "bd_53af97f583ea4a34ba7852ad8c4d52cd",
+  "cancel_requested": false,
+  "created_at": "2026-05-02T08:48:53.866006+08:00",
+  "updated_at": "2026-05-02T08:48:54.147622+08:00",
+  "ended_at": "2026-05-02T08:48:54.147622+08:00"
+}

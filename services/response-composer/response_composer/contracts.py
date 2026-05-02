@@ -282,6 +282,70 @@ class ResponseComposer:
             user_next_step=_first_next_step([]),
         )
 
+    def response_plan_for_action_status(
+        self,
+        *,
+        facts: dict[str, Any],
+        task_status: dict[str, Any] | None = None,
+        trace_refs: list[dict[str, Any]] | None = None,
+    ) -> ResponsePlan:
+        text = _compose_action_status_text(facts)
+        visible_summary, redaction_summary = redact_visible_text(text)
+        reply_options = [
+            str(item)
+            for item in facts.get("reply_options") or []
+            if str(item).strip()
+        ]
+        reply_option_items = [
+            item
+            for item in facts.get("reply_option_items") or []
+            if isinstance(item, dict)
+        ]
+        status = str(facts.get("status") or "pending_action")
+        high_risk = bool(
+            facts.get("approval_required") or facts.get("risk_level") in {"R5", "R6", "R7"}
+        )
+        tone_metadata = _default_tone_metadata(
+            scenario="action_status",
+            high_risk=high_risk,
+        )
+        action_buttons = _action_buttons(
+            scenario="approval_required" if facts.get("approval_required") else "direct",
+            approval_prompt={"status": "required"} if facts.get("approval_required") else None,
+            follow_up_options=reply_options,
+        )
+        return ResponsePlan(
+            title=_action_status_title(status),
+            style="natural_action",
+            sections=[{"kind": "natural_interaction", "text": visible_summary}],
+            action_buttons=action_buttons,
+            summary=visible_summary,
+            task_status=task_status,
+            follow_up_options=reply_options,
+            tone_metadata=tone_metadata,
+            redaction_summary=redaction_summary,
+            trace_refs=trace_refs or [],
+            plain_text=visible_summary,
+            structured_payload={
+                "source": "response_composer",
+                "scenario": "action_status",
+                "action_status": _redact_payload(facts),
+                "reply_option_items": _redact_payload(reply_option_items),
+                "task_status": task_status or {},
+            },
+            tone_mode=_tone_mode_from_metadata(tone_metadata),
+            quality_markers={
+                **_baseline_quality_markers(
+                    scenario="approval_required" if high_risk else "direct",
+                    high_risk=high_risk,
+                ),
+                "natural_language": True,
+                "no_false_done": True,
+            },
+            boundary_notice=_action_boundary_notice(facts) if high_risk else None,
+            user_next_step=_first_next_step(reply_options),
+        )
+
     def response_plan_for_clarification(
         self,
         *,
@@ -357,14 +421,24 @@ class ResponseComposer:
         recoverable: bool,
         suggested_next_actions: list[str],
         base_plan: ResponsePlan | None = None,
+        recovery: dict[str, Any] | None = None,
     ) -> ResponsePlan:
         plan = base_plan or self.response_plan_for_status(summary=summary)
+        recovery_payload = recovery or {
+            "status": "needs_user_input" if recoverable else "unrecoverable",
+            "attempt_count": 0,
+            "root_cause": error_code,
+            "actions_taken": [],
+            "next_action": suggested_next_actions[0] if suggested_next_actions else None,
+            "task_id": None,
+        }
         structured = {
             **plan.structured_payload,
             "scenario": "failure_recovery",
             "error_code": error_code,
             "recoverable": recoverable,
             "suggested_next_actions": suggested_next_actions,
+            "recovery": _redact_payload(recovery_payload),
         }
         return plan.model_copy(
             update={
@@ -722,6 +796,154 @@ def _structured_notices(notices: dict[str, Any]) -> dict[str, Any]:
             "follow_up_options",
         }
     }
+
+
+def _compose_action_status_text(facts: dict[str, Any]) -> str:
+    status = str(facts.get("status") or "pending_action")
+    action_label = str(facts.get("action_label") or "这一步操作").strip()
+    target = str(facts.get("target") or "").strip()
+    label = (
+        action_label
+        if target and target in action_label
+        else f"{action_label} {target}".strip()
+    )
+    if status == "already_absent" or facts.get("already_absent"):
+        return (
+            f"我查了一圈，{target or label}现在没在本机安装清单里。"
+            "所以这次不用卸载，也没有动你的电脑。🙂"
+        )
+    if status in {"pending_action", "waiting_approval"}:
+        lines = [
+            f"{_pending_opener(facts)}{label}，我这边已经摆好工具了，不过还没动手。",
+            _pending_reason_text(facts),
+        ]
+        options = [str(item) for item in facts.get("reply_options") or [] if str(item).strip()]
+        if options:
+            lines.append("你直接回我：" + "、".join(options[:4]) + "。")
+        lines.append("你确认前，我会乖乖把手收住，不会把没做的事说成做完 🙂")
+        return "\n".join(line for line in lines if line)
+    if status == "manual_only":
+        reason = str(facts.get("failure_reason") or facts.get("safe_next_step") or "").strip()
+        return (
+            f"{label}这步我没硬上。"
+            f"{reason or '现在还缺一个能让我放心执行的可信来源，我不想拿你的电脑冒险。'}"
+        )
+    if status == "approved":
+        detail_status = str(facts.get("detail_status") or "")
+        evidence = str(facts.get("evidence_summary") or "").strip()
+        if detail_status == "completed" or facts.get("completed"):
+            return (
+                f"已确认，{label}已经完成，跑完啦。"
+                f"{_friendly_evidence_text(evidence)}"
+            )
+        if detail_status in {"paused", "waiting_approval"}:
+            return f"收到，{label}我已经接着往前推了；后面还有一步要你点头，我会停在那儿等你。"
+        if detail_status == "failed" or facts.get("failed"):
+            reason = str(facts.get("failure_reason") or "").strip()
+            return f"收到，但{label}没有顺利完成。{reason or '你可以换个目标或来源，我再试一轮。'}"
+        return f"收到，{label}我继续处理；有结果我会按真实状态说，不给你画饼。"
+    if status == "denied":
+        return f"好，{label}我已经刹住了，这一步没有执行。你换个目标或让我只出方案都行。"
+    if status == "edited":
+        return f"收到，{label}已经按新的目标修改好；我会重新检查一遍，该确认的地方还会等你点头。"
+    if status == "edit_missing_target":
+        reason = str(facts.get("failure_reason") or "").strip()
+        return f"我懂，你想改{label}，但新目标还没说清楚。{reason}"
+    if status == "resolution_failed":
+        reason = str(facts.get("failure_reason") or "").strip()
+        fallback = "你可以修改目标后重试，或取消这次操作。"
+        return f"{label}这步卡住了，没有完成。{reason or fallback}"
+    return f"{label}现在是 {status} 状态；我会继续按真实进展告诉你。"
+
+
+def _pending_reason_text(facts: dict[str, Any]) -> str:
+    action_type = str(facts.get("action_type") or "")
+    if action_type == "host.uninstall_software":
+        return "这会从电脑里移除软件，我得先听到你明确点头再开工。"
+    if action_type == "host.install_software":
+        return "这会往电脑里装东西，可能动到系统环境，所以我先踩住刹车等你确认。"
+    if action_type == "browser.download":
+        return "这会在本机生成文件，我先等你一句准话。"
+    if action_type == "file.delete":
+        return "这可能删文件，我不会手滑，先等你确认。"
+    return _soften_action_text(
+        str(facts.get("impact_summary") or "这一步有实际影响，需要你明确确认后才会继续。")
+    )
+
+
+def _pending_opener(facts: dict[str, Any]) -> str:
+    action_type = str(facts.get("action_type") or "")
+    if action_type == "host.install_software":
+        return "我先把安装路线铺好："
+    if action_type == "host.uninstall_software":
+        return "我先把卸载路线看清楚："
+    if action_type == "file.delete":
+        return "我先把手放在删除按钮旁边："
+    if action_type == "browser.download":
+        return "下载这边我已经瞄准了："
+    return "我先把这步准备好："
+
+
+def _friendly_evidence_text(evidence: str) -> str:
+    text = _soften_action_text(evidence).strip()
+    if not text:
+        return "我也把过程记录好了，后面要查结果能翻得到。"
+    return text
+
+
+def _soften_action_text(text: str) -> str:
+    replacements = {
+        "受控链路": "处理流程",
+        "受控任务链路": "处理流程",
+        "任务链路": "处理流程",
+        "工件": "结果记录",
+        "回放证据": "过程记录",
+        "Safety": "安全检查",
+        "Approval": "确认",
+        "本机软件状态": "电脑里的软件",
+        "需要你明确确认后才会继续": "需要你点头后我才会继续",
+        "确认前尚未安装": "确认前还没安装",
+        "确认前尚未卸载": "确认前还没卸载",
+        "确认前尚未下载": "确认前还没下载",
+        "确认前尚未提交": "确认前还没提交",
+        "确认前尚未保存": "确认前还没保存",
+    }
+    friendly_evidence = "我也把过程记录好了，后面要查结果能翻得到。"
+    replacements["结果可以通过任务记录、结果记录或过程记录复核。"] = friendly_evidence
+    replacements["结果可以通过任务记录、工件或回放证据复核。"] = friendly_evidence
+    result = text
+    for old, new in replacements.items():
+        result = result.replace(old, new)
+    return result
+
+
+def _action_status_title(status: str) -> str | None:
+    if status == "already_absent":
+        return "无需操作"
+    if status in {"pending_action", "waiting_approval"}:
+        return "等待确认"
+    if status == "manual_only":
+        return "需要人工处理"
+    if status == "approved":
+        return "已确认"
+    if status == "denied":
+        return "已取消"
+    if status == "edited":
+        return "已更新"
+    if status == "edit_missing_target":
+        return "需要新目标"
+    if status == "resolution_failed":
+        return "未完成"
+    return None
+
+
+def _action_boundary_notice(facts: dict[str, Any]) -> str | None:
+    action_type = str(facts.get("action_type") or "")
+    if action_type.startswith("host."):
+        return "本机软件变更必须经过确认；不会绕过系统安全提示或未知来源校验。"
+    if facts.get("approval_required"):
+        return "这一步需要确认后才会执行。"
+    return None
 
 
 def _scenario_for_status(

@@ -35,6 +35,7 @@ TASK_UPDATE_COLUMNS = {
 STEP_UPDATE_COLUMNS = {
     "status",
     "output_json",
+    "idempotency_key",
     "retry_count",
     "approval_id",
     "tool_call_id",

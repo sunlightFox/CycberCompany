@@ -1,0 +1,27 @@
+[
+  {
+    "FullName": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\data\\wechat-cli-install-20260502-0003\\artifacts\\tsk_643c3b9f61ed4ac7a14a4c93bcb5e3de\\logs\\host-install.log",
+    "Length": 2458,
+    "LastWriteTime": "2026-05-02T08:50:20.3089167+08:00"
+  },
+  {
+    "FullName": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\data\\wechat-cli-install-20260502-0003\\artifacts\\tsk_643c3b9f61ed4ac7a14a4c93bcb5e3de\\outputs\\task-report.md",
+    "Length": 140,
+    "LastWriteTime": "2026-05-02T08:49:11.8093194+08:00"
+  },
+  {
+    "FullName": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\data\\wechat-cli-install-20260502-0003\\sqlite\\app.db",
+    "Length": 3375104,
+    "LastWriteTime": "2026-05-02T08:49:11.9028008+08:00"
+  },
+  {
+    "FullName": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\data\\wechat-cli-install-20260502-0003\\sqlite\\app.db-shm",
+    "Length": 32768,
+    "LastWriteTime": "2026-05-02T08:48:27.6223368+08:00"
+  },
+  {
+    "FullName": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\data\\wechat-cli-install-20260502-0003\\sqlite\\app.db-wal",
+    "Length": 4140632,
+    "LastWriteTime": "2026-05-02T08:50:20.6316122+08:00"
+  }
+]

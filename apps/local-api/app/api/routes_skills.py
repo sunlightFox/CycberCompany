@@ -23,10 +23,15 @@ from app.schemas.skills import (
     SkillCandidateDecisionRequest,
     SkillCandidateListResponse,
     SkillCandidatePromoteResponse,
+    SkillCatalogSearchResponse,
     SkillEvalResponse,
     SkillListResponse,
     SkillMatchRequest,
     SkillMatchResponse,
+    SkillRepositoryListResponse,
+    SkillRepositoryPatchRequest,
+    SkillRepositoryRefreshResponse,
+    SkillRepositoryUpsertRequest,
 )
 from app.services.registry import ServiceRegistry
 
@@ -60,6 +65,98 @@ async def install_skill_bundle(
         skills=skills,
         permission_preview=preview,
         status=bundle.status,
+    )
+
+
+@router.get("/repositories", response_model=SkillRepositoryListResponse)
+async def list_skill_repositories(
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillRepositoryListResponse:
+    return SkillRepositoryListResponse(
+        items=await registry.skill_repository_service.list_repositories()
+    )
+
+
+@router.put("/repositories/{repository_id}", response_model=SkillRepositoryListResponse)
+async def upsert_skill_repository(
+    repository_id: str,
+    payload: SkillRepositoryUpsertRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillRepositoryListResponse:
+    repository = await registry.skill_repository_service.upsert_repository(
+        repository_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return SkillRepositoryListResponse(items=[repository])
+
+
+@router.patch("/repositories/{repository_id}", response_model=SkillRepositoryListResponse)
+async def patch_skill_repository(
+    repository_id: str,
+    payload: SkillRepositoryPatchRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillRepositoryListResponse:
+    repository = await registry.skill_repository_service.patch_repository(
+        repository_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return SkillRepositoryListResponse(items=[repository])
+
+
+@router.delete("/repositories/{repository_id}", response_model=SkillRepositoryListResponse)
+async def disable_skill_repository(
+    repository_id: str,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillRepositoryListResponse:
+    repository = await registry.skill_repository_service.disable_repository(
+        repository_id,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return SkillRepositoryListResponse(items=[repository])
+
+
+@router.post(
+    "/repositories/{repository_id}/refresh",
+    response_model=SkillRepositoryRefreshResponse,
+)
+async def refresh_skill_repository(
+    repository_id: str,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillRepositoryRefreshResponse:
+    repository, sync_run, indexed_count = (
+        await registry.skill_repository_service.refresh_repository(
+            repository_id,
+            trace_id=getattr(request.state, "trace_id", None),
+        )
+    )
+    return SkillRepositoryRefreshResponse(
+        repository=repository,
+        sync_run=sync_run,
+        indexed_count=indexed_count,
+    )
+
+
+@router.get("/catalog/search", response_model=SkillCatalogSearchResponse)
+async def search_skill_catalog(
+    q: str | None = None,
+    repository_id: str | None = None,
+    tag: str | None = None,
+    limit: int = 50,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillCatalogSearchResponse:
+    return SkillCatalogSearchResponse(
+        items=await registry.skill_repository_service.search(
+            query=q,
+            repository_id=repository_id,
+            tag=tag,
+            limit=limit,
+        )
     )
 
 

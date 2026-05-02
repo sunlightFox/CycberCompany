@@ -1,0 +1,383 @@
+{
+  "items": [
+    {
+      "event_id": "evt_87ca3bb7063943d2a2553d837c6a1e5b",
+      "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+      "sequence": 1,
+      "event_type": "turn.started",
+      "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+      "payload": {
+        "event": "turn.started",
+        "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+        "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+        "timestamp": "2026-05-02T00:33:52.693816Z",
+        "payload": {
+          "status": "running"
+        }
+      },
+      "created_at": "2026-05-02T08:33:52.693816+08:00"
+    },
+    {
+      "event_id": "evt_1023d7fcf58d4133ab960d103f8e2501",
+      "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+      "sequence": 2,
+      "event_type": "context.started",
+      "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+      "payload": {
+        "event": "context.started",
+        "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+        "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+        "timestamp": "2026-05-02T00:33:52.693816Z",
+        "payload": {}
+      },
+      "created_at": "2026-05-02T08:33:52.693816+08:00"
+    },
+    {
+      "event_id": "evt_5219c1647450496099a242165ef3ce1d",
+      "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+      "sequence": 3,
+      "event_type": "context.ready",
+      "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+      "payload": {
+        "event": "context.ready",
+        "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+        "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+        "timestamp": "2026-05-02T00:33:52.835783Z",
+        "payload": {
+          "context_packet_id": "ctx_813216c1afc845f89ab7a0ed3de801db",
+          "recent_messages": 2,
+          "memory_blocks": 0,
+          "decision_id": "bd_6c8528a71bba466ca9169bcf12865b4d",
+          "confidence": 0.58,
+          "context_decision": {
+            "include_recent_messages": true,
+            "include_conversation_state": false,
+            "include_session_summary": false,
+            "include_memory": false,
+            "memory_query": {
+              "enabled": false,
+              "layers": [
+                "semantic",
+                "episodic",
+                "procedural"
+              ],
+              "max_items": 0
+            },
+            "include_persona": true,
+            "include_heart": true,
+            "include_capability_summary": true,
+            "include_asset_handles": false,
+            "include_task_state": false,
+            "include_artifact_summary": false,
+            "untrusted_refs": [],
+            "token_budget_profile": "balanced",
+            "selection_reason": [
+              "current_input",
+              "capability_boundary_summary",
+              "recent_messages"
+            ]
+          },
+          "selection_reason": [
+            "current_input",
+            "capability_boundary_summary",
+            "recent_messages"
+          ],
+          "route_profile": "simple_qa",
+          "conversation_depth": 2,
+          "context_redaction": {
+            "selected_count": 2,
+            "redacted_count": 0,
+            "sensitivity_hits_summary": {
+              "count": 0,
+              "categories": []
+            },
+            "model_safe_fields": [
+              "model_safe_content_text",
+              "recent_summary",
+              "memory_summary"
+            ],
+            "raw_content_text_used_for_model": false
+          }
+        }
+      },
+      "created_at": "2026-05-02T08:33:52.835783+08:00"
+    },
+    {
+      "event_id": "evt_41ca183b3121418e99678b0c646986ac",
+      "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+      "sequence": 4,
+      "event_type": "intent.detected",
+      "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+      "payload": {
+        "event": "intent.detected",
+        "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+        "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+        "timestamp": "2026-05-02T00:34:01.270302Z",
+        "payload": {
+          "intent": "host_software_install_request",
+          "reason_codes": [
+            "phase52_host_install_text_request"
+          ]
+        }
+      },
+      "created_at": "2026-05-02T08:34:01.270302+08:00"
+    },
+    {
+      "event_id": "evt_196a1e1a6f3a43e18c73dc5e204a9d56",
+      "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+      "sequence": 5,
+      "event_type": "response.delta",
+      "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+      "payload": {
+        "event": "response.delta",
+        "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+        "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+        "timestamp": "2026-05-02T00:34:01.274434Z",
+        "payload": {
+          "text": "我暂时不能自动安装这个软件：当前没有可用的健康包管理器候选。请提供可信包管理器 ID、官网安装源，或修复当前包管理器环境后重试。",
+          "response_filter": {
+            "component": "ChatVisibleOutputFilter",
+            "input_chars": 64,
+            "output_chars": 64,
+            "changed_count": 0,
+            "blocked_terms": [],
+            "stream_safe": true,
+            "final_from_filtered_delta": true
+          }
+        }
+      },
+      "created_at": "2026-05-02T08:34:01.274434+08:00"
+    },
+    {
+      "event_id": "evt_0acf48c061204ff6a93d6cbeab61e3f0",
+      "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+      "sequence": 6,
+      "event_type": "response.completed",
+      "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+      "payload": {
+        "event": "response.completed",
+        "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+        "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+        "timestamp": "2026-05-02T00:34:01.33491Z",
+        "payload": {
+          "message_id": "msg_a843c1f51cfb4152a115cf9797c83922",
+          "finish_reason": "stop",
+          "usage": {},
+          "route": {
+            "brain_id": null,
+            "fallback_used": false
+          },
+          "mode": "workflow",
+          "response_plan": {
+            "title": "安全边界",
+            "style": "safety_boundary",
+            "sections": [
+              {
+                "kind": "summary",
+                "text": "我暂时不能自动安装这个软件：当前没有可用的健康包管理器候选。请提供可信包管理器 ID、官网安装源，或修复当前包管理器环境后重试。"
+              }
+            ],
+            "tables": [],
+            "code_blocks": [],
+            "action_buttons": [
+              {
+                "action": "task.create_plan",
+                "label": "只生成计划",
+                "style": "primary",
+                "requires_confirmation": false
+              },
+              {
+                "action": "capability.configure",
+                "label": "检查能力配置",
+                "style": "secondary",
+                "requires_confirmation": false
+              }
+            ],
+            "tone": {},
+            "summary": "我暂时不能自动安装这个软件：当前没有可用的健康包管理器候选。请提供可信包管理器 ID、官网安装源，或修复当前包管理器环境后重试。",
+            "approval_prompt": null,
+            "task_status": {
+              "task_id": "tsk_0b3badc626414b018c832c21a216425d",
+              "status": "manual_only",
+              "mode": "workflow"
+            },
+            "artifact_refs": [],
+            "safety_notice": "本机软件安装必须强确认；不会绕过 UAC、安全提示或未知来源校验。",
+            "memory_notice": null,
+            "tool_notice": null,
+            "follow_up_options": [],
+            "tone_metadata": {
+              "scenario": "safety_deny",
+              "deescalation_required": true,
+              "risk_tone": "clear_and_calm",
+              "safety_overrides_tone": true,
+              "anthropomorphic_level": 0.1,
+              "tone_resolution_id": "tone_8f69fdcedb9044cdbc865412b51e2814",
+              "tone_mode": "safety_boundary",
+              "reason_codes": [
+                "high_risk_low_anthropomorphic",
+                "safety_boundary_overrides_persona",
+                "scenario_safety_deny"
+              ]
+            },
+            "redaction_summary": {
+              "applied": false,
+              "categories": []
+            },
+            "trace_refs": [],
+            "plain_text": "我暂时不能自动安装这个软件：当前没有可用的健康包管理器候选。请提供可信包管理器 ID、官网安装源，或修复当前包管理器环境后重试。",
+            "structured_payload": {
+              "scenario": "safety_deny",
+              "task_status": {
+                "task_id": "tsk_0b3badc626414b018c832c21a216425d",
+                "status": "manual_only",
+                "mode": "workflow"
+              },
+              "approval_prompt": {},
+              "artifact_refs": [],
+              "safety_notice": "本机软件安装必须强确认；不会绕过 UAC、安全提示或未知来源校验。",
+              "memory_notice": null,
+              "tool_notice": null,
+              "host_install_plan": {
+                "host_install_plan_id": "hip_fbeacf186bb14ffdb35ad04b6e61b2e4",
+                "organization_id": "org_default",
+                "task_id": "tsk_0b3badc626414b018c832c21a216425d",
+                "requested_software": "微信",
+                "install_source": {
+                  "reason": "package_manager_candidate_unavailable",
+                  "source_type": "manual_only"
+                },
+                "command_preview": {},
+                "impact_summary": {
+                  "manual_only": true,
+                  "reason_codes": [
+                    "no_high_confidence_healthy_package_candidate"
+                  ],
+                  "safe_next_step": "请提供可信包管理器 ID、官网安装源，或修复当前包管理器环境后重试。"
+                },
+                "risk_level": "R6",
+                "status": "manual_only",
+                "approval_id": null,
+                "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+                "created_at": "2026-05-02T00:34:01.267679Z",
+                "updated_at": "2026-05-02T00:34:01.267679Z"
+              },
+              "approval_binding": {
+                "approval_id": null,
+                "status": "manual_only"
+              },
+              "finish_reason": "stop",
+              "mode": "workflow",
+              "intent": "host_software_install_request",
+              "response_filter": {
+                "component": "ChatVisibleOutputFilter",
+                "input_chars": 64,
+                "output_chars": 64,
+                "changed_count": 0,
+                "blocked_terms": [],
+                "stream_safe": true,
+                "final_from_filtered_delta": true,
+                "final_guard": {
+                  "component": "ChatVisibleOutputFilter",
+                  "input_chars": 64,
+                  "output_chars": 64,
+                  "changed_count": 0,
+                  "blocked_terms": [],
+                  "stream_safe": true,
+                  "final_from_filtered_delta": true
+                }
+              },
+              "experience": {
+                "conversation_depth": 2,
+                "complexity_score": 0.02,
+                "chat_style": "simple_qa",
+                "route_profile": "simple_qa",
+                "context_selection_reason": [
+                  "current_input",
+                  "recent_messages",
+                  "capability_boundary_summary"
+                ],
+                "recoverable": true,
+                "needs_strong_reasoning": false,
+                "needs_long_output": false,
+                "needs_tool_or_task": false,
+                "chat_route_decision": {
+                  "route_type": "host_software_install",
+                  "confidence": 0.9,
+                  "reason_code": "explicit_host_software_install",
+                  "requires_confirmation": true,
+                  "task_goal": "帮我安装微信",
+                  "safe_user_summary": "帮我安装微信",
+                  "office_request": null,
+                  "metadata": {}
+                }
+              },
+              "tone_policy_resolution_id": "tone_8f69fdcedb9044cdbc865412b51e2814",
+              "response_quality_evaluation_id": "rq_f541793bfd304118a04a89c44be12c88"
+            },
+            "tone_mode": "safety_boundary",
+            "quality_markers": {
+              "directness": true,
+              "continuity": true,
+              "boundary_honesty": true,
+              "failure_recoverability": true,
+              "persona_consistency": true,
+              "heart_appropriateness": true,
+              "no_leakage": true
+            },
+            "boundary_notice": "本机软件安装必须强确认；不会绕过 UAC、安全提示或未知来源校验。",
+            "continuity_refs": [
+              {
+                "type": "conversation",
+                "conversation_id": "conv_default_xiaoyao",
+                "reason": "response_plan_continuity"
+              },
+              {
+                "type": "working_state",
+                "reason": "chat_experience_payload"
+              }
+            ],
+            "deescalation_notice": "我会保持克制和清楚，先确认边界再继续。",
+            "user_next_step": "调整为可安全处理的范围"
+          },
+          "response_filter": {
+            "component": "ChatVisibleOutputFilter",
+            "input_chars": 64,
+            "output_chars": 64,
+            "changed_count": 0,
+            "blocked_terms": [],
+            "stream_safe": true,
+            "final_from_filtered_delta": true,
+            "final_guard": {
+              "component": "ChatVisibleOutputFilter",
+              "input_chars": 64,
+              "output_chars": 64,
+              "changed_count": 0,
+              "blocked_terms": [],
+              "stream_safe": true,
+              "final_from_filtered_delta": true
+            }
+          }
+        }
+      },
+      "created_at": "2026-05-02T08:34:01.33491+08:00"
+    },
+    {
+      "event_id": "evt_9c5221810c954e5abfd6628f538950b9",
+      "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+      "sequence": 7,
+      "event_type": "turn.completed",
+      "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+      "payload": {
+        "event": "turn.completed",
+        "turn_id": "turn_439e8a81ac78492f95efd28559e2962d",
+        "trace_id": "trc_05846bf46db44984874135ea1d165ef2",
+        "timestamp": "2026-05-02T00:34:01.33491Z",
+        "payload": {
+          "status": "completed"
+        }
+      },
+      "created_at": "2026-05-02T08:34:01.33491+08:00"
+    }
+  ]
+}

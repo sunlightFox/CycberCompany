@@ -20,6 +20,14 @@ from app.core.time import new_id, utc_now_iso
 from app.db.repositories.chat_repo import ChatRepository
 from app.db.repositories.design_alignment_repo import DesignAlignmentRepository
 from app.db.repositories.skill_mcp_repo import SkillMcpRepository
+from app.services.chat_intent_router import (
+    is_explicit_download_request,
+    is_file_mutation_request,
+    is_host_filesystem_list_request,
+    is_host_software_install_request,
+    is_office_document_request,
+    is_webpage_read_request,
+)
 from app.services.dialogue_semantics import (
     DialogueStateService,
     LowConfidenceDecisionReviewer,
@@ -439,6 +447,45 @@ def _intent_decision(
         primary = "memory_correction"
         needs_memory = True
         rule_hits.append("memory_correction")
+    elif _advice_strategy_direct(clean):
+        primary = "complex_dialogue"
+        secondary.append("make_plan")
+        rule_hits.append("phase51_advice_strategy_direct")
+    elif _office_document_request(clean):
+        skill_available = _capability_available(capability_snapshot, "skill_engine")
+        primary = "skill_request" if skill_available else "task_request"
+        needs_skill = skill_available
+        needs_task = True
+        needs_tool = not skill_available
+        secondary.append("generate_document")
+        rule_hits.append("office_document_request")
+    elif is_host_filesystem_list_request(clean):
+        primary = "system_filesystem_read"
+        needs_tool = True
+        needs_task = False
+        secondary.append("filesystem_readonly")
+        rule_hits.append("host_filesystem_list_readonly")
+    elif is_webpage_read_request(clean):
+        primary = "browser_read"
+        needs_tool = True
+        needs_task = False
+        secondary.append("webpage_readonly")
+        rule_hits.append("browser_read_page_readonly")
+    elif is_host_software_install_request(clean):
+        primary = "task_request"
+        needs_task = True
+        needs_tool = True
+        secondary.append("host_software_change")
+        rule_hits.append("host_software_install_request")
+    elif is_file_mutation_request(clean):
+        primary = "task_request"
+        needs_task = True
+        needs_tool = True
+        secondary.append("delete_or_destructive")
+        secondary.append("filesystem_scope")
+        risks.append("destructive_action")
+        risks.append("filesystem_scope_required")
+        rule_hits.append("file_mutation_request")
     elif _system_settings(clean):
         primary = "system_settings"
         rule_hits.append("settings_keyword")
@@ -499,13 +546,21 @@ def _intent_decision(
         secondary.append("compare_options")
     if any(word in clean for word in ["调试", "报错", "错误", "排查"]):
         secondary.append("debug_problem")
-    if any(word in clean for word in ["删除", "清空", "覆盖"]):
+    advice_strategy_direct = _advice_strategy_direct(clean)
+    if any(word in clean for word in ["删除", "清空", "覆盖"]) and not advice_strategy_direct:
         secondary.append("delete_or_destructive")
         risks.append("destructive_action")
-    if _filesystem_scope_action(clean):
+    if is_host_software_install_request(clean) and not advice_strategy_direct:
+        risks.append("host_software_change")
+        risks.append("destructive_action")
+    if (
+        _filesystem_scope_action(clean)
+        and not advice_strategy_direct
+        and not is_host_filesystem_list_request(clean)
+    ):
         secondary.append("filesystem_scope")
         risks.append("filesystem_scope_required")
-    if any(word in clean for word in ["下载", "截图"]):
+    if is_explicit_download_request(clean) or "截图" in clean:
         secondary.append("browser_side_effect")
         risks.append("browser_artifact_or_download")
     if any(word in clean for word in ["发帖", "发布", "发送", "提交"]):
@@ -528,6 +583,10 @@ def _intent_decision(
             semantic.tool_intents
             and not _safe_plan_only(clean)
             and not _persona_boundary_question(clean)
+            and not _advice_strategy_direct(clean)
+            and not _office_document_request(clean)
+            and not is_host_filesystem_list_request(clean)
+            and not is_webpage_read_request(clean)
         ):
             primary = "task_request"
             needs_tool = True
@@ -589,6 +648,16 @@ def _mode_decision(
         mode = TaskMode.DIRECT_WITH_MEMORY.value
         submode = "memory_answer"
         reasons.append("memory_visible_scope")
+    elif intent.primary_intent == "system_filesystem_read":
+        mode = TaskMode.DIRECT.value
+        submode = "host_filesystem_read"
+        approval_first = False
+        reasons.append("readonly_host_tool_supported")
+    elif intent.primary_intent == "browser_read":
+        mode = TaskMode.DIRECT.value
+        submode = "browser_readonly"
+        approval_first = False
+        reasons.append("readonly_browser_tool_supported")
     elif intent.primary_intent in {"task_request", "tool_request", "asset_management"}:
         mode = TaskMode.WORKFLOW.value
         submode = "plan_first" if approval_first else "workflow"
@@ -746,6 +815,8 @@ def _clarification_decision(
     conflicts = set(semantic.conflicts if semantic else [])
     if intent.primary_intent == "boundary_question":
         return _no_clarification()
+    if intent.primary_intent in {"system_filesystem_read", "browser_read"}:
+        return _no_clarification()
     if "ambiguous_reference" in conflicts:
         return _clarify(
             "ambiguous_reference",
@@ -809,6 +880,7 @@ def _clarify(
 ) -> dict[str, Any]:
     return {
         "needs_clarification": True,
+        "needed": True,
         "reason": reason,
         "clarification_type": clarification_type,
         "blocking_level": "blocks_execution",
@@ -821,6 +893,7 @@ def _clarify(
 def _no_clarification() -> dict[str, Any]:
     return {
         "needs_clarification": False,
+        "needed": False,
         "reason": "safe_to_continue",
         "clarification_type": "none",
         "blocking_level": "none",
@@ -985,6 +1058,8 @@ def _memory_correction(text: str) -> bool:
 
 
 def _system_settings(text: str) -> bool:
+    if _office_document_request(text):
+        return False
     return any(marker in text for marker in ["配置", "设置", "模型", "大脑"])
 
 
@@ -1003,6 +1078,10 @@ def _skill_request(text: str) -> bool:
         return False
     lowered = text.lower()
     return "skill" in lowered or "技能" in text
+
+
+def _office_document_request(text: str) -> bool:
+    return is_office_document_request(text)
 
 
 def _mcp_request(text: str) -> bool:
@@ -1074,7 +1153,7 @@ def _explicit_task_creation(text: str) -> bool:
 
 
 def _real_task_request(text: str) -> bool:
-    if _safe_plan_only(text) or _persona_boundary_question(text):
+    if _safe_plan_only(text) or _persona_boundary_question(text) or _advice_strategy_direct(text):
         return False
     if _explicit_task_creation(text):
         return True
@@ -1107,8 +1186,14 @@ def _real_task_request(text: str) -> bool:
 
 
 def _tool_request(text: str) -> bool:
-    if _safe_plan_only(text) or _persona_boundary_question(text):
+    if _safe_plan_only(text) or _persona_boundary_question(text) or _advice_strategy_direct(text):
         return False
+    if is_host_filesystem_list_request(text):
+        return False
+    if is_webpage_read_request(text):
+        return False
+    if ("下载" in text or "download" in text.lower()) and not is_explicit_download_request(text):
+        text = text.replace("下载", "").replace("download", "")
     return any(
         marker in text
         for marker in [
@@ -1136,8 +1221,56 @@ def _tool_request(text: str) -> bool:
     )
 
 
+def _advice_strategy_direct(text: str) -> bool:
+    if _explicit_task_creation(text):
+        return False
+    hard_execution = [
+        "运行命令",
+        "执行命令",
+        "打开网页",
+        "打开浏览器",
+        "下载",
+        "删除",
+        "登录",
+        "截图",
+        "发帖",
+        "发布",
+        "转账",
+        "支付",
+        "签名",
+        "基于当前仓库",
+        "基于这个仓库",
+        "读取文件",
+        "写文件",
+    ]
+    if any(marker in text for marker in hard_execution):
+        return False
+    advice_markers = [
+        "建议",
+        "取舍",
+        "策略",
+        "对比",
+        "方案",
+        "解释",
+        "总结",
+        "优缺点",
+        "利弊",
+        "权衡",
+        "成本",
+        "覆盖率",
+        "速度",
+        "如何选择",
+        "怎么选",
+        "医疗建议",
+        "金融建议",
+    ]
+    return any(marker in text for marker in advice_markers)
+
+
 def _filesystem_scope_action(text: str) -> bool:
     if _safe_plan_only(text):
+        return False
+    if is_host_filesystem_list_request(text):
         return False
     return any(marker in text for marker in ["文件夹", "目录", "文件", "移动"]) or any(
         marker in text for marker in ["整理文件", "整理目录", "整理这些测试日志"]

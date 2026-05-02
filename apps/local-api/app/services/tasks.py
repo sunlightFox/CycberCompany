@@ -48,6 +48,13 @@ from app.schemas.skills import SkillMatchRequest
 from app.schemas.tasks import TaskCreateRequest, ToolExecuteRequest
 from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
+from app.services.chat_intent_router import (
+    is_explicit_download_request,
+    parse_office_chat_request,
+)
+from app.services.chat_intent_router import (
+    office_skill_input as office_chat_skill_input,
+)
 from app.services.memory import MemoryService
 from app.services.model_planner import (
     AgentNextActionSelector,
@@ -519,6 +526,14 @@ class TaskEngine:
                 "只有 failed/paused 任务可以重试",
                 status_code=409,
             )
+        reset_count = await self._reset_recoverable_failed_steps(task, trace_id=trace_id)
+        if reset_count == 0:
+            raise AppError(
+                ErrorCode.TASK_RETRY_EXHAUSTED,
+                "没有可自动重试的失败步骤",
+                status_code=409,
+                details={"task_id": task_id},
+            )
         await self._repo.update_task(
             task_id,
             {
@@ -910,13 +925,60 @@ class TaskEngine:
                 if step["status"] == "completed":
                     continue
                 if step["status"] == "failed":
-                    continue
+                    await self._create_tool_failure_recovery_plan(
+                        task=fresh,
+                        step=step,
+                        failure_reason=str(step.get("error_code") or "step_failed"),
+                        trace_id=trace_id,
+                    )
+                    await self._create_retry_plan(
+                        fresh,
+                        reason=str(step.get("error_code") or "step_failed"),
+                        suggested_actions=["自动恢复会重试可恢复步骤", "必要时请缩小任务范围"],
+                        trace_id=trace_id,
+                    )
+                    await self._repo.update_task(
+                        task_id,
+                        {
+                            "status": TaskStatus.FAILED.value,
+                            "failure_reason": str(
+                                step.get("error_summary")
+                                or step.get("error_code")
+                                or "step_failed"
+                            ),
+                            "updated_at": utc_now_iso(),
+                        },
+                    )
+                    await self._end_span(span_id, output_data={"status": "failed"})
+                    return
                 await self._run_step(fresh, step, trace_id=trace_id)
                 current = await self._get_task(task_id)
                 if current["status"] == TaskStatus.WAITING_APPROVAL.value:
                     await self._end_span(span_id, output_data={"status": "waiting_approval"})
                     return
                 if current["status"] in {TaskStatus.FAILED.value, TaskStatus.PAUSED.value}:
+                    failed_step = await self._latest_failed_step(task_id)
+                    if failed_step is not None:
+                        await self._create_tool_failure_recovery_plan(
+                            task=current,
+                            step=failed_step,
+                            failure_reason=str(
+                                failed_step.get("error_code")
+                                or current.get("failure_reason")
+                                or "step_failed"
+                            ),
+                            trace_id=trace_id,
+                        )
+                        await self._create_retry_plan(
+                            current,
+                            reason=str(
+                                failed_step.get("error_code")
+                                or current.get("failure_reason")
+                                or "step_failed"
+                            ),
+                            suggested_actions=["自动恢复会重试可恢复步骤", "必要时请缩小任务范围"],
+                            trace_id=trace_id,
+                        )
                     await self._end_span(span_id, output_data={"status": current["status"]})
                     return
             await self._complete_task(task_id, {"summary": "任务已完成。"}, trace_id=trace_id)
@@ -949,6 +1011,26 @@ class TaskEngine:
                 payload={"error": str(redact(str(exc)))},
                 trace_id=trace_id,
             )
+            failed_step = await self._latest_failed_step(task_id)
+            failed_task = await self._get_task(task_id)
+            if failed_step is not None:
+                failure_reason = str(
+                    failed_step.get("error_code")
+                    or failed_task.get("failure_reason")
+                    or getattr(exc, "code", ErrorCode.TASK_STEP_FAILED.value)
+                )
+                await self._create_tool_failure_recovery_plan(
+                    task=failed_task,
+                    step=failed_step,
+                    failure_reason=failure_reason,
+                    trace_id=trace_id,
+                )
+                await self._create_retry_plan(
+                    failed_task,
+                    reason=failure_reason,
+                    suggested_actions=["自动恢复会重试可恢复步骤", "必要时请缩小任务范围"],
+                    trace_id=trace_id,
+                )
             await self._end_span(
                 span_id,
                 status=TraceSpanStatus.FAILED,
@@ -957,6 +1039,73 @@ class TaskEngine:
             if isinstance(exc, AppError):
                 return
             raise
+
+    async def _reset_recoverable_failed_steps(
+        self,
+        task: dict[str, Any],
+        *,
+        trace_id: str | None,
+    ) -> int:
+        reset_count = 0
+        for step in await self._repo.list_steps(task["task_id"]):
+            if step["status"] != "failed":
+                continue
+            if _risk_order(str(step.get("risk_level") or "R1")) >= 3:
+                await self._create_tool_failure_recovery_plan(
+                    task=task,
+                    step=step,
+                    failure_reason=str(step.get("error_code") or "high_risk_retry_blocked"),
+                    trace_id=trace_id,
+                )
+                continue
+            retry_count = int(step.get("retry_count") or 0)
+            max_retries = int(step.get("max_retries") or 0)
+            if retry_count >= max_retries:
+                await self._create_tool_failure_recovery_plan(
+                    task=task,
+                    step=step,
+                    failure_reason=str(step.get("error_code") or "retry_exhausted"),
+                    trace_id=trace_id,
+                )
+                continue
+            next_retry = retry_count + 1
+            base_key = str(step.get("idempotency_key") or f"{task['task_id']}:{step['step_key']}")
+            await self._repo.update_step(
+                step["step_id"],
+                {
+                    "status": "pending",
+                    "retry_count": next_retry,
+                    "idempotency_key": f"{base_key}:retry:{next_retry}",
+                    "approval_id": None,
+                    "tool_call_id": None,
+                    "error_code": None,
+                    "error_summary": None,
+                    "updated_at": utc_now_iso(),
+                },
+            )
+            await self._event(
+                task["task_id"],
+                "task.step.retry",
+                {
+                    "step_id": step["step_id"],
+                    "step_key": step["step_key"],
+                    "retry_count": next_retry,
+                },
+                step_id=step["step_id"],
+                trace_id=trace_id,
+            )
+            reset_count += 1
+        if reset_count:
+            await self._update_progress(task["task_id"])
+        return reset_count
+
+    async def _latest_failed_step(self, task_id: str) -> dict[str, Any] | None:
+        failed = [
+            step
+            for step in await self._repo.list_steps(task_id)
+            if step["status"] == "failed"
+        ]
+        return failed[-1] if failed else None
 
     async def _run_agent_loop(self, task_id: str, *, trace_id: str | None) -> None:
         task = await self._get_task(task_id)
@@ -1589,6 +1738,11 @@ class TaskEngine:
                 skill_input = step["input"].get("input", {"goal": task["goal"]})
                 if not isinstance(skill_input, dict):
                     skill_input = {"input": skill_input, "goal": task["goal"]}
+                skill_input = await self._prepare_skill_input_for_task(
+                    task,
+                    skill_input,
+                    trace_id=trace_id,
+                )
                 phase36 = task.get("preflight", {}).get("phase36", {})
                 background_policy = (
                     phase36.get("background_execution")
@@ -1702,6 +1856,53 @@ class TaskEngine:
             )
             await self._end_span(span_id, status=TraceSpanStatus.FAILED)
             raise
+
+    async def _prepare_skill_input_for_task(
+        self,
+        task: dict[str, Any],
+        skill_input: dict[str, Any],
+        *,
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        source_artifact_id = str(skill_input.get("source_artifact_id") or "").strip()
+        if not source_artifact_id:
+            return skill_input
+        try:
+            source_artifact, _preview = await self._artifacts.read_preview(
+                source_artifact_id,
+                limit=32,
+            )
+        except AppError:
+            return skill_input
+        if source_artifact.task_id == task["task_id"]:
+            return skill_input
+        if not _is_office_artifact(source_artifact):
+            return skill_input
+        source_task = await self._repo.get_task(source_artifact.task_id)
+        if source_task is None:
+            return skill_input
+        if source_task.get("conversation_id") != task.get("conversation_id"):
+            return skill_input
+        if source_task.get("owner_member_id") != task.get("owner_member_id"):
+            return skill_input
+        source_path = self._artifacts.path_for_artifact(source_artifact)
+        copied = await self._artifacts.write_bytes(
+            task_id=task["task_id"],
+            organization_id=task["organization_id"],
+            display_name=source_artifact.display_name,
+            content=source_path.read_bytes(),
+            artifact_type=source_artifact.artifact_type,
+            content_type=source_artifact.content_type or "application/octet-stream",
+            sensitivity=source_artifact.sensitivity,
+            metadata={
+                **dict(source_artifact.metadata or {}),
+                "copied_for_office_edit": True,
+                "source_artifact_id": source_artifact.artifact_id,
+                "source_task_id": source_artifact.task_id,
+            },
+            trace_id=trace_id,
+        )
+        return {**skill_input, "source_artifact_id": copied.artifact_id}
 
     async def _complete_task(
         self,
@@ -2016,8 +2217,8 @@ class TaskEngine:
         mode = _select_mode(request)
         risk = _risk_for_goal(request.goal)
         budget = TaskBudget(**{**TaskBudget().model_dump(), **request.budget_override})
-        steps = _steps_for_goal(request, mode)
         capability_snapshot = await self._capability_snapshot(request, trace_id=trace_id)
+        steps = _steps_for_goal(request, mode, capability_snapshot)
         planner_reason_codes = _planner_reason_codes(request, mode, risk)
         planner_reason_codes.extend(capability_snapshot.get("reason_codes", []))
         blocked_actions: list[dict[str, Any]] = []
@@ -2436,6 +2637,8 @@ def _planner_assumptions(
         assumptions.append("MCP 当前无 ready server，计划不会伪造 MCP 执行。")
     if _goal_mentions_skill(request.goal) and capability_snapshot.get("enabled_skill_count") == 0:
         assumptions.append("当前无 enabled Skill，计划不会伪造 Skill 执行。")
+    if _goal_mentions_office(request.goal):
+        assumptions.append("Office 文件请求只通过受控 Office 工具写入任务 artifact。")
     return assumptions
 
 
@@ -2459,7 +2662,30 @@ def _required_capabilities_for_steps(steps: list[dict[str, Any]]) -> list[str]:
 
 def _goal_mentions_skill(goal: str) -> bool:
     lowered = goal.lower()
-    return any(word in lowered for word in ["skill", "技能", "插件", "流程"])
+    return any(word in lowered for word in ["skill", "技能", "插件", "流程"]) or (
+        _goal_mentions_office(goal)
+    )
+
+
+def _goal_mentions_office(goal: str) -> bool:
+    lowered = goal.lower()
+    return any(
+        word in lowered
+        for word in [
+            "word",
+            "docx",
+            "excel",
+            "xlsx",
+            "ppt",
+            "pptx",
+            "powerpoint",
+            "文档",
+            "表格",
+            "演示稿",
+            "周报",
+            "项目周报",
+        ]
+    )
 
 
 def _goal_mentions_mcp(goal: str) -> bool:
@@ -2473,12 +2699,18 @@ def _risk_for_goal(goal: str) -> RiskLevel:
         return RiskLevel.R5
     if any(word in lowered for word in ["发布", "发帖", "发送", "提交", "publish"]):
         return RiskLevel.R4
-    if any(word in lowered for word in ["浏览器", "download", "下载", "overwrite"]):
+    if any(word in lowered for word in ["浏览器", "overwrite"]) or (
+        is_explicit_download_request(goal)
+    ):
         return RiskLevel.R3
     return RiskLevel.R2
 
 
-def _steps_for_goal(request: TaskCreateRequest, mode: TaskMode) -> list[dict[str, Any]]:
+def _steps_for_goal(
+    request: TaskCreateRequest,
+    mode: TaskMode,
+    capability_snapshot: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     if mode == TaskMode.SUPERVISOR:
         return [
             {
@@ -2491,6 +2723,10 @@ def _steps_for_goal(request: TaskCreateRequest, mode: TaskMode) -> list[dict[str
         ]
     steps: list[dict[str, Any]] = []
     goal = request.goal.lower()
+    skill_match_refs = (
+        capability_snapshot.get("skill_match_refs", []) if capability_snapshot is not None else []
+    )
+    office_skill_id = _office_skill_id_for_goal(request.goal, skill_match_refs)
     if request.constraints.get("skill_id"):
         steps.append(
             {
@@ -2504,7 +2740,24 @@ def _steps_for_goal(request: TaskCreateRequest, mode: TaskMode) -> list[dict[str
                 },
             }
         )
-    elif any(word in goal for word in ["skill", "技能", "插件", "流程"]):
+    elif office_skill_id:
+        steps.append(
+            {
+                "step_key": "skill_run",
+                "step_type": "skill_run",
+                "title": "执行 Office Skill",
+                "risk_level": "R2",
+                "input": {
+                    "skill_id": office_skill_id,
+                    "input": _office_skill_input(request),
+                    "matched_reason": "office_intent_route",
+                    "confidence": _office_skill_confidence(office_skill_id, skill_match_refs),
+                },
+            }
+        )
+    elif any(word in goal for word in ["skill", "技能", "插件", "流程"]) or _goal_mentions_office(
+        request.goal
+    ):
         steps.append(
             {
                 "step_key": "skill_match",
@@ -2554,10 +2807,7 @@ def _steps_for_goal(request: TaskCreateRequest, mode: TaskMode) -> list[dict[str
             }
         )
     has_delete_request = any(word in goal for word in ["删除", "delete", "删掉"])
-    has_explicit_download_target = _first_url(request.goal) is not None
-    if any(word in goal for word in ["下载", "download"]) and (
-        has_explicit_download_target or not has_delete_request
-    ):
+    if is_explicit_download_request(request.goal) and not has_delete_request:
         steps.append(
             {
                 "step_key": "browser_download",
@@ -2567,7 +2817,7 @@ def _steps_for_goal(request: TaskCreateRequest, mode: TaskMode) -> list[dict[str
                 "input": {
                     "tool_name": "browser.download",
                     "args": {
-                        "url": _first_url(request.goal) or "http://127.0.0.1/download.bin",
+                        "url": _first_url(request.goal),
                         "display_name": _download_display_name(request.goal),
                     },
                 },
@@ -2669,6 +2919,64 @@ def _download_display_name(text: str) -> str:
         return "download.bin"
     name = url.rsplit("/", 1)[-1].split("?", 1)[0]
     return name or "download.bin"
+
+
+def _office_skill_id_for_goal(goal: str, matches: list[dict[str, Any]]) -> str | None:
+    if not _goal_mentions_office(goal):
+        return None
+    lowered = goal.lower()
+    preferred_bundle = None
+    edit_markers = ["编辑", "修改", "追加", "增加", "替换", "完善", "改"]
+    wants_edit = any(marker in goal for marker in edit_markers)
+    if any(marker in lowered for marker in ["excel", "xlsx"]) or "表格" in goal:
+        preferred_bundle = "clawhub-excel-edit" if wants_edit else "clawhub-excel-analysis-workbook"
+    elif any(marker in lowered for marker in ["ppt", "pptx", "powerpoint"]) or "演示稿" in goal:
+        preferred_bundle = "clawhub-ppt-edit" if wants_edit else "clawhub-ppt-briefing"
+    elif (
+        any(marker in lowered for marker in ["word", "docx"])
+        or "文档" in goal
+        or "周报" in goal
+        or "报告" in goal
+    ):
+        preferred_bundle = "clawhub-word-edit" if wants_edit else "clawhub-word-report"
+    if preferred_bundle:
+        for match in matches:
+            if match.get("bundle_id") == preferred_bundle and match.get("skill_id"):
+                return str(match["skill_id"])
+    return str(matches[0]["skill_id"]) if matches and matches[0].get("skill_id") else None
+
+
+def _office_skill_confidence(skill_id: str, matches: list[dict[str, Any]]) -> float | None:
+    for match in matches:
+        if match.get("skill_id") == skill_id:
+            confidence = match.get("confidence")
+            return float(confidence) if confidence is not None else None
+    return None
+
+
+def _office_skill_input(request: TaskCreateRequest) -> dict[str, Any]:
+    skill_input = dict(request.constraints.get("skill_input") or {})
+    office_request = parse_office_chat_request(request.goal)
+    if office_request is not None:
+        for key, value in office_chat_skill_input(office_request).items():
+            skill_input.setdefault(key, value)
+    skill_input.setdefault("goal", request.goal)
+    skill_input.setdefault("content", request.constraints.get("content") or request.goal)
+    if request.constraints.get("source_artifact_id"):
+        skill_input.setdefault("source_artifact_id", request.constraints["source_artifact_id"])
+    return skill_input
+
+
+def _is_office_artifact(artifact: TaskArtifact) -> bool:
+    content_type = str(artifact.content_type or "")
+    return any(
+        marker in content_type
+        for marker in [
+            "wordprocessingml.document",
+            "spreadsheetml.sheet",
+            "presentationml.presentation",
+        ]
+    )
 
 
 def _merge_edited_step_input(

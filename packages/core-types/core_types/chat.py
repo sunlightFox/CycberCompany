@@ -54,3 +54,19 @@ class ChatEvent(ApiModel):
     trace_id: EntityId | None = None
     timestamp: datetime
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatTurnRecoveryAttempt(ApiModel):
+    recovery_attempt_id: EntityId
+    organization_id: EntityId = "org_default"
+    turn_id: EntityId
+    task_id: EntityId | None = None
+    attempt_index: int
+    failure_type: str
+    root_cause: str
+    recovery_action: str
+    status: str
+    diagnostic_payload: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
+    started_at: datetime | str
+    completed_at: datetime | str | None = None

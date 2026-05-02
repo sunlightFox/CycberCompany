@@ -421,6 +421,14 @@ class AssetBrokerService:
             status="active",
             limit=100,
         )
+        rows = [
+            row
+            for row in rows
+            if _asset_matches_context(
+                row,
+                request.context,
+            )
+        ]
         if not request.keywords:
             return rows
         keywords = [keyword.lower() for keyword in request.keywords]
@@ -707,11 +715,31 @@ def _asset_search_text(asset: dict[str, Any]) -> str:
                 parts.append(str(value))
     metadata = asset.get("metadata")
     if isinstance(metadata, dict):
-        for key in ("platform", "label"):
+        for key in ("platform", "label", "asset_subtype", "provider"):
             value = metadata.get(key)
             if value is not None:
                 parts.append(str(value))
     return " ".join(parts).lower()
+
+
+def _asset_matches_context(
+    asset: dict[str, Any],
+    context: dict[str, Any],
+) -> bool:
+    provider = context.get("provider")
+    if provider is not None and asset.get("provider") != provider:
+        return False
+    raw_metadata = asset.get("metadata")
+    metadata: dict[str, Any] = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
+    asset_subtype = context.get("asset_subtype") or context.get("metadata.asset_subtype")
+    if asset_subtype is not None and metadata.get("asset_subtype") != asset_subtype:
+        return False
+    required_capability = context.get("capability")
+    if required_capability is not None:
+        capabilities = set(asset.get("capabilities") or [])
+        if str(required_capability) not in capabilities:
+            return False
+    return True
 
 
 def _minimal_config(asset: dict[str, Any], action: str) -> dict[str, Any]:

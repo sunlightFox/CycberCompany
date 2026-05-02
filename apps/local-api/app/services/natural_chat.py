@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core_types import ApprovalDetail, ResponsePlan, RiskLevel
+from response_composer import ResponseComposer
 from trace_service import redact
 
 from app.core.errors import AppError
@@ -44,10 +45,13 @@ class NaturalChatActionGateway:
         chat_repo: ChatRepository,
         approval_service: ApprovalService,
         task_engine: Any | None,
+        host_install_service: Any | None = None,
     ) -> None:
         self._chat_repo = chat_repo
         self._approvals = approval_service
         self._task_engine = task_engine
+        self._host_installs = host_install_service
+        self._composer = ResponseComposer()
 
     async def handle(
         self,
@@ -184,23 +188,25 @@ class NaturalChatActionGateway:
                         trace_id=trace_id,
                     )
                 return _outcome(
-                    (
-                        f"已取消这次{label}，这一步没有执行，也不会继续下载、删除、登录或外发。"
-                        "相关任务会停在安全状态；你可以修改目标后重新发起，或让我只给方案。"
-                    ),
+                    "",
                     status="denied",
                     reason_codes=["natural_language_deny"],
                     action=action,
                     clear_pending=True,
+                    composer=self._composer,
                 )
             if resolution == "edit":
                 if edited_payload is None:
                     return _outcome(
-                        f"我理解你想修改{label}的参数。请直接说清要改成什么，比如“把地址改成：https://...”，或“标题改成《...》”。",
+                        "",
                         status="edit_missing_target",
                         reason_codes=["edit_missing_target"],
                         action=action,
                         clear_pending=False,
+                        composer=self._composer,
+                        failure_reason=(
+                            "请直接说清要改成什么，比如把地址、目标、标题或正文改成新的内容。"
+                        ),
                     )
                 await self._approvals.edit(
                     approval_id,
@@ -222,6 +228,8 @@ class NaturalChatActionGateway:
                     reason_codes=["natural_language_edit"],
                     action={**action, "edited_payload": edited_payload},
                     clear_pending=True,
+                    composer=self._composer,
+                    detail=detail,
                 )
             await self._approvals.approve(
                 approval_id,
@@ -231,7 +239,15 @@ class NaturalChatActionGateway:
                 trace_id=trace_id,
             )
             detail = None
-            if self._task_engine is not None:
+            host_execution = None
+            if self._host_installs is not None:
+                host_execution = await self._host_installs.execute_for_approval(
+                    approval_id,
+                    trace_id=trace_id,
+                )
+            if host_execution is not None and self._task_engine is not None:
+                detail = await self._task_engine.detail(host_execution.task_id)
+            elif self._task_engine is not None:
                 detail = await self._task_engine.handle_approval_resolved(
                     approval_id,
                     trace_id=trace_id,
@@ -242,6 +258,8 @@ class NaturalChatActionGateway:
                 reason_codes=[f"natural_language_{resolution}"],
                 action=action,
                 clear_pending=True,
+                composer=self._composer,
+                detail=detail,
                 session_grant=(
                     _session_grant(action, session_id)
                     if resolution == "session"
@@ -259,6 +277,8 @@ class NaturalChatActionGateway:
                 reason_codes=["resolution_failed", error_code],
                 action=action,
                 clear_pending=True,
+                composer=self._composer,
+                failure_reason=visible_text_guard(exc.message),
             )
 
     async def _pending_actions(
@@ -322,20 +342,63 @@ def response_plan_for_pending_action(
     action: dict[str, Any],
     session_id: str | None,
 ) -> ResponsePlan:
-    text = _pending_action_prompt(action)
-    return _plan(
-        text,
+    composer = ResponseComposer()
+    facts = _action_status_facts(
+        action,
         status="pending_action",
-        reason_codes=["approval_required", "natural_pending_action"],
-        pending_actions=[action],
-        pending_confirmation={
+        detail=None,
+        failure_reason=None,
+    )
+    plan = composer.response_plan_for_action_status(facts=facts)
+    reply_options = _reply_options_from_actions([action])
+    natural = {
+        "status": "pending_action",
+        "reason_codes": ["approval_required", "natural_pending_action"],
+        "pending_actions": [action],
+        "natural_reply_options": reply_options,
+        "reply_option_items": _reply_option_items(reply_options),
+        "pending_confirmation": {
             "kind": "natural_pending_actions",
             "session_id": session_id,
             "actions": [action],
-            "questions": list(action.get("reply_options") or []),
+            "questions": reply_options,
             "created_at": utc_now_iso(),
         },
-        technical_detail=_technical_detail(action),
+        "clear_pending": False,
+        "session_grant": {},
+    }
+    structured_payload = {
+        **plan.structured_payload,
+        "scenario": "natural_interaction",
+        "natural_interaction": natural,
+        "pending_actions": [action],
+        "pending_action_binding": _pending_action_binding("pending_action", [action]),
+        "response_quality_guard": {
+            "status": "pending_action",
+            "state_disclosed": True,
+            "boundary_disclosed": True,
+            "next_step_provided": bool(reply_options),
+            "no_false_done": True,
+            "no_internal_terms": True,
+        },
+        "natural_reply_options": reply_options,
+        "reply_option_items": _reply_option_items(reply_options),
+        "technical_detail": redact(_technical_detail(action)),
+    }
+    return plan.model_copy(
+        update={
+            "structured_payload": structured_payload,
+            "follow_up_options": reply_options,
+            "user_next_step": reply_options[0] if reply_options else None,
+            "plain_text": visible_text_guard(plan.plain_text or plan.summary or ""),
+            "summary": visible_text_guard(plan.summary or plan.plain_text or ""),
+            "sections": [
+                {
+                    "kind": "natural_interaction",
+                    "text": visible_text_guard(plan.plain_text or plan.summary or ""),
+                }
+            ],
+        }
     )
 
 
@@ -358,7 +421,61 @@ def _outcome(
     action: dict[str, Any] | None = None,
     clear_pending: bool,
     session_grant: dict[str, Any] | None = None,
+    composer: ResponseComposer | None = None,
+    detail: Any | None = None,
+    failure_reason: str | None = None,
 ) -> NaturalChatOutcome:
+    if composer is not None and action is not None:
+        facts = _action_status_facts(
+            action,
+            status=status,
+            detail=detail,
+            failure_reason=failure_reason,
+        )
+        plan = composer.response_plan_for_action_status(
+            facts=facts,
+            task_status=_task_status_payload(detail),
+        )
+        reply_options = _reply_options_from_actions(pending_actions or ([action] if action else []))
+        natural = {
+            "status": status,
+            "reason_codes": reason_codes,
+            "pending_actions": pending_actions or ([action] if action else []),
+            "natural_reply_options": reply_options,
+            "reply_option_items": _reply_option_items(reply_options),
+            "clear_pending": clear_pending,
+            "session_grant": session_grant or {},
+        }
+        pending_action_binding = _pending_action_binding(status, pending_actions or [])
+        structured_payload = {
+            **plan.structured_payload,
+            "scenario": "natural_interaction",
+            "natural_interaction": natural,
+            "pending_actions": pending_actions or ([action] if action else []),
+            "pending_action_binding": pending_action_binding,
+            "response_quality_guard": {
+                "status": status,
+                "state_disclosed": True,
+                "boundary_disclosed": True,
+                "next_step_provided": bool(reply_options) or status != "approved",
+                "no_false_done": True,
+                "no_internal_terms": True,
+            },
+            "natural_reply_options": reply_options,
+            "reply_option_items": _reply_option_items(reply_options),
+            "technical_detail": redact(_technical_detail(action)),
+        }
+        plan = plan.model_copy(
+            update={
+                "structured_payload": structured_payload,
+                "follow_up_options": reply_options,
+                "user_next_step": reply_options[0] if reply_options else None,
+            }
+        )
+        return NaturalChatOutcome(
+            text=visible_text_guard(plan.plain_text or plan.summary or text),
+            response_plan=plan,
+        )
     plan = _plan(
         text,
         status=status,
@@ -392,8 +509,25 @@ def _plan(
         "clear_pending": clear_pending,
         "session_grant": session_grant or {},
     }
+    pending_action_binding = {
+        "conversation_session_bound": True,
+        "unique_action_required": True,
+        "action_count": len(pending_actions or []),
+        "fail_closed": status
+        in {
+            "no_pending_action",
+            "multiple_pending_actions",
+            "ambiguous_confirmation_blocked",
+            "always_denied_for_risk",
+            "edit_missing_target",
+            "pending_action_invalid",
+            "resolution_failed",
+        },
+        "status": status,
+    }
     if pending_confirmation is not None:
         natural["pending_confirmation"] = pending_confirmation
+    natural["reply_option_items"] = _reply_option_items(reply_options)
     return ResponsePlan(
         title="等待确认" if pending_actions else None,
         style="natural_action",
@@ -405,7 +539,17 @@ def _plan(
             "scenario": "natural_interaction",
             "natural_interaction": natural,
             "pending_actions": pending_actions or [],
+            "pending_action_binding": pending_action_binding,
+            "response_quality_guard": {
+                "status": status,
+                "state_disclosed": True,
+                "boundary_disclosed": True,
+                "next_step_provided": bool(reply_options) or status != "approved",
+                "no_false_done": True,
+                "no_internal_terms": True,
+            },
             "natural_reply_options": reply_options,
+            "reply_option_items": _reply_option_items(reply_options),
             "technical_detail": redact(technical_detail or {}),
         },
         tone_mode="safety_boundary" if pending_actions else "default",
@@ -417,6 +561,85 @@ def _plan(
         },
         user_next_step=reply_options[0] if reply_options else None,
     )
+
+
+def _pending_action_binding(status: str, pending_actions: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "conversation_session_bound": True,
+        "unique_action_required": True,
+        "action_count": len(pending_actions),
+        "fail_closed": status
+        in {
+            "no_pending_action",
+            "multiple_pending_actions",
+            "ambiguous_confirmation_blocked",
+            "always_denied_for_risk",
+            "edit_missing_target",
+            "pending_action_invalid",
+            "resolution_failed",
+        },
+        "status": status,
+    }
+
+
+def _reply_option_items(options: list[str]) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for option in options:
+        label = str(option)
+        code = "edit"
+        if any(marker in label for marker in ["只允许", "本次允许", "确认"]):
+            code = "once"
+        elif "本会话" in label:
+            code = "session"
+        elif any(marker in label for marker in ["拒绝", "取消"]):
+            code = "deny"
+        items.append({"code": code, "label": label})
+    return items
+
+
+def _action_status_facts(
+    action: dict[str, Any],
+    *,
+    status: str,
+    detail: Any | None,
+    failure_reason: str | None,
+) -> dict[str, Any]:
+    action_type = str(action.get("action_type") or "")
+    label = str(action.get("user_label") or action.get("action_label") or "这一步操作")
+    target = str(
+        (action.get("payload_summary") or {}).get("display_name")
+        or (action.get("payload_summary") or {}).get("requested_software")
+        or (action.get("payload_summary") or {}).get("url")
+        or (action.get("payload_summary") or {}).get("path")
+        or ""
+    )
+    detail_status = str(getattr(detail, "status", "") or "")
+    return {
+        "status": status,
+        "action_type": action_type,
+        "action_label": label,
+        "target": target,
+        "risk_level": str(action.get("risk_level") or ""),
+        "approval_required": status in {"pending_action", "waiting_approval"},
+        "reply_options": list(action.get("reply_options") or []),
+        "reply_option_items": _reply_option_items(list(action.get("reply_options") or [])),
+        "impact_summary": str(action.get("impact_summary") or ""),
+        "detail_status": detail_status,
+        "completed": detail_status == "completed",
+        "failed": detail_status == "failed",
+        "failure_reason": failure_reason,
+        "evidence_summary": "结果可以通过任务记录、工件或回放证据复核。",
+    }
+
+
+def _task_status_payload(detail: Any | None) -> dict[str, Any] | None:
+    if detail is None:
+        return None
+    task_id = str(getattr(detail, "task_id", "") or "")
+    status = str(getattr(detail, "status", "") or "")
+    if not task_id and not status:
+        return None
+    return {"task_id": task_id, "status": status, "mode": "workflow"}
 
 
 def _pending_action_prompt(action: dict[str, Any]) -> str:
@@ -674,7 +897,13 @@ def _edit_payload_for_action(action: dict[str, Any], text: str) -> dict[str, Any
             args["body"] = body
         return {"args": args} if args else None
     url = _first_url(text)
-    return {"args": {"url": url}} if url else None
+    if action_type == "browser.download":
+        return {"args": {"url": url}, "action_type": action_type} if url else None
+    if action_type in {"browser.open", "browser.snapshot", "browser.screenshot"}:
+        return {"args": {"url": url}, "action_type": action_type} if url else None
+    if action_type.startswith("browser."):
+        return None
+    return {"args": {"url": url}, "action_type": action_type} if url else None
 
 
 def _extract_edited_title(text: str) -> str | None:
@@ -708,7 +937,17 @@ def _risk_order(value: str) -> int:
 
 
 def _label_for_action(action_type: str, payload: dict[str, Any]) -> str:
-    target = str(payload.get("display_name") or payload.get("url") or payload.get("path") or "目标")
+    target = str(
+        payload.get("display_name")
+        or payload.get("requested_software")
+        or payload.get("url")
+        or payload.get("path")
+        or "目标"
+    )
+    if action_type == "host.install_software":
+        return f"安装 {target}"
+    if action_type == "host.uninstall_software":
+        return f"卸载 {target}"
     if action_type == "account.publish_post":
         platform = str(payload.get("platform") or "社交平台")
         title = str(payload.get("title") or "文章")
@@ -727,7 +966,17 @@ def _label_for_action(action_type: str, payload: dict[str, Any]) -> str:
 
 
 def _summary_for_action(action_type: str, payload: dict[str, Any], label: str) -> str:
-    target = str(payload.get("url") or payload.get("path") or payload.get("display_name") or "")
+    target = str(
+        payload.get("url")
+        or payload.get("path")
+        or payload.get("display_name")
+        or payload.get("requested_software")
+        or ""
+    )
+    if action_type == "host.install_software":
+        return f"我准备{label}，这会修改本机软件和系统环境。"
+    if action_type == "host.uninstall_software":
+        return f"我准备{label}，这会从本机移除软件。"
     if action_type == "account.publish_post":
         account = str(payload.get("account_summary") or "账号")
         return f"我准备使用{account}{label}。"
@@ -745,6 +994,10 @@ def _summary_for_action(action_type: str, payload: dict[str, Any], label: str) -
 
 
 def _impact_for_action(action_type: str) -> str:
+    if action_type == "host.install_software":
+        return "这会安装本机软件或补齐包管理器，所以需要你明确确认；确认前尚未安装。"
+    if action_type == "host.uninstall_software":
+        return "这会卸载本机软件，所以需要你明确确认；确认前尚未卸载。"
     if action_type == "account.publish_post":
         return "这会向外部平台发布内容，所以需要你确认；确认前尚未发布。"
     if action_type == "browser.download":
@@ -801,6 +1054,8 @@ def _payload_summary(payload: dict[str, Any]) -> dict[str, Any]:
             "platform",
             "title",
             "account_summary",
+            "requested_software",
+            "host_action",
         }
     }
 

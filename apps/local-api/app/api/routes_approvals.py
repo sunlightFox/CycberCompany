@@ -34,6 +34,14 @@ async def approve(
         reason=payload.reason,
         trace_id=trace_id,
     )
+    host_execution = await registry.host_install_service.execute_for_approval(
+        approval_id,
+        trace_id=trace_id,
+    )
+    if host_execution is not None:
+        return TaskDetailResponse(
+            **(await registry.task_engine.detail(host_execution.task_id)).model_dump(mode="json")
+        )
     return TaskDetailResponse(
         **(
             await registry.task_engine.handle_approval_resolved(

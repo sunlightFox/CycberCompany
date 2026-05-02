@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -59,6 +60,8 @@ def build_parser() -> argparse.ArgumentParser:
     trace_sub = traces.add_subparsers(dest="trace_command", required=True)
     trace_show = trace_sub.add_parser("show")
     trace_show.add_argument("trace_id")
+    _skills_parser(sub)
+    _tasks_parser(sub)
     sub.add_parser("config")
     return parser
 
@@ -74,9 +77,66 @@ def _chat_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> No
     chat.add_argument("--no-stream", dest="stream", action="store_false")
     chat.add_argument("--diagnostics", action="store_true")
     chat.add_argument("--json", action="store_true")
+    chat.add_argument("--export-dir", type=Path)
     chat.add_argument("--autostart", dest="autostart", action="store_true", default=True)
     chat.add_argument("--no-autostart", dest="autostart", action="store_false")
     chat.add_argument("--timeout", type=int, default=180)
+
+
+def _skills_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    skills = sub.add_parser("skills")
+    skills.add_argument("--autostart", dest="autostart", action="store_true", default=True)
+    skills.add_argument("--no-autostart", dest="autostart", action="store_false")
+    skills_sub = skills.add_subparsers(dest="skills_command", required=True)
+    sources = skills_sub.add_parser("sources")
+    sources_sub = sources.add_subparsers(dest="sources_command", required=True)
+    sources_sub.add_parser("list")
+    refresh = sources_sub.add_parser("refresh")
+    refresh.add_argument("repository_id")
+    add = sources_sub.add_parser("add")
+    add.add_argument("repository_id")
+    add.add_argument("--display-name", required=True)
+    add.add_argument("--index-uri", required=True)
+    add.add_argument("--provider", default="index_json")
+    add.add_argument("--priority", type=int, default=100)
+    add.add_argument("--default", action="store_true")
+    disable = sources_sub.add_parser("disable")
+    disable.add_argument("repository_id")
+    search = skills_sub.add_parser("search")
+    search.add_argument("query")
+    search.add_argument("--source")
+    search.add_argument("--limit", type=int, default=50)
+    search.add_argument("--json", action="store_true")
+    install = skills_sub.add_parser("install")
+    install.add_argument("ref")
+    install.add_argument("--source")
+    install.add_argument("--preview", action="store_true")
+    install.add_argument("--enable", action="store_true")
+    install.add_argument("--grant-default", action="store_true")
+    install.add_argument("--json", action="store_true")
+    install.add_argument("--type", dest="source_type")
+    install.add_argument("--checksum")
+    install.add_argument("--bundle-id")
+    grant = skills_sub.add_parser("grant")
+    grant.add_argument("skill_id")
+    grant.add_argument("--tool", dest="tools", action="append", default=[])
+    grant.add_argument("--member", default="mem_xiaoyao")
+    grant.add_argument("--json", action="store_true")
+
+
+def _tasks_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    tasks = sub.add_parser("tasks")
+    tasks.add_argument("--autostart", dest="autostart", action="store_true", default=True)
+    tasks.add_argument("--no-autostart", dest="autostart", action="store_false")
+    tasks.add_argument("--timeout", type=int, default=180)
+    tasks_sub = tasks.add_subparsers(dest="tasks_command", required=True)
+    run = tasks_sub.add_parser("run")
+    run.add_argument("--goal", required=True)
+    run.add_argument("--skill-id", required=True)
+    run.add_argument("--content")
+    run.add_argument("--input-json")
+    run.add_argument("--export-dir", type=Path)
+    run.add_argument("--json", action="store_true")
 
 
 async def _dispatch(args: argparse.Namespace) -> int:
@@ -85,9 +145,17 @@ async def _dispatch(args: argparse.Namespace) -> int:
     if getattr(args, "base_url", None):
         state.base_url = args.base_url
     manager = ServerManager(base_url=state.base_url)
-    if command in {"chat", "status", "doctor", "conversations", "turns", "traces"}:
-        chat_autostart = command == "chat" and getattr(args, "autostart", True)
-        autostart = bool(getattr(args, "autostart", False) or chat_autostart)
+    if command in {
+        "chat",
+        "status",
+        "doctor",
+        "conversations",
+        "turns",
+        "traces",
+        "skills",
+        "tasks",
+    }:
+        autostart = bool(getattr(args, "autostart", False))
         await manager.ensure_running(autostart=autostart)
     timeout = float(getattr(args, "timeout", 30))
     async with CycberApiClient(state.base_url, timeout=timeout) as client:
@@ -113,6 +181,10 @@ async def _dispatch(args: argparse.Namespace) -> int:
         if command == "traces":
             print_payload(await client.trace(args.trace_id))
             return 0
+        if command == "skills":
+            return await _run_skills(args, client)
+        if command == "tasks":
+            return await _run_tasks(args, client)
         if command == "config":
             print_payload(state.__dict__)
             return 0
@@ -125,6 +197,238 @@ async def _dispatch(args: argparse.Namespace) -> int:
         print_payload((await manager.ensure_running(autostart=False)).__dict__)
         return 0
     return 0
+
+
+async def _run_tasks(args: argparse.Namespace, client: CycberApiClient) -> int:
+    if args.tasks_command == "run":
+        skill_input = _task_skill_input(args)
+        task = await client.create_task(
+            {
+                "owner_member_id": "mem_xiaoyao",
+                "goal": args.goal,
+                "mode_hint": "workflow",
+                "constraints": {"skill_id": args.skill_id, "skill_input": skill_input},
+                "auto_start": True,
+            }
+        )
+        if task.get("status") == "created":
+            task_id = str(task["task_id"])
+            task = await client.start_task(task_id)
+        artifacts = await client.task_artifacts(str(task["task_id"]))
+        exported = _export_artifacts(artifacts.get("items", []), args.export_dir)
+        print_payload(
+            {
+                "task": {
+                    "task_id": task.get("task_id"),
+                    "status": task.get("status"),
+                    "title": task.get("title"),
+                },
+                "artifacts": artifacts.get("items", []),
+                "exported": exported,
+            },
+            json_mode=bool(args.json),
+        )
+        return 0
+    return 0
+
+
+async def _run_skills(args: argparse.Namespace, client: CycberApiClient) -> int:
+    if args.skills_command == "sources":
+        if args.sources_command == "list":
+            print_payload(await client.skill_repositories())
+            return 0
+        if args.sources_command == "refresh":
+            print_payload(await client.refresh_skill_repository(args.repository_id))
+            return 0
+        if args.sources_command == "add":
+            print_payload(
+                await client.upsert_skill_repository(
+                    args.repository_id,
+                    {
+                        "display_name": args.display_name,
+                        "provider": args.provider,
+                        "index_uri": args.index_uri,
+                        "priority": args.priority,
+                        "is_default": bool(args.default),
+                        "status": "enabled",
+                    },
+                )
+            )
+            return 0
+        if args.sources_command == "disable":
+            print_payload(await client.disable_skill_repository(args.repository_id))
+            return 0
+    if args.skills_command == "search":
+        print_payload(
+            await client.search_skills(
+                args.query,
+                repository_id=args.source,
+                limit=args.limit,
+            ),
+            json_mode=bool(args.json),
+        )
+        return 0
+    if args.skills_command == "install":
+        payload = _skill_install_payload(args)
+        if args.preview:
+            print_payload(await client.preview_skill_install(payload), json_mode=bool(args.json))
+            return 0
+        result = await client.install_skill(payload)
+        if args.enable:
+            bundle_id = result.get("bundle", {}).get("bundle_id")
+            if bundle_id:
+                result["enabled"] = await client.enable_plugin(str(bundle_id))
+        if args.grant_default:
+            result["grants"] = await _grant_default_installed_skills(result, client)
+        print_payload(result, json_mode=bool(args.json))
+        return 0
+    if args.skills_command == "grant":
+        payload = {
+            "subject_type": "member",
+            "subject_id": args.member,
+            "allowed_tools": list(args.tools),
+            "grant_scope": "explicit",
+            "created_by_member_id": args.member,
+        }
+        print_payload(
+            await client.grant_skill(args.skill_id, payload),
+            json_mode=bool(args.json),
+        )
+        return 0
+    return 0
+
+
+def _task_skill_input(args: argparse.Namespace) -> dict[str, Any]:
+    skill_input: dict[str, Any] = {}
+    if args.input_json:
+        raw = Path(args.input_json)
+        text = raw.read_text(encoding="utf-8") if raw.exists() else args.input_json
+        import json
+
+        parsed = json.loads(text)
+        if not isinstance(parsed, dict):
+            raise ValueError("--input-json must be a JSON object or a path to one")
+        skill_input.update(parsed)
+    skill_input.setdefault("goal", args.goal)
+    if args.content:
+        skill_input.setdefault("content", args.content)
+    return skill_input
+
+
+def _export_artifacts(items: list[dict[str, Any]], export_dir: Path | None) -> list[dict[str, Any]]:
+    if export_dir is None:
+        return []
+    root = find_repo_root()
+    artifact_root = (root / "data" / "artifacts").resolve()
+    target_dir = export_dir.expanduser().resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    exported: list[dict[str, Any]] = []
+    for item in items:
+        display_name = str(item.get("display_name") or "")
+        if Path(display_name).suffix.lower() not in {".docx", ".xlsx", ".pptx"}:
+            continue
+        source = _artifact_path(artifact_root, item)
+        target = _unique_target(target_dir / Path(display_name).name)
+        shutil.copy2(source, target)
+        exported.append(
+            {
+                "artifact_id": item.get("artifact_id"),
+                "display_name": display_name,
+                "path": str(target),
+            }
+        )
+    return exported
+
+
+def _artifact_path(artifact_root: Path, item: dict[str, Any]) -> Path:
+    uri = str(item.get("uri") or "")
+    if not uri.startswith("artifact://"):
+        raise ValueError(f"Unsupported artifact URI: {uri}")
+    relative = Path(uri.removeprefix("artifact://"))
+    source = (artifact_root / relative).resolve()
+    if artifact_root not in [source, *source.parents]:
+        raise ValueError(f"Artifact path escaped root: {uri}")
+    if not source.exists():
+        raise FileNotFoundError(str(source))
+    return source
+
+
+def _unique_target(path: Path) -> Path:
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    for index in range(2, 1000):
+        candidate = path.with_name(f"{stem}-{index}{suffix}")
+        if not candidate.exists():
+            return candidate
+    raise FileExistsError(str(path))
+
+
+async def _grant_default_installed_skills(
+    result: dict[str, Any],
+    client: CycberApiClient,
+) -> list[dict[str, Any]]:
+    grants: list[dict[str, Any]] = []
+    for skill in result.get("skills") or []:
+        skill_id = str(skill.get("skill_id") or "")
+        tools = [str(item) for item in skill.get("required_tools") or [] if str(item)]
+        if not skill_id or not tools or not _low_risk_default_grant_tools(tools):
+            continue
+        grants.append(
+            await client.grant_skill(
+                skill_id,
+                {
+                    "subject_type": "member",
+                    "subject_id": "mem_xiaoyao",
+                    "allowed_tools": tools,
+                    "grant_scope": "curated_default",
+                    "created_by_member_id": "mem_xiaoyao",
+                },
+            )
+        )
+    return grants
+
+
+def _low_risk_default_grant_tools(tools: list[str]) -> bool:
+    return all(
+        tool.startswith("office.")
+        or tool in {"file.write", "file.read", "file.list", "file.hash"}
+        for tool in tools
+    )
+
+
+def _skill_install_payload(args: argparse.Namespace) -> dict[str, Any]:
+    source_type = args.source_type or _infer_skill_source_type(args.ref, args.source)
+    install_options: dict[str, Any] = {}
+    if args.checksum:
+        install_options["checksum"] = args.checksum
+    if args.bundle_id:
+        install_options["bundle_id"] = args.bundle_id
+    payload: dict[str, Any] = {
+        "source_type": source_type,
+        "source_uri": args.ref,
+        "requested_by_member_id": "mem_xiaoyao",
+        "install_options": install_options,
+    }
+    if args.source:
+        payload["repository_id"] = args.source
+    return payload
+
+
+def _infer_skill_source_type(ref: str, source: str | None) -> str:
+    lowered = ref.lower()
+    if source or (":" in ref and not lowered.startswith(("http://", "https://"))):
+        return "repository_ref"
+    if lowered.startswith("https://github.com/") or lowered.startswith("github:"):
+        return "github_path"
+    if lowered.startswith(("https://", "http://")) and lowered.endswith(".md"):
+        return "skill_md_url"
+    if lowered.startswith(("https://", "http://")):
+        return "archive_url"
+    if lowered.endswith((".zip", ".tar", ".tar.gz", ".tgz")):
+        return "local_archive"
+    return "local_directory"
 
 
 async def _run_chat(args: argparse.Namespace, client: CycberApiClient, state: CliState) -> int:
@@ -143,14 +447,81 @@ async def _run_chat(args: argparse.Namespace, client: CycberApiClient, state: Cl
         include_diagnostics=bool(getattr(args, "diagnostics", False)),
     )
     state.save()
+    exported = await _export_chat_artifacts(
+        result.artifacts,
+        getattr(args, "export_dir", None),
+        client,
+    )
     payload: dict[str, Any] = {
         "turn": result.created,
         "text": result.text,
+        "artifacts": result.artifacts,
+        "exported": exported,
         "diagnostics": result.diagnostics,
     }
     verbose_payload = json_mode or bool(getattr(args, "diagnostics", False))
-    print_payload(payload if verbose_payload else result.text, json_mode=json_mode)
+    visible = _format_chat_output(result.text, result.artifacts, exported)
+    print_payload(payload if verbose_payload else visible, json_mode=json_mode)
     return 0
+
+
+async def _export_chat_artifacts(
+    artifacts: list[dict[str, Any]],
+    export_dir: Path | None,
+    client: CycberApiClient,
+) -> list[dict[str, Any]]:
+    if export_dir is None:
+        return []
+    target_dir = export_dir.expanduser().resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    exported: list[dict[str, Any]] = []
+    for item in artifacts:
+        artifact_id = str(item.get("artifact_id") or "").strip()
+        if not artifact_id:
+            continue
+        content, _headers = await client.download_artifact(artifact_id)
+        display_name = _safe_output_name(str(item.get("display_name") or artifact_id))
+        target = _unique_target(target_dir / display_name)
+        target.write_bytes(content)
+        exported.append(
+            {
+                "artifact_id": artifact_id,
+                "display_name": display_name,
+                "path": str(target),
+            }
+        )
+    return exported
+
+
+def _format_chat_output(
+    text: str,
+    artifacts: list[dict[str, Any]],
+    exported: list[dict[str, Any]],
+) -> str:
+    if not artifacts:
+        return text
+    lines = [text.rstrip(), "", "文件："]
+    exported_by_id = {
+        str(item.get("artifact_id")): item for item in exported if item.get("artifact_id")
+    }
+    for item in artifacts:
+        artifact_id = str(item.get("artifact_id") or "")
+        name = str(item.get("display_name") or artifact_id or "artifact")
+        content_type = str(item.get("content_type") or "application/octet-stream")
+        download_url = str(item.get("download_url") or "")
+        line = f"- {name} ({content_type})"
+        if download_url:
+            line += f" {download_url}"
+        exported_item = exported_by_id.get(artifact_id)
+        if exported_item:
+            line += f" -> {exported_item.get('path')}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _safe_output_name(value: str) -> str:
+    name = Path(value).name.strip().replace("\\", "_").replace("/", "_")
+    return name or "artifact.bin"
 
 
 async def _run_conversations(

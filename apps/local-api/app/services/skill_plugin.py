@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,7 @@ from app.schemas.tasks import ToolExecuteRequest
 from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
 from app.services.skill_governance import SkillGovernanceService
+from app.services.skill_source_resolver import SkillSourceResolver
 from app.services.tools import ToolRuntime
 
 REQUIRED_SKILL_SECTIONS = ["用途", "何时使用", "输入", "输出", "步骤", "禁止"]
@@ -47,11 +49,13 @@ class SkillPluginService:
         trace_service: TraceService,
         audit_service: AuditEventService,
         governance_service: SkillGovernanceService | None = None,
+        source_resolver: SkillSourceResolver | None = None,
     ) -> None:
         self._repo = repo
         self._task_repo = task_repo
         self._tools = tool_runtime
         self._artifacts = artifact_store
+        self._source_resolver = source_resolver
         self._trace = trace_service
         self._audit = audit_service
         self._governance = governance_service
@@ -59,6 +63,9 @@ class SkillPluginService:
 
     def set_governance_service(self, governance_service: SkillGovernanceService) -> None:
         self._governance = governance_service
+
+    def set_source_resolver(self, source_resolver: SkillSourceResolver) -> None:
+        self._source_resolver = source_resolver
 
     async def install_bundle(
         self,
@@ -88,9 +95,19 @@ class SkillPluginService:
             }
         )
         try:
-            root = self._resolve_bundle_root(request)
+            resolved = await self._resolve_source(request)
+            root = resolved.root
             manifest, skill_md, manifest_hash = await self._load_and_validate(root, trace_id)
             preview = await self._build_permission_preview(None, manifest, trace_id=trace_id)
+            analysis = None
+            if self._governance is not None:
+                analysis = await self._governance.analyze_manifest(
+                    bundle_id=_safe_id(str(manifest["id"])),
+                    manifest=manifest,
+                    skill_md=skill_md,
+                    manifest_hash=manifest_hash,
+                    trace_id=trace_id,
+                )
             bundle_id = _safe_id(str(manifest["id"]))
             bundle = {
                 "bundle_id": bundle_id,
@@ -101,12 +118,14 @@ class SkillPluginService:
                 "bundle_revision": str(
                     manifest.get("bundle_revision") or manifest.get("version") or "1.0.0"
                 ),
-                "source_type": request.source_type,
-                "source_uri": request.source_uri,
+                "source_type": resolved.source_type,
+                "source_uri": resolved.source_uri,
                 "package_uri": f"bundle://{bundle_id}",
                 "manifest_hash": manifest_hash,
                 "signature_status": "unsigned",
-                "trust_level": _trust_for_manifest(manifest),
+                "trust_level": (
+                    analysis.trust_level if analysis is not None else _trust_for_manifest(manifest)
+                ),
                 "status": "installed_disabled",
                 "permission_summary": preview.model_dump(mode="json"),
                 "risk_summary": {
@@ -217,6 +236,7 @@ class SkillPluginService:
                     skill_md=skill_md,
                     manifest_hash=manifest_hash,
                     preview=preview.model_copy(update={"bundle_id": bundle_id}),
+                    analysis=analysis,
                     trace_id=trace_id,
                 )
             return (
@@ -1182,6 +1202,18 @@ class SkillPluginService:
             raise AppError(ErrorCode.PLUGIN_VALIDATE_FAILED, "安装目录不存在", status_code=404)
         return root
 
+    async def _resolve_source(self, request: BundleInstallRequest):
+        if self._source_resolver is not None:
+            return await self._source_resolver.resolve(request)
+        root = self._resolve_bundle_root(request)
+        from app.services.skill_source_resolver import ResolvedSkillSource
+
+        return ResolvedSkillSource(
+            root=root,
+            source_type=request.source_type,
+            source_uri=request.source_uri,
+        )
+
     async def _start_span(
         self,
         trace_id: str | None,
@@ -1430,6 +1462,13 @@ def _format_args(
 ) -> dict[str, Any]:
     def replace(value: Any) -> Any:
         if isinstance(value, str):
+            placeholder = re.fullmatch(r"\{([A-Za-z0-9_]+)\}", value.strip())
+            if placeholder:
+                key = placeholder.group(1)
+                if key == "skill_display_name":
+                    return skill.display_name
+                if key in input_data:
+                    return input_data[key]
             result = value
             for key, item in input_data.items():
                 result = result.replace("{" + key + "}", str(item))

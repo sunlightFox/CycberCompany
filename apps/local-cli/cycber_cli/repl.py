@@ -7,7 +7,8 @@ from cycber_cli.state import CliState
 
 HELP = (
     "本地命令：/help /status /doctor /conversations /use <id> "
-    "/events last /brain last /quality last /exit"
+    "/events last /brain last /quality last /skills search <q> "
+    "/skills install <ref> /skills grant <skill_id> <tool...> /exit"
 )
 
 
@@ -81,6 +82,40 @@ async def _handle_slash(
         trace_id = parts[1] if len(parts) > 1 and parts[1] != "last" else state.last_trace_id
         if trace_id:
             print_payload(await client.trace(trace_id), json_mode=json_mode)
+    elif name == "/skills" and len(parts) >= 3 and parts[1] == "search":
+        print_payload(
+            await client.search_skills(" ".join(parts[2:])),
+            json_mode=json_mode,
+        )
+    elif name == "/skills" and len(parts) >= 3 and parts[1] == "install":
+        ref = parts[2]
+        source_type = "repository_ref" if ":" in ref else "local_directory"
+        print_payload(
+            await client.install_skill(
+                {
+                    "source_type": source_type,
+                    "source_uri": ref,
+                    "requested_by_member_id": state.member_id,
+                }
+            ),
+            json_mode=json_mode,
+        )
+    elif name == "/skills" and len(parts) >= 4 and parts[1] == "grant":
+        skill_id = parts[2]
+        tools = parts[3:]
+        print_payload(
+            await client.grant_skill(
+                skill_id,
+                {
+                    "subject_type": "member",
+                    "subject_id": state.member_id,
+                    "allowed_tools": tools,
+                    "grant_scope": "explicit",
+                    "created_by_member_id": state.member_id,
+                },
+            ),
+            json_mode=json_mode,
+        )
     elif name == "/clear":
         print("\033c", end="")
     else:

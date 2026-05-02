@@ -358,6 +358,68 @@ class ChatRepository:
         )
         return [self._event_from_row(dict(row)) for row in rows]
 
+    async def insert_recovery_attempt(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO chat_turn_recovery_attempts (
+              recovery_attempt_id, organization_id, turn_id, task_id, attempt_index,
+              failure_type, root_cause, recovery_action, status, diagnostic_payload_json,
+              trace_id, started_at, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["recovery_attempt_id"],
+                data.get("organization_id") or "org_default",
+                data["turn_id"],
+                data.get("task_id"),
+                int(data["attempt_index"]),
+                data["failure_type"],
+                data["root_cause"],
+                data["recovery_action"],
+                data["status"],
+                json.dumps(data.get("diagnostic_payload", {}), ensure_ascii=False),
+                data.get("trace_id"),
+                data["started_at"],
+                data.get("completed_at"),
+            ),
+        )
+
+    async def update_recovery_attempt(
+        self,
+        recovery_attempt_id: str,
+        *,
+        status: str,
+        diagnostic_payload: dict[str, Any],
+        completed_at: str,
+    ) -> None:
+        await self._db.execute(
+            """
+            UPDATE chat_turn_recovery_attempts
+            SET status = ?,
+                diagnostic_payload_json = ?,
+                completed_at = ?
+            WHERE recovery_attempt_id = ?
+            """,
+            (
+                status,
+                json.dumps(diagnostic_payload, ensure_ascii=False),
+                completed_at,
+                recovery_attempt_id,
+            ),
+        )
+
+    async def list_recovery_attempts(self, turn_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM chat_turn_recovery_attempts
+            WHERE turn_id = ?
+            ORDER BY attempt_index ASC, started_at ASC
+            """,
+            (turn_id,),
+        )
+        return [self._recovery_attempt_from_row(dict(row)) for row in rows]
+
     async def upsert_conversation_summary(
         self,
         *,
@@ -999,6 +1061,10 @@ class ChatRepository:
 
     def _event_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         row["payload"] = json.loads(row.pop("payload_json") or "{}")
+        return row
+
+    def _recovery_attempt_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        row["diagnostic_payload"] = json.loads(row.pop("diagnostic_payload_json") or "{}")
         return row
 
     def _working_state_from_row(self, row: dict[str, Any]) -> dict[str, Any]:

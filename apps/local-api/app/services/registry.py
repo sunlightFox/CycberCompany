@@ -9,10 +9,15 @@ from app.core.config import AppConfig
 from app.db.repositories.asset_repo import AssetRepository
 from app.db.repositories.brain_repo import BrainRepository
 from app.db.repositories.browser_repo import BrowserRepository
+from app.db.repositories.browser_workflow_repo import BrowserWorkflowRepository
+from app.db.repositories.channel_repo import ChannelRepository
 from app.db.repositories.chat_repo import ChatRepository
 from app.db.repositories.checkpoint_repo import CheckpointRepository
 from app.db.repositories.design_alignment_repo import DesignAlignmentRepository
 from app.db.repositories.execution_boundary_repo import ExecutionBoundaryRepository
+from app.db.repositories.external_platform_adapter_repo import (
+    ExternalPlatformAdapterRepository,
+)
 from app.db.repositories.external_platform_repo import ExternalPlatformRepository
 from app.db.repositories.knowledge_repo import KnowledgeRepository
 from app.db.repositories.media_repo import MediaRepository
@@ -20,6 +25,7 @@ from app.db.repositories.member_repo import MemberRepository
 from app.db.repositories.memory_repo import MemoryRepository
 from app.db.repositories.notification_repo import NotificationRepository
 from app.db.repositories.organization_repo import OrganizationRepository
+from app.db.repositories.project_deployment_repo import ProjectDeploymentRepository
 from app.db.repositories.release_repo import ReleaseRepository
 from app.db.repositories.retrieval_repo import RetrievalRepository
 from app.db.repositories.scheduled_task_repo import ScheduledTaskRepository
@@ -27,6 +33,7 @@ from app.db.repositories.settings_repo import SettingsRepository
 from app.db.repositories.shell_repo import ShellRepository
 from app.db.repositories.skill_governance_repo import SkillGovernanceRepository
 from app.db.repositories.skill_mcp_repo import SkillMcpRepository
+from app.db.repositories.skill_repository_repo import SkillRepositoryRepository
 from app.db.repositories.task_repo import TaskRepository
 from app.db.session import Database
 from app.services.approvals import ApprovalService
@@ -39,7 +46,14 @@ from app.services.bootstrap import BootstrapService
 from app.services.brain import BrainService
 from app.services.brain_decision import BrainDecisionService
 from app.services.browser_sessions import BrowserSessionService
+from app.services.browser_workflows import AutonomousBrowserWorkflowService
 from app.services.capability import CapabilityGraphService
+from app.services.channel_connectors import (
+    ChannelConnectorRegistry,
+    WechatClawbotConnector,
+    WechatMockConnector,
+)
+from app.services.channels import ChannelBindingService
 from app.services.chat import ChatService
 from app.services.chat_experience import ChatExperienceService
 from app.services.checkpoints import CheckpointService
@@ -51,12 +65,20 @@ from app.services.design_alignment import (
 )
 from app.services.execution_boundary import ExecutionBoundaryService
 from app.services.external_platform_actions import ExternalPlatformActionService
+from app.services.external_platform_adapters import ExternalPlatformAdapterService
 from app.services.knowledge import KnowledgeService
 from app.services.mcp import MCPService
 from app.services.media import MediaService
 from app.services.memory import MemoryService
 from app.services.model_routing import ModelRoutingService
 from app.services.notifications import NotificationGatewayService
+from app.services.office_tools import OfficeToolService
+from app.services.project_deployments import (
+    HostInstallService,
+    ProjectDeploymentService,
+    ProjectWorkspaceService,
+    ToolchainService,
+)
 from app.services.release import ReleaseGateService
 from app.services.retrieval import RetrievalDiagnosticsService
 from app.services.scheduled_tasks import ScheduledTaskService
@@ -65,9 +87,12 @@ from app.services.settings import SettingsService
 from app.services.shell_switch import ShellSwitchService
 from app.services.skill_governance import SkillGovernanceService
 from app.services.skill_plugin import SkillPluginService
+from app.services.skill_repositories import SkillRepositoryService
+from app.services.skill_source_resolver import SkillSourceResolver
 from app.services.supervisor import SupervisorService
 from app.services.tasks import TaskEngine
 from app.services.tools import ToolRuntime
+from app.services.wechat_gateway import WechatChannelGatewayService
 
 
 @dataclass
@@ -91,11 +116,20 @@ class ServiceRegistry:
     scheduled_task_service: ScheduledTaskService
     checkpoint_service: CheckpointService
     notification_gateway_service: NotificationGatewayService
+    channel_binding_service: ChannelBindingService
+    wechat_gateway_service: WechatChannelGatewayService
     browser_session_service: BrowserSessionService
+    autonomous_browser_workflow_service: AutonomousBrowserWorkflowService
+    project_workspace_service: ProjectWorkspaceService
+    project_deployment_service: ProjectDeploymentService
+    toolchain_service: ToolchainService
+    host_install_service: HostInstallService
     external_platform_action_service: ExternalPlatformActionService
+    external_platform_adapter_service: ExternalPlatformAdapterService
     tool_runtime: ToolRuntime
     skill_governance_service: SkillGovernanceService
     skill_plugin_service: SkillPluginService
+    skill_repository_service: SkillRepositoryService
     mcp_service: MCPService
     supervisor_service: SupervisorService
     shell_switch_service: ShellSwitchService
@@ -126,10 +160,15 @@ class ServiceRegistry:
     scheduled_tasks: ScheduledTaskRepository
     checkpoints: CheckpointRepository
     notifications: NotificationRepository
+    channels: ChannelRepository
     browser: BrowserRepository
+    browser_workflows: BrowserWorkflowRepository
+    project_deployments: ProjectDeploymentRepository
     external_platform: ExternalPlatformRepository
+    external_platform_adapters: ExternalPlatformAdapterRepository
     skill_governance: SkillGovernanceRepository
     skill_mcp: SkillMcpRepository
+    skill_repositories: SkillRepositoryRepository
     release: ReleaseRepository
     retrieval: RetrievalRepository
     execution_boundary: ExecutionBoundaryRepository
@@ -148,14 +187,19 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     media_repo = MediaRepository(db)
     asset_repo = AssetRepository(db)
     browser_repo = BrowserRepository(db)
+    browser_workflow_repo = BrowserWorkflowRepository(db)
+    project_deployment_repo = ProjectDeploymentRepository(db)
     external_platform_repo = ExternalPlatformRepository(db)
+    external_platform_adapter_repo = ExternalPlatformAdapterRepository(db)
     knowledge_repo = KnowledgeRepository(db)
     task_repo = TaskRepository(db)
     scheduled_task_repo = ScheduledTaskRepository(db)
     checkpoint_repo = CheckpointRepository(db)
     notification_repo = NotificationRepository(db)
+    channel_repo = ChannelRepository(db)
     skill_governance_repo = SkillGovernanceRepository(db)
     skill_mcp_repo = SkillMcpRepository(db)
+    skill_repository_repo = SkillRepositoryRepository(db)
     release_repo = ReleaseRepository(db)
     retrieval_repo = RetrievalRepository(db)
     execution_boundary_repo = ExecutionBoundaryRepository(db)
@@ -251,6 +295,14 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
     )
+    office_tool_service = OfficeToolService(
+        artifact_store,
+        brain_repo=brain_repo,
+        model_routing_service=model_routing_service,
+        secret_store=secret_store,
+        trace_service=trace_service,
+        audit_service=audit_service,
+    )
     tool_runtime = ToolRuntime(
         repo=task_repo,
         artifact_store=artifact_store,
@@ -265,6 +317,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         browser_session_service=browser_session_service,
         checkpoint_service=checkpoint_service,
         media_service=media_service,
+        office_tool_service=office_tool_service,
     )
     task_engine = TaskEngine(
         repo=task_repo,
@@ -286,6 +339,19 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         audit_service=audit_service,
         capability_service=capability_service,
     )
+    skill_repository_service = SkillRepositoryService(
+        repo=skill_repository_repo,
+        config=config.skills,
+        root_dir=config.paths.root_dir,
+        trace_service=trace_service,
+        audit_service=audit_service,
+    )
+    skill_source_resolver = SkillSourceResolver(
+        root_dir=config.paths.root_dir,
+        cache_dir=config.storage.data_dir / "skill-source-cache",
+        repository_service=skill_repository_service,
+    )
+    skill_governance_service.set_source_resolver(skill_source_resolver)
     skill_plugin_service = SkillPluginService(
         repo=skill_mcp_repo,
         task_repo=task_repo,
@@ -294,6 +360,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
         governance_service=skill_governance_service,
+        source_resolver=skill_source_resolver,
     )
     mcp_service = MCPService(
         repo=skill_mcp_repo,
@@ -323,6 +390,44 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
         task_engine=task_engine,
+    )
+    wechat_config = config.channels.providers.get("wechat")
+    wechat_mock_config = config.channels.providers.get("wechat_mock")
+    if wechat_config is None:
+        from app.core.config import ChannelProviderSection
+
+        wechat_config = ChannelProviderSection()
+    if wechat_mock_config is None:
+        from app.core.config import ChannelProviderSection
+
+        wechat_mock_config = ChannelProviderSection(enabled=True, test_only=True)
+    wechat_state_dir = wechat_config.state_dir or (
+        config.storage.data_dir / "channel-providers" / "wechat"
+    )
+    channel_connector_registry = ChannelConnectorRegistry(
+        [
+            WechatClawbotConnector(wechat_config, state_dir=wechat_state_dir),
+            WechatMockConnector(wechat_mock_config),
+        ]
+    )
+    channel_binding_service = ChannelBindingService(
+        repo=channel_repo,
+        asset_repo=asset_repo,
+        asset_service=asset_service,
+        capability=capability_service,
+        notifications=notification_gateway_service,
+        connectors=channel_connector_registry,
+        secret_store=secret_store,
+        trace_service=trace_service,
+        audit_service=audit_service,
+    )
+    notification_gateway_service.register_provider(
+        "wechat_mock",
+        _ChannelNotificationProvider(channel_binding_service),
+    )
+    notification_gateway_service.register_provider(
+        "wechat",
+        _ChannelNotificationProvider(channel_binding_service),
     )
     approval_service.set_notification_callback(
         notification_gateway_service.notify_approval_required
@@ -407,6 +512,41 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         interval_seconds=config.workers.interval_seconds,
         timeout_seconds=config.workers.timeout_seconds,
     )
+    project_workspace_service = ProjectWorkspaceService(
+        repo=project_deployment_repo,
+        member_repo=member_repo,
+        data_dir=config.storage.data_dir,
+        trace_service=trace_service,
+        audit_service=audit_service,
+    )
+    toolchain_service = ToolchainService(
+        repo=project_deployment_repo,
+        data_dir=config.storage.data_dir,
+    )
+    project_deployment_service = ProjectDeploymentService(
+        repo=project_deployment_repo,
+        workspace_service=project_workspace_service,
+        toolchain_service=toolchain_service,
+        task_engine=task_engine,
+        task_repo=task_repo,
+        approval_service=approval_service,
+        artifact_store=artifact_store,
+        data_dir=config.storage.data_dir,
+        trace_service=trace_service,
+        audit_service=audit_service,
+    )
+    host_install_service = HostInstallService(
+        repo=project_deployment_repo,
+        task_engine=task_engine,
+        task_repo=task_repo,
+        approval_service=approval_service,
+        artifact_store=artifact_store,
+        trace_service=trace_service,
+        audit_service=audit_service,
+        brain_repo=brain_repo,
+        model_routing_service=model_routing_service,
+        secret_store=secret_store,
+    )
     external_platform_action_service = ExternalPlatformActionService(
         repo=external_platform_repo,
         asset_repo=asset_repo,
@@ -416,6 +556,55 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
     )
+    external_platform_adapter_service = ExternalPlatformAdapterService(
+        repo=external_platform_adapter_repo,
+        platform_repo=external_platform_repo,
+        tool_runtime=tool_runtime,
+        approval_service=approval_service,
+        audit_service=audit_service,
+    )
+    autonomous_browser_workflow_service = AutonomousBrowserWorkflowService(
+        repo=browser_workflow_repo,
+        task_repo=task_repo,
+        task_engine=task_engine,
+        tool_runtime=tool_runtime,
+        approval_service=approval_service,
+        audit_service=audit_service,
+    )
+    chat_service = ChatService(
+        db,
+        trace_service,
+        audit_service,
+        model_routing_service,
+        secret_store,
+        memory_service,
+        asset_broker_service,
+        persona_heart_service,
+        task_engine,
+        chat_experience_service,
+        brain_decision_service,
+        approval_service,
+        scheduled_task_service,
+        project_deployment_service,
+        host_install_service,
+        skill_plugin_service,
+        skill_governance_service,
+        tool_runtime=tool_runtime,
+    )
+    wechat_gateway_service = WechatChannelGatewayService(
+        repo=channel_repo,
+        chat_repo=chat_repo,
+        chat_service=chat_service,
+        notifications=notification_gateway_service,
+        connectors=channel_connector_registry,
+        secret_store=secret_store,
+        media_repo=media_repo,
+        data_dir=config.storage.data_dir,
+        trace_service=trace_service,
+        audit_service=audit_service,
+        config=wechat_config,
+    )
+    background_worker_service.set_wechat_gateway(wechat_gateway_service)
     return ServiceRegistry(
         config=config,
         db=db,
@@ -423,21 +612,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
         bootstrap_service=BootstrapService(db, shell_runtime, config.app.default_shell),
-        chat_service=ChatService(
-            db,
-            trace_service,
-            audit_service,
-            model_routing_service,
-            secret_store,
-            memory_service,
-            asset_broker_service,
-            persona_heart_service,
-            task_engine,
-            chat_experience_service,
-            brain_decision_service,
-            approval_service,
-            scheduled_task_service,
-        ),
+        chat_service=chat_service,
         chat_experience_service=chat_experience_service,
         memory_service=memory_service,
         media_service=media_service,
@@ -450,11 +625,20 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         scheduled_task_service=scheduled_task_service,
         checkpoint_service=checkpoint_service,
         notification_gateway_service=notification_gateway_service,
+        channel_binding_service=channel_binding_service,
+        wechat_gateway_service=wechat_gateway_service,
         browser_session_service=browser_session_service,
+        autonomous_browser_workflow_service=autonomous_browser_workflow_service,
+        project_workspace_service=project_workspace_service,
+        project_deployment_service=project_deployment_service,
+        toolchain_service=toolchain_service,
+        host_install_service=host_install_service,
         external_platform_action_service=external_platform_action_service,
+        external_platform_adapter_service=external_platform_adapter_service,
         tool_runtime=tool_runtime,
         skill_governance_service=skill_governance_service,
         skill_plugin_service=skill_plugin_service,
+        skill_repository_service=skill_repository_service,
         mcp_service=mcp_service,
         supervisor_service=supervisor_service,
         shell_switch_service=shell_switch_service,
@@ -485,12 +669,42 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         scheduled_tasks=scheduled_task_repo,
         checkpoints=checkpoint_repo,
         notifications=notification_repo,
+        channels=channel_repo,
         browser=browser_repo,
+        browser_workflows=browser_workflow_repo,
+        project_deployments=project_deployment_repo,
         external_platform=external_platform_repo,
+        external_platform_adapters=external_platform_adapter_repo,
         skill_governance=skill_governance_repo,
         skill_mcp=skill_mcp_repo,
+        skill_repositories=skill_repository_repo,
         release=release_repo,
         retrieval=retrieval_repo,
         execution_boundary=execution_boundary_repo,
         design_alignment=design_alignment_repo,
     )
+
+
+class _ChannelNotificationProvider:
+    def __init__(self, channels: ChannelBindingService) -> None:
+        self._channels = channels
+
+    async def send(self, *, channel, message):  # type: ignore[no-untyped-def]
+        provider_state_ref = None
+        if isinstance(channel.provider_config, dict):
+            provider_state_ref = channel.provider_config.get("provider_state_ref")
+        result = await self._channels.send_channel_text(
+            provider=channel.provider,
+            provider_state_ref=provider_state_ref,
+            recipient=message.recipient,
+            text=message.body_redacted,
+        )
+        from app.services.notifications import ProviderDeliveryResult
+
+        return ProviderDeliveryResult(
+            status=result.status,
+            provider_message_id=result.provider_message_id,
+            response_summary=result.response_summary,
+            error_code=result.error_code,
+            error_summary=result.error_summary,
+        )

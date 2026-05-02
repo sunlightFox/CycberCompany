@@ -287,6 +287,8 @@ class ExecutionBoundaryService:
             action_category = terminal_network["category"]
         requested = requested_risk_level
         policy_risk = policy.risk_level
+        if tool_name == "browser.download" and args.get("workflow_low_risk_download"):
+            policy_risk = requested
         command_risk = (
             _risk_from_class(command_policy["command_class"])
             if command_policy is not None
@@ -318,13 +320,16 @@ class ExecutionBoundaryService:
             if command_policy["decision"] == "deny":
                 decision = "deny"
         serialized_args = json.dumps(args, ensure_ascii=False, default=str)
-        if _contains_sensitive_path(serialized_args):
+        if tool_name != "host.fs.list" and _contains_sensitive_path(serialized_args):
             decision = "deny"
             reason_codes.append("sensitive_path_denied")
         if tool_name == "terminal.run" and _contains_path_traversal(serialized_args):
             decision = "deny"
             reason_codes.append("terminal_path_traversal_denied")
-        if _contains_denied_pattern(serialized_args, policy.deny_patterns):
+        if tool_name != "host.fs.list" and _contains_denied_pattern(
+            serialized_args,
+            policy.deny_patterns,
+        ):
             decision = "deny"
             reason_codes.append("policy_deny_pattern")
         if action_category in {"browser_submit", "browser_upload", "payment", "network_write"}:
@@ -648,14 +653,22 @@ def _policy_for_tool(tool: dict[str, Any], now: str) -> dict[str, Any]:
     source = str(tool.get("source") or "builtin")
     risk = str((tool.get("risk_policy") or {}).get("default") or "R1")
     category = _category_from_tool_name(tool_name)
-    requires_task = tool_name.startswith(("file.", "browser.", "terminal.", "account."))
+    taskless_read_tools = {"host.fs.list", "browser.snapshot", "browser.search"}
+    requires_task = tool_name.startswith(
+        ("file.", "browser.", "terminal.", "account.", "project.", "runtime.", "host.")
+    ) and tool_name not in taskless_read_tools
     return {
         "policy_id": f"tap_{_safe_policy_id(tool_name)}",
         "tool_name": tool_name,
         "source": source,
         "action_category": category,
         "risk_level": risk,
-        "allowed_scopes": ["task_artifact"] if requires_task else ["local_backend"],
+        "allowed_scopes": (
+            ["host_filesystem_metadata"]
+            if tool_name == "host.fs.list"
+            else (["browser_untrusted_readonly"] if tool_name in taskless_read_tools else [])
+            or (["task_artifact"] if requires_task else ["local_backend"])
+        ),
         "required_capabilities": _required_capabilities(tool_name),
         "required_asset_kinds": _required_asset_kinds(tool_name),
         "requires_task_binding": requires_task,
@@ -755,6 +768,20 @@ def _category_from_tool_name(tool_name: str) -> str:
         return "terminal_command"
     if tool_name.startswith("terminal."):
         return "terminal_control"
+    if tool_name.startswith("project."):
+        if tool_name == "project.clone":
+            return "project_clone"
+        if tool_name == "project.install_deps":
+            return "project_dependency_install"
+        if tool_name in {"project.run", "project.stop"}:
+            return "managed_process"
+        return "project_deployment"
+    if tool_name.startswith("runtime."):
+        return "portable_toolchain"
+    if tool_name.startswith("host."):
+        if tool_name == "host.fs.list":
+            return "host_filesystem_read"
+        return "host_install" if tool_name == "host.install_software" else "host_detect"
     if tool_name == "file.delete":
         return "file_delete"
     if tool_name.startswith("file."):
@@ -818,6 +845,14 @@ def _required_capabilities(tool_name: str) -> list[str]:
         return ["browser.read"]
     if tool_name.startswith("terminal."):
         return ["terminal.sandboxed"]
+    if tool_name.startswith("project."):
+        return ["project_deployment.execute"]
+    if tool_name.startswith("runtime."):
+        return ["toolchain.prepare"]
+    if tool_name == "host.fs.list":
+        return ["host_filesystem.read_metadata"]
+    if tool_name.startswith("host."):
+        return ["host_install.execute"]
     if tool_name.startswith("knowledge."):
         return ["knowledge.read"]
     if tool_name.startswith("memory."):

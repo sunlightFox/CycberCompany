@@ -16,6 +16,7 @@ from app.services.memory import MemoryService
 from app.services.notifications import NotificationGatewayService
 from app.services.scheduled_tasks import ScheduledTaskService
 from app.services.tasks import TaskEngine
+from app.services.wechat_gateway import WechatChannelGatewayService
 
 WorkerHandler = Callable[[str], Awaitable[dict[str, Any]]]
 
@@ -69,6 +70,7 @@ class BackgroundWorkerService:
         checkpoints: CheckpointService,
         task_engine: TaskEngine,
         memory_service: MemoryService,
+        wechat_gateway: WechatChannelGatewayService | None = None,
         trace_service: TraceService,
         audit_service: AuditEventService,
         enabled: bool = False,
@@ -80,6 +82,7 @@ class BackgroundWorkerService:
         self._checkpoints = checkpoints
         self._task_engine = task_engine
         self._memory = memory_service
+        self._wechat_gateway = wechat_gateway
         self._trace = trace_service
         self._audit = audit_service
         self._enabled = enabled
@@ -95,12 +98,16 @@ class BackgroundWorkerService:
         self._handlers: dict[str, WorkerHandler] = {
             "scheduled_due_worker": self._scheduled_due_worker,
             "notification_retry_worker": self._notification_retry_worker,
+            "wechat_inbound_worker": self._wechat_inbound_worker,
             "checkpoint_cleanup_worker": self._checkpoint_cleanup_worker,
             "stale_recovery_worker": self._stale_recovery_worker,
         }
         self._states = {
             name: WorkerState(name=name, enabled=True) for name in self._handlers
         }
+
+    def set_wechat_gateway(self, wechat_gateway: WechatChannelGatewayService) -> None:
+        self._wechat_gateway = wechat_gateway
 
     async def start(self) -> None:
         if not self._enabled or self._loop_task is not None:
@@ -323,6 +330,16 @@ class BackgroundWorkerService:
             "processed_messages": len(messages),
             "notification_ids": [item.notification_id for item in messages],
             "statuses": [item.status for item in messages],
+        }
+
+    async def _wechat_inbound_worker(self, trace_id: str) -> dict[str, Any]:
+        if self._wechat_gateway is None:
+            return {"status": "skipped", "reason": "wechat_gateway_unavailable"}
+        inbound = await self._wechat_gateway.poll_once(trace_id=trace_id)
+        outbound = await self._wechat_gateway.deliver_due(trace_id=trace_id)
+        return {
+            "inbound": inbound.model_dump(mode="json"),
+            "outbound": outbound.model_dump(mode="json"),
         }
 
     async def _checkpoint_cleanup_worker(self, trace_id: str) -> dict[str, Any]:

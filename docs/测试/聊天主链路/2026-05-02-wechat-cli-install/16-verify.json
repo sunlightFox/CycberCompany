@@ -1,0 +1,22 @@
+{
+  "command": null,
+  "uninstall_entries": null,
+  "choco_local": "",
+  "paths": [
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\brand_wechat_16.svg",
+      "Length": 2490,
+      "LastWriteTime": "2026-05-02T00:32:11.1583423+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\brand_wechat_filled_24.svg",
+      "Length": 2370,
+      "LastWriteTime": "2026-05-02T00:32:11.1590164+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\wmpfsdk\\runtime\\WeChatAppEx.exe",
+      "Length": 2286640,
+      "LastWriteTime": "2026-05-02T00:32:20.998592+08:00"
+    }
+  ]
+}

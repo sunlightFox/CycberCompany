@@ -222,6 +222,21 @@ class ArtifactStore:
             preview = raw[: min(limit, 512)].hex()
         return artifact, str(redact(preview))[:limit]
 
+    async def open_download(self, artifact_id: str) -> tuple[TaskArtifact, Path]:
+        row = await self._repo.get_artifact(artifact_id)
+        if row is None:
+            raise AppError(ErrorCode.ARTIFACT_NOT_FOUND, "工件不存在", status_code=404)
+        artifact = TaskArtifact(**row)
+        path = self.path_for_artifact(artifact)
+        if not path.exists() or not path.is_file():
+            raise AppError(
+                ErrorCode.ARTIFACT_NOT_FOUND,
+                "工件文件不存在",
+                status_code=404,
+                details={"artifact_id": artifact_id},
+            )
+        return artifact, path
+
     def resolve_task_relative_path(self, task_id: str, value: str) -> Path:
         root = self.task_dir(task_id)
         path = (root / value).resolve()

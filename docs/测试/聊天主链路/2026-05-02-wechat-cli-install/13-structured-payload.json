@@ -1,0 +1,133 @@
+{
+  "scenario": "safety_deny",
+  "task_status": {
+    "task_id": "tsk_84a22e6510e846d1abbe05072bf7b1e4",
+    "status": "waiting_approval",
+    "mode": "workflow"
+  },
+  "approval_prompt": {},
+  "artifact_refs": [],
+  "safety_notice": "本机软件安装必须强确认；不会绕过 UAC、安全提示或未知来源校验。",
+  "memory_notice": null,
+  "tool_notice": null,
+  "host_install_plan": {
+    "host_install_plan_id": "hip_0a5362a303c74e8eb160eacb1ec11ff4",
+    "organization_id": "org_default",
+    "task_id": "tsk_84a22e6510e846d1abbe05072bf7b1e4",
+    "requested_software": "微信",
+    "install_source": {
+      "match_confidence": 0.99,
+      "match_reason": "choco_exact_search",
+      "package_id": "wechat",
+      "publisher": "Chocolatey community package",
+      "source_type": "choco",
+      "trust": "known_package_manager_dynamic",
+      "version": "3.9.8.15"
+    },
+    "command_preview": {
+      "action": "install",
+      "args": [
+        "install",
+        "wechat",
+        "-y",
+        "--no-progress",
+        "--limit-output"
+      ],
+      "cwd": "host_default",
+      "env_policy": "minimal",
+      "executable": "choco",
+      "steps": [
+        {
+          "action": "install",
+          "args": [
+            "install",
+            "wechat",
+            "-y",
+            "--no-progress",
+            "--limit-output"
+          ],
+          "cwd": "host_default",
+          "env_policy": "minimal",
+          "executable": "choco",
+          "package_manager": "choco",
+          "step_key": "choco_install_wechat",
+          "step_type": "package_manager_install",
+          "target_package_id": "wechat",
+          "timeout_seconds": 1800
+        }
+      ]
+    },
+    "impact_summary": {
+      "may_require_admin": true,
+      "modifies_global_environment": true,
+      "modifies_path_or_registry": true,
+      "package_resolution": {
+        "match_confidence": 0.99,
+        "match_reason": "choco_exact_search",
+        "source_type": "choco"
+      },
+      "preserve_preexisting_install": true,
+      "real_execution_default": false,
+      "rollback": "choco uninstall wechat -y --no-progress",
+      "writes_system_locations": true
+    },
+    "risk_level": "R5",
+    "status": "waiting_approval",
+    "approval_id": "apr_cf5eb06ef8c744efb5f96cf0b3b96a90",
+    "trace_id": "trc_b805c041cf1b449db55459bad2483534",
+    "created_at": "2026-05-02T00:38:21.7273Z",
+    "updated_at": "2026-05-02T00:38:21.808263Z"
+  },
+  "approval_binding": {
+    "approval_id": "apr_cf5eb06ef8c744efb5f96cf0b3b96a90",
+    "status": "required"
+  },
+  "finish_reason": "stop",
+  "mode": "workflow",
+  "intent": "host_software_install_request",
+  "response_filter": {
+    "component": "ChatVisibleOutputFilter",
+    "input_chars": 73,
+    "output_chars": 73,
+    "changed_count": 0,
+    "blocked_terms": [],
+    "stream_safe": true,
+    "final_from_filtered_delta": true,
+    "final_guard": {
+      "component": "ChatVisibleOutputFilter",
+      "input_chars": 73,
+      "output_chars": 73,
+      "changed_count": 0,
+      "blocked_terms": [],
+      "stream_safe": true,
+      "final_from_filtered_delta": true
+    }
+  },
+  "experience": {
+    "conversation_depth": 2,
+    "complexity_score": 0.02,
+    "chat_style": "simple_qa",
+    "route_profile": "simple_qa",
+    "context_selection_reason": [
+      "current_input",
+      "recent_messages",
+      "capability_boundary_summary"
+    ],
+    "recoverable": true,
+    "needs_strong_reasoning": false,
+    "needs_long_output": false,
+    "needs_tool_or_task": false,
+    "chat_route_decision": {
+      "route_type": "host_software_install",
+      "confidence": 0.9,
+      "reason_code": "explicit_host_software_install",
+      "requires_confirmation": true,
+      "task_goal": "帮我安装微信",
+      "safe_user_summary": "帮我安装微信",
+      "office_request": null,
+      "metadata": {}
+    }
+  },
+  "tone_policy_resolution_id": "tone_ae17dc1c440445f0afd172b83307bde3",
+  "response_quality_evaluation_id": "rq_5d6e07a6059e43139d43c9d32db0cb00"
+}

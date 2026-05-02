@@ -81,6 +81,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         await registry.chat_service.recover_incomplete_turns()
         await registry.tool_runtime.ensure_builtin_tools()
+        await registry.skill_repository_service.ensure_configured(trace_id=startup_trace_id)
+        await registry.skill_repository_service.refresh_all(trace_id=startup_trace_id)
         await registry.task_engine.recover_stale_jobs()
         await registry.memory_service.recover_stale_jobs()
         await registry.memory_service.process_pending_jobs()

@@ -14,6 +14,8 @@ from trace_service import redact
 _BROWSER_EXECUTABLE_PATH_ENV = "CYCBER_BROWSER_EXECUTABLE_PATH"
 _BROWSER_CHANNEL_ENV = "CYCBER_BROWSER_CHANNEL"
 _BROWSER_EXECUTOR_ENV = "CYCBER_BROWSER_EXECUTOR"
+_BROWSER_CDP_ENDPOINT_ENV = "CYCBER_BROWSER_CDP_ENDPOINT"
+_BROWSER_REMOTE_CDP_ENDPOINT_ENV = "CYCBER_REMOTE_BROWSER_CDP_ENDPOINT"
 
 _FALLBACK_PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
@@ -33,6 +35,16 @@ class BrowserExecutionRequest:
     context_key: str = "default"
     session_context: dict[str, Any] = field(default_factory=dict)
     display_name: str | None = None
+    file_path: str | None = None
+    provider_mode: str = "auto"
+    viewport_profile: str = "desktop"
+    target_ref: str | None = None
+    frame_ref: str | None = None
+    tab_ref: str | None = None
+    wait_until: str | None = None
+    wait_for_text: str | None = None
+    wait_for_url: str | None = None
+    action_strategy: str = "css"
 
 
 @dataclass
@@ -51,6 +63,7 @@ class BrowserExecutionResult:
     download_bytes: bytes | None = None
     content_type: str | None = None
     filename: str | None = None
+    extracted_data: dict[str, Any] | None = None
     timeout: bool = False
     recoverable: bool = False
     selector: str | None = None
@@ -58,6 +71,8 @@ class BrowserExecutionResult:
     interaction: dict[str, Any] = field(default_factory=dict)
     network_summary: dict[str, Any] = field(default_factory=dict)
     console_summary: dict[str, Any] = field(default_factory=dict)
+    frame_summary: dict[str, Any] = field(default_factory=dict)
+    tab_summary: dict[str, Any] = field(default_factory=dict)
     fallback_chain: list[str] = field(default_factory=list)
     degraded_reason: str | None = None
 
@@ -81,6 +96,8 @@ class BrowserExecutionResult:
             "recoverable": self.recoverable,
             "network_summary": redact(self.network_summary),
             "console_summary": redact(self.console_summary),
+            "frame_summary": redact(self.frame_summary),
+            "tab_summary": redact(self.tab_summary),
             "interaction": redact(self.interaction),
             "redaction_summary": {
                 "policy": "trace_service.redact",
@@ -94,6 +111,8 @@ class BrowserExecutionResult:
             payload["selector"] = str(redact(self.selector))
         if self.value_preview is not None:
             payload["value_preview"] = str(redact(self.value_preview))
+        if self.extracted_data is not None:
+            payload["extracted_data"] = redact(self.extracted_data)
         return payload
 
 
@@ -104,7 +123,24 @@ class BrowserExecutor:
         self._playwright_disabled_reason: str | None = None
 
     async def execute(self, request: BrowserExecutionRequest) -> BrowserExecutionResult:
-        mode = os.environ.get(_BROWSER_EXECUTOR_ENV, "auto").strip().lower()
+        requested_provider = (request.provider_mode or "auto").strip().lower()
+        mode = (
+            os.environ.get(_BROWSER_EXECUTOR_ENV, "auto").strip().lower()
+            if requested_provider == "auto"
+            else requested_provider
+        )
+        if mode == "remote_cdp" and not _cdp_endpoint(request, remote=True):
+            return BrowserExecutionResult(
+                action=request.action,
+                url=request.url,
+                action_status="degraded",
+                backend="remote_cdp",
+                backend_status="unavailable",
+                evidence_summary="Remote CDP browser provider is configured as an interface only",
+                recoverable=True,
+                fallback_chain=["remote_cdp_unavailable"],
+                degraded_reason="remote_cdp_endpoint_missing",
+            )
         if mode in {"playwright", "auto"}:
             if mode == "auto" and self._playwright_disabled_reason:
                 fallback = await self._http.execute(request)
@@ -145,6 +181,8 @@ class BrowserExecutor:
                 fallback.fallback_chain = ["playwright_failed", "http_fallback"]
                 fallback.degraded_reason = self._playwright_disabled_reason
                 return fallback
+        if mode in {"local_cdp", "remote_cdp"}:
+            return await self._playwright.execute(request)
         return await self._http.execute(request)
 
     async def close(self) -> None:
@@ -159,7 +197,12 @@ class HttpBrowserExecutor:
         context = self._contexts.setdefault(request.context_key, _HttpBrowserContext())
         if request.action in {"open", "snapshot"}:
             return await self._fetch_page(request, action_status="completed")
-        if request.action in {"fill", "type"}:
+        if request.action == "wait":
+            page = await self._fetch_page(request, action_status="completed")
+            page.evidence_summary = "browser.wait degraded to HTTP fetch evidence"
+            page.degraded_reason = "http_fallback_wait_without_js"
+            return page
+        if request.action in {"fill", "type", "select", "check"}:
             return await self._fill(context, request)
         if request.action == "click":
             return await self._click(context, request)
@@ -173,8 +216,50 @@ class HttpBrowserExecutor:
             page.filename = "screenshot.png"
             page.evidence_summary = "browser.screenshot captured fallback page evidence"
             return page
+        if request.action == "vision_snapshot":
+            page = await self._fetch_page(request, action_status="completed")
+            page.action = "vision_snapshot"
+            page.action_status = "completed"
+            page.screenshot_bytes = _FALLBACK_PNG
+            page.content_type = "image/png"
+            page.filename = "vision-snapshot.png"
+            page.evidence_summary = "browser.vision_snapshot captured fallback page evidence"
+            page.degraded_reason = "http_fallback_visual_evidence_placeholder"
+            return page
         if request.action == "download":
             return await self._download(request)
+        if request.action == "upload":
+            return BrowserExecutionResult(
+                action="upload",
+                url=request.url,
+                action_status="unsupported",
+                backend="http_fallback",
+                backend_status="unsupported",
+                evidence_summary="browser.upload is unsupported by HTTP fallback",
+                recoverable=True,
+                fallback_chain=["http_fallback"],
+                degraded_reason="http_fallback_upload_unsupported",
+            )
+        if request.action == "extract":
+            return await self._extract(request)
+        if request.action in {
+            "dialog",
+            "tabs",
+            "frame_action",
+            "console",
+            "network_summary",
+        }:
+            return BrowserExecutionResult(
+                action=request.action,
+                url=request.url,
+                action_status="unsupported",
+                backend="http_fallback",
+                backend_status="unsupported",
+                evidence_summary=f"browser.{request.action} requires a real browser backend",
+                recoverable=True,
+                fallback_chain=["http_fallback"],
+                degraded_reason=f"http_fallback_{request.action}_unsupported",
+            )
         return BrowserExecutionResult(
             action=request.action,
             url=request.url,
@@ -373,6 +458,16 @@ class HttpBrowserExecutor:
             fallback_chain=["http_fallback"],
         )
 
+    async def _extract(self, request: BrowserExecutionRequest) -> BrowserExecutionResult:
+        page = await self._fetch_page(request, action_status="completed")
+        data = _extract_structured_data(page.snapshot or "")
+        page.action = "extract"
+        page.action_status = "completed" if data else "not_found"
+        page.extracted_data = data
+        page.evidence_summary = "browser.extract captured structured page data"
+        page.recoverable = not bool(data)
+        return page
+
 
 class PlaywrightBrowserExecutor:
     def __init__(self) -> None:
@@ -411,7 +506,7 @@ class PlaywrightBrowserExecutor:
                 degraded_reason="playwright_not_installed",
             )
         try:
-            state = await self._state_for(async_playwright, request.context_key)
+            state = await self._state_for(async_playwright, request)
         except Exception as exc:  # pragma: no cover - depends on local browser runtime
             return BrowserExecutionResult(
                 action=request.action,
@@ -451,24 +546,66 @@ class PlaywrightBrowserExecutor:
                     console_summary={"error_count": 0, "warning_count": 0},
                     fallback_chain=["playwright"],
                 )
+            if request.action == "upload" and not request.file_path:
+                return BrowserExecutionResult(
+                    action=request.action,
+                    url=request.url,
+                    action_status="unsupported",
+                    backend="playwright",
+                    backend_status="available",
+                    evidence_summary="browser.upload requires an artifact-backed file",
+                    recoverable=True,
+                    fallback_chain=["playwright"],
+                    degraded_reason="upload_file_path_missing",
+                )
             page = state.page
             response = None
-            should_navigate = request.action != "submit" or state.current_url != request.url
+            should_navigate = (
+                request.action not in {"submit", "tabs", "dialog"}
+                or state.current_url != request.url
+            )
             if should_navigate:
                 response = await page.goto(
                     request.url,
-                    wait_until="domcontentloaded",
+                    wait_until=_wait_until(request),
                     timeout=int(request.timeout_seconds * 1000),
                 )
                 state.current_url = request.url
-            if request.action in {"fill", "type"} and request.selector:
-                await page.locator(request.selector).fill(request.value or "")
-            elif request.action == "click" and request.selector:
-                await page.locator(request.selector).click(timeout=5000)
+            if request.action == "wait":
+                await _wait_for_request(page, request)
+            elif request.action in {"fill", "type"} and (request.selector or request.target_ref):
+                locator = await _locator_for_request(page, request)
+                await locator.fill(request.value or "")
+            elif request.action == "select" and (request.selector or request.target_ref):
+                locator = await _locator_for_request(page, request)
+                await locator.select_option(request.value or "")
+            elif request.action == "check" and (request.selector or request.target_ref):
+                checked = str(request.value or "true").lower() not in {"0", "false", "no"}
+                locator = await _locator_for_request(page, request)
+                await locator.set_checked(checked)
+            elif (
+                request.action == "upload"
+                and (request.selector or request.target_ref)
+                and request.file_path
+            ):
+                locator = await _locator_for_request(page, request)
+                await locator.set_input_files(request.file_path)
+            elif request.action == "click" and (request.selector or request.target_ref):
+                popup = await _click_maybe_new_page(state, request)
+                if popup is not None:
+                    page = popup
                 await _quiet_load_state(page)
+            elif request.action == "dialog":
+                await _handle_dialog_action(page, request)
+            elif request.action == "tabs":
+                popup = await _tabs_action(state, request)
+                if popup is not None:
+                    page = popup
+            elif request.action == "frame_action":
+                await _frame_action(page, request)
             elif request.action == "submit":
-                if request.selector:
-                    locator = page.locator(request.selector)
+                if request.selector or request.target_ref:
+                    locator = await _locator_for_request(page, request)
                     tag = await locator.evaluate("el => el.tagName.toLowerCase()")
                     if tag == "form":
                         await locator.evaluate("form => form.requestSubmit()")
@@ -478,11 +615,15 @@ class PlaywrightBrowserExecutor:
                     await page.locator("form").first.evaluate("form => form.requestSubmit()")
                 await _quiet_load_state(page)
             data: bytes | None = None
-            if request.action == "screenshot":
+            if request.action in {"screenshot", "vision_snapshot"}:
                 data = await page.screenshot(full_page=True)
-            content = (await page.content())[:5000]
+            content = (await _enhanced_page_snapshot(page))[:8000]
             title = await page.title()
+            extracted_data = (
+                _extract_structured_data(content) if request.action == "extract" else None
+            )
             state.current_url = page.url
+            state.page = page
             return BrowserExecutionResult(
                 action=request.action,
                 url=page.url,
@@ -492,21 +633,44 @@ class PlaywrightBrowserExecutor:
                 backend="playwright",
                 backend_status="available",
                 evidence_summary=f"browser.{request.action} executed in Playwright",
-                snapshot=content if request.action in {"open", "snapshot", "submit"} else None,
+                snapshot=content
+                if request.action
+                in {"open", "snapshot", "submit", "extract", "wait", "frame_action"}
+                else None,
                 content_preview=content,
                 screenshot_bytes=data,
                 content_type="image/png" if data else None,
-                filename="screenshot.png" if data else None,
+                filename=(
+                    "vision-snapshot.png"
+                    if request.action == "vision_snapshot" and data
+                    else "screenshot.png" if data else None
+                ),
+                extracted_data=extracted_data,
                 selector=request.selector,
                 value_preview=(request.value or "")[:80] if request.value else None,
                 interaction={
                     "dom_interaction_executed": request.action
-                    in {"fill", "type", "click", "submit"},
+                    in {
+                        "fill",
+                        "type",
+                        "select",
+                        "check",
+                        "click",
+                        "submit",
+                        "upload",
+                        "dialog",
+                        "tabs",
+                        "frame_action",
+                    },
                     "storage_state_visible": False,
                     "context_reused": True,
+                    "provider_mode": _provider_mode(request),
+                    "viewport_profile": request.viewport_profile,
                 },
-                network_summary={"request_count": 1, "failed_count": 0},
-                console_summary={"error_count": 0, "warning_count": 0},
+                network_summary=_network_summary(state),
+                console_summary=_console_summary(state),
+                frame_summary=_frame_summary(page),
+                tab_summary=_tab_summary(state),
                 fallback_chain=["playwright"],
             )
         except Exception as exc:
@@ -527,8 +691,9 @@ class PlaywrightBrowserExecutor:
     async def _state_for(
         self,
         async_playwright: Any,
-        context_key: str,
+        request: BrowserExecutionRequest,
     ) -> _PlaywrightContextState:
+        context_key = _playwright_context_key(request)
         state = self._states.get(context_key)
         if state is not None:
             return state
@@ -537,15 +702,32 @@ class PlaywrightBrowserExecutor:
         browser = None
         try:
             playwright = await manager.start()
-            browser = await playwright.chromium.launch(**_browser_launch_options())
-            context = await browser.new_context()
+            provider_mode = _provider_mode(request)
+            if provider_mode in {"local_cdp", "remote_cdp"}:
+                endpoint = _cdp_endpoint(request, remote=provider_mode == "remote_cdp")
+                if not endpoint:
+                    raise RuntimeError(f"{provider_mode}_endpoint_missing")
+                browser = await playwright.chromium.connect_over_cdp(endpoint)
+                context = browser.contexts[0] if browser.contexts else await browser.new_context(
+                    **_context_options(request)
+                )
+            else:
+                browser = await playwright.chromium.launch(**_browser_launch_options())
+                context = await browser.new_context(**_context_options(request))
             page = await context.new_page()
+            console_events: list[dict[str, Any]] = []
+            network_events: list[dict[str, Any]] = []
+            _attach_observers(page, console_events, network_events)
             state = _PlaywrightContextState(
                 manager=manager,
                 playwright=playwright,
                 browser=browser,
                 context=context,
                 page=page,
+                provider_mode=provider_mode,
+                viewport_profile=request.viewport_profile,
+                console_events=console_events,
+                network_events=network_events,
             )
             self._states[context_key] = state
             return state
@@ -571,6 +753,10 @@ class _PlaywrightContextState:
     context: Any
     page: Any
     current_url: str | None = None
+    provider_mode: str = "playwright"
+    viewport_profile: str = "desktop"
+    console_events: list[dict[str, Any]] = field(default_factory=list)
+    network_events: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -620,7 +806,7 @@ class _ParsedHtml(HTMLParser):
                     "controls": {},
                 }
             )
-        if tag in {"input", "textarea"}:
+        if tag in {"input", "textarea", "select"} or values.get("contenteditable") == "true":
             self.inputs.append(values)
             name = values.get("name")
             if name and self._form_stack:
@@ -699,6 +885,95 @@ def _selector_name(selector: str) -> str | None:
     return None
 
 
+class _StructuredDataParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.tables: list[list[list[str]]] = []
+        self.lists: list[list[str]] = []
+        self._table_stack: list[list[list[str]]] = []
+        self._row_stack: list[list[str]] = []
+        self._cell_parts: list[str] | None = None
+        self._list_stack: list[list[str]] = []
+        self._item_parts: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag == "table":
+            self._table_stack.append([])
+        if tag == "tr":
+            self._row_stack.append([])
+        if tag in {"th", "td"}:
+            self._cell_parts = []
+        if tag in {"ul", "ol"}:
+            self._list_stack.append([])
+        if tag == "li":
+            self._item_parts = []
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in {"th", "td"} and self._cell_parts is not None:
+            if self._row_stack:
+                self._row_stack[-1].append(_compact_html_text("".join(self._cell_parts)))
+            self._cell_parts = None
+        if tag == "tr" and self._row_stack:
+            row = self._row_stack.pop()
+            if self._table_stack and any(row):
+                self._table_stack[-1].append(row)
+        if tag == "table" and self._table_stack:
+            table = self._table_stack.pop()
+            if table:
+                self.tables.append(table)
+        if tag == "li" and self._item_parts is not None:
+            if self._list_stack:
+                text = _compact_html_text("".join(self._item_parts))
+                if text:
+                    self._list_stack[-1].append(text)
+            self._item_parts = None
+        if tag in {"ul", "ol"} and self._list_stack:
+            items = self._list_stack.pop()
+            if items:
+                self.lists.append(items)
+
+    def handle_data(self, data: str) -> None:
+        if self._cell_parts is not None:
+            self._cell_parts.append(data)
+        if self._item_parts is not None:
+            self._item_parts.append(data)
+
+
+def _extract_structured_data(text: str) -> dict[str, Any]:
+    parser = _StructuredDataParser()
+    parser.feed(text)
+    parser.close()
+    tables: list[dict[str, Any]] = []
+    rows: list[dict[str, str] | list[str]] = []
+    for table in parser.tables:
+        if not table:
+            continue
+        headers = table[0]
+        body = table[1:] if len(table) > 1 else []
+        normalized_rows: list[dict[str, str] | list[str]] = []
+        for row in body:
+            if headers and len(headers) == len(row):
+                normalized_rows.append(dict(zip(headers, row, strict=True)))
+            else:
+                normalized_rows.append(row)
+        tables.append({"headers": headers, "rows": normalized_rows})
+        rows.extend(normalized_rows)
+    payload: dict[str, Any] = {}
+    if tables:
+        payload["tables"] = tables
+        payload["rows"] = rows
+    if parser.lists:
+        payload["lists"] = parser.lists
+        payload.setdefault("rows", [{"text": item} for items in parser.lists for item in items])
+    return payload
+
+
+def _compact_html_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _html_title(text: str) -> str | None:
     match = re.search(r"<title[^>]*>(.*?)</title>", text, flags=re.IGNORECASE | re.DOTALL)
     if not match:
@@ -748,6 +1023,370 @@ async def _quiet_load_state(page: Any) -> None:
         await page.wait_for_load_state("domcontentloaded", timeout=5000)
     except Exception:
         return
+
+
+def _provider_mode(request: BrowserExecutionRequest) -> str:
+    mode = (request.provider_mode or "auto").strip().lower()
+    if mode == "auto":
+        return "playwright"
+    return mode
+
+
+def _playwright_context_key(request: BrowserExecutionRequest) -> str:
+    return ":".join(
+        [
+            request.context_key,
+            _provider_mode(request),
+            (request.viewport_profile or "desktop").strip().lower(),
+        ]
+    )
+
+
+def _context_options(request: BrowserExecutionRequest) -> dict[str, Any]:
+    profile = (request.viewport_profile or "desktop").strip().lower()
+    if profile == "mobile":
+        return {
+            "viewport": {"width": 390, "height": 844},
+            "is_mobile": True,
+            "has_touch": True,
+            "device_scale_factor": 2,
+            "user_agent": (
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 "
+                "Mobile/15E148 Safari/604.1"
+            ),
+        }
+    return {"viewport": {"width": 1365, "height": 900}}
+
+
+def _cdp_endpoint(request: BrowserExecutionRequest, *, remote: bool) -> str | None:
+    key = "remote_cdp_endpoint" if remote else "local_cdp_endpoint"
+    value = str(request.session_context.get(key) or "").strip()
+    if value:
+        return value
+    env_name = _BROWSER_REMOTE_CDP_ENDPOINT_ENV if remote else _BROWSER_CDP_ENDPOINT_ENV
+    value = os.environ.get(env_name, "").strip()
+    return value or None
+
+
+def _wait_until(request: BrowserExecutionRequest) -> str:
+    value = (request.wait_until or "").strip().lower()
+    if value in {"load", "domcontentloaded", "networkidle", "commit"}:
+        return value
+    return "domcontentloaded"
+
+
+async def _wait_for_request(page: Any, request: BrowserExecutionRequest) -> None:
+    timeout = int(request.timeout_seconds * 1000)
+    if request.wait_for_text:
+        await page.get_by_text(request.wait_for_text).first.wait_for(timeout=timeout)
+        return
+    if request.wait_for_url:
+        await page.wait_for_url(request.wait_for_url, timeout=timeout)
+        return
+    if request.selector or request.target_ref:
+        locator = await _locator_for_request(page, request)
+        await locator.first.wait_for(timeout=timeout, state="attached")
+        return
+    await page.wait_for_load_state(_wait_until(request), timeout=timeout)
+
+
+async def _locator_for_request(page: Any, request: BrowserExecutionRequest) -> Any:
+    selector = (request.target_ref or request.selector or "").strip()
+    if not selector:
+        return page.locator("body")
+    if selector.startswith("frame=") and " >> " in selector:
+        frame_selector, inner = selector.removeprefix("frame=").split(" >> ", 1)
+        frame = await _resolve_frame(page, frame_selector.strip())
+        return frame.locator(inner.strip())
+    strategy = (request.action_strategy or "").strip().lower()
+    if strategy == "role_ref" or selector.startswith("role="):
+        role, name = _parse_role_ref(selector)
+        if role:
+            return page.get_by_role(role, name=name)
+    if strategy == "text_label" or selector.startswith(("text=", "label=")):
+        text = selector.split("=", 1)[1] if "=" in selector else selector
+        if request.action in {"fill", "type", "select", "check", "upload"}:
+            label_locator = page.get_by_label(text)
+            try:
+                if await label_locator.count() > 0:
+                    return label_locator.first
+            except Exception:
+                pass
+            return page.get_by_placeholder(text).first
+        return page.get_by_text(text).first
+    locator = page.locator(selector)
+    try:
+        if await locator.count() > 0:
+            return locator.first
+    except Exception:
+        pass
+    if hasattr(page, "frames"):
+        for frame in page.frames:
+            try:
+                frame_locator = frame.locator(selector)
+                if await frame_locator.count() > 0:
+                    return frame_locator.first
+            except Exception:
+                continue
+    return locator.first
+
+
+def _parse_role_ref(selector: str) -> tuple[str | None, str | None]:
+    text = selector.removeprefix("role=").strip()
+    if not text:
+        return None, None
+    if "|" in text:
+        parts = dict(
+            item.split("=", 1)
+            for item in text.split("|")
+            if "=" in item and item.split("=", 1)[0] in {"role", "name"}
+        )
+        return parts.get("role"), parts.get("name")
+    if ":" in text:
+        role, name = text.split(":", 1)
+        return role.strip(), name.strip() or None
+    return text, None
+
+
+async def _resolve_frame(page: Any, frame_ref: str | None) -> Any:
+    if not frame_ref:
+        return page.frames[1] if len(page.frames) > 1 else page.main_frame
+    ref = frame_ref.strip()
+    for frame in page.frames:
+        if ref in (frame.name or "") or ref in frame.url:
+            return frame
+    try:
+        handle = await page.locator(ref).first.element_handle(timeout=2000)
+        if handle is not None:
+            frame = await handle.content_frame()
+            if frame is not None:
+                return frame
+    except Exception:
+        pass
+    return page.frames[1] if len(page.frames) > 1 else page.main_frame
+
+
+async def _click_maybe_new_page(
+    state: _PlaywrightContextState,
+    request: BrowserExecutionRequest,
+) -> Any | None:
+    locator = await _locator_for_request(state.page, request)
+    clicked = False
+    try:
+        async with state.context.expect_page(timeout=1500) as popup_info:
+            await locator.click(timeout=5000)
+            clicked = True
+        popup = await popup_info.value
+        _attach_observers(popup, state.console_events, state.network_events)
+        await popup.wait_for_load_state("domcontentloaded", timeout=5000)
+        state.page = popup
+        return popup
+    except Exception:
+        if not clicked:
+            await locator.click(timeout=5000)
+        return None
+
+
+async def _handle_dialog_action(page: Any, request: BrowserExecutionRequest) -> None:
+    dialog_info: dict[str, Any] = {}
+
+    async def _handler(dialog: Any) -> None:
+        dialog_info.update({"type": dialog.type, "message": str(redact(dialog.message))})
+        action = (request.value or "accept").strip().lower()
+        if action == "dismiss":
+            await dialog.dismiss()
+        else:
+            await dialog.accept(prompt_text=request.display_name or "")
+
+    page.once("dialog", _handler)
+    if request.selector or request.target_ref:
+        locator = await _locator_for_request(page, request)
+        await locator.click(timeout=5000)
+    await page.wait_for_timeout(250)
+
+
+async def _tabs_action(
+    state: _PlaywrightContextState,
+    request: BrowserExecutionRequest,
+) -> Any | None:
+    if request.selector or request.target_ref:
+        return await _click_maybe_new_page(state, request)
+    tab_ref = (request.tab_ref or "").strip()
+    if tab_ref:
+        for page in state.context.pages:
+            if tab_ref in page.url or tab_ref == str(state.context.pages.index(page)):
+                state.page = page
+                return page
+    return None
+
+
+async def _frame_action(page: Any, request: BrowserExecutionRequest) -> None:
+    frame = await _resolve_frame(page, request.frame_ref)
+    target_request = BrowserExecutionRequest(
+        **{
+            **request.__dict__,
+            "selector": request.target_ref or request.selector,
+            "target_ref": None,
+        }
+    )
+    locator = await _locator_for_request(frame, target_request)
+    if request.value is not None:
+        await locator.fill(request.value)
+    else:
+        await locator.click(timeout=5000)
+
+
+async def _enhanced_page_snapshot(page: Any) -> str:
+    base = await page.content()
+    frame_chunks: list[str] = []
+    for frame in page.frames:
+        if frame == page.main_frame:
+            continue
+        try:
+            frame_chunks.append(await frame.content())
+        except Exception:
+            continue
+    shadow_chunk = await _shadow_controls_snapshot(page)
+    extras = "\n".join(
+        item
+        for item in [
+            "<section data-browser-context='frames'>" + "\n".join(frame_chunks) + "</section>"
+            if frame_chunks
+            else "",
+            "<section data-browser-context='shadow-dom'>" + shadow_chunk + "</section>"
+            if shadow_chunk
+            else "",
+        ]
+        if item
+    )
+    return f"{base}\n{extras}" if extras else base
+
+
+async def _shadow_controls_snapshot(page: Any) -> str:
+    try:
+        return await page.evaluate(
+            """() => {
+              const esc = (value) => String(value || '').replace(/[&<>"']/g, ch => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+              }[ch]));
+              const selectorFor = (el) => {
+                if (el.id) return `#${CSS.escape(el.id)}`;
+                const name = el.getAttribute('name');
+                if (name) return `[name="${CSS.escape(name)}"]`;
+                return el.tagName.toLowerCase();
+              };
+              const chunks = [];
+              for (const host of document.querySelectorAll('*')) {
+                if (!host.shadowRoot) continue;
+                const controlSelector = [
+                  'input',
+                  'textarea',
+                  'select',
+                  '[contenteditable="true"]'
+                ].join(',');
+                for (const el of host.shadowRoot.querySelectorAll(controlSelector)) {
+                  const tag = el.tagName.toLowerCase();
+                  const attrs = [];
+                  const attrNames = [
+                    'id',
+                    'name',
+                    'type',
+                    'placeholder',
+                    'aria-label',
+                    'data-field',
+                    'data-label'
+                  ];
+                  for (const name of attrNames) {
+                    const value = el.getAttribute(name);
+                    if (value) attrs.push(`${name}="${esc(value)}"`);
+                  }
+                  attrs.push(`data-browser-selector="${esc(selectorFor(el))}"`);
+                  if (tag === 'textarea') chunks.push(`<textarea ${attrs.join(' ')}></textarea>`);
+                  else if (tag === 'select') chunks.push(`<select ${attrs.join(' ')}></select>`);
+                  else chunks.push(`<input ${attrs.join(' ')} />`);
+                }
+              }
+              return chunks.join('\\n');
+            }"""
+        )
+    except Exception:
+        return ""
+
+
+def _attach_observers(
+    page: Any,
+    console_events: list[dict[str, Any]],
+    network_events: list[dict[str, Any]],
+) -> None:
+    page.on(
+        "console",
+        lambda msg: console_events.append(
+            {"type": msg.type, "text": str(redact(msg.text))[:300]}
+        ),
+    )
+    page.on(
+        "pageerror",
+        lambda exc: console_events.append(
+            {"type": "pageerror", "text": str(redact(str(exc)))[:300]}
+        ),
+    )
+    page.on(
+        "request",
+        lambda req: network_events.append({"event": "request", "url": str(redact(req.url))[:300]}),
+    )
+    page.on(
+        "requestfailed",
+        lambda req: network_events.append(
+            {"event": "requestfailed", "url": str(redact(req.url))[:300]}
+        ),
+    )
+    page.on(
+        "response",
+        lambda resp: network_events.append(
+            {"event": "response", "status": resp.status, "url": str(redact(resp.url))[:300]}
+        ),
+    )
+
+
+def _console_summary(state: _PlaywrightContextState) -> dict[str, Any]:
+    recent = state.console_events[-20:]
+    return {
+        "error_count": sum(1 for item in state.console_events if item.get("type") == "error"),
+        "warning_count": sum(1 for item in state.console_events if item.get("type") == "warning"),
+        "events": redact(recent),
+    }
+
+
+def _network_summary(state: _PlaywrightContextState) -> dict[str, Any]:
+    events = state.network_events[-50:]
+    return {
+        "request_count": sum(1 for item in state.network_events if item.get("event") == "request"),
+        "failed_count": sum(
+            1 for item in state.network_events if item.get("event") == "requestfailed"
+        ),
+        "events": redact(events[-10:]),
+    }
+
+
+def _frame_summary(page: Any) -> dict[str, Any]:
+    return {
+        "frame_count": len(page.frames),
+        "has_child_frames": len(page.frames) > 1,
+        "frames": [
+            {"name": str(redact(frame.name or ""))[:80], "url": str(redact(frame.url))[:200]}
+            for frame in page.frames[:8]
+        ],
+    }
+
+
+def _tab_summary(state: _PlaywrightContextState) -> dict[str, Any]:
+    pages = state.context.pages
+    return {
+        "tab_count": len(pages),
+        "current_url": str(redact(state.page.url)) if state.page else None,
+        "tabs": [{"url": str(redact(page.url))[:200]} for page in pages[:8]],
+    }
 
 
 def _browser_launch_options() -> dict[str, Any]:

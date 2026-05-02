@@ -140,6 +140,9 @@ class NotificationGatewayService:
     def set_task_engine(self, task_engine: Any) -> None:
         self._task_engine = task_engine
 
+    def register_provider(self, provider: str, runtime: ChannelProvider) -> None:
+        self._providers[provider] = runtime
+
     async def create_channel(
         self,
         request: NotificationChannelCreateRequest,
@@ -148,41 +151,49 @@ class NotificationGatewayService:
     ) -> NotificationChannel:
         _reject_inline_secret_config(request.provider_config)
         now = utc_now_iso()
-        asset = await self._assets.create_asset(
-            AssetCreateRequest(
-                asset_type=AssetCategory.ACCOUNT,
-                display_name=f"消息渠道：{request.display_name}",
-                provider=request.provider,
-                sensitivity=request.sensitivity,
-                config={
-                    "platform": "message_channel",
-                    "username": request.display_name,
-                    "auth_type": "notification_gateway",
-                    "provider": request.provider,
-                },
-                secret_value=request.secret_value,
-                owner_scope_type="member",
-                owner_scope_id=request.created_by_member_id,
-                visibility="private",
-                risk_level=RiskLevel.R2,
-                summary_text=f"{request.display_name} message channel asset",
-                capabilities=["message_channel", "notification.outbound", "notification.inbound"],
-                policy={"notification_gateway": True},
-                metadata={"provider": request.provider, "channel_type": request.channel_type},
-            ),
-            trace_id=trace_id,
-        )
-        await self._grant_channel_actions(
-            asset.asset_id,
-            request.created_by_member_id,
-            trace_id=trace_id,
-        )
+        if request.asset_id and not request.create_asset:
+            asset_id = request.asset_id
+        else:
+            asset = await self._assets.create_asset(
+                AssetCreateRequest(
+                    asset_type=AssetCategory.ACCOUNT,
+                    display_name=f"消息渠道：{request.display_name}",
+                    provider=request.provider,
+                    sensitivity=request.sensitivity,
+                    config={
+                        "platform": "message_channel",
+                        "username": request.display_name,
+                        "auth_type": "notification_gateway",
+                        "provider": request.provider,
+                    },
+                    secret_value=request.secret_value,
+                    owner_scope_type="member",
+                    owner_scope_id=request.created_by_member_id,
+                    visibility="private",
+                    risk_level=RiskLevel.R2,
+                    summary_text=f"{request.display_name} message channel asset",
+                    capabilities=[
+                        "message_channel",
+                        "notification.outbound",
+                        "notification.inbound",
+                    ],
+                    policy={"notification_gateway": True},
+                    metadata={"provider": request.provider, "channel_type": request.channel_type},
+                ),
+                trace_id=trace_id,
+            )
+            asset_id = asset.asset_id
+            await self._grant_channel_actions(
+                asset_id,
+                request.created_by_member_id,
+                trace_id=trace_id,
+            )
         channel_id = new_id("nch")
         policy = {**DEFAULT_CHANNEL_POLICY, **request.policy}
         data = {
             "channel_id": channel_id,
             "organization_id": "org_default",
-            "asset_id": asset.asset_id,
+            "asset_id": asset_id,
             "provider": request.provider,
             "display_name": request.display_name,
             "channel_type": request.channel_type,
@@ -190,7 +201,13 @@ class NotificationGatewayService:
             "sensitivity": request.sensitivity,
             "policy": redact(policy),
             "provider_config": redact(request.provider_config),
-            "last_health_status": "healthy" if request.provider == "local_mock" else "disabled",
+            "last_health_status": (
+                "healthy"
+                if request.provider in {"local_mock", "wechat_mock"}
+                else "unknown"
+                if request.provider == "wechat"
+                else "disabled"
+            ),
             "last_error": None,
             "created_by_member_id": request.created_by_member_id,
             "trace_id": trace_id,
@@ -208,7 +225,7 @@ class NotificationGatewayService:
             payload={
                 "channel_id": channel_id,
                 "provider": request.provider,
-                "asset_id": asset.asset_id,
+                "asset_id": asset_id,
             },
             trace_id=trace_id,
         )
@@ -255,6 +272,30 @@ class NotificationGatewayService:
             summary="通知渠道已更新",
             risk_level=RiskLevel.R1,
             payload={"changed_fields": sorted(fields)},
+            trace_id=trace_id,
+        )
+        return await self.get_channel(channel_id)
+
+    async def update_channel_status(
+        self,
+        channel_id: str,
+        status: str,
+        *,
+        trace_id: str | None = None,
+    ) -> NotificationChannel:
+        await self.get_channel(channel_id)
+        await self._repo.update_channel(
+            channel_id,
+            {"status": status, "updated_at": utc_now_iso()},
+        )
+        await self._audit.write_event(
+            actor_type="system",
+            action="notification.channel.status_updated",
+            object_type="notification_channel",
+            object_id=channel_id,
+            summary="通知渠道状态已更新",
+            risk_level=RiskLevel.R2,
+            payload={"status": status},
             trace_id=trace_id,
         )
         return await self.get_channel(channel_id)
@@ -861,7 +902,7 @@ class NotificationGatewayService:
         *,
         trace_id: str | None,
     ) -> None:
-        for action in ("message_send", "message_receive"):
+        for action in ("message_send", "message_receive", "approval.reply"):
             await self._capability.create_grant(
                 CapabilityGrantCreateRequest(
                     subject_type="member",
@@ -961,7 +1002,8 @@ def _content_matches_approval(content: str, approval: dict[str, Any]) -> bool:
 
 def _reject_inline_secret_config(config: dict[str, Any]) -> None:
     forbidden = {"token", "api_key", "password", "cookie", "private_key", "mnemonic", "secret"}
-    if {key.lower() for key in config} & forbidden:
+    allowed_refs = {"provider_state_ref", "secret_ref", "channel_account_ref"}
+    if ({key.lower() for key in config} - allowed_refs) & forbidden:
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
             "通知渠道配置不能包含明文 secret，请使用 secret_value/secret_ref",

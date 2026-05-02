@@ -12,6 +12,9 @@ from core_types import (
     SkillEvalRun,
     SkillMatch,
     SkillRecord,
+    SkillRepositoryEntry,
+    SkillRepositoryRecord,
+    SkillRepositorySyncRun,
 )
 from pydantic import Field
 
@@ -22,6 +25,8 @@ class BundleInstallRequest(ApiModel):
     requested_by_member_id: EntityId = "mem_xiaoyao"
     install_options: dict[str, Any] = Field(default_factory=dict)
     idempotency_key: str | None = None
+    repository_id: EntityId | None = None
+    package_ref: str | None = None
 
 
 class BundleInstallResponse(ApiModel):
@@ -83,3 +88,43 @@ class PluginActionRequest(ApiModel):
 
 class PermissionPreviewResponse(PermissionPreview):
     pass
+
+
+class SkillRepositoryUpsertRequest(ApiModel):
+    display_name: str
+    provider: str = "index_json"
+    index_uri: str | None = None
+    base_uri: str | None = None
+    auth: dict[str, Any] = Field(default_factory=dict)
+    priority: int = 100
+    is_default: bool = False
+    trust_level: str = "restricted"
+    status: str = "enabled"
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class SkillRepositoryPatchRequest(ApiModel):
+    display_name: str | None = None
+    provider: str | None = None
+    index_uri: str | None = None
+    base_uri: str | None = None
+    auth: dict[str, Any] | None = None
+    priority: int | None = None
+    is_default: bool | None = None
+    trust_level: str | None = None
+    status: str | None = None
+    config: dict[str, Any] | None = None
+
+
+class SkillRepositoryListResponse(ApiModel):
+    items: list[SkillRepositoryRecord] = Field(default_factory=list)
+
+
+class SkillRepositoryRefreshResponse(ApiModel):
+    repository: SkillRepositoryRecord
+    sync_run: SkillRepositorySyncRun
+    indexed_count: int
+
+
+class SkillCatalogSearchResponse(ApiModel):
+    items: list[SkillRepositoryEntry] = Field(default_factory=list)

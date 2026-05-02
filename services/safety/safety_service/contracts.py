@@ -185,8 +185,14 @@ def _risk_from_request(request: ActionRequest) -> RiskLevel:
         candidates.append(RiskLevel.R5 if delete_like else RiskLevel.R3)
     if tool_name == "terminal.run" or action in {"terminal.run", "shell", "command"}:
         candidates.append(RiskLevel.R5)
-    if tool_name.startswith("browser.") and any(
-        word in action or word in tool_name for word in ("download", "screenshot")
+    if (
+        tool_name.startswith("browser.")
+        and any(word in action or word in tool_name for word in ("download", "screenshot"))
+        and not (
+            tool_name == "browser.download"
+            and isinstance(request.payload, dict)
+            and request.payload.get("workflow_low_risk_download")
+        )
     ):
         candidates.append(RiskLevel.R3)
     if object_type in {"wallet", "payment", "hardware"}:

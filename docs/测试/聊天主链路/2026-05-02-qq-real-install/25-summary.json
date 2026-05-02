@@ -1,0 +1,24 @@
+{
+  "run_id": "qq-real-install-20260502-0003",
+  "plan_id": "hip_5567e604dab34fd999ed6bb5250cc0f4",
+  "approval_id": "apr_dd970262a7264154aed472444aed487b",
+  "risk_level": "R6",
+  "source_type": "official_manifest_installer_fallback",
+  "package_manager": "winget_manifest",
+  "package_id": "Tencent.QQ.NT",
+  "installer_url": "https://dldir1v6.qq.com/qqfile/qq/QQNT/Windows/QQ_9.9.29_260401_x64_01.exe",
+  "step_types": [
+    "official_manifest_installer"
+  ],
+  "status": "installed",
+  "exit_code": 0,
+  "failure_reason": null,
+  "version_detected": null,
+  "install_path_summary": "installed_by_package_manager",
+  "log_artifact_id": "art_2f1a2179a13046a49084a4f042ebaf6a",
+  "qq_command": null,
+  "uninstall_entries": [
+    "QQ"
+  ],
+  "qq_processes": []
+}

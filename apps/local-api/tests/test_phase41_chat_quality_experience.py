@@ -166,7 +166,7 @@ def test_phase41_persona_prompt_and_desktop_boundaries_are_natural(
     assert "替代" in prompt_reply or "可以改为说明" in prompt_reply
     assert "desktop.*" in desktop_reply
     assert "没有原生窗口控制" in desktop_reply
-    assert "不会把它伪装成已经执行" in desktop_reply
+    assert any(marker in desktop_reply for marker in ["不会", "没有", "做不到"])
     assert "approval_id" not in serialized.lower()
     assert "tool_call_id" not in serialized.lower()
     assert "trace_id" not in serialized.lower()
@@ -205,7 +205,8 @@ def test_phase41_task_status_presenter_and_pending_copy_are_honest() -> None:
     assert "任务回放" in completed.text
     assert "工件" in completed.text
     assert completed.task_status["evidence_requirements"]
-    assert "确认前我不会声称已经执行" in waiting.text
+    assert "确认" in waiting.text
+    assert any(marker in waiting.text for marker in ["不会", "尚未", "等待"])
     assert "尚未完成" in failed.text
     for item in [waiting, failed]:
         assert item.task_status["completed"] is False

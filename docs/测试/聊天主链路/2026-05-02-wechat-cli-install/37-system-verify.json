@@ -1,0 +1,29 @@
+{
+  "command": null,
+  "executable_candidates": [
+    {
+      "Path": "C:\\Program Files\\Tencent\\Weixin\\Weixin.exe",
+      "Exists": true
+    },
+    {
+      "Path": "C:\\Program Files\\Tencent\\WeChat\\WeChat.exe",
+      "Exists": false
+    },
+    {
+      "Path": "C:\\Program Files (x86)\\Tencent\\Weixin\\Weixin.exe",
+      "Exists": false
+    },
+    {
+      "Path": "C:\\Program Files (x86)\\Tencent\\WeChat\\WeChat.exe",
+      "Exists": false
+    }
+  ],
+  "uninstall_entries": {
+    "DisplayName": "微信",
+    "DisplayVersion": "4.1.9.30",
+    "Publisher": "腾讯科技(深圳)有限公司",
+    "InstallLocation": "\"C:\\Program Files\\Tencent\\Weixin\"",
+    "DisplayIcon": "\"C:\\Program Files\\Tencent\\Weixin\\Weixin.exe\"",
+    "UninstallString": "\"C:\\Program Files\\Tencent\\Weixin\\Uninstall.exe\""
+  }
+}

@@ -88,6 +88,79 @@ class CycberApiClient:
     async def trace(self, trace_id: str) -> dict[str, Any]:
         return await self.get_json(f"/api/traces/{trace_id}")
 
+    async def skill_repositories(self) -> dict[str, Any]:
+        return await self.get_json("/api/skills/repositories")
+
+    async def refresh_skill_repository(self, repository_id: str) -> dict[str, Any]:
+        return await self.post_json(f"/api/skills/repositories/{repository_id}/refresh", {})
+
+    async def upsert_skill_repository(
+        self,
+        repository_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = await self._client.put(f"/api/skills/repositories/{repository_id}", json=payload)
+        return self._json_or_error(response)
+
+    async def disable_skill_repository(self, repository_id: str) -> dict[str, Any]:
+        response = await self._client.delete(f"/api/skills/repositories/{repository_id}")
+        return self._json_or_error(response)
+
+    async def search_skills(
+        self,
+        query: str,
+        *,
+        repository_id: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"q": query, "limit": limit}
+        if repository_id:
+            params["repository_id"] = repository_id
+        response = await self._client.get("/api/skills/catalog/search", params=params)
+        return self._json_or_error(response)
+
+    async def preview_skill_install(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.post_json("/api/skills/preview-install", payload)
+
+    async def install_skill(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.post_json("/api/skills/install", payload)
+
+    async def enable_plugin(
+        self,
+        bundle_id: str,
+        actor_member_id: str = "mem_xiaoyao",
+    ) -> dict[str, Any]:
+        return await self.post_json(
+            f"/api/plugins/{bundle_id}/enable",
+            {"actor_member_id": actor_member_id},
+        )
+
+    async def grant_skill(
+        self,
+        skill_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self.post_json(f"/api/skills/{skill_id}/grants", payload)
+
+    async def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.post_json("/api/tasks", payload)
+
+    async def start_task(self, task_id: str) -> dict[str, Any]:
+        return await self.post_json(f"/api/tasks/{task_id}/start", {})
+
+    async def task_artifacts(self, task_id: str) -> dict[str, Any]:
+        return await self.get_json(f"/api/tasks/{task_id}/artifacts")
+
+    async def download_artifact(self, artifact_id: str) -> tuple[bytes, dict[str, str]]:
+        response = await self._client.get(f"/api/artifacts/{artifact_id}/download")
+        if response.status_code >= 400:
+            try:
+                payload: Any = response.json()
+            except json.JSONDecodeError:
+                payload = {"text": response.text}
+            raise ApiError(response.status_code, payload)
+        return response.content, dict(response.headers)
+
     async def stream_turn(self, turn_id: str) -> AsyncIterator[dict[str, Any]]:
         decoder = SSEDecoder()
         async with self._client.stream("GET", f"/api/chat/stream/{turn_id}") as response:

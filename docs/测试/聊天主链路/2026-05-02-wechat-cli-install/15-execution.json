@@ -1,0 +1,83 @@
+{
+  "host_install_execution_id": "hie_1921060635e34d278efdf7f8bfba0cbd",
+  "organization_id": "org_default",
+  "host_install_plan_id": "hip_0a5362a303c74e8eb160eacb1ec11ff4",
+  "task_id": "tsk_84a22e6510e846d1abbe05072bf7b1e4",
+  "status": "failed",
+  "exit_code": 404,
+  "log_artifact_id": "art_69f8dc9d249a4529a28511a3b856edef",
+  "version_detected": null,
+  "install_path_summary": "not_installed",
+  "failure_reason": "host install failed",
+  "trace_id": "trc_de462ed20030489bb55fc4279de5e7dc",
+  "created_at": "2026-05-02T00:38:45.913913Z",
+  "updated_at": "2026-05-02T00:38:45.913913Z",
+  "plan": {
+    "host_install_plan_id": "hip_0a5362a303c74e8eb160eacb1ec11ff4",
+    "organization_id": "org_default",
+    "task_id": "tsk_84a22e6510e846d1abbe05072bf7b1e4",
+    "requested_software": "微信",
+    "install_source": {
+      "match_confidence": 0.99,
+      "match_reason": "choco_exact_search",
+      "package_id": "wechat",
+      "publisher": "Chocolatey community package",
+      "source_type": "choco",
+      "trust": "known_package_manager_dynamic",
+      "version": "3.9.8.15"
+    },
+    "command_preview": {
+      "action": "install",
+      "args": [
+        "install",
+        "wechat",
+        "-y",
+        "--no-progress",
+        "--limit-output"
+      ],
+      "cwd": "host_default",
+      "env_policy": "minimal",
+      "executable": "choco",
+      "steps": [
+        {
+          "action": "install",
+          "args": [
+            "install",
+            "wechat",
+            "-y",
+            "--no-progress",
+            "--limit-output"
+          ],
+          "cwd": "host_default",
+          "env_policy": "minimal",
+          "executable": "choco",
+          "package_manager": "choco",
+          "step_key": "choco_install_wechat",
+          "step_type": "package_manager_install",
+          "target_package_id": "wechat",
+          "timeout_seconds": 1800
+        }
+      ]
+    },
+    "impact_summary": {
+      "may_require_admin": true,
+      "modifies_global_environment": true,
+      "modifies_path_or_registry": true,
+      "package_resolution": {
+        "match_confidence": 0.99,
+        "match_reason": "choco_exact_search",
+        "source_type": "choco"
+      },
+      "preserve_preexisting_install": true,
+      "real_execution_default": false,
+      "rollback": "choco uninstall wechat -y --no-progress",
+      "writes_system_locations": true
+    },
+    "risk_level": "R5",
+    "status": "failed",
+    "approval_id": "apr_cf5eb06ef8c744efb5f96cf0b3b96a90",
+    "trace_id": "trc_b805c041cf1b449db55459bad2483534",
+    "created_at": "2026-05-02T00:38:21.7273Z",
+    "updated_at": "2026-05-02T00:38:45.913913Z"
+  }
+}

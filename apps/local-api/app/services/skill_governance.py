@@ -43,6 +43,7 @@ from app.schemas.skills import BundleInstallRequest
 from app.services.audit import AuditEventService
 from app.services.capability import CapabilityGraphService, capability_request
 from app.services.checkpoints import rollback_availability_for_tool
+from app.services.skill_source_resolver import SkillSourceResolver
 
 BLOCKED_TOOL_PATTERNS = {
     "terminal.run:*": "wildcard_terminal",
@@ -74,6 +75,7 @@ class SkillGovernanceService:
         trace_service: TraceService,
         audit_service: AuditEventService,
         capability_service: CapabilityGraphService | None = None,
+        source_resolver: SkillSourceResolver | None = None,
     ) -> None:
         self._repo = repo
         self._skills = skill_repo
@@ -81,7 +83,11 @@ class SkillGovernanceService:
         self._trace = trace_service
         self._audit = audit_service
         self._capability = capability_service
+        self._source_resolver = source_resolver
         self._safety = SafetyService()
+
+    def set_source_resolver(self, source_resolver: SkillSourceResolver) -> None:
+        self._source_resolver = source_resolver
 
     async def preview_install(
         self,
@@ -89,7 +95,7 @@ class SkillGovernanceService:
         *,
         trace_id: str | None = None,
     ) -> SkillInstallPreviewResponse:
-        root = self._resolve_bundle_root(request)
+        root = await self._resolve_source_root(request)
         manifest, skill_md, manifest_hash = self._load_manifest(root)
         bundle_id = _safe_id(str(manifest.get("id") or root.name))
         preview = await self.build_permission_preview(
@@ -139,15 +145,17 @@ class SkillGovernanceService:
         skill_md: str,
         manifest_hash: str,
         preview: PermissionPreview,
-        trace_id: str | None,
+        analysis: SkillStaticAnalysisReport | None = None,
+        trace_id: str | None = None,
     ) -> None:
-        analysis = await self.analyze_manifest(
-            bundle_id=str(bundle["bundle_id"]),
-            manifest=manifest,
-            skill_md=skill_md,
-            manifest_hash=manifest_hash,
-            trace_id=trace_id,
-        )
+        if analysis is None:
+            analysis = await self.analyze_manifest(
+                bundle_id=str(bundle["bundle_id"]),
+                manifest=manifest,
+                skill_md=skill_md,
+                manifest_hash=manifest_hash,
+                trace_id=trace_id,
+            )
         await self.persist_preview_source(
             request=request,
             bundle_id=str(bundle["bundle_id"]),
@@ -1124,6 +1132,14 @@ class SkillGovernanceService:
         if not root.exists() or not root.is_dir():
             raise AppError(ErrorCode.PLUGIN_VALIDATE_FAILED, "安装目录不存在", status_code=404)
         return root
+
+    async def _resolve_source_root(
+        self,
+        request: SkillInstallPreviewRequest | BundleInstallRequest,
+    ) -> Path:
+        if self._source_resolver is not None:
+            return (await self._source_resolver.resolve(request)).root
+        return self._resolve_bundle_root(request)
 
     def _load_manifest(self, root: Path) -> tuple[dict[str, Any], str, str]:
         manifest_path = root / "bundle.yaml"

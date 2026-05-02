@@ -16,7 +16,9 @@ from app.api import (
     routes_audit,
     routes_brains,
     routes_browser,
+    routes_browser_workflows,
     routes_capabilities,
+    routes_channels,
     routes_chat,
     routes_checkpoints,
     routes_execution_boundary,
@@ -33,6 +35,7 @@ from app.api import (
     routes_organization,
     routes_persona,
     routes_plugins,
+    routes_project_deployments,
     routes_release,
     routes_response_composer,
     routes_retrieval,
@@ -119,7 +122,13 @@ def create_app() -> FastAPI:
     app.include_router(routes_model_routing.router)
     app.include_router(routes_assets.router)
     app.include_router(routes_browser.router)
+    app.include_router(routes_browser_workflows.router)
+    app.include_router(routes_project_deployments.workspace_router)
+    app.include_router(routes_project_deployments.deployment_router)
+    app.include_router(routes_project_deployments.toolchain_router)
+    app.include_router(routes_project_deployments.host_install_router)
     app.include_router(routes_capabilities.router)
+    app.include_router(routes_channels.router)
     app.include_router(routes_knowledge.router)
     app.include_router(routes_tasks.router)
     app.include_router(routes_checkpoints.router)

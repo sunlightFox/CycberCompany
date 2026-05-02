@@ -1,0 +1,27 @@
+{
+  "run_id": "qq-real-install-20260502-0002",
+  "plan_id": "hip_bf89b5ec68b941279efc07c063f06ece",
+  "approval_id": "apr_5f732febabe74f89907e99f320490645",
+  "risk_level": "R6",
+  "source_type": "package_manager_bootstrap",
+  "package_manager": "winget",
+  "package_id": "Tencent.QQ.NT",
+  "step_types": [
+    "package_manager_bootstrap",
+    "verify_package_manager",
+    "package_manager_install"
+  ],
+  "step_executables": [
+    "pwsh",
+    "pwsh",
+    "pwsh"
+  ],
+  "status": "failed",
+  "exit_code": -1,
+  "failure_reason": "timeout",
+  "version_detected": null,
+  "install_path_summary": "not_installed",
+  "log_artifact_id": "art_d696dae77ed24dcf812b02eca0edbedd",
+  "winget_source": null,
+  "qq_source": null
+}

@@ -12,13 +12,17 @@ dependencies = [
   "cryptography>=43.0.0",
   "fastapi>=0.115.0",
   "httpx>=0.27.0",
+  "openpyxl>=3.1.5",
   "pydantic>=2.8.0",
   "pydantic-settings>=2.4.0",
   "playwright>=1.45.0",
+  "python-docx>=1.1.2",
+  "python-pptx>=1.0.2",
   "pypdf>=5.0.0",
   "PyYAML>=6.0.2",
   "uvicorn[standard]>=0.30.0",
   "chromadb>=0.5.0",
+  "wechat-clawbot-sdk>=0.4.0,<0.5.0",
 ]
 
 [project.optional-dependencies]
@@ -80,6 +84,10 @@ python_version = "3.12"
 warn_unused_configs = true
 ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
+exclude = [
+  '^data([\\/]|$)',
+  '^docs[\\/]测试([\\/]|$)',
+]
 
 [tool.setuptools]
 packages = []

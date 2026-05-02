@@ -33,6 +33,9 @@ def test_phase13_decision_preview_classifies_intent_mode_and_context(
     private = _preview(client, "我的 api_key 是 sk-secret，帮我解释一下", privacy_level="high")
     skill = _preview(client, "用技能帮我写一个草稿")
     mcp = _preview(client, "调用 MCP 做一下")
+    desktop_files = _preview(client, "我桌面有哪些文件")
+    advice_tradeoff = _preview(client, "在测试速度、覆盖率、真实模型成本之间做取舍")
+    forget_preference = _preview(client, "请忘记本批次临时测试回复偏好")
 
     assert casual["intent"]["primary_intent"] == "casual_chat"
     assert casual["mode"]["mode"] == "direct"
@@ -71,6 +74,16 @@ def test_phase13_decision_preview_classifies_intent_mode_and_context(
     assert mcp["intent"]["needs_task"] is False
     assert mcp["mode"]["submode"] == "capability_boundary"
     assert mcp["capability_snapshot"]["mcp_runtime"]["ready_server_count"] == 0
+    assert desktop_files["intent"]["primary_intent"] == "system_filesystem_read"
+    assert desktop_files["intent"]["needs_tool"] is True
+    assert desktop_files["intent"]["needs_task"] is False
+    assert desktop_files["mode"]["mode"] == "direct"
+    assert desktop_files["clarification"]["needs_clarification"] is False
+    assert "filesystem_scope_required" not in desktop_files["intent"]["risk_signals"]
+    assert advice_tradeoff["clarification"]["needs_clarification"] is False
+    assert "目标文件或范围是什么？" not in json.dumps(advice_tradeoff, ensure_ascii=False)
+    assert forget_preference["clarification"]["needs_clarification"] is False
+    assert "目标文件或范围是什么？" not in json.dumps(forget_preference, ensure_ascii=False)
     assert _brain_decision_count(client) == before
 
 

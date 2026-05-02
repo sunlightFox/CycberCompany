@@ -1,0 +1,441 @@
+{
+  "items": [
+    {
+      "event_id": "evt_dd9118d6f04b4fbd9359ff4921edb715",
+      "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+      "sequence": 1,
+      "event_type": "turn.started",
+      "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+      "payload": {
+        "event": "turn.started",
+        "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+        "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+        "timestamp": "2026-05-02T00:48:53.881676Z",
+        "payload": {
+          "status": "running"
+        }
+      },
+      "created_at": "2026-05-02T08:48:53.881676+08:00"
+    },
+    {
+      "event_id": "evt_a8ec9230a45c468eb9f8514c158f485a",
+      "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+      "sequence": 2,
+      "event_type": "context.started",
+      "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+      "payload": {
+        "event": "context.started",
+        "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+        "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+        "timestamp": "2026-05-02T00:48:53.881676Z",
+        "payload": {}
+      },
+      "created_at": "2026-05-02T08:48:53.881676+08:00"
+    },
+    {
+      "event_id": "evt_3472336ebf004c788beb5f8263992baf",
+      "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+      "sequence": 3,
+      "event_type": "context.ready",
+      "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+      "payload": {
+        "event": "context.ready",
+        "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+        "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+        "timestamp": "2026-05-02T00:48:53.975759Z",
+        "payload": {
+          "context_packet_id": "ctx_c1812e20aadc430190d0ff501ddad30e",
+          "recent_messages": 2,
+          "memory_blocks": 0,
+          "decision_id": "bd_53af97f583ea4a34ba7852ad8c4d52cd",
+          "confidence": 0.58,
+          "context_decision": {
+            "include_recent_messages": true,
+            "include_conversation_state": false,
+            "include_session_summary": false,
+            "include_memory": false,
+            "memory_query": {
+              "enabled": false,
+              "layers": [
+                "semantic",
+                "episodic",
+                "procedural"
+              ],
+              "max_items": 0
+            },
+            "include_persona": true,
+            "include_heart": true,
+            "include_capability_summary": true,
+            "include_asset_handles": false,
+            "include_task_state": false,
+            "include_artifact_summary": false,
+            "untrusted_refs": [],
+            "token_budget_profile": "balanced",
+            "selection_reason": [
+              "current_input",
+              "capability_boundary_summary",
+              "recent_messages"
+            ]
+          },
+          "selection_reason": [
+            "current_input",
+            "capability_boundary_summary",
+            "recent_messages"
+          ],
+          "route_profile": "simple_qa",
+          "conversation_depth": 2,
+          "context_redaction": {
+            "selected_count": 2,
+            "redacted_count": 0,
+            "sensitivity_hits_summary": {
+              "count": 0,
+              "categories": []
+            },
+            "model_safe_fields": [
+              "model_safe_content_text",
+              "recent_summary",
+              "memory_summary"
+            ],
+            "raw_content_text_used_for_model": false
+          }
+        }
+      },
+      "created_at": "2026-05-02T08:48:53.975759+08:00"
+    },
+    {
+      "event_id": "evt_7fb25916f50d44b0b00d4a86d562c816",
+      "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+      "sequence": 4,
+      "event_type": "intent.detected",
+      "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+      "payload": {
+        "event": "intent.detected",
+        "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+        "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+        "timestamp": "2026-05-02T00:48:54.10063Z",
+        "payload": {
+          "intent": "host_software_install_request",
+          "reason_codes": [
+            "phase52_host_install_text_request"
+          ]
+        }
+      },
+      "created_at": "2026-05-02T08:48:54.10063+08:00"
+    },
+    {
+      "event_id": "evt_0b1ddde277c440e5b4d541541205bd88",
+      "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+      "sequence": 5,
+      "event_type": "response.delta",
+      "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+      "payload": {
+        "event": "response.delta",
+        "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+        "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+        "timestamp": "2026-05-02T00:48:54.10063Z",
+        "payload": {
+          "text": "本机软件安装计划已待确认。它会修改系统应用或环境，必须确认后才会执行；当前系统不支持自动补齐目标包管理器时，计划会改用包管理器官方 manifest 中记录的官网安装器并校验哈希后安装；当前只准备可信包管理器来源、命令预览、影响范围和回滚建议，没有安装任何东西。",
+          "response_filter": {
+            "component": "ChatVisibleOutputFilter",
+            "input_chars": 131,
+            "output_chars": 131,
+            "changed_count": 0,
+            "blocked_terms": [],
+            "stream_safe": true,
+            "final_from_filtered_delta": true
+          }
+        }
+      },
+      "created_at": "2026-05-02T08:48:54.10063+08:00"
+    },
+    {
+      "event_id": "evt_516e915b258941d2aa0ac1df2814f5c7",
+      "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+      "sequence": 6,
+      "event_type": "response.completed",
+      "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+      "payload": {
+        "event": "response.completed",
+        "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+        "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+        "timestamp": "2026-05-02T00:48:54.131974Z",
+        "payload": {
+          "message_id": "msg_4723fa0c9c4c47e2a71333b0d93378f1",
+          "finish_reason": "stop",
+          "usage": {},
+          "route": {
+            "brain_id": null,
+            "fallback_used": false
+          },
+          "mode": "workflow",
+          "response_plan": {
+            "title": "安全边界",
+            "style": "safety_boundary",
+            "sections": [
+              {
+                "kind": "summary",
+                "text": "本机软件安装计划已待确认。它会修改系统应用或环境，必须确认后才会执行；当前系统不支持自动补齐目标包管理器时，计划会改用包管理器官方 manifest 中记录的官网安装器并校验哈希后安装；当前只准备可信包管理器来源、命令预览、影响范围和回滚建议，没有安装任何东西。"
+              }
+            ],
+            "tables": [],
+            "code_blocks": [],
+            "action_buttons": [
+              {
+                "action": "task.create_plan",
+                "label": "只生成计划",
+                "style": "primary",
+                "requires_confirmation": false
+              },
+              {
+                "action": "capability.configure",
+                "label": "检查能力配置",
+                "style": "secondary",
+                "requires_confirmation": false
+              }
+            ],
+            "tone": {},
+            "summary": "本机软件安装计划已待确认。它会修改系统应用或环境，必须确认后才会执行；当前系统不支持自动补齐目标包管理器时，计划会改用包管理器官方 manifest 中记录的官网安装器并校验哈希后安装；当前只准备可信包管理器来源、命令预览、影响范围和回滚建议，没有安装任何东西。",
+            "approval_prompt": null,
+            "task_status": {
+              "task_id": "tsk_643c3b9f61ed4ac7a14a4c93bcb5e3de",
+              "status": "waiting_approval",
+              "mode": "workflow"
+            },
+            "artifact_refs": [],
+            "safety_notice": "本机软件安装必须强确认；不会绕过 UAC、安全提示或未知来源校验。",
+            "memory_notice": null,
+            "tool_notice": null,
+            "follow_up_options": [],
+            "tone_metadata": {
+              "scenario": "safety_deny",
+              "deescalation_required": true,
+              "risk_tone": "clear_and_calm",
+              "safety_overrides_tone": true,
+              "anthropomorphic_level": 0.1,
+              "tone_resolution_id": "tone_bbe3b5ccd10643a09ff29b8e762d8f1d",
+              "tone_mode": "safety_boundary",
+              "reason_codes": [
+                "high_risk_low_anthropomorphic",
+                "safety_boundary_overrides_persona",
+                "scenario_safety_deny"
+              ]
+            },
+            "redaction_summary": {
+              "applied": false,
+              "categories": []
+            },
+            "trace_refs": [],
+            "plain_text": "本机软件安装计划已待确认。它会修改系统应用或环境，必须确认后才会执行；当前系统不支持自动补齐目标包管理器时，计划会改用包管理器官方 manifest 中记录的官网安装器并校验哈希后安装；当前只准备可信包管理器来源、命令预览、影响范围和回滚建议，没有安装任何东西。",
+            "structured_payload": {
+              "scenario": "safety_deny",
+              "task_status": {
+                "task_id": "tsk_643c3b9f61ed4ac7a14a4c93bcb5e3de",
+                "status": "waiting_approval",
+                "mode": "workflow"
+              },
+              "approval_prompt": {},
+              "artifact_refs": [],
+              "safety_notice": "本机软件安装必须强确认；不会绕过 UAC、安全提示或未知来源校验。",
+              "memory_notice": null,
+              "tool_notice": null,
+              "host_install_plan": {
+                "host_install_plan_id": "hip_b8e9ba1025134d99aee6b4685d45bcad",
+                "organization_id": "org_default",
+                "task_id": "tsk_643c3b9f61ed4ac7a14a4c93bcb5e3de",
+                "requested_software": "微信",
+                "install_source": {
+                  "installer_sha256": "81D05E79EAD9D310BDF00B64E94809FE808ADBE21D95588BF3A52395C29C52BD",
+                  "installer_url": "https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.9.exe",
+                  "match_confidence": 0.99,
+                  "match_reason": "winget_bootstrap_unsupported_on_current_host",
+                  "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+                  "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/t/Tencent/WeChat/Universal/4.1.9.30/Tencent.WeChat.Universal.installer.yaml",
+                  "package_id": "Tencent.WeChat.Universal",
+                  "package_manager": "winget_manifest",
+                  "publisher": "Tencent",
+                  "source_type": "official_manifest_installer_fallback",
+                  "target_source_type": "official_installer_from_winget_manifest",
+                  "trust": "official_manifest_with_sha256",
+                  "version": "4.1.9.30"
+                },
+                "command_preview": {
+                  "action": "install",
+                  "args": [
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'Tencent.WeChat.Universal.exe'; Invoke-WebRequest -Uri 'https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.9.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '81D05E79EAD9D310BDF00B64E94809FE808ADBE21D95588BF3A52395C29C52BD') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru; exit $process.ExitCode"
+                  ],
+                  "cwd": "host_default",
+                  "env_policy": "minimal",
+                  "executable": "pwsh",
+                  "steps": [
+                    {
+                      "action": "install",
+                      "args": [
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-Command",
+                        "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'Tencent.WeChat.Universal.exe'; Invoke-WebRequest -Uri 'https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.9.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '81D05E79EAD9D310BDF00B64E94809FE808ADBE21D95588BF3A52395C29C52BD') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru; exit $process.ExitCode"
+                      ],
+                      "cwd": "host_default",
+                      "env_policy": "minimal",
+                      "executable": "pwsh",
+                      "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/t/Tencent/WeChat/Universal/4.1.9.30/Tencent.WeChat.Universal.installer.yaml",
+                      "official_source": "https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.9.exe",
+                      "package_manager": "winget_manifest",
+                      "sha256": "81D05E79EAD9D310BDF00B64E94809FE808ADBE21D95588BF3A52395C29C52BD",
+                      "step_key": "official_manifest_install_tencent_wechat_universal",
+                      "step_type": "official_manifest_installer",
+                      "target_package_id": "Tencent.WeChat.Universal",
+                      "timeout_seconds": 1800
+                    }
+                  ]
+                },
+                "impact_summary": {
+                  "bootstrap_required": false,
+                  "bootstrap_skipped_reason": "winget_not_supported_on_current_windows_server",
+                  "checksum_verification": "sha256",
+                  "may_require_admin": true,
+                  "modifies_global_environment": true,
+                  "modifies_path_or_registry": true,
+                  "package_resolution": {
+                    "match_confidence": 0.99,
+                    "match_reason": "winget_bootstrap_unsupported_on_current_host",
+                    "source_type": "official_winget_manifest",
+                    "target_package_id": "Tencent.WeChat.Universal"
+                  },
+                  "preserve_preexisting_install": true,
+                  "real_execution_default": false,
+                  "risk_level": "R6",
+                  "rollback": "winget uninstall --id Tencent.WeChat.Universal 或通过系统应用卸载 微信",
+                  "writes_system_locations": true
+                },
+                "risk_level": "R6",
+                "status": "waiting_approval",
+                "approval_id": "apr_770195f4f659486f8d88a4615e8a0706",
+                "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+                "created_at": "2026-05-02T00:48:54.006613Z",
+                "updated_at": "2026-05-02T00:48:54.084961Z"
+              },
+              "approval_binding": {
+                "approval_id": "apr_770195f4f659486f8d88a4615e8a0706",
+                "status": "required"
+              },
+              "finish_reason": "stop",
+              "mode": "workflow",
+              "intent": "host_software_install_request",
+              "response_filter": {
+                "component": "ChatVisibleOutputFilter",
+                "input_chars": 131,
+                "output_chars": 131,
+                "changed_count": 0,
+                "blocked_terms": [],
+                "stream_safe": true,
+                "final_from_filtered_delta": true,
+                "final_guard": {
+                  "component": "ChatVisibleOutputFilter",
+                  "input_chars": 131,
+                  "output_chars": 131,
+                  "changed_count": 0,
+                  "blocked_terms": [],
+                  "stream_safe": true,
+                  "final_from_filtered_delta": true
+                }
+              },
+              "experience": {
+                "conversation_depth": 2,
+                "complexity_score": 0.02,
+                "chat_style": "simple_qa",
+                "route_profile": "simple_qa",
+                "context_selection_reason": [
+                  "current_input",
+                  "recent_messages",
+                  "capability_boundary_summary"
+                ],
+                "recoverable": true,
+                "needs_strong_reasoning": false,
+                "needs_long_output": false,
+                "needs_tool_or_task": false,
+                "chat_route_decision": {
+                  "route_type": "host_software_install",
+                  "confidence": 0.9,
+                  "reason_code": "explicit_host_software_install",
+                  "requires_confirmation": true,
+                  "task_goal": "帮我安装微信",
+                  "safe_user_summary": "帮我安装微信",
+                  "office_request": null,
+                  "metadata": {}
+                }
+              },
+              "tone_policy_resolution_id": "tone_bbe3b5ccd10643a09ff29b8e762d8f1d",
+              "response_quality_evaluation_id": "rq_efcec97d662d496db2a9553f57a2e737"
+            },
+            "tone_mode": "safety_boundary",
+            "quality_markers": {
+              "directness": true,
+              "continuity": true,
+              "boundary_honesty": true,
+              "failure_recoverability": true,
+              "persona_consistency": true,
+              "heart_appropriateness": true,
+              "no_leakage": true
+            },
+            "boundary_notice": "本机软件安装必须强确认；不会绕过 UAC、安全提示或未知来源校验。",
+            "continuity_refs": [
+              {
+                "type": "conversation",
+                "conversation_id": "conv_default_xiaoyao",
+                "reason": "response_plan_continuity"
+              },
+              {
+                "type": "working_state",
+                "reason": "chat_experience_payload"
+              }
+            ],
+            "deescalation_notice": "我会保持克制和清楚，先确认边界再继续。",
+            "user_next_step": "调整为可安全处理的范围"
+          },
+          "response_filter": {
+            "component": "ChatVisibleOutputFilter",
+            "input_chars": 131,
+            "output_chars": 131,
+            "changed_count": 0,
+            "blocked_terms": [],
+            "stream_safe": true,
+            "final_from_filtered_delta": true,
+            "final_guard": {
+              "component": "ChatVisibleOutputFilter",
+              "input_chars": 131,
+              "output_chars": 131,
+              "changed_count": 0,
+              "blocked_terms": [],
+              "stream_safe": true,
+              "final_from_filtered_delta": true
+            }
+          }
+        }
+      },
+      "created_at": "2026-05-02T08:48:54.131974+08:00"
+    },
+    {
+      "event_id": "evt_283a8d1911124decba53bf60b8bc46b6",
+      "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+      "sequence": 7,
+      "event_type": "turn.completed",
+      "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+      "payload": {
+        "event": "turn.completed",
+        "turn_id": "turn_7368f8f7c0bc4a41a52d7172da1658ea",
+        "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+        "timestamp": "2026-05-02T00:48:54.147622Z",
+        "payload": {
+          "status": "completed"
+        }
+      },
+      "created_at": "2026-05-02T08:48:54.147622+08:00"
+    }
+  ]
+}

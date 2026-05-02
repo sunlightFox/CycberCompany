@@ -22,6 +22,8 @@ class NotificationChannelCreateRequest(ApiModel):
     provider_config: dict[str, Any] = Field(default_factory=dict)
     created_by_member_id: EntityId = "mem_xiaoyao"
     secret_value: str | None = None
+    asset_id: EntityId | None = None
+    create_asset: bool = True
 
 
 class NotificationChannelUpdateRequest(ApiModel):

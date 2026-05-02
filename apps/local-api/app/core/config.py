@@ -65,6 +65,27 @@ class WorkerSection(BaseModel):
     timeout_seconds: float = 60.0
 
 
+class ChannelProviderSection(BaseModel):
+    enabled: bool = False
+    test_only: bool = False
+    state_dir: Path | None = None
+    timeout_seconds: float = 10.0
+    min_version: str = "0.4.0"
+    private_chat_only: bool = True
+    group_messages: str = "disabled"
+    allow_mock_fallback: bool = False
+    poll_enabled: bool = False
+    poll_interval_seconds: float = 5.0
+    poll_batch_size: int = 20
+    pairing_required: bool = True
+    allow_unknown_private: bool = False
+    media: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChannelsSection(BaseModel):
+    providers: dict[str, ChannelProviderSection] = Field(default_factory=dict)
+
+
 class AppConfig(BaseModel):
     app: AppSection
     desktop: DesktopSection
@@ -73,6 +94,8 @@ class AppConfig(BaseModel):
     model_routing: dict[str, Any] = Field(default_factory=dict)
     safety: dict[str, Any] = Field(default_factory=dict)
     mcp: dict[str, Any] = Field(default_factory=dict)
+    skills: dict[str, Any] = Field(default_factory=dict)
+    channels: ChannelsSection = Field(default_factory=ChannelsSection)
     workers: WorkerSection = Field(default_factory=WorkerSection)
     paths: RuntimePaths
 
@@ -91,6 +114,8 @@ def load_app_config(root_dir: Path | None = None) -> AppConfig:
     model_routing = _read_yaml(config_dir / "model-routing.yaml")
     safety = _read_yaml(config_dir / "safety.yaml")
     mcp = _read_yaml(config_dir / "mcp.yaml")
+    skills = _read_optional_yaml(config_dir / "skills.yaml")
+    channels_data = _read_optional_yaml(config_dir / "channels.yaml")
 
     storage_raw = dict(storage_data.get("storage", {}))
     if env.data_dir is not None:
@@ -115,6 +140,8 @@ def load_app_config(root_dir: Path | None = None) -> AppConfig:
         model_routing=model_routing,
         safety=safety,
         mcp=mcp,
+        skills=skills,
+        channels=_channels_section(root, channels_data),
         workers=WorkerSection(
             enabled=env.background_workers_enabled,
             interval_seconds=max(0.5, float(env.background_worker_interval_seconds)),
@@ -140,6 +167,9 @@ def ensure_data_dirs(config: AppConfig) -> None:
     (config.storage.data_dir / "restore-workspaces").mkdir(parents=True, exist_ok=True)
     (config.storage.data_dir / "diagnostics").mkdir(parents=True, exist_ok=True)
     (config.storage.data_dir / "release-reports").mkdir(parents=True, exist_ok=True)
+    for provider in config.channels.providers.values():
+        if provider.state_dir is not None:
+            provider.state_dir.mkdir(parents=True, exist_ok=True)
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -152,8 +182,25 @@ def _read_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
+def _read_optional_yaml(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return _read_yaml(path)
+
+
 def _resolve_path(root: Path, value: str | Path) -> Path:
     path = Path(value)
     if path.is_absolute():
         return path
     return (root / path).resolve()
+
+
+def _channels_section(root: Path, data: dict[str, Any]) -> ChannelsSection:
+    raw = dict(data.get("channels", {}))
+    providers = {}
+    for name, provider_raw in dict(raw.get("providers", {})).items():
+        provider_data = dict(provider_raw or {})
+        if provider_data.get("state_dir") is not None:
+            provider_data["state_dir"] = _resolve_path(root, provider_data["state_dir"])
+        providers[str(name)] = ChannelProviderSection(**provider_data)
+    return ChannelsSection(providers=providers)

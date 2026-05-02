@@ -157,6 +157,61 @@ class SkillEvalRun(ApiModel):
     created_at: datetime
 
 
+class SkillRepositoryRecord(ApiModel):
+    repository_id: EntityId
+    organization_id: EntityId
+    display_name: str
+    provider: str
+    index_uri: str | None = None
+    base_uri: str | None = None
+    auth: dict[str, Any] = Field(default_factory=dict)
+    priority: int = 100
+    is_default: bool = False
+    trust_level: str = "restricted"
+    status: str
+    config: dict[str, Any] = Field(default_factory=dict)
+    last_refresh_at: datetime | None = None
+    last_error_code: str | None = None
+    last_error_summary: str | None = None
+    trace_id: EntityId | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class SkillRepositoryEntry(ApiModel):
+    entry_id: EntityId
+    organization_id: EntityId
+    repository_id: EntityId
+    package_ref: str
+    bundle_id: EntityId
+    display_name: str
+    description: str | None = None
+    version: str | None = None
+    author: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    source: dict[str, Any] = Field(default_factory=dict)
+    checksum: str | None = None
+    trust_level: str = "restricted"
+    status: str
+    indexed_at: datetime
+    updated_at: datetime
+
+
+class SkillRepositorySyncRun(ApiModel):
+    sync_run_id: EntityId
+    organization_id: EntityId
+    repository_id: EntityId
+    status: str
+    indexed_count: int = 0
+    error_code: str | None = None
+    error_summary: str | None = None
+    trace_id: EntityId | None = None
+    started_at: datetime
+    completed_at: datetime | None = None
+    created_at: datetime
+
+
 class MCPServerRecord(ApiModel):
     server_id: EntityId
     organization_id: EntityId

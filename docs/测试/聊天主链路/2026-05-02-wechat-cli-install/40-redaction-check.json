@@ -1,0 +1,20 @@
+[
+  {
+    "path": "docs\\测试\\聊天主链路\\2026-05-02-wechat-cli-install\\33-events.json",
+    "has_secret_word": true,
+    "has_password_word": false,
+    "length": 19527
+  },
+  {
+    "path": "docs\\测试\\聊天主链路\\2026-05-02-wechat-cli-install\\36-execution.json",
+    "has_secret_word": false,
+    "has_password_word": false,
+    "length": 5518
+  },
+  {
+    "path": "docs\\测试\\聊天主链路\\2026-05-02-wechat-cli-install\\38-host-install.log",
+    "has_secret_word": [],
+    "has_password_word": [],
+    "length": 0
+  }
+]

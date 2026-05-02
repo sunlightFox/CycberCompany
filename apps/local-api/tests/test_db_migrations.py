@@ -55,6 +55,12 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     assert "028_notification_gateway.sql" in first
     assert "030_external_platform_actions.sql" in first
     assert "031_media_runtime.sql" in first
+    assert "032_external_platform_adapters.sql" in first
+    assert "033_autonomous_browser_workflows.sql" in first
+    assert "034_project_deployment_host_install.sql" in first
+    assert "036_channel_bindings_wechat.sql" in first
+    assert "037_channel_gateway_wechat_full_link.sql" in first
+    assert "038_chat_turn_recovery_attempts.sql" in first
     for phase, contract in PHASE_MIGRATION_REQUIREMENTS.items():
         assert contract["required_migration"] in first, phase
         assert set(contract.get("tables") or ()).issubset(table_names), phase
@@ -76,6 +82,7 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "conversation_summaries",
         "secret_refs",
         "chat_events",
+        "chat_turn_recovery_attempts",
         "memory_items",
         "memory_candidates",
         "memory_relations",
@@ -232,6 +239,33 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "media_derivatives",
         "media_analysis",
         "media_edit_plans",
+        "external_platform_adapters",
+        "external_platform_adapter_versions",
+        "external_platform_adapter_steps",
+        "external_platform_adapter_executions",
+        "external_platform_adapter_drift_events",
+        "browser_workflow_intents",
+        "browser_workflow_plans",
+        "browser_workflow_steps",
+        "browser_workflow_executions",
+        "browser_workflow_events",
+        "browser_workflow_candidates",
+        "project_workspaces",
+        "project_deployments",
+        "toolchain_installs",
+        "host_install_plans",
+        "host_install_executions",
+        "managed_processes",
+        "port_leases",
+        "channel_bind_sessions",
+        "channel_accounts",
+        "channel_peers",
+        "channel_events",
+        "channel_peer_sessions",
+        "channel_pairing_requests",
+        "channel_attachments",
+        "channel_delivery_bindings",
+        "channel_event_offsets",
     }.issubset(table_names)
 
     db = Database(tmp_path / "app.db")
@@ -280,6 +314,10 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         chat_turn_columns = {
             row["name"]
             for row in await db.fetch_all("PRAGMA table_info(chat_turns)")
+        }
+        chat_turn_recovery_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(chat_turn_recovery_attempts)")
         }
         local_vector_columns = {
             row["name"]
@@ -533,6 +571,65 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         media_edit_plan_columns = {
             row["name"] for row in await db.fetch_all("PRAGMA table_info(media_edit_plans)")
         }
+        external_adapter_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(external_platform_adapters)")
+        }
+        external_adapter_version_columns = {
+            row["name"]
+            for row in await db.fetch_all(
+                "PRAGMA table_info(external_platform_adapter_versions)"
+            )
+        }
+        external_adapter_step_columns = {
+            row["name"]
+            for row in await db.fetch_all(
+                "PRAGMA table_info(external_platform_adapter_steps)"
+            )
+        }
+        external_adapter_execution_columns = {
+            row["name"]
+            for row in await db.fetch_all(
+                "PRAGMA table_info(external_platform_adapter_executions)"
+            )
+        }
+        external_adapter_drift_columns = {
+            row["name"]
+            for row in await db.fetch_all(
+                "PRAGMA table_info(external_platform_adapter_drift_events)"
+            )
+        }
+        channel_bind_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(channel_bind_sessions)")
+        }
+        channel_account_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(channel_accounts)")
+        }
+        channel_peer_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(channel_peers)")
+        }
+        channel_event_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(channel_events)")
+        }
+        channel_peer_session_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(channel_peer_sessions)")
+        }
+        channel_pairing_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(channel_pairing_requests)")
+        }
+        channel_attachment_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(channel_attachments)")
+        }
+        channel_attachment_indexes = {
+            row["name"] for row in await db.fetch_all("PRAGMA index_list(channel_attachments)")
+        }
+        channel_delivery_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(channel_delivery_bindings)")
+        }
+        channel_offset_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(channel_event_offsets)")
+        }
     finally:
         await db.close()
 
@@ -588,6 +685,17 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "resolved_asset_refs_json",
     }.issubset(skill_run_columns)
     assert {"experience_json", "brain_decision_id"}.issubset(chat_turn_columns)
+    assert {
+        "recovery_attempt_id",
+        "turn_id",
+        "task_id",
+        "attempt_index",
+        "failure_type",
+        "root_cause",
+        "recovery_action",
+        "status",
+        "diagnostic_payload_json",
+    }.issubset(chat_turn_recovery_columns)
     assert {
         "embedding_id",
         "collection_name",
@@ -1045,6 +1153,104 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     assert {"edit_plan_id", "media_id", "operations_json", "requires_approval"}.issubset(
         media_edit_plan_columns
     )
+    assert {
+        "adapter_id",
+        "platform_key",
+        "action_type",
+        "adapter_type",
+        "manifest_json",
+        "allowed_domains_json",
+    }.issubset(external_adapter_columns)
+    assert {"adapter_version_id", "adapter_id", "manifest_checksum"}.issubset(
+        external_adapter_version_columns
+    )
+    assert {
+        "step_id",
+        "plan_id",
+        "adapter_id",
+        "tool_name",
+        "requires_approval",
+        "input_redacted_json",
+        "evidence_json",
+    }.issubset(external_adapter_step_columns)
+    assert {"adapter_execution_id", "plan_id", "status", "evidence_json"}.issubset(
+        external_adapter_execution_columns
+    )
+    assert {"drift_event_id", "plan_id", "adapter_id", "drift_type"}.issubset(
+        external_adapter_drift_columns
+    )
+    assert {
+        "bind_session_id",
+        "provider",
+        "qr_payload_ref",
+        "provider_account_ref_redacted",
+        "provider_state_ref",
+        "policy_snapshot_json",
+        "provider_status_json",
+    }.issubset(channel_bind_columns)
+    assert {
+        "channel_account_id",
+        "asset_id",
+        "channel_id",
+        "account_ref_redacted",
+        "provider_state_ref",
+        "capabilities_json",
+    }.issubset(channel_account_columns)
+    assert {
+        "channel_peer_id",
+        "channel_account_id",
+        "peer_ref_redacted",
+        "pairing_status",
+        "allow_inbound",
+    }.issubset(channel_peer_columns)
+    assert {
+        "channel_event_id",
+        "provider",
+        "provider_event_id_redacted",
+        "payload_redacted_json",
+        "normalized_event_json",
+        "status",
+    }.issubset(channel_event_columns)
+    assert {
+        "channel_peer_session_id",
+        "channel_account_id",
+        "peer_ref_redacted",
+        "peer_state_ref",
+        "conversation_id",
+        "session_id",
+        "pairing_status",
+    }.issubset(channel_peer_session_columns)
+    assert {
+        "pairing_request_id",
+        "channel_account_id",
+        "peer_ref_redacted",
+        "peer_state_ref",
+        "status",
+    }.issubset(channel_pairing_columns)
+    assert {
+        "channel_attachment_id",
+        "channel_event_id",
+        "provider_attachment_ref_redacted",
+        "blob_ref",
+        "media_id",
+        "status",
+    }.issubset(channel_attachment_columns)
+    assert "idx_channel_attachments_event_provider_ref" in channel_attachment_indexes
+    assert {
+        "channel_delivery_binding_id",
+        "channel_peer_session_id",
+        "turn_id",
+        "notification_id",
+        "provider_message_id_redacted",
+        "status",
+    }.issubset(channel_delivery_columns)
+    assert {
+        "offset_id",
+        "channel_account_id",
+        "provider_event_id_redacted",
+        "channel_event_id",
+        "status",
+    }.issubset(channel_offset_columns)
 
 
 @pytest.mark.asyncio

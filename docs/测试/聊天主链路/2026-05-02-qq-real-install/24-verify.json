@@ -1,0 +1,264 @@
+{
+  "winget": null,
+  "qq_command": null,
+  "qq_process": [],
+  "uninstall_entries": {
+    "DisplayName": "QQ",
+    "DisplayVersion": "9.9.29.47354",
+    "Publisher": "腾讯科技(深圳)有限公司",
+    "InstallLocation": null,
+    "UninstallString": "\"C:\\Program Files\\Tencent\\QQNT\\Uninstall.exe\""
+  },
+  "tencent_paths": [
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT",
+      "Length": null,
+      "LastWriteTime": "2026-05-02T00:32:26.5741294+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\qq_shell_extension_32.dll",
+      "Length": 156208,
+      "LastWriteTime": "2026-05-02T00:31:52.8583361+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\qq_shell_extension_64.dll",
+      "Length": 385576,
+      "LastWriteTime": "2026-05-02T00:31:52.8583361+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\QQ.exe",
+      "Length": 1653800,
+      "LastWriteTime": "2026-05-02T00:31:52.8392212+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\QQEX.exe",
+      "Length": 1903144,
+      "LastWriteTime": "2026-05-02T00:31:52.8561494+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\extension\\qq_explorer_command.dll",
+      "Length": 385576,
+      "LastWriteTime": "2026-05-02T00:31:52.7715523+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\extension\\QQExtension.appx",
+      "Length": 12129,
+      "LastWriteTime": "2026-05-02T00:31:52.7715523+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\chrome_100_qq.pak",
+      "Length": 167282,
+      "LastWriteTime": "2026-05-02T00:31:52.9679898+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\chrome_200_qq.pak",
+      "Length": 258304,
+      "LastWriteTime": "2026-05-02T00:31:52.9836836+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\QQNT.dll",
+      "Length": 206428208,
+      "LastWriteTime": "2026-05-02T00:31:59.1748435+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\QQScreenShot",
+      "Length": null,
+      "LastWriteTime": "2026-05-02T00:32:10.2850698+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\qq-proton.node",
+      "Length": 375344,
+      "LastWriteTime": "2026-05-02T00:32:09.5336458+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\qqex.node",
+      "Length": 964648,
+      "LastWriteTime": "2026-05-02T00:32:09.5493382+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\QQScreenShot\\QQScreenShot.rdb",
+      "Length": 429929,
+      "LastWriteTime": "2026-05-02T00:32:10.2850698+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\QQScreenShot\\QQScreenShot.tpc",
+      "Length": 934,
+      "LastWriteTime": "2026-05-02T00:32:10.2850698+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\QQScreenShot\\BinRelease-x64\\QQScreenshot.exe",
+      "Length": 41000,
+      "LastWriteTime": "2026-05-02T00:32:09.9739604+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\qqb",
+      "Length": null,
+      "LastWriteTime": "2026-05-02T00:31:52.6666551+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\fonts\\DINNextLTPro-QQ.ttf",
+      "Length": 3824,
+      "LastWriteTime": "2026-05-02T00:32:11.0687292+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\brand_qq_24.svg",
+      "Length": 1045,
+      "LastWriteTime": "2026-05-02T00:32:11.1548151+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\brand_qq_outline_16.svg",
+      "Length": 2057,
+      "LastWriteTime": "2026-05-02T00:32:11.1558511+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\brand_qq_outline_24.svg",
+      "Length": 2047,
+      "LastWriteTime": "2026-05-02T00:32:11.1568901+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\computer_qq_24.svg",
+      "Length": 2233,
+      "LastWriteTime": "2026-05-02T00:32:11.309974+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_qq_farm_normal_16.svg",
+      "Length": 1733,
+      "LastWriteTime": "2026-05-02T00:32:11.5850358+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_qq_farm_normal_24.svg",
+      "Length": 1720,
+      "LastWriteTime": "2026-05-02T00:32:11.5850358+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_qq_zone_normal_16.svg",
+      "Length": 1795,
+      "LastWriteTime": "2026-05-02T00:32:11.5850358+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_qq_zone_normal_24.svg",
+      "Length": 1785,
+      "LastWriteTime": "2026-05-02T00:32:11.5850358+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_qqdocs_normal_16.svg",
+      "Length": 872,
+      "LastWriteTime": "2026-05-02T00:32:11.5693537+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_qqdocs_normal_24.svg",
+      "Length": 889,
+      "LastWriteTime": "2026-05-02T00:32:11.5693537+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_qqmusic_normal_16.svg",
+      "Length": 1163,
+      "LastWriteTime": "2026-05-02T00:32:11.5693537+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_qqmusic_normal_24.svg",
+      "Length": 1119,
+      "LastWriteTime": "2026-05-02T00:32:11.5693537+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_qqvideo_normal_16.svg",
+      "Length": 1466,
+      "LastWriteTime": "2026-05-02T00:32:11.5693537+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_qqvideo_normal_24.svg",
+      "Length": 1451,
+      "LastWriteTime": "2026-05-02T00:32:11.5850358+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_super_qq_show_active_24.svg",
+      "Length": 1903,
+      "LastWriteTime": "2026-05-02T00:32:11.6007077+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_super_qq_show_normal_16.svg",
+      "Length": 2762,
+      "LastWriteTime": "2026-05-02T00:32:11.6007077+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\nav_super_qq_show_normal_24.svg",
+      "Length": 2684,
+      "LastWriteTime": "2026-05-02T00:32:11.6007077+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\oh_qqemail_24.svg",
+      "Length": 434,
+      "LastWriteTime": "2026-05-02T00:32:11.6316492+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\oh_qqgame_24.svg",
+      "Length": 1542,
+      "LastWriteTime": "2026-05-02T00:32:11.6316492+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\oh_qqmoney_24.svg",
+      "Length": 1508,
+      "LastWriteTime": "2026-05-02T00:32:11.6316492+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\phone_qq_24.svg",
+      "Length": 2188,
+      "LastWriteTime": "2026-05-02T00:32:11.8618168+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qq_game_16.svg",
+      "Length": 1485,
+      "LastWriteTime": "2026-05-02T00:32:11.9061287+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qq_game_24.svg",
+      "Length": 1630,
+      "LastWriteTime": "2026-05-02T00:32:11.9061287+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qq_sport_16.svg",
+      "Length": 1303,
+      "LastWriteTime": "2026-05-02T00:32:11.9061287+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qq_sport_24.svg",
+      "Length": 1250,
+      "LastWriteTime": "2026-05-02T00:32:11.9061287+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qq_super member_16.svg",
+      "Length": 642,
+      "LastWriteTime": "2026-05-02T00:32:11.9061287+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qq_super member_24.svg",
+      "Length": 659,
+      "LastWriteTime": "2026-05-02T00:32:11.9061287+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qq_wallet_16.svg",
+      "Length": 2207,
+      "LastWriteTime": "2026-05-02T00:32:11.9061287+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qq_wallet_24.svg",
+      "Length": 2160,
+      "LastWriteTime": "2026-05-02T00:32:11.9061287+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qq_zone_16.svg",
+      "Length": 1782,
+      "LastWriteTime": "2026-05-02T00:32:11.9061287+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qq_zone_24.svg",
+      "Length": 1778,
+      "LastWriteTime": "2026-05-02T00:32:11.9061287+08:00"
+    },
+    {
+      "FullName": "C:\\Program Files\\Tencent\\QQNT\\versions\\9.9.29-47354\\resources\\app\\resource\\icons\\qqdocs_16.svg",
+      "Length": 861,
+      "LastWriteTime": "2026-05-02T00:32:11.8909355+08:00"
+    }
+  ]
+}

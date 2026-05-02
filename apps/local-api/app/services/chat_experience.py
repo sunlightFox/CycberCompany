@@ -614,30 +614,33 @@ def _pending_from_response_plan(response_plan: dict[str, Any]) -> dict[str, Any]
     if not isinstance(structured, dict):
         return None
     natural = structured.get("natural_interaction")
-    if not isinstance(natural, dict):
-        return None
-    explicit = natural.get("pending_confirmation")
-    if isinstance(explicit, dict):
-        return explicit
-    if natural.get("clear_pending"):
-        session_grant = natural.get("session_grant")
-        if isinstance(session_grant, dict) and session_grant:
-            return {
-                "kind": "natural_pending_actions",
-                "session_id": session_grant.get("session_id"),
-                "actions": [],
-                "session_grants": [session_grant],
-                "questions": [],
-            }
-        return {}
-    actions = natural.get("pending_actions") or structured.get("pending_actions")
+    if isinstance(natural, dict):
+        explicit = natural.get("pending_confirmation")
+        if isinstance(explicit, dict):
+            return explicit
+        if natural.get("clear_pending"):
+            session_grant = natural.get("session_grant")
+            if isinstance(session_grant, dict) and session_grant:
+                return {
+                    "kind": "natural_pending_actions",
+                    "session_id": session_grant.get("session_id"),
+                    "actions": [],
+                    "session_grants": [session_grant],
+                    "questions": [],
+                }
+            return {}
+        actions = natural.get("pending_actions") or structured.get("pending_actions")
+        questions = list(natural.get("natural_reply_options") or [])
+    else:
+        actions = structured.get("pending_actions")
+        questions = list(structured.get("natural_reply_options") or [])
     if isinstance(actions, list) and actions:
         safe_actions = [dict(item) for item in actions if isinstance(item, dict)]
         return {
             "kind": "natural_pending_actions",
             "session_id": safe_actions[0].get("session_id"),
             "actions": safe_actions,
-            "questions": list(natural.get("natural_reply_options") or []),
+            "questions": questions,
             "created_at": utc_now_iso(),
         }
     return None

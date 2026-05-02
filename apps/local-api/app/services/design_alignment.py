@@ -866,6 +866,129 @@ class RuntimeContractService:
                 "capability/safety/approval guarded tools with Phase 21 boundary evidence",
             ),
             _contract(
+                "QualityRegressionHardening",
+                "implemented",
+                "Phase 51 quality regression closure for chat routing, safety replies and evidence",
+                details={"phase": "phase_51", "batch_id": "CHAT-E2E-20260501-QUALITY"},
+            ),
+            _contract(
+                "ChatIntentModelRouteRepair",
+                "implemented",
+                (
+                    "advice, strategy, comparison and professional guidance stay "
+                    "direct/model unless explicit execution is requested"
+                ),
+                details={"phase": "phase_51", "no_task_for_advice": True},
+            ),
+            _contract(
+                "SupportiveSafetyRefusal",
+                "implemented",
+                (
+                    "approval bypass, unauthorized login and fake-execution requests "
+                    "fail closed without task/tool/approval"
+                ),
+                details={"phase": "phase_51", "task_created": False},
+            ),
+            _contract(
+                "NaturalPendingActionBinding",
+                "implemented",
+                (
+                    "natural confirm/deny/edit binds to one pending action in the "
+                    "same conversation/session"
+                ),
+                details={"phase": "phase_51", "cross_action_edit_denied": True},
+            ),
+            _contract(
+                "NoFalseDoneResponseGuard",
+                "implemented",
+                (
+                    "planned, waiting, running, failed and cancelled task states do "
+                    "not emit user-visible completion claims"
+                ),
+                details={"phase": "phase_51"},
+            ),
+            _contract(
+                "BrowserInteractionSessionBinding",
+                "implemented",
+                (
+                    "browser interaction tools inherit current_url/session/last evidence "
+                    "or return BROWSER_SESSION_REQUIRED"
+                ),
+                details={"phase": "phase_51", "recoverable_missing_state": True},
+            ),
+            _contract(
+                "TerminalLogEvidenceClosure",
+                "implemented",
+                (
+                    "terminal.run writes terminal_log artifacts and terminal.read_log "
+                    "returns stable diagnostic states"
+                ),
+                details={"phase": "phase_51", "log_artifact_required": True},
+            ),
+            _contract(
+                "DesktopCapabilityBoundaryV2",
+                "implemented",
+                "desktop native requests return explicit capability gaps without fake execution",
+                details={"phase": "phase_51", "ui_code_added": False},
+            ),
+            _contract(
+                "ProjectWorkspaceService",
+                "implemented",
+                "Phase 52 project sources, logs and runtime outputs stay under managed workspaces",
+                details={"phase": "phase_52", "root": "data/workspaces/projects"},
+            ),
+            _contract(
+                "ExecutionBackendSelector",
+                "implemented",
+                (
+                    "project deployment selects container, wsl or local_workspace "
+                    "with degraded evidence"
+                ),
+                details={"phase": "phase_52", "fallback": "local_workspace_policy_guard"},
+            ),
+            _contract(
+                "ProjectDeploymentWorkflow",
+                "implemented",
+                (
+                    "clone, stack detect, toolchain, build/run, health and logs "
+                    "are modeled as a workflow"
+                ),
+                details={"phase": "phase_52", "suite_id": "suite_phase52_chat_deploy_install"},
+            ),
+            _contract(
+                "PortableToolchainService",
+                "implemented",
+                "runtime.ensure prepares portable toolchains without modifying global PATH",
+                details={"phase": "phase_52", "modifies_global_path": False},
+            ),
+            _contract(
+                "HostInstallApprovalBinding",
+                "implemented",
+                (
+                    "host software install plans require strong approval bound to "
+                    "source, command and impact"
+                ),
+                details={"phase": "phase_52", "real_execution_default": False},
+            ),
+            _contract(
+                "ManagedProcessPortLease",
+                "implemented",
+                (
+                    "deployment preview endpoints are tracked with managed_process "
+                    "and port_lease evidence"
+                ),
+                details={"phase": "phase_52"},
+            ),
+            _contract(
+                "DeploymentReplayEvidence",
+                "implemented",
+                "deployment and host install logs are persisted as task artifacts for replay",
+                details={
+                    "phase": "phase_52",
+                    "artifact_types": ["deployment_log", "host_install_log"],
+                },
+            ),
+            _contract(
                 "ToolActionPolicyService",
                 "implemented",
                 "pre-safety tool action policy decisions with deny-first unknown tool handling",
@@ -1918,6 +2041,222 @@ class RuntimeContractService:
                 "backend release closure report records pass/fail, risk and next-stage evidence",
                 blocker_level="none",
                 details={"phase": "phase_49", "no_ui_scope": True},
+            ),
+            _contract(
+                "ExternalPlatformAdapterRegistry",
+                "implemented",
+                (
+                    "external platform browser/MCP adapter manifests are registered "
+                    "with redacted versions"
+                ),
+                blocker_level="none",
+                details={
+                    "phase": "phase_50",
+                    "migration": "032_external_platform_adapters.sql",
+                    "secret_material_visible": False,
+                },
+            ),
+            _contract(
+                "BrowserPlatformAdapterCompiler",
+                "implemented",
+                (
+                    "browser adapter manifests compile publish_content into "
+                    "login/navigate/fill/snapshot/submit/verify steps"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_50", "submit_requires_approval": True},
+            ),
+            _contract(
+                "MCPPlatformAdapterCompiler",
+                "implemented",
+                "MCP adapter manifests compile only to registered MCP registry tools",
+                blocker_level="none",
+                details={"phase": "phase_50", "mock_mcp_supported": True},
+            ),
+            _contract(
+                "AdapterApprovalBinding",
+                "implemented",
+                "publish and submit adapter steps bind to approval before external state change",
+                blocker_level="none",
+                details={"phase": "phase_50", "approval_before_submit": True},
+            ),
+            _contract(
+                "AdapterChallengeFailClosed",
+                "implemented",
+                "captcha, 2FA, login-required and risk challenge evidence stops adapter execution",
+                blocker_level="none",
+                details={"phase": "phase_50", "bypass_challenge": False},
+            ),
+            _contract(
+                "AdapterDriftDetection",
+                "implemented",
+                "selector or page drift writes drift evidence and avoids false success",
+                blocker_level="none",
+                details={"phase": "phase_50", "false_success_claim": False},
+            ),
+            _contract(
+                "AdapterExecutionReplayEvidence",
+                "implemented",
+                (
+                    "adapter executions record plan, version, step, tool/MCP, "
+                    "approval and evidence refs"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_50", "replay_evidence_required": True},
+            ),
+            _contract(
+                "AutonomousBrowserDiscovery",
+                "implemented",
+                (
+                    "clear external platform publish goals fall back to browser discovery "
+                    "when no active adapter is configured"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_50", "adapter_not_configured_user_visible": False},
+            ),
+            _contract(
+                "DiscoveryCandidateAdapterLearning",
+                "implemented",
+                (
+                    "successful browser discovery is persisted as a test_only candidate "
+                    "adapter before production activation"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_50", "auto_promote_to_active": False},
+            ),
+            _contract(
+                "DiscoveryApprovalBeforeSubmit",
+                "implemented",
+                (
+                    "autonomous browser discovery may prepare drafts but must stop before "
+                    "submit until approval is granted"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_50", "submit_requires_approval": True},
+            ),
+            _contract(
+                "WechatClawbotConnector",
+                "implemented",
+                (
+                    "wechat provider calls wechat-clawbot-sdk for QR login, "
+                    "session status, event polling and text sending"
+                ),
+                blocker_level="none",
+                details={
+                    "phase": "phase_53",
+                    "sdk": "wechat-clawbot-sdk>=0.4.0,<0.5.0",
+                    "mock_fallback": False,
+                },
+            ),
+            _contract(
+                "WechatChannelBindingService",
+                "implemented",
+                (
+                    "wechat bind sessions move through QR, scanned, confirmed, bound, "
+                    "cancelled and revoked states while creating account assets"
+                ),
+                blocker_level="none",
+                details={
+                    "phase": "phase_53",
+                    "asset_subtype": "communication_channel",
+                    "asset_type": "account",
+                },
+            ),
+            _contract(
+                "WechatChannelNotificationBridge",
+                "implemented",
+                (
+                    "notification gateway routes wechat provider outbound text through "
+                    "bound channel provider state"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_53", "provider": "wechat"},
+            ),
+            _contract(
+                "WechatInboundApprovalResolver",
+                "implemented",
+                (
+                    "wechat inbound messages are normalized as untrusted external content "
+                    "and reuse notification pending approval binding"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_53", "untrusted_external_content": True},
+            ),
+            _contract(
+                "WechatChannelPeerPolicy",
+                "implemented",
+                (
+                    "private chat is allowed by default while group and unpaired peer "
+                    "messages fail closed"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_53", "group_messages": "disabled"},
+            ),
+            _contract(
+                "WechatChannelRedactionAudit",
+                "implemented",
+                "QR tickets, tokens, cookies, sessions, peer ids and provider state are redacted",
+                blocker_level="none",
+                details={"phase": "phase_53", "raw_provider_ids_persisted": False},
+            ),
+            _contract(
+                "BrowserWorkflowProviderModes",
+                "implemented",
+                "browser workflows expose auto/playwright/local CDP/remote CDP provider modes",
+                blocker_level="none",
+                details={
+                    "phase": "phase_54",
+                    "remote_cdp_default": "interface_only",
+                    "anti_bot_bypass": False,
+                },
+            ),
+            _contract(
+                "BrowserWorkflowDynamicDomWait",
+                "implemented",
+                "dynamic DOM workflows can wait, re-observe and retry before failing closed",
+                blocker_level="none",
+                details={"phase": "phase_54", "bounded_retry": True},
+            ),
+            _contract(
+                "BrowserWorkflowFrameShadowTraversal",
+                "implemented",
+                "browser snapshots and actions include iframe and shadow DOM traversal evidence",
+                blocker_level="none",
+                details={"phase": "phase_54", "selectors_user_visible": False},
+            ),
+            _contract(
+                "BrowserWorkflowModalTabDialogHandling",
+                "implemented",
+                "modal, drawer, new tab and JavaScript dialog paths are observed and replayed",
+                blocker_level="none",
+                details={"phase": "phase_54", "state_change_still_requires_approval": True},
+            ),
+            _contract(
+                "BrowserWorkflowMobileFallback",
+                "implemented",
+                (
+                    "desktop discovery can retry with a mobile viewport when stable "
+                    "controls are absent"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_54", "viewport_profiles": ["desktop", "mobile"]},
+            ),
+            _contract(
+                "BrowserWorkflowChallengeResume",
+                "implemented",
+                (
+                    "captcha, 2FA, payment and risk challenges stop for humans and "
+                    "can resume afterward"
+                ),
+                blocker_level="none",
+                details={"phase": "phase_54", "bypass_challenge": False},
+            ),
+            _contract(
+                "BrowserWorkflowResilienceReplay",
+                "implemented",
+                "replay includes redacted frame, tab, console and network summaries",
+                blocker_level="none",
+                details={"phase": "phase_54", "session_material_visible": False},
             ),
         ]
         for item in contracts:

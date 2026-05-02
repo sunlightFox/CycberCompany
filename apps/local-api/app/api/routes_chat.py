@@ -14,6 +14,8 @@ from app.schemas.chat import (
     ChatPersistedEvent,
     ChatPersistedEventsResponse,
     ChatTurnDetail,
+    ChatTurnRecoveryAttempt,
+    ChatTurnRecoveryAttemptListResponse,
     ChatTurnRequest,
     ChatTurnResponse,
     ConversationDetail,
@@ -234,6 +236,22 @@ async def get_turn_events(
         raise AppError(ErrorCode.NOT_FOUND, "turn 不存在", status_code=404)
     rows = await registry.chat.list_events(turn_id)
     return ChatPersistedEventsResponse(items=[ChatPersistedEvent(**row) for row in rows])
+
+
+@router.get(
+    "/turns/{turn_id}/recovery",
+    response_model=ChatTurnRecoveryAttemptListResponse,
+)
+async def get_turn_recovery(
+    turn_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> ChatTurnRecoveryAttemptListResponse:
+    if await registry.chat.get_turn(turn_id) is None:
+        raise AppError(ErrorCode.NOT_FOUND, "turn 不存在", status_code=404)
+    rows = await registry.chat.list_recovery_attempts(turn_id)
+    return ChatTurnRecoveryAttemptListResponse(
+        items=[ChatTurnRecoveryAttempt(**row) for row in rows]
+    )
 
 
 @router.post("/turn", response_model=ChatTurnResponse)

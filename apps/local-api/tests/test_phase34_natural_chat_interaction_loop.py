@@ -58,7 +58,7 @@ def test_phase34_download_pending_confirm_edit_and_noise_filter(
     assert "确认" in first["reply"]
     assert "拒绝" in first["reply"]
     assert "修改" in first["reply"]
-    assert "尚未" in first["reply"] or "确认前" in first["reply"]
+    assert any(marker in first["reply"] for marker in ["还没", "点头", "确认前", "动手"])
     assert _jargon_count(first["reply"]) == 0
     assert pending["actions"][0]["action_type"] == "browser.download"
 

@@ -1,0 +1,82 @@
+{
+  "host_install_plan_id": "hip_5567e604dab34fd999ed6bb5250cc0f4",
+  "organization_id": "org_default",
+  "task_id": "tsk_3bcd45ad542a49e2be019587543b72b5",
+  "requested_software": "QQ",
+  "install_source": {
+    "installer_sha256": "D52601A3224D29364F03F4948A487ECD2710DB1921383730801D795397E0A808",
+    "installer_url": "https://dldir1v6.qq.com/qqfile/qq/QQNT/Windows/QQ_9.9.29_260401_x64_01.exe",
+    "match_confidence": 0.99,
+    "match_reason": "winget_bootstrap_unsupported_on_current_host",
+    "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+    "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/t/Tencent/QQ/NT/9.9.29.47354/Tencent.QQ.NT.installer.yaml",
+    "package_id": "Tencent.QQ.NT",
+    "package_manager": "winget_manifest",
+    "publisher": "Tencent",
+    "source_type": "official_manifest_installer_fallback",
+    "target_source_type": "official_installer_from_winget_manifest",
+    "trust": "official_manifest_with_sha256",
+    "version": "9.9.29.47354"
+  },
+  "command_preview": {
+    "action": "install",
+    "args": [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'Tencent.QQ.NT.exe'; Invoke-WebRequest -Uri 'https://dldir1v6.qq.com/qqfile/qq/QQNT/Windows/QQ_9.9.29_260401_x64_01.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne 'D52601A3224D29364F03F4948A487ECD2710DB1921383730801D795397E0A808') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '/s' -Wait -PassThru; exit $process.ExitCode"
+    ],
+    "cwd": "host_default",
+    "env_policy": "minimal",
+    "executable": "pwsh",
+    "steps": [
+      {
+        "action": "install",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'Tencent.QQ.NT.exe'; Invoke-WebRequest -Uri 'https://dldir1v6.qq.com/qqfile/qq/QQNT/Windows/QQ_9.9.29_260401_x64_01.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne 'D52601A3224D29364F03F4948A487ECD2710DB1921383730801D795397E0A808') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '/s' -Wait -PassThru; exit $process.ExitCode"
+        ],
+        "cwd": "host_default",
+        "env_policy": "minimal",
+        "executable": "pwsh",
+        "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/t/Tencent/QQ/NT/9.9.29.47354/Tencent.QQ.NT.installer.yaml",
+        "official_source": "https://dldir1v6.qq.com/qqfile/qq/QQNT/Windows/QQ_9.9.29_260401_x64_01.exe",
+        "package_manager": "winget_manifest",
+        "sha256": "D52601A3224D29364F03F4948A487ECD2710DB1921383730801D795397E0A808",
+        "step_key": "official_manifest_install_tencent_qq_nt",
+        "step_type": "official_manifest_installer",
+        "target_package_id": "Tencent.QQ.NT",
+        "timeout_seconds": 1800
+      }
+    ]
+  },
+  "impact_summary": {
+    "bootstrap_required": false,
+    "bootstrap_skipped_reason": "winget_not_supported_on_current_windows_server",
+    "checksum_verification": "sha256",
+    "may_require_admin": true,
+    "modifies_global_environment": true,
+    "modifies_path_or_registry": true,
+    "package_resolution": {
+      "match_confidence": 0.99,
+      "match_reason": "winget_bootstrap_unsupported_on_current_host",
+      "source_type": "official_winget_manifest",
+      "target_package_id": "Tencent.QQ.NT"
+    },
+    "preserve_preexisting_install": true,
+    "real_execution_default": false,
+    "risk_level": "R6",
+    "rollback": "winget uninstall --id Tencent.QQ.NT 或通过系统应用卸载 QQ",
+    "writes_system_locations": true
+  },
+  "risk_level": "R6",
+  "status": "waiting_approval",
+  "approval_id": "apr_dd970262a7264154aed472444aed487b",
+  "trace_id": "trc_bc1cfbe99cf44b279c353fc828212921",
+  "created_at": "2026-05-01T16:31:11.638132Z",
+  "updated_at": "2026-05-01T16:31:11.704394Z"
+}

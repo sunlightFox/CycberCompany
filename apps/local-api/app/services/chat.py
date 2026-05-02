@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import html
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -36,11 +38,19 @@ from app.db.repositories.brain_repo import BrainRepository
 from app.db.repositories.chat_repo import ChatRepository
 from app.db.repositories.member_repo import MemberRepository
 from app.db.session import Database
+from app.schemas.tasks import ToolExecuteRequest
 from app.services.asset_broker import AssetBrokerService
 from app.services.audit import AuditEventService
 from app.services.brain_decision import BrainDecisionService
 from app.services.chat_context import ChatContextCoordinator
 from app.services.chat_experience import ChatExperienceService, ClarificationDecision
+from app.services.chat_intent_router import (
+    ChatIntentRouter,
+    OfficeChatRequest,
+    office_skill_input,
+    preferred_office_bundle_id,
+    preferred_office_tool_name,
+)
 from app.services.chat_memory import ChatMemoryCoordinator
 from app.services.chat_model import ChatModelCoordinator
 from app.services.chat_privacy import ChatPrivacyCoordinator
@@ -59,8 +69,24 @@ from app.services.natural_chat import (
 from app.services.secrets import SecretStore
 from app.services.turn_events import TurnEventStore
 from app.services.turn_execution import TurnExecutionManager
+from app.services.turn_recovery import TurnRecoveryResult, TurnRecoveryService
 
 DEFAULT_USER_ID = "user_local_owner"
+
+
+def _reply_option_items(options: list[str]) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for option in options:
+        label = str(option)
+        code = "edit"
+        if any(marker in label for marker in ["只允许", "本次允许", "确认"]):
+            code = "once"
+        elif "本会话" in label:
+            code = "session"
+        elif any(marker in label for marker in ["拒绝", "取消"]):
+            code = "deny"
+        items.append({"code": code, "label": label})
+    return items
 
 
 class ChatService:
@@ -79,6 +105,11 @@ class ChatService:
         brain_decision_service: BrainDecisionService | None = None,
         approval_service: Any | None = None,
         scheduled_task_service: Any | None = None,
+        project_deployment_service: Any | None = None,
+        host_install_service: Any | None = None,
+        skill_plugin_service: Any | None = None,
+        skill_governance_service: Any | None = None,
+        tool_runtime: Any | None = None,
     ) -> None:
         self._db = db
         self._chat_repo = ChatRepository(db)
@@ -96,11 +127,17 @@ class ChatService:
         self._brain_decision = brain_decision_service
         self._approval_service = approval_service
         self._scheduled_tasks = scheduled_task_service
+        self._project_deployments = project_deployment_service
+        self._host_installs = host_install_service
+        self._skill_plugins = skill_plugin_service
+        self._skill_governance = skill_governance_service
+        self._tool_runtime = tool_runtime
         self._natural_chat = (
             NaturalChatActionGateway(
                 chat_repo=self._chat_repo,
                 approval_service=approval_service,
                 task_engine=task_engine,
+                host_install_service=host_install_service,
             )
             if approval_service is not None
             else None
@@ -117,7 +154,18 @@ class ChatService:
         self._response_coordinator = ChatResponseCoordinator()
         self._turn_orchestrator = ChatTurnOrchestrator()
         self._access_policy = ChatTurnAccessPolicy()
+        self._intent_router = ChatIntentRouter()
         self._events = TurnEventStore()
+        self._turn_recovery = (
+            TurnRecoveryService(
+                chat_repo=self._chat_repo,
+                task_engine=task_engine,
+                trace_service=trace_service,
+                composer=self._composer,
+            )
+            if task_engine is not None
+            else None
+        )
         self._context_gateway = RuntimeContextGateway(
             chat_repo=self._chat_repo,
             member_repo=self._members,
@@ -795,6 +843,94 @@ class ChatService:
                 yield event
             return
 
+        route_decision = self._intent_router.decide(user_text)
+        turn["experience"] = {
+            **dict(turn.get("experience") or {}),
+            "chat_route_decision": route_decision.as_payload(),
+        }
+        await self._chat_repo.update_turn(
+            turn_id,
+            experience=turn["experience"],
+            privacy_level=privacy.privacy_level,
+            updated_at=utc_now_iso(),
+        )
+        if route_decision.office_request is not None:
+            async for event in self._handle_office_chat_request(
+                turn,
+                events,
+                user_text,
+                route_decision.office_request,
+                root_span_id,
+                trace_id=trace_id,
+            ):
+                yield event
+            return
+        if route_decision.route_type == "host_filesystem_list":
+            async for event in self._handle_host_filesystem_list(
+                turn,
+                events,
+                route_decision.metadata,
+                root_span_id,
+                trace_id=trace_id,
+            ):
+                yield event
+            return
+        if route_decision.route_type == "browser_read_page":
+            async for event in self._handle_browser_read_page(
+                turn,
+                events,
+                route_decision.metadata,
+                root_span_id,
+                trace_id=trace_id,
+            ):
+                yield event
+            return
+        direct_route_reply = _direct_route_reply(route_decision.route_type, user_text)
+        if direct_route_reply is not None:
+            text, intent, structured = direct_route_reply
+            response_plan = self._composer.response_plan_for_status(
+                summary=text,
+                task_status={"status": "not_created", "reason": route_decision.reason_code},
+                safety_notice="没有创建任务，也没有执行下载、安装或外部动作。",
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **response_plan.structured_payload,
+                        "route_semantics": {
+                            "route": route_decision.route_type,
+                            "model_called": False,
+                            "task_created": False,
+                            "tool_created": False,
+                            "reason_code": route_decision.reason_code,
+                        },
+                        **structured,
+                    },
+                }
+            )
+            yield await emit(
+                ChatEventType.INTENT_DETECTED,
+                {
+                    "intent": intent,
+                    "reason_codes": [route_decision.reason_code],
+                },
+            )
+            yield await emit(
+                ChatEventType.MODE_SELECTED,
+                {"mode": TaskMode.DIRECT.value, "needs_tool": False},
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent=intent,
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+
         media_request = self._task_coordinator.parse_media_task_request(user_text)
         if media_request is not None and self._task_engine is not None:
             from app.schemas.tasks import TaskCreateRequest
@@ -856,6 +992,291 @@ class ChatService:
                 text,
                 root_span_id,
                 intent="media_runtime_request",
+                mode=TaskMode.WORKFLOW.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+
+        if _phase52_deploy_or_install_explain_only(user_text):
+            text = (
+                "可以。安全的项目部署通常分为：确认源码来源，创建受控项目工作区，"
+                "识别技术栈，准备 portable 运行时，安装项目内依赖，构建，启动预览，"
+                "做健康检查并保留日志。安装桌面软件则应先确认可信来源、命令、影响范围"
+                "和回滚方式，再由用户确认；我不会在你要求“不要执行”时创建任务或调用工具。"
+            )
+            response_plan = self._composer.response_plan_for_status(
+                summary=text,
+                task_status={"status": "not_created", "reason": "phase52_direct_only"},
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **response_plan.structured_payload,
+                        "route_semantics": {
+                            "model_not_required_reason": "phase52_direct_only_explanation",
+                            "task_created": False,
+                        },
+                    },
+                }
+            )
+            yield await emit(
+                ChatEventType.INTENT_DETECTED,
+                {
+                    "intent": "project_deploy_explanation",
+                    "reason_codes": ["phase52_direct_only"],
+                },
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="project_deploy_explanation",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+
+        deploy_request = self._task_coordinator.parse_project_deploy_request(user_text)
+        if deploy_request is not None and self._project_deployments is not None:
+            from app.schemas.project_deployments import ProjectDeployRequest
+
+            deployment = await self._project_deployments.create_plan(
+                ProjectDeployRequest(
+                    member_id=turn["member_id"],
+                    conversation_id=turn["conversation_id"],
+                    source_uri=deploy_request["source_uri"],
+                    target=deploy_request["target"],
+                    constraints=deploy_request["constraints"],
+                ),
+                trace_id=trace_id,
+            )
+            text = (
+                "我已创建受控项目部署计划。接下来会在项目工作区中准备源码、识别技术栈、"
+                "准备运行时、安装项目依赖、构建并启动预览；这不会修改系统全局环境。"
+                "需要联网下载依赖或占用本地端口的步骤会等待你确认。"
+            )
+            response_plan = self._composer.response_plan_for_status(
+                summary=text,
+                task_status={
+                    "task_id": deployment.task_id,
+                    "status": deployment.status,
+                    "mode": "workflow",
+                },
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **response_plan.structured_payload,
+                        "deployment_plan": deployment.plan,
+                        "workspace_boundary": {
+                            "workspace_id": deployment.workspace_id,
+                            "filesystem_policy": "data/workspaces/projects/{workspace_id}",
+                        },
+                        "backend_selection": deployment.plan.get("backend_selection", {}),
+                    },
+                }
+            )
+            yield await emit(
+                ChatEventType.INTENT_DETECTED,
+                {
+                    "intent": "project_deploy_request",
+                    "reason_codes": ["phase52_project_deploy_text_request"],
+                },
+            )
+            yield await emit(
+                ChatEventType.TASK_CREATED,
+                {
+                    "task_id": deployment.task_id,
+                    "title": "项目部署计划",
+                    "status": deployment.status,
+                },
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="project_deploy_request",
+                mode=TaskMode.WORKFLOW.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+
+        host_install_request = self._task_coordinator.parse_host_install_request(user_text)
+        if host_install_request is not None and self._host_installs is not None:
+            from app.schemas.project_deployments import HostInstallPlanRequest
+
+            host_action = str(host_install_request.get("action") or "install")
+            action_label = "卸载" if host_action == "uninstall" else "安装"
+            plan = await self._host_installs.create_plan(
+                HostInstallPlanRequest(
+                    member_id=turn["member_id"],
+                    conversation_id=turn["conversation_id"],
+                    requested_software=host_install_request["requested_software"],
+                    install_scope=host_install_request["install_scope"],
+                    dry_run=True,
+                ),
+                trace_id=trace_id,
+            )
+            pending_action: dict[str, Any] | None = None
+            if plan.approval_id and self._approval_service is not None:
+                approval = await self._approval_service.get(plan.approval_id)
+                pending_action = pending_action_from_approval(
+                    approval,
+                    session_id=session_id,
+                    source_turn_id=turn_id,
+                )
+            already_absent = bool(
+                plan.install_source.get("already_absent")
+                or plan.impact_summary.get("already_absent")
+            )
+            if already_absent:
+                facts = {
+                    "status": "already_absent",
+                    "action_type": f"host.{host_action}_software",
+                    "action_label": f"{action_label}本机软件",
+                    "target": plan.requested_software,
+                    "risk_level": plan.risk_level.value
+                    if isinstance(plan.risk_level, RiskLevel)
+                    else str(plan.risk_level),
+                    "approval_required": False,
+                    "already_absent": True,
+                    "reply_options": [],
+                    "reply_option_items": [],
+                }
+                pending_action = None
+            elif plan.status == "manual_only":
+                reason_codes = list(plan.impact_summary.get("reason_codes") or [])
+                safe_next_step = str(plan.impact_summary.get("safe_next_step") or "").strip()
+                if "no_high_confidence_healthy_package_candidate" in reason_codes:
+                    failure_reason = safe_next_step or "当前没有可用的健康包管理器候选。"
+                else:
+                    failure_reason = "这个请求涉及高风险或需要人工处理的系统级变更。"
+                facts = {
+                    "status": "manual_only",
+                    "action_type": f"host.{host_action}_software",
+                    "action_label": f"{action_label}本机软件",
+                    "target": plan.requested_software,
+                    "risk_level": plan.risk_level.value
+                    if isinstance(plan.risk_level, RiskLevel)
+                    else str(plan.risk_level),
+                    "approval_required": False,
+                    "failure_reason": failure_reason,
+                    "safe_next_step": safe_next_step,
+                    "reply_options": [],
+                    "reply_option_items": [],
+                }
+            else:
+                reply_options = (
+                    list(pending_action.get("reply_options") or [])
+                    if pending_action
+                    else []
+                )
+                facts = {
+                    "status": "pending_action",
+                    "action_type": f"host.{host_action}_software",
+                    "action_label": f"{action_label}本机软件",
+                    "target": plan.requested_software,
+                    "risk_level": plan.risk_level.value
+                    if isinstance(plan.risk_level, RiskLevel)
+                    else str(plan.risk_level),
+                    "approval_required": bool(plan.approval_id),
+                    "reply_options": reply_options,
+                    "reply_option_items": _reply_option_items(reply_options),
+                    "impact_summary": (
+                        "这会修改本机软件状态，需要你明确确认后才会继续。"
+                        if host_action == "uninstall"
+                        else "这会修改本机软件或系统环境，需要你明确确认后才会继续。"
+                    ),
+                }
+            response_plan = self._composer.response_plan_for_action_status(
+                facts=facts,
+                task_status={
+                    "task_id": plan.task_id,
+                    "status": plan.status,
+                    "mode": "workflow",
+                },
+            )
+            text = response_plan.plain_text or response_plan.summary or ""
+            structured_payload = {
+                **response_plan.structured_payload,
+                "host_install_plan": plan.model_dump(mode="json"),
+                "approval_binding": {
+                    "approval_id": plan.approval_id,
+                    "status": "required" if plan.approval_id else "manual_only",
+                    "host_action": host_action,
+                },
+            }
+            if pending_action is not None:
+                reply_options = list(pending_action.get("reply_options") or [])
+                structured_payload = {
+                    **structured_payload,
+                    "natural_interaction": {
+                        "status": "pending_action",
+                        "reason_codes": ["approval_required", "host_install_pending_action"],
+                        "pending_actions": [pending_action],
+                        "natural_reply_options": reply_options,
+                        "reply_option_items": _reply_option_items(reply_options),
+                        "pending_confirmation": {
+                            "kind": "natural_pending_actions",
+                            "session_id": session_id,
+                            "actions": [pending_action],
+                            "questions": reply_options,
+                            "created_at": utc_now_iso(),
+                        },
+                        "clear_pending": False,
+                        "session_grant": {},
+                    },
+                    "pending_actions": [pending_action],
+                    "natural_reply_options": reply_options,
+                    "reply_option_items": _reply_option_items(reply_options),
+                }
+            follow_up_options = (
+                reply_options
+                if pending_action is not None
+                else list(response_plan.follow_up_options)
+            )
+            user_next_step = (
+                follow_up_options[0]
+                if pending_action is not None and follow_up_options
+                else response_plan.user_next_step
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": structured_payload,
+                    "follow_up_options": follow_up_options,
+                    "user_next_step": user_next_step,
+                }
+            )
+            yield await emit(
+                ChatEventType.INTENT_DETECTED,
+                {
+                    "intent": (
+                        "host_software_uninstall_request"
+                        if host_action == "uninstall"
+                        else "host_software_install_request"
+                    ),
+                    "reason_codes": [
+                        "phase52_host_uninstall_text_request"
+                        if host_action == "uninstall"
+                        else "phase52_host_install_text_request"
+                    ],
+                },
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent=(
+                    "host_software_uninstall_request"
+                    if host_action == "uninstall"
+                    else "host_software_install_request"
+                ),
                 mode=TaskMode.WORKFLOW.value,
                 response_plan=response_plan,
             ):
@@ -1093,6 +1514,8 @@ class ChatService:
                         "risk_level": task.risk_level.value,
                     },
                 )
+                recovery = await self._recover_task_in_turn(turn, events, task, root_span_id)
+                task = recovery.task
                 if task.status.value == "waiting_approval":
                     presentation = self._task_coordinator.present_task_status(task)
                     pending_action = None
@@ -1162,18 +1585,29 @@ class ChatService:
                             presentation.event_type,
                             presentation.event_payload,
                         )
-                    text = presentation.text
+                    text = f"{recovery.response_prefix}{presentation.text}"
                     response_plan = self._composer.response_plan_for_status(
                         summary=text,
                         task_status=presentation.task_status,
                         safety_notice=presentation.safety_notice,
                         tool_notice=presentation.tool_notice,
                     )
+                    if recovery.recovery_payload.get("attempt_count"):
+                        turn_recovery = self._turn_recovery
+                        if turn_recovery is not None:
+                            response_plan = turn_recovery.response_plan_for_task(
+                                summary=text,
+                                task_status=presentation.task_status,
+                                recovery_payload=recovery.recovery_payload,
+                                safety_notice=presentation.safety_notice,
+                                tool_notice=presentation.tool_notice,
+                            )
                     response_plan = response_plan.model_copy(
                         update={
                             "structured_payload": {
                                 **response_plan.structured_payload,
                                 "task_status_semantics": presentation.task_status,
+                                "recovery": recovery.recovery_payload,
                             },
                         }
                     )
@@ -1211,6 +1645,42 @@ class ChatService:
         model_route = route_selection.route
         if model_route is None:
             code = self._route_error_code(available_brains, privacy.privacy_level)
+            reason_codes = brain_decision.intent.reason_codes if brain_decision else []
+            if (
+                code == ErrorCode.MODEL_NOT_CONFIGURED
+                and "phase51_advice_strategy_direct" in reason_codes
+            ):
+                text = _strategy_advice_fallback_text(user_text)
+                response_plan = self._composer.response_plan_for_status(
+                    summary=text,
+                    task_status={"status": "not_created", "reason": "local_strategy_fallback"},
+                    safety_notice="没有可用模型时只给确定性建议；没有创建任务或调用工具。",
+                )
+                response_plan = response_plan.model_copy(
+                    update={
+                        "structured_payload": {
+                            **response_plan.structured_payload,
+                            "route_semantics": {
+                                "route": "direct_strategy_fallback",
+                                "model_called": False,
+                                "task_created": False,
+                                "tool_created": False,
+                                "model_not_required_reason": "phase51_strategy_no_model_fallback",
+                            },
+                        },
+                    }
+                )
+                async for event in self._complete_without_model(
+                    turn,
+                    events,
+                    text,
+                    root_span_id,
+                    intent=intent,
+                    mode=mode.value,
+                    response_plan=response_plan,
+                ):
+                    yield event
+                return
             if intent == "boundary_question" and code == ErrorCode.MODEL_NOT_CONFIGURED:
                 boundary_text = (
                     "我不是隐藏真人账号，也不能绕过系统替你登录或直接操作；"
@@ -1578,6 +2048,492 @@ class ChatService:
         ):
             yield event
 
+    async def _handle_host_filesystem_list(
+        self,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+        metadata: dict[str, Any],
+        root_span_id: str | None,
+        *,
+        trace_id: str | None,
+    ) -> AsyncIterator[ChatEvent]:
+        if self._tool_runtime is None:
+            text = "当前本机文件列表工具不可用；我没有查看目录，也不会假装已经看过。"
+            response_plan = self._composer.response_plan_for_tool_boundary(
+                summary=text,
+                required_capability="host.fs.list",
+                next_actions=["检查工具注册", "稍后重试"],
+                safety_notice="没有读取文件内容，也没有执行文件修改。",
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="system_filesystem_read",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+        location = str(metadata.get("location") or "home")
+        limit = metadata.get("limit") or 50
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.INTENT_DETECTED,
+            {
+                "intent": "system_filesystem_read",
+                "reason_codes": ["host_filesystem_list_readonly"],
+            },
+        )
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.MODE_SELECTED,
+            {"mode": TaskMode.DIRECT.value, "needs_tool": True},
+        )
+        try:
+            response = await self._tool_runtime.execute(
+                ToolExecuteRequest(
+                    member_id=turn["member_id"],
+                    tool_name="host.fs.list",
+                    args={"location": location, "limit": limit},
+                    idempotency_key=f"chat:{turn['turn_id']}:host.fs.list:{location}",
+                ),
+                trace_id=trace_id,
+            )
+        except AppError as exc:
+            text = _host_filesystem_list_error_reply(location, exc)
+            response_plan = self._composer.response_plan_for_tool_boundary(
+                summary=text,
+                required_capability="host.fs.list",
+                next_actions=["换成桌面、下载、文档或主目录", "确认目录授权后重试"],
+                safety_notice="请求被目录边界策略拦截；没有读取文件内容或修改文件。",
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **response_plan.structured_payload,
+                        "host_filesystem_list": {
+                            "location": location,
+                            "status": "blocked",
+                            "error_code": exc.code,
+                            "details": exc.details,
+                        },
+                    },
+                }
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="system_filesystem_read",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+        result = response.result
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.TOOL_COMPLETED,
+            {
+                "tool_call_id": response.tool_call.tool_call_id,
+                "tool_name": "host.fs.list",
+                "risk_level": response.tool_call.risk_level.value
+                if hasattr(response.tool_call.risk_level, "value")
+                else str(response.tool_call.risk_level),
+            },
+        )
+        text = _host_filesystem_list_reply(result)
+        response_plan = self._composer.response_plan_for_status(
+            summary=text,
+            task_status={"status": "not_created", "reason": "readonly_host_filesystem_list"},
+            tool_notice="只列出目录项元数据，没有读取文件内容、递归扫描或修改文件。",
+        )
+        response_plan = response_plan.model_copy(
+            update={
+                "structured_payload": {
+                    **response_plan.structured_payload,
+                    "host_filesystem_list": result,
+                    "route_semantics": {
+                        "route": "host_filesystem_list",
+                        "model_called": False,
+                        "task_created": False,
+                        "tool_created": True,
+                        "tool_name": "host.fs.list",
+                        "tool_call_id": response.tool_call.tool_call_id,
+                        "reason_code": "host_filesystem_list_readonly",
+                    },
+                },
+            }
+        )
+        async for event in self._complete_without_model(
+            turn,
+            events,
+            text,
+            root_span_id,
+            intent="system_filesystem_read",
+            mode=TaskMode.DIRECT.value,
+            response_plan=response_plan,
+        ):
+            yield event
+
+    async def _handle_browser_read_page(
+        self,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+        metadata: dict[str, Any],
+        root_span_id: str | None,
+        *,
+        trace_id: str | None,
+    ) -> AsyncIterator[ChatEvent]:
+        url = str(metadata.get("url") or "").strip()
+        if self._tool_runtime is None:
+            text = "当前浏览器只读工具不可用；我没有打开网页，也不会假装已经看过。"
+            response_plan = self._composer.response_plan_for_tool_boundary(
+                summary=text,
+                required_capability="browser.snapshot",
+                next_actions=["检查浏览器工具注册", "稍后重试"],
+                safety_notice="没有访问外部链接，也没有执行网页交互。",
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="browser_read",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+        if not url:
+            text = "我没有识别到可查看的链接；请把完整的 http 或 https 链接发给我。"
+            response_plan = self._composer.response_plan_for_tool_boundary(
+                summary=text,
+                required_capability="browser.snapshot",
+                next_actions=["补充完整链接后重试"],
+                safety_notice="没有访问外部链接，也没有执行网页交互。",
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="browser_read",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.INTENT_DETECTED,
+            {
+                "intent": "browser_read",
+                "reason_codes": ["browser_read_page_readonly"],
+            },
+        )
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.MODE_SELECTED,
+            {"mode": TaskMode.DIRECT.value, "needs_tool": True},
+        )
+        try:
+            response = await self._tool_runtime.execute(
+                ToolExecuteRequest(
+                    member_id=turn["member_id"],
+                    tool_name="browser.snapshot",
+                    args={
+                        "url": url,
+                        "intent": "readonly_page_summary",
+                        "provider_mode": "auto",
+                    },
+                    idempotency_key=f"chat:{turn['turn_id']}:browser.snapshot",
+                ),
+                trace_id=trace_id,
+            )
+        except AppError as exc:
+            text = _browser_read_page_error_reply(exc)
+            response_plan = self._composer.response_plan_for_tool_boundary(
+                summary=text,
+                required_capability="browser.snapshot",
+                next_actions=["确认链接可公开访问", "换一个 http/https 链接后重试"],
+                safety_notice="这次没有执行下载、登录、提交、点击或截图。",
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **response_plan.structured_payload,
+                        "browser_read_page": {
+                            "status": "blocked",
+                            "error_code": exc.code,
+                            "details": exc.details,
+                        },
+                    },
+                }
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="browser_read",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+        result = response.result
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.TOOL_COMPLETED,
+            {
+                "tool_call_id": response.tool_call.tool_call_id,
+                "tool_name": "browser.snapshot",
+                "risk_level": response.tool_call.risk_level.value
+                if hasattr(response.tool_call.risk_level, "value")
+                else str(response.tool_call.risk_level),
+            },
+        )
+        text = _browser_read_page_reply(result)
+        response_plan = self._composer.response_plan_for_status(
+            summary=text,
+            task_status={"status": "not_created", "reason": "readonly_browser_page_read"},
+            tool_notice="只读取网页快照文本，没有下载文件、登录、提交、点击或截图。",
+        )
+        response_plan = response_plan.model_copy(
+            update={
+                "structured_payload": {
+                    **response_plan.structured_payload,
+                    "browser_read_page": _browser_read_page_payload(result),
+                    "route_semantics": {
+                        "route": "browser_read_page",
+                        "model_called": False,
+                        "task_created": False,
+                        "tool_created": True,
+                        "tool_name": "browser.snapshot",
+                        "tool_call_id": response.tool_call.tool_call_id,
+                        "reason_code": "browser_read_page_readonly",
+                    },
+                },
+            }
+        )
+        async for event in self._complete_without_model(
+            turn,
+            events,
+            text,
+            root_span_id,
+            intent="browser_read",
+            mode=TaskMode.DIRECT.value,
+            response_plan=response_plan,
+        ):
+            yield event
+
+    async def _handle_office_chat_request(
+        self,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+        user_text: str,
+        office_request: OfficeChatRequest,
+        root_span_id: str | None,
+        *,
+        trace_id: str | None,
+    ) -> AsyncIterator[ChatEvent]:
+        turn_id = turn["turn_id"]
+        if self._task_engine is None:
+            text = "我识别到这是 Office 文件任务，但当前任务引擎不可用；没有生成文件。"
+            response_plan = self._composer.response_plan_for_tool_boundary(
+                summary=text,
+                required_capability="office_document",
+                next_actions=["检查任务引擎", "稍后重试"],
+                safety_notice="没有执行任何文件写入动作。",
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="office_document_request",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+        skill_id = await self._enabled_office_skill_id(office_request)
+        tool_name = preferred_office_tool_name(office_request)
+        missing_reason = None
+        if skill_id is None:
+            missing_reason = "missing_enabled_skill"
+        elif not await self._office_skill_has_grant(skill_id, tool_name, str(turn["member_id"])):
+            missing_reason = "missing_skill_grant"
+        if missing_reason is not None:
+            text = self._office_missing_capability_text(office_request, missing_reason)
+            response_plan = self._composer.response_plan_for_tool_boundary(
+                summary=text,
+                required_capability=f"office.{office_request.document_type}.{office_request.operation}",
+                next_actions=self._office_next_actions(office_request, missing_reason),
+                safety_notice="没有生成或编辑 Office 文件；我不会把未执行说成已完成。",
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **response_plan.structured_payload,
+                        "office_route": {
+                            "document_type": office_request.document_type,
+                            "operation": office_request.operation,
+                            "missing_reason": missing_reason,
+                            "tool_name": tool_name,
+                        },
+                    },
+                }
+            )
+            yield await self._emit_and_record(
+                turn_id,
+                turn["trace_id"],
+                events,
+                ChatEventType.INTENT_DETECTED,
+                {
+                    "intent": "office_document_request",
+                    "reason_codes": ["office_document_hard_route", missing_reason],
+                },
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="office_document_request",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+
+        from app.schemas.tasks import TaskCreateRequest
+
+        source_artifact_id = await self._latest_office_artifact_id(
+            str(turn["conversation_id"]),
+            office_request.document_type,
+        )
+        task = await self._task_engine.create_task(
+            TaskCreateRequest(
+                conversation_id=turn["conversation_id"],
+                owner_member_id=turn["member_id"],
+                goal=user_text,
+                mode_hint=TaskMode.WORKFLOW,
+                constraints={
+                    "skill_id": skill_id,
+                    "skill_input": office_skill_input(
+                        office_request,
+                        source_artifact_id=source_artifact_id,
+                    ),
+                    "office_chat_request": office_request.__dict__,
+                },
+                planner_context={
+                    "intent": {
+                        "primary_intent": "office_document_request",
+                        "reason_codes": ["office_document_hard_route"],
+                    },
+                    "route": "office_document_hard_route",
+                },
+                auto_start=True,
+                client_request_id=f"chat:{turn_id}:office-task",
+            ),
+            trace_id=trace_id,
+        )
+        yield await self._emit_and_record(
+            turn_id,
+            turn["trace_id"],
+            events,
+            ChatEventType.INTENT_DETECTED,
+            {
+                "intent": "office_document_request",
+                "reason_codes": ["office_document_hard_route", "office_skill_auto_execute"],
+            },
+        )
+        yield await self._emit_and_record(
+            turn_id,
+            turn["trace_id"],
+            events,
+            ChatEventType.TASK_CREATED,
+            {"task_id": task.task_id, "title": task.title, "status": task.status.value},
+        )
+        artifacts = await self._task_engine.artifacts(task.task_id)
+        office_artifact_refs = _office_artifact_refs(artifacts, office_request.document_type)
+        recovery = await self._recover_task_in_turn(turn, events, task, root_span_id)
+        task = recovery.task
+        artifacts = await self._task_engine.artifacts(task.task_id)
+        office_artifact_refs = _office_artifact_refs(artifacts, office_request.document_type)
+        office_reply = self._office_task_reply(office_request, task, artifacts)
+        text = f"{recovery.response_prefix}{office_reply}"
+        presentation = self._task_coordinator.present_task_status(task)
+        response_plan = self._composer.response_plan_for_status(
+            summary=text,
+            task_status={
+                **presentation.task_status,
+                "artifact_count": len(artifacts),
+                "office_document_type": office_request.document_type,
+                "office_operation": office_request.operation,
+            },
+            safety_notice=presentation.safety_notice,
+            tool_notice=presentation.tool_notice,
+        )
+        if recovery.recovery_payload.get("attempt_count"):
+            turn_recovery = self._turn_recovery
+            if turn_recovery is not None:
+                response_plan = turn_recovery.response_plan_for_task(
+                    summary=text,
+                    task_status={
+                        **presentation.task_status,
+                        "artifact_count": len(artifacts),
+                        "office_document_type": office_request.document_type,
+                        "office_operation": office_request.operation,
+                    },
+                    recovery_payload=recovery.recovery_payload,
+                    safety_notice=presentation.safety_notice,
+                    tool_notice=presentation.tool_notice,
+                )
+        response_plan = response_plan.model_copy(
+            update={
+                "artifact_refs": office_artifact_refs,
+                "structured_payload": {
+                    **response_plan.structured_payload,
+                    "office_route": {
+                        "document_type": office_request.document_type,
+                        "operation": office_request.operation,
+                        "artifact_count": len(artifacts),
+                        "artifacts": office_artifact_refs,
+                        "status": task.status.value,
+                    },
+                    "recovery": recovery.recovery_payload,
+                },
+            }
+        )
+        async for event in self._complete_without_model(
+            turn,
+            events,
+            text,
+            root_span_id,
+            intent="office_document_request",
+            mode=TaskMode.WORKFLOW.value,
+            response_plan=response_plan,
+        ):
+            yield event
+
     async def _emit_memory_events(
         self,
         turn: dict[str, Any],
@@ -1921,6 +2877,42 @@ class ChatService:
             await self._trace.end_span(root_span_id, status=TraceSpanStatus.FAILED)
         await self._trace.end_trace(turn["trace_id"], status=TraceStatus.FAILED)
 
+    async def _recover_task_in_turn(
+        self,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+        task: Any,
+        root_span_id: str | None,
+    ) -> TurnRecoveryResult:
+        if self._turn_recovery is None:
+            return TurnRecoveryResult(
+                task=task,
+                recovery_payload={
+                    "status": (
+                        "recovered" if task.status.value == "completed" else task.status.value
+                    ),
+                    "attempt_count": 0,
+                    "root_cause": None,
+                    "actions_taken": [],
+                    "next_action": None,
+                    "task_id": task.task_id,
+                },
+            )
+        recovery = await self._turn_recovery.recover_task_for_turn(
+            turn=turn,
+            task=task,
+            root_span_id=root_span_id,
+        )
+        for recovery_event in recovery.events:
+            await self._emit_and_record(
+                turn["turn_id"],
+                turn["trace_id"],
+                events,
+                recovery_event.event_type,
+                recovery_event.payload,
+            )
+        return recovery
+
     async def _cancel_turn_during_stream(
         self,
         turn: dict[str, Any],
@@ -2247,6 +3239,128 @@ class ChatService:
     def _intent_creates_task(self, intent: str) -> bool:
         return self._task_coordinator.intent_creates_task(intent)
 
+    async def _enabled_office_skill_id(self, office_request: OfficeChatRequest) -> str | None:
+        if self._skill_plugins is None:
+            return None
+        preferred_bundle = preferred_office_bundle_id(office_request)
+        try:
+            for skill in await self._skill_plugins.list_skills(status="enabled"):
+                if skill.bundle_id == preferred_bundle and skill.status == "enabled":
+                    return str(skill.skill_id)
+        except Exception:
+            return None
+        return None
+
+    async def _office_skill_has_grant(
+        self,
+        skill_id: str,
+        tool_name: str,
+        member_id: str,
+    ) -> bool:
+        if self._skill_governance is None:
+            return True
+        try:
+            for grant in await self._skill_governance.list_grants(skill_id):
+                if grant.status != "active":
+                    continue
+                if grant.subject_type != "member" or grant.subject_id != member_id:
+                    continue
+                if tool_name in set(grant.allowed_tools):
+                    return True
+        except Exception:
+            return False
+        return False
+
+    async def _latest_office_artifact_id(
+        self,
+        conversation_id: str,
+        document_type: str,
+    ) -> str | None:
+        if self._task_engine is None:
+            return None
+        content_marker = {
+            "word": "wordprocessingml.document",
+            "excel": "spreadsheetml.sheet",
+            "ppt": "presentationml.presentation",
+        }.get(document_type)
+        try:
+            for task in await self._task_engine.list_tasks(limit=50):
+                if str(task.conversation_id or "") != conversation_id:
+                    continue
+                for artifact in reversed(await self._task_engine.artifacts(task.task_id)):
+                    if content_marker and content_marker in str(artifact.content_type or ""):
+                        return str(artifact.artifact_id)
+        except Exception:
+            return None
+        return None
+
+    def _office_missing_capability_text(
+        self,
+        office_request: OfficeChatRequest,
+        reason: str,
+    ) -> str:
+        doc_name = _office_doc_visible_name(office_request.document_type)
+        action = "编辑" if office_request.operation == "edit" else "生成"
+        source_ref = f"clawhub:official/office/{_office_package_ref_suffix(office_request)}"
+        if reason == "missing_enabled_skill":
+            return (
+                f"我看出来你要{action}{doc_name}，但对应 Office Skill 还没安装并启用。"
+                "我先停在这里，没有假装生成文件。"
+                f"可以用 CLI 安装：cycber skills install {source_ref} --enable --grant-default。"
+            )
+        return (
+            f"我看出来你要{action}{doc_name}，对应 Skill 已找到，但当前成员还没有授权"
+            f" `{preferred_office_tool_name(office_request)}`。"
+            "没有授权我就不写文件，这点我比较守规矩。"
+        )
+
+    def _office_next_actions(self, office_request: OfficeChatRequest, reason: str) -> list[str]:
+        source_ref = f"clawhub:official/office/{_office_package_ref_suffix(office_request)}"
+        if reason == "missing_enabled_skill":
+            return [f"cycber skills install {source_ref} --enable --grant-default"]
+        return [
+            f"cycber skills grant <skill_id> --tool {preferred_office_tool_name(office_request)}"
+        ]
+
+    def _office_task_reply(
+        self,
+        office_request: OfficeChatRequest,
+        task: Any,
+        artifacts: list[Any],
+    ) -> str:
+        doc_name = _office_doc_visible_name(office_request.document_type)
+        action = "编辑" if office_request.operation == "edit" else "生成"
+        if task.status.value != "completed":
+            if task.status.value == "waiting_approval":
+                return (
+                    f"{doc_name}{action}任务已创建，但还在等待确认；"
+                    "确认前不会写入或改动文件。"
+                )
+            if task.status.value == "failed":
+                return (
+                    f"{doc_name}{action}任务没有完成。"
+                    "你可以让我缩小范围、换内容，或查看失败原因后重试。"
+                )
+            return (
+                f"{doc_name}{action}任务已创建，当前状态是 {task.status.value}，"
+                "我会按真实状态继续反馈。"
+            )
+        office_artifact = _first_office_artifact(artifacts, office_request.document_type)
+        if office_artifact is None:
+            return (
+                f"{doc_name}{action}任务已跑完，但没有发现对应 Office 文件 artifact。"
+                "我不会把这当成真正完成，需要检查 Skill 输出。"
+            )
+        detail = _office_reply_detail(office_request)
+        summary = _office_content_summary(office_request)
+        next_hint = _office_next_edit_hint(office_request.document_type)
+        return (
+            f"{doc_name}已经{action}完成，文件：{office_artifact.display_name}。"
+            f"{detail}"
+            f"{summary}"
+            f"{next_hint}"
+        )
+
 
 def _session_id_from_message(message: dict[str, Any] | None) -> str | None:
     if not message:
@@ -2256,6 +3370,259 @@ def _session_id_from_message(message: dict[str, Any] | None) -> str | None:
         value = content.get("session_id")
         return str(value) if value else None
     return None
+
+
+def _phase52_deploy_or_install_explain_only(text: str) -> bool:
+    clean = text.strip()
+    lowered = clean.lower()
+    direct_only = any(
+        marker in clean
+        for marker in ["只解释", "只给方案", "不要执行", "不要创建任务", "不要调用工具"]
+    )
+    deploy_or_install = any(
+        marker in clean or marker in lowered
+        for marker in ["部署", "安装", "跑起来", "github", "git 仓库", "git仓库", "install"]
+    )
+    return direct_only and deploy_or_install
+
+
+def _direct_route_reply(
+    route_type: str,
+    user_text: str,
+) -> tuple[str, str, dict[str, Any]] | None:
+    if route_type == "download_topic":
+        text = (
+            "可以补下载端点说明，但我不会触发真实下载。建议把 artifact 下载设计成只读接口："
+            "先校验成员对该任务的访问权限，再按 artifact id 读取元数据和文件流；响应头设置"
+            "准确的文件名、content type 和长度，并记录一次审计事件。这样用户拿到的是已生成"
+            "工件，不会因为一句“下载端点”就让浏览器跑出去。"
+        )
+        return text, "download_topic_explanation", {"download_topic": {"real_download": False}}
+    if route_type == "skill_mcp_concept":
+        text = (
+            "Skill 更像“做事方法包”：定义什么时候用、需要哪些受控工具、权限和步骤。"
+            "MCP 更像“外部工具插座”：把浏览器、数据库、SaaS 或本地服务以统一协议接进来。"
+            "简单说，Skill 决定怎么做，MCP 提供能调用的外部能力；两者都应该经过权限、"
+            "安全检查和审计记录，而不是绕过系统直接执行。"
+        )
+        return text, "skill_mcp_concept", {"concept_answer": {"task_created": False}}
+    return None
+
+
+def _host_filesystem_list_reply(result: dict[str, Any]) -> str:
+    location = _host_filesystem_label(str(result.get("location") or "home"))
+    items = list(result.get("items") or [])
+    if not items:
+        return f"我看了一下{location}，没有可展示的文件或文件夹。"
+    visible = items[:10]
+    names = []
+    for item in visible:
+        name = str(item.get("name") or "")
+        kind = "文件夹" if item.get("type") == "directory" else "文件"
+        names.append(f"{name}（{kind}）")
+    suffix = "；结果已截断。" if result.get("truncated") else "。"
+    hidden = int((result.get("redaction_summary") or {}).get("hidden_items_skipped") or 0)
+    redacted = int((result.get("redaction_summary") or {}).get("sensitive_names_redacted") or 0)
+    privacy_note = ""
+    if hidden or redacted:
+        privacy_note = f" 另外有 {hidden + redacted} 项因隐藏或敏感命名没有直接展示。"
+    return f"我看了一下{location}，找到 {len(items)} 项：{'; '.join(names)}{suffix}{privacy_note}"
+
+
+def _host_filesystem_list_error_reply(location: str, exc: AppError) -> str:
+    label = _host_filesystem_label(location)
+    reason = str((exc.details or {}).get("reason") or exc.message)
+    if reason in {"host_fs_sensitive_path_denied", "host_fs_outside_allowed_roots"}:
+        return f"这个位置不能直接查看：{label} 不在当前允许的只读目录边界内。"
+    if reason == "host_fs_path_traversal_denied":
+        return "这个路径包含越界片段，安全策略已拒绝查看。"
+    return f"我没能查看{label}：{exc.message}"
+
+
+def _host_filesystem_label(location: str) -> str:
+    return {
+        "desktop": "桌面",
+        "downloads": "下载目录",
+        "documents": "文档目录",
+        "home": "用户主目录",
+        "authorized": "授权目录",
+    }.get(location, "该目录")
+
+
+def _browser_read_page_reply(result: dict[str, Any]) -> str:
+    title = _clean_browser_text(str(result.get("title") or "")) or "未识别标题"
+    status = result.get("http_status")
+    content = _browser_visible_text(
+        str(result.get("content_preview") or result.get("snapshot") or "")
+    )
+    if not content:
+        return (
+            f"我打开了这个网页，HTTP 状态是 {status or '未知'}，标题是《{title}》。"
+            "页面没有返回可提取的正文文本，可能主要依赖脚本渲染或访问受限。"
+        )
+    preview = _truncate_browser_text(content, 360)
+    return (
+        f"我打开并读取了这个网页，HTTP 状态是 {status or '未知'}，标题是《{title}》。"
+        f"页面可见内容大致是：{preview}"
+    )
+
+
+def _browser_read_page_error_reply(exc: AppError) -> str:
+    details = exc.details or {}
+    reason_codes = details.get("reason_codes") or []
+    blocked_reason = str(details.get("blocked_reason") or "")
+    if blocked_reason == "metadata_url" or "browser_metadata_url_denied" in reason_codes:
+        return "这个链接指向云元数据或本机敏感地址，安全策略已拒绝访问。"
+    if blocked_reason == "private_network" or "browser_private_network_denied" in reason_codes:
+        return "这个链接指向当前不允许访问的私有网络地址，安全策略已拒绝访问。"
+    if blocked_reason == "unsupported_scheme":
+        return "这个链接不是可安全访问的 http/https 地址，所以没有打开。"
+    if "task_binding_required" in reason_codes:
+        return "当前浏览器只读策略还没有生效，所以这次没有打开网页；需要刷新工具边界配置后重试。"
+    return f"我没能打开这个网页：{exc.message}"
+
+
+def _browser_read_page_payload(result: dict[str, Any]) -> dict[str, Any]:
+    content = _browser_visible_text(
+        str(result.get("content_preview") or result.get("snapshot") or "")
+    )
+    return {
+        "status": result.get("action_status") or "completed",
+        "url": result.get("url"),
+        "title": _clean_browser_text(str(result.get("title") or "")) or None,
+        "http_status": result.get("http_status"),
+        "content_preview": _truncate_browser_text(content, 1000) if content else None,
+        "browser_evidence_id": result.get("browser_evidence_id"),
+        "backend": result.get("backend"),
+        "redaction_summary": result.get("redaction_summary"),
+        "untrusted_external_content": True,
+    }
+
+
+def _browser_visible_text(raw: str) -> str:
+    text = re.sub(r"(?is)<(script|style|noscript|svg|canvas)[^>]*>.*?</\1>", " ", raw)
+    text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</(p|div|section|article|header|footer|li|h[1-6])>", "\n", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    return _clean_browser_text(html.unescape(text))
+
+
+def _clean_browser_text(value: str) -> str:
+    value = re.sub(r"\s+", " ", value or "")
+    return value.strip(" \t\r\n")
+
+
+def _truncate_browser_text(value: str, limit: int) -> str:
+    clean = _clean_browser_text(value)
+    if len(clean) <= limit:
+        return clean
+    return f"{clean[: max(0, limit - 1)].rstrip()}…"
+
+
+def _strategy_advice_fallback_text(user_text: str) -> str:
+    del user_text
+    return (
+        "建议默认采用“快回归优先，关键链路再上真实模型”的策略：日常提交跑定向回归，"
+        "保证速度和开发反馈；合并前跑核心聊天、任务、Skill、权限的组合用例，保证覆盖率；"
+        "真实模型测试放到 nightly 或 release profile，只覆盖高价值样例，控制成本。"
+        "默认阈值可以是：本地规则/假模型每次必跑，真实模型只跑主链路和最近改动相关场景。"
+    )
+
+
+def _office_doc_visible_name(document_type: str) -> str:
+    return {"word": "Word 文档", "excel": "Excel 表格", "ppt": "PPT 演示稿"}.get(
+        document_type,
+        "Office 文件",
+    )
+
+
+def _office_reply_detail(office_request: OfficeChatRequest) -> str:
+    if office_request.operation == "edit":
+        return "我已基于上一版生成了新的文件，没有覆盖原文件。"
+    if office_request.document_type == "excel":
+        return "我把输入数据落到了 Data sheet，并附上了摘要 sheet。"
+    if office_request.document_type == "ppt":
+        if office_request.requested_pages_or_sheets:
+            return f"我按你要的 {office_request.requested_pages_or_sheets} 页组织了标题页和正文页。"
+        return "我整理了标题页、进展、风险和下一步页面。"
+    return "我整理了进展、风险与下一步计划，并保留了表格结构。"
+
+
+def _office_next_edit_hint(document_type: str) -> str:
+    if document_type == "excel":
+        return "下一步可以继续让我新增利润率 sheet，或把图表改成月度趋势。"
+    if document_type == "ppt":
+        return "下一步可以继续让我加一页风险，或按新的汇报对象改写。"
+    return "下一步可以继续让我补风险、下一步章节，或把语气改得更正式。"
+
+
+def _office_content_summary(office_request: OfficeChatRequest) -> str:
+    topic = office_request.topic.strip()
+    if office_request.operation == "edit":
+        return "这次编辑生成的是新版本，原文件没有被覆盖。"
+    if office_request.document_type == "excel":
+        return f"我已按“{topic}”整理数据、汇总和基础分析。"
+    if office_request.document_type == "ppt":
+        page_hint = (
+            f"{office_request.requested_pages_or_sheets} 页"
+            if office_request.requested_pages_or_sheets
+            else "多页"
+        )
+        return f"我已按“{topic}”组织成 {page_hint} 演示结构。"
+    return f"我已按“{topic}”整理完成事项、风险和下一步。"
+
+
+def _office_package_ref_suffix(office_request: OfficeChatRequest) -> str:
+    bundle = preferred_office_bundle_id(office_request)
+    return bundle.removeprefix("clawhub-").replace("analysis-workbook", "analysis-workbook")
+
+
+def _office_artifact_refs(artifacts: list[Any], document_type: str) -> list[dict[str, Any]]:
+    marker = {
+        "word": "wordprocessingml.document",
+        "excel": "spreadsheetml.sheet",
+        "ppt": "presentationml.presentation",
+    }.get(document_type)
+    refs: list[dict[str, Any]] = []
+    for artifact in artifacts:
+        content_type = str(getattr(artifact, "content_type", "") or "")
+        if marker and marker not in content_type:
+            continue
+        metadata = getattr(artifact, "metadata", {}) or {}
+        if metadata.get("copied_for_office_edit"):
+            continue
+        artifact_id = str(getattr(artifact, "artifact_id", "") or "")
+        if not artifact_id:
+            continue
+        refs.append(
+            {
+                "artifact_id": artifact_id,
+                "display_name": str(getattr(artifact, "display_name", "") or "office-file"),
+                "content_type": content_type,
+                "size_bytes": getattr(artifact, "size_bytes", None),
+                "checksum": getattr(artifact, "checksum", None),
+                "download_url": f"/api/artifacts/{artifact_id}/download",
+            }
+        )
+    return refs
+
+
+def _first_office_artifact(artifacts: list[Any], document_type: str) -> Any | None:
+    marker = {
+        "word": "wordprocessingml.document",
+        "excel": "spreadsheetml.sheet",
+        "ppt": "presentationml.presentation",
+    }.get(document_type)
+    office_artifacts = [
+        artifact
+        for artifact in artifacts
+        if marker and marker in str(getattr(artifact, "content_type", "") or "")
+    ]
+    for artifact in reversed(office_artifacts):
+        metadata = getattr(artifact, "metadata", {}) or {}
+        if not metadata.get("copied_for_office_edit"):
+            return artifact
+    return office_artifacts[-1] if office_artifacts else (artifacts[0] if artifacts else None)
 
 
 def _title_from_text(text: str) -> str:

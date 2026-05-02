@@ -1,0 +1,274 @@
+{
+  "task_id": "tsk_857eef45b9084a638bbaa25cc91ca545",
+  "organization_id": "org_default",
+  "title": "安装本机软件 QQ",
+  "goal": "安装本机软件 QQ",
+  "mode": "agent",
+  "status": "completed",
+  "risk_level": "R2",
+  "owner_member_id": "mem_xiaoyao",
+  "conversation_id": null,
+  "parent_task_id": null,
+  "host_member_id": null,
+  "collaboration_plan_id": null,
+  "supervisor_mode": null,
+  "success_criteria": [
+    "任务产生可回放结果"
+  ],
+  "progress": {
+    "total_steps": 1,
+    "completed_steps": 1,
+    "current_step_key": null
+  },
+  "current_approval_id": null,
+  "artifact_count": 1,
+  "failure_reason": null,
+  "cancellation_reason": null,
+  "trace_id": "trc_7df4935f01784b4cb9ce390aff3d4349",
+  "created_at": "2026-05-01T16:07:54.905455Z",
+  "updated_at": "2026-05-01T16:07:55.201156Z",
+  "plan": {
+    "task_id": "tsk_857eef45b9084a638bbaa25cc91ca545",
+    "title": "安装本机软件 QQ",
+    "goal": "安装本机软件 QQ",
+    "mode": "agent",
+    "owner_member_id": "mem_xiaoyao",
+    "host_member_id": null,
+    "success_criteria": [
+      "任务产生可回放结果"
+    ],
+    "constraints": {
+      "phase52": "host_install",
+      "requested_software": "QQ"
+    },
+    "assumptions": [
+      "规则优先 planner；未启用模型辅助规划。",
+      "Agent loop 只按预算执行当前任务步骤，不做后台自主动作。",
+      "未声明资产句柄，步骤只能使用无需资产的能力。"
+    ],
+    "required_capabilities": [],
+    "required_assets": [],
+    "approval_strategy": {
+      "strategy": "step_gate",
+      "required_before_execution": false,
+      "high_risk_step_keys": [],
+      "phase19_candidate_id": "plancand_bd4fab6cf88b4cc4a92453a8af778cd1",
+      "phase25_selected_candidate_id": "plancand_bd4fab6cf88b4cc4a92453a8af778cd1"
+    },
+    "steps": [
+      {
+        "step_key": "compose_report",
+        "step_type": "compose",
+        "title": "生成任务报告",
+        "risk_level": "R1",
+        "input": {}
+      }
+    ],
+    "participants": [],
+    "collaboration": {},
+    "risk_level": "R2",
+    "budget": {
+      "max_steps": 20,
+      "max_loop_steps": 8,
+      "max_tool_calls": 30,
+      "max_runtime_seconds": 1800,
+      "max_model_calls": 20,
+      "max_total_cost": 0.0,
+      "max_artifact_bytes": 10000000
+    },
+    "checkpoint_policy": {
+      "checkpoint_after_each_step": true,
+      "persist_observations": true
+    },
+    "failure_policy": {
+      "on_step_failure": "pause_and_create_retry_plan",
+      "allow_alternate_path_without_approval": false
+    },
+    "reflection_policy": {
+      "candidate_only": true,
+      "candidate_types": [
+        "memory_candidate",
+        "workflow_template_candidate",
+        "skill_candidate",
+        "failure_pattern_candidate"
+      ]
+    },
+    "planner_type": "agent_exploratory_planner",
+    "planner_reason_codes": [
+      "mode_agent",
+      "rule_first_planner",
+      "explicit_mode_hint"
+    ],
+    "preflight": {
+      "required_handles": [],
+      "required_approvals": [],
+      "blocked_actions": [],
+      "capability_snapshot": {
+        "enabled_skill_count": 0,
+        "ready_mcp_server_count": 0,
+        "active_mcp_tool_count": 0,
+        "explicit_skill_available": false,
+        "skill_match_refs": [],
+        "mcp_tool_refs": [],
+        "reason_codes": [],
+        "model_assist": {
+          "enabled": false,
+          "reason": "rule_first_planner"
+        }
+      },
+      "skill_match_refs": [],
+      "mcp_tool_refs": [],
+      "planner_context": {
+        "phase52": {
+          "workflow": "host_install"
+        }
+      },
+      "brain_decision_id": null,
+      "phase19": {
+        "candidate_id": "plancand_bd4fab6cf88b4cc4a92453a8af778cd1",
+        "verification_status": "passed",
+        "policy_prune_count": 0,
+        "capability_candidate_count": 0,
+        "model_assist_enabled": false,
+        "safe_final_step_count": 1,
+        "fallback_used": true,
+        "unsafe_prune_types": []
+      },
+      "phase25": {
+        "generation_id": "plangen_09e234c0619440da952f9aeb0aee7b85",
+        "candidate_count": 1,
+        "selected_candidate_id": "plancand_bd4fab6cf88b4cc4a92453a8af778cd1",
+        "selected_candidate_source": "deterministic_rule_surrogate",
+        "selected_quality_score": 0.8712,
+        "quality_score": {
+          "score_id": "planscore_88b815c2fc1947f99aaaf38b33adebd5",
+          "task_id": "tsk_857eef45b9084a638bbaa25cc91ca545",
+          "candidate_id": "plancand_bd4fab6cf88b4cc4a92453a8af778cd1",
+          "total_score": 0.8712,
+          "goal_coverage": 0.5,
+          "step_coherence": 1.0,
+          "capability_fit": 1.0,
+          "safety_compliance": 1.0,
+          "budget_efficiency": 1.0,
+          "missing_information_handling": 0.72,
+          "recoverability": 0.85,
+          "artifact_clarity": 0.9,
+          "selected": true,
+          "reason_codes": [
+            "quality_scored",
+            "source_deterministic_rule_surrogate"
+          ],
+          "created_at": "2026-05-02T00:07:54.91831+08:00"
+        },
+        "model_assist_attempted": false,
+        "fallback_used": true,
+        "fallback_reason": "no_routable_planner_brain",
+        "model_call": {
+          "adapter": "brain_openai_compatible",
+          "status": "fallback",
+          "privacy_level": "medium",
+          "fallback_reason": "no_routable_planner_brain"
+        },
+        "candidate_only": true
+      }
+    },
+    "artifact_plan": {
+      "expected_outputs": [
+        "task_report"
+      ]
+    }
+  },
+  "budget": {
+    "max_steps": 20,
+    "max_loop_steps": 8,
+    "max_tool_calls": 30,
+    "max_runtime_seconds": 1800,
+    "max_model_calls": 20,
+    "max_total_cost": 0.0,
+    "max_artifact_bytes": 10000000
+  },
+  "preflight": {
+    "required_handles": [],
+    "required_approvals": [],
+    "blocked_actions": [],
+    "capability_snapshot": {
+      "enabled_skill_count": 0,
+      "ready_mcp_server_count": 0,
+      "active_mcp_tool_count": 0,
+      "explicit_skill_available": false,
+      "skill_match_refs": [],
+      "mcp_tool_refs": [],
+      "reason_codes": [],
+      "model_assist": {
+        "enabled": false,
+        "reason": "rule_first_planner"
+      }
+    },
+    "skill_match_refs": [],
+    "mcp_tool_refs": [],
+    "planner_context": {
+      "phase52": {
+        "workflow": "host_install"
+      }
+    },
+    "brain_decision_id": null,
+    "phase19": {
+      "candidate_id": "plancand_bd4fab6cf88b4cc4a92453a8af778cd1",
+      "verification_status": "passed",
+      "policy_prune_count": 0,
+      "capability_candidate_count": 0,
+      "model_assist_enabled": false,
+      "safe_final_step_count": 1,
+      "fallback_used": true,
+      "unsafe_prune_types": []
+    },
+    "phase25": {
+      "generation_id": "plangen_09e234c0619440da952f9aeb0aee7b85",
+      "candidate_count": 1,
+      "selected_candidate_id": "plancand_bd4fab6cf88b4cc4a92453a8af778cd1",
+      "selected_candidate_source": "deterministic_rule_surrogate",
+      "selected_quality_score": 0.8712,
+      "quality_score": {
+        "score_id": "planscore_88b815c2fc1947f99aaaf38b33adebd5",
+        "task_id": "tsk_857eef45b9084a638bbaa25cc91ca545",
+        "candidate_id": "plancand_bd4fab6cf88b4cc4a92453a8af778cd1",
+        "total_score": 0.8712,
+        "goal_coverage": 0.5,
+        "step_coherence": 1.0,
+        "capability_fit": 1.0,
+        "safety_compliance": 1.0,
+        "budget_efficiency": 1.0,
+        "missing_information_handling": 0.72,
+        "recoverability": 0.85,
+        "artifact_clarity": 0.9,
+        "selected": true,
+        "reason_codes": [
+          "quality_scored",
+          "source_deterministic_rule_surrogate"
+        ],
+        "created_at": "2026-05-02T00:07:54.91831+08:00"
+      },
+      "model_assist_attempted": false,
+      "fallback_used": true,
+      "fallback_reason": "no_routable_planner_brain",
+      "model_call": {
+        "adapter": "brain_openai_compatible",
+        "status": "fallback",
+        "privacy_level": "medium",
+        "fallback_reason": "no_routable_planner_brain"
+      },
+      "candidate_only": true
+    }
+  },
+  "artifact_plan": {
+    "expected_outputs": [
+      "task_report"
+    ]
+  },
+  "result": {
+    "summary": "Agent loop 已完成。",
+    "stop_reason": "completed",
+    "loop_steps": 1,
+    "tool_calls": 0
+  }
+}

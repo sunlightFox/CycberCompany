@@ -1,0 +1,97 @@
+{
+  "host_install_execution_id": "hie_ce379b363db64f07baaa8a55dae0dd72",
+  "organization_id": "org_default",
+  "host_install_plan_id": "hip_b8e9ba1025134d99aee6b4685d45bcad",
+  "task_id": "tsk_643c3b9f61ed4ac7a14a4c93bcb5e3de",
+  "status": "installed",
+  "exit_code": 0,
+  "log_artifact_id": "art_58448fa712184f3abc9bdf2027abbd96",
+  "version_detected": "4.1.9.30",
+  "install_path_summary": "C:\\Program Files\\Tencent\\Weixin\\Weixin.exe",
+  "failure_reason": null,
+  "trace_id": "trc_fbebcba731164cf48e7ce5c59a44fc3f",
+  "created_at": "2026-05-02T00:50:20.547078Z",
+  "updated_at": "2026-05-02T00:50:20.547078Z",
+  "plan": {
+    "host_install_plan_id": "hip_b8e9ba1025134d99aee6b4685d45bcad",
+    "organization_id": "org_default",
+    "task_id": "tsk_643c3b9f61ed4ac7a14a4c93bcb5e3de",
+    "requested_software": "微信",
+    "install_source": {
+      "installer_sha256": "81D05E79EAD9D310BDF00B64E94809FE808ADBE21D95588BF3A52395C29C52BD",
+      "installer_url": "https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.9.exe",
+      "match_confidence": 0.99,
+      "match_reason": "winget_bootstrap_unsupported_on_current_host",
+      "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+      "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/t/Tencent/WeChat/Universal/4.1.9.30/Tencent.WeChat.Universal.installer.yaml",
+      "package_id": "Tencent.WeChat.Universal",
+      "package_manager": "winget_manifest",
+      "publisher": "Tencent",
+      "source_type": "official_manifest_installer_fallback",
+      "target_source_type": "official_installer_from_winget_manifest",
+      "trust": "official_manifest_with_sha256",
+      "version": "4.1.9.30"
+    },
+    "command_preview": {
+      "action": "install",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'Tencent.WeChat.Universal.exe'; Invoke-WebRequest -Uri 'https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.9.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '81D05E79EAD9D310BDF00B64E94809FE808ADBE21D95588BF3A52395C29C52BD') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru; exit $process.ExitCode"
+      ],
+      "cwd": "host_default",
+      "env_policy": "minimal",
+      "executable": "pwsh",
+      "steps": [
+        {
+          "action": "install",
+          "args": [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'Tencent.WeChat.Universal.exe'; Invoke-WebRequest -Uri 'https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.9.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '81D05E79EAD9D310BDF00B64E94809FE808ADBE21D95588BF3A52395C29C52BD') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru; exit $process.ExitCode"
+          ],
+          "cwd": "host_default",
+          "env_policy": "minimal",
+          "executable": "pwsh",
+          "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/t/Tencent/WeChat/Universal/4.1.9.30/Tencent.WeChat.Universal.installer.yaml",
+          "official_source": "https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.9.exe",
+          "package_manager": "winget_manifest",
+          "sha256": "81D05E79EAD9D310BDF00B64E94809FE808ADBE21D95588BF3A52395C29C52BD",
+          "step_key": "official_manifest_install_tencent_wechat_universal",
+          "step_type": "official_manifest_installer",
+          "target_package_id": "Tencent.WeChat.Universal",
+          "timeout_seconds": 1800
+        }
+      ]
+    },
+    "impact_summary": {
+      "bootstrap_required": false,
+      "bootstrap_skipped_reason": "winget_not_supported_on_current_windows_server",
+      "checksum_verification": "sha256",
+      "may_require_admin": true,
+      "modifies_global_environment": true,
+      "modifies_path_or_registry": true,
+      "package_resolution": {
+        "match_confidence": 0.99,
+        "match_reason": "winget_bootstrap_unsupported_on_current_host",
+        "source_type": "official_winget_manifest",
+        "target_package_id": "Tencent.WeChat.Universal"
+      },
+      "preserve_preexisting_install": true,
+      "real_execution_default": false,
+      "risk_level": "R6",
+      "rollback": "winget uninstall --id Tencent.WeChat.Universal 或通过系统应用卸载 微信",
+      "writes_system_locations": true
+    },
+    "risk_level": "R6",
+    "status": "installed",
+    "approval_id": "apr_770195f4f659486f8d88a4615e8a0706",
+    "trace_id": "trc_a9ed991265954edcb119ba0667b0e11b",
+    "created_at": "2026-05-02T00:48:54.006613Z",
+    "updated_at": "2026-05-02T00:50:20.547078Z"
+  }
+}

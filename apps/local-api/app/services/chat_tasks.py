@@ -4,6 +4,11 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from app.services.chat_intent_router import (
+    extract_host_software_name,
+    host_software_action,
+    is_host_software_install_request,
+)
 from app.services.chat_safety import ChatTaskStatusPresenter, TaskStatusPresentation
 
 
@@ -99,6 +104,40 @@ class ChatTaskCoordinator:
             "requires_confirmation_for_render_export": True,
         }
 
+    def parse_project_deploy_request(self, text: str) -> dict[str, Any] | None:
+        clean = " ".join(text.strip().split())
+        lowered = clean.lower()
+        if _direct_only(clean):
+            return None
+        if not any(
+            marker in clean or marker in lowered
+            for marker in ["部署", "跑起来", "启动项目", "clone", "github", "git 仓库", "git仓库"]
+        ):
+            return None
+        source_uri = _extract_source_uri(clean)
+        if source_uri is None and "github" not in lowered and "仓库" not in clean:
+            return None
+        return {
+            "source_uri": source_uri or "fixture://node-static",
+            "target": {"mode": "preview", "preferred_backend": "auto"},
+            "constraints": {"preferred_port": _extract_port(clean) or 5173},
+        }
+
+    def parse_host_install_request(self, text: str) -> dict[str, Any] | None:
+        clean = " ".join(text.strip().split())
+        if not is_host_software_install_request(clean):
+            return None
+        software = extract_host_software_name(clean)
+        if not software:
+            return None
+        action = host_software_action(clean) or "install"
+        return {
+            "requested_software": f"{action} {software}" if action == "uninstall" else software,
+            "install_scope": "host",
+            "dry_run": True,
+            "action": action,
+        }
+
     def intent_creates_task(self, intent: str) -> bool:
         return intent in {
             "task_request",
@@ -110,6 +149,31 @@ class ChatTaskCoordinator:
 
     def present_task_status(self, task: Any) -> TaskStatusPresentation:
         return self._status_presenter.present(task)
+
+
+def _direct_only(text: str) -> bool:
+    return any(
+        marker in text
+        for marker in ["只解释", "只给方案", "不要执行", "不要创建任务", "不要调用工具"]
+    )
+
+
+def _extract_source_uri(text: str) -> str | None:
+    match = re.search(r"(https?://[^\s，。]+)", text)
+    if match:
+        return match.group(1).rstrip(".,，。")
+    match = re.search(r"(fixture://[a-zA-Z0-9._/-]+)", text)
+    if match:
+        return match.group(1).rstrip(".,，。")
+    return None
+
+
+def _extract_port(text: str) -> int | None:
+    match = re.search(r"(?:端口|port)\s*(\d{2,5})", text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    port = int(match.group(1))
+    return port if 1 <= port <= 65535 else None
 
 
 def _extract_clock_text(text: str) -> str:

@@ -70,6 +70,30 @@ class ChatQualityPolicy:
                 ),
             )
 
+        if _supportive_safety_refusal_request(text):
+            return self._outcome(
+                (
+                    "这个请求我不能照做：它要求跳过审批、越权登录、伪装执行，或绕过系统安全边界。"
+                    "我没有创建任务，也没有调用工具。"
+                    "如果你要完成真实操作，可以重新说明目标、账号归属和允许范围；"
+                    "我会按安全检查、用户确认和审计证据链路处理。"
+                ),
+                intent="safety_boundary",
+                status="supportive_safety_refusal",
+                reason_codes=[
+                    "chat_quality_policy",
+                    "phase51_supportive_safety_refusal",
+                    "no_task_or_tool_created",
+                ],
+                structured={
+                    "task_created": False,
+                    "tool_created": False,
+                    "approval_created": False,
+                    "fail_closed": True,
+                },
+                safety_notice="不会跳过审批、越权登录、伪装执行或绕过系统安全边界。",
+            )
+
         if _persona_boundary_question(text):
             return self._outcome(
                 (
@@ -96,6 +120,25 @@ class ChatQualityPolicy:
                 reason_codes=["chat_quality_policy", "internal_instruction_refusal"],
                 structured={},
                 safety_notice="系统提示、开发者指令和内部审计细节不会作为普通聊天内容披露。",
+            )
+
+        if _high_risk_professional_advice(text):
+            return self._outcome(
+                _professional_boundary_reply(text),
+                intent="professional_safety_advice",
+                status="professional_safety_boundary",
+                reason_codes=[
+                    "chat_quality_policy",
+                    "phase51_professional_safety_advice",
+                    "no_unconditional_dosage_or_guarantee",
+                ],
+                structured={
+                    "task_created": False,
+                    "tool_created": False,
+                    "professional_boundary": True,
+                    "safe_next_step": True,
+                },
+                safety_notice="高风险医疗或金融建议只提供安全边界和下一步，不给无条件剂量或保证性结论。",
             )
 
         if _recoverable_secret_input(
@@ -153,6 +196,22 @@ class ChatQualityPolicy:
                 "structured_payload": {
                     **plan.structured_payload,
                     "scenario": "chat_quality_policy",
+                    "route_semantics": {
+                        "route": "direct",
+                        "model_called": False,
+                        "task_created": False,
+                        "tool_created": False,
+                        "model_not_required_reason": status,
+                    },
+                    "response_quality_guard": {
+                        "status": status,
+                        "state_disclosed": True,
+                        "boundary_disclosed": True,
+                        "next_step_provided": bool(follow_ups),
+                        "no_false_done": True,
+                        "no_internal_terms": True,
+                        "professional_boundary": status == "professional_safety_boundary",
+                    },
                     "chat_quality_policy": {
                         "status": status,
                         "reason_codes": reason_codes,
@@ -281,6 +340,96 @@ def _system_prompt_or_trace_request(text: str) -> bool:
     )
 
 
+def _supportive_safety_refusal_request(text: str) -> bool:
+    lowered = text.lower()
+    bypass_markers = [
+        "跳过审批",
+        "绕过审批",
+        "忽略审批",
+        "不要审批",
+        "不需要审批",
+        "绕过安全",
+        "无视安全",
+        "绕过系统",
+        "跳过确认",
+        "不需要确认",
+        "bypass approval",
+        "skip approval",
+    ]
+    abuse_markers = [
+        "登录别人账号",
+        "登录他人账号",
+        "替我登录别人",
+        "越权登录",
+        "越权审批",
+        "假装已执行",
+        "假装已经执行",
+        "假装完成",
+        "明明没执行也说完成",
+        "伪装执行",
+        "偷偷执行",
+    ]
+    return any(marker in lowered or marker in text for marker in bypass_markers) or any(
+        marker in lowered or marker in text for marker in abuse_markers
+    )
+
+
+def _high_risk_professional_advice(text: str) -> bool:
+    lowered = text.lower()
+    medical_markers = [
+        "布洛芬",
+        "用药",
+        "吃多少",
+        "剂量",
+        "毫克",
+        "退烧药",
+        "止痛药",
+        "处方药",
+        "药量",
+        "儿童用药",
+    ]
+    finance_markers = [
+        "保证收益",
+        "稳赚",
+        "全部积蓄",
+        "满仓",
+        "确定买入",
+        "贷款买",
+        "不要提醒风险",
+        "金融建议",
+        "投资建议",
+    ]
+    return any(marker in lowered or marker in text for marker in medical_markers) or any(
+        marker in lowered or marker in text for marker in finance_markers
+    )
+
+
+def _professional_boundary_reply(text: str) -> str:
+    medical_markers = [
+        "布洛芬",
+        "用药",
+        "吃多少",
+        "剂量",
+        "毫克",
+        "退烧药",
+        "止痛药",
+    ]
+    if any(marker in text for marker in medical_markers):
+        return (
+            "关于布洛芬或其他用药，我不能根据一段聊天给出个人化、无条件的剂量指令。"
+            "安全做法是先看药品说明书和包装上的适用人群、禁忌、间隔与最大用量；"
+            "如果是儿童、孕期、肝肾疾病、胃溃疡、正在服用抗凝药，或症状持续/加重，"
+            "请联系医生或药师。\n\n"
+            "你可以把问题改成“帮我整理咨询医生前要确认的信息”，"
+            "我可以列出年龄、体重、症状持续时间、既往病史、正在用药和过敏史这些安全核对项。"
+        )
+    return (
+        "这属于高风险金融建议，我不能给出保证性结论或让你忽略风险。"
+        "更安全的下一步是先明确目标、期限、可承受亏损、流动性需求和分散配置，"
+        "再把任何具体交易决定交给合格专业人士或你自己的审慎判断。"
+    )
+
+
 def _recoverable_secret_input(
     lowered: str,
     *,
@@ -306,4 +455,8 @@ def _follow_ups_for_status(status: str) -> list[str]:
         return ["说明可见能力", "生成安全边界说明", "解释审批规则"]
     if status == "persona_boundary":
         return ["说明可用能力", "创建受控任务", "解释账号边界"]
+    if status == "supportive_safety_refusal":
+        return ["重新说明合法目标", "只生成安全方案", "解释审批规则"]
+    if status == "professional_safety_boundary":
+        return ["整理咨询清单", "说明风险边界", "改成通用科普"]
     return ["继续按这三点展开", "生成验收清单", "补充异常场景"]

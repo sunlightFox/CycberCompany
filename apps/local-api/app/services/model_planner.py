@@ -639,9 +639,7 @@ class PolicyPruner:
                     )
                 )
                 continue
-            if step.get("step_type") == "skill_run" and not plan.preflight.get(
-                "capability_snapshot", {}
-            ).get("explicit_skill_available", False):
+            if step.get("step_type") == "skill_run" and not _skill_step_available(step, plan):
                 prunes.append(
                     _prune(
                         candidate,
@@ -1211,6 +1209,27 @@ def _select_candidate(items: list[CandidateEvidence]) -> CandidateEvidence:
         ),
         reverse=True,
     )[0]
+
+
+def _skill_step_available(step: dict[str, Any], plan: TaskPlan) -> bool:
+    snapshot = plan.preflight.get("capability_snapshot", {})
+    raw_step_input = step.get("input")
+    step_input: dict[str, Any] = (
+        dict(raw_step_input) if isinstance(raw_step_input, dict) else {}
+    )
+    skill_id = str(step_input.get("skill_id") or "")
+    bundle_id = str(step_input.get("bundle_id") or "")
+    if snapshot.get("explicit_skill_available") and not skill_id:
+        return True
+    match_refs = plan.preflight.get("skill_match_refs") or snapshot.get("skill_match_refs") or []
+    for item in match_refs:
+        if not isinstance(item, dict):
+            continue
+        if skill_id and item.get("skill_id") == skill_id:
+            return True
+        if bundle_id and item.get("bundle_id") == bundle_id:
+            return True
+    return bool(snapshot.get("explicit_skill_available"))
 
 
 def _capability_candidates(

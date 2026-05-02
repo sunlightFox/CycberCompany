@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -15,6 +16,7 @@ class ChatResult:
     created: dict[str, Any]
     events: list[dict[str, Any]] = field(default_factory=list)
     text: str = ""
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
@@ -60,6 +62,14 @@ async def send_message(
             if delta:
                 parts.append(delta)
     else:
+        turn_detail = getattr(client, "turn", None)
+        if callable(turn_detail):
+            deadline = time.time() + 60
+            while time.time() < deadline:
+                detail = await turn_detail(turn_id)
+                if detail.get("status") in {"completed", "failed", "cancelled"}:
+                    break
+                await asyncio.sleep(0.1)
         events = await client.turn_events(turn_id)
         parts.append(persisted_assistant_text(events))
     diagnostics = await turn_diagnostics(client, turn_id) if include_diagnostics else {}
@@ -69,5 +79,23 @@ async def send_message(
         created=created,
         events=events,
         text="".join(parts).strip(),
+        artifacts=response_artifacts(events),
         diagnostics=diagnostics,
     )
+
+
+def response_artifacts(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    for item in reversed(events):
+        event_type = str(item.get("event_type") or item.get("event") or "")
+        if event_type != "response.completed":
+            continue
+        payload_obj = item.get("payload")
+        payload: dict[str, Any] = payload_obj if isinstance(payload_obj, dict) else {}
+        nested_obj = payload.get("payload")
+        nested: dict[str, Any] = nested_obj if isinstance(nested_obj, dict) else payload
+        plan_obj = nested.get("response_plan")
+        plan: dict[str, Any] = plan_obj if isinstance(plan_obj, dict) else {}
+        refs = plan.get("artifact_refs")
+        if isinstance(refs, list):
+            return [item for item in refs if isinstance(item, dict)]
+    return []

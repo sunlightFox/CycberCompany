@@ -5,6 +5,7 @@ from typing import Any
 from core_types import (
     ApiModel,
     ChatEvent,
+    ChatTurnRecoveryAttempt,
     ChatTurnRequest,
     ChatTurnResponse,
     DialogueState,
@@ -92,6 +93,10 @@ class ChatPersistedEventsResponse(ApiModel):
     items: list[ChatPersistedEvent]
 
 
+class ChatTurnRecoveryAttemptListResponse(ApiModel):
+    items: list[ChatTurnRecoveryAttempt] = Field(default_factory=list)
+
+
 class ConversationWorkingStateResponse(ApiModel):
     conversation_id: str
     organization_id: str
@@ -160,6 +165,8 @@ __all__ = [
     "ChatEventStreamResponse",
     "ChatPersistedEvent",
     "ChatPersistedEventsResponse",
+    "ChatTurnRecoveryAttempt",
+    "ChatTurnRecoveryAttemptListResponse",
     "ChatTurnDetail",
     "ChatTurnRequest",
     "ChatTurnResponse",
