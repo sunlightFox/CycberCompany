@@ -1,0 +1,11 @@
+{
+  "body": {
+    "db": "ok",
+    "default_shell": "company",
+    "status": "ok",
+    "trace_id": "trc_d5caba2473f44b22b499fd032dff787a",
+    "version": "0.1.0"
+  },
+  "status_code": 200,
+  "trace_id": "trc_d5caba2473f44b22b499fd032dff787a"
+}

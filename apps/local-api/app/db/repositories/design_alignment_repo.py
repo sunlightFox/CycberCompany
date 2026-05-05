@@ -275,6 +275,57 @@ class DesignAlignmentRepository:
         )
         return _persona_consistency_from_row(dict(row)) if row else None
 
+    async def upsert_soul_manifest(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO soul_manifests (
+              soul_manifest_id, organization_id, member_id, file_path, content_hash,
+              compiled_profile_id, compiled_snapshot_json, validation_status,
+              validation_errors_json, source, trace_id, created_at, updated_at, compiled_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(member_id) DO UPDATE SET
+              organization_id = excluded.organization_id,
+              file_path = excluded.file_path,
+              content_hash = excluded.content_hash,
+              compiled_profile_id = excluded.compiled_profile_id,
+              compiled_snapshot_json = excluded.compiled_snapshot_json,
+              validation_status = excluded.validation_status,
+              validation_errors_json = excluded.validation_errors_json,
+              source = excluded.source,
+              trace_id = excluded.trace_id,
+              updated_at = excluded.updated_at,
+              compiled_at = excluded.compiled_at
+            """,
+            (
+                data["soul_manifest_id"],
+                data.get("organization_id", "org_default"),
+                data["member_id"],
+                data["file_path"],
+                data["content_hash"],
+                data.get("compiled_profile_id"),
+                _json(data.get("compiled_snapshot", {})),
+                data.get("validation_status", "unknown"),
+                _json(data.get("validation_errors", [])),
+                data.get("source", "file"),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+                data.get("compiled_at"),
+            ),
+        )
+
+    async def get_soul_manifest(self, member_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM soul_manifests
+            WHERE member_id = ?
+            LIMIT 1
+            """,
+            (member_id,),
+        )
+        return _soul_manifest_from_row(dict(row)) if row else None
+
     async def insert_heart_transition(self, data: dict[str, Any]) -> None:
         await self._db.execute(
             """
@@ -682,6 +733,12 @@ def _persona_consistency_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["mode_switch_rules"] = _load(row.pop("mode_switch_rules_json"))
     row["consistency_markers"] = _load(row.pop("consistency_markers_json"))
     row["disabled_patterns"] = _load(row.pop("disabled_patterns_json"))
+    return row
+
+
+def _soul_manifest_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["compiled_snapshot"] = _load(row.pop("compiled_snapshot_json"))
+    row["validation_errors"] = _load(row.pop("validation_errors_json"))
     return row
 
 

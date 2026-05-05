@@ -180,6 +180,11 @@ def test_phase52_chat_host_uninstall_confirm_auto_executes(
     )
     monkeypatch.setattr(
         project_deployments,
+        "_detect_installed_version_for_terms",
+        lambda terms, package_id=None: fake_detect_installed_version(str(package_id or "")),
+    )
+    monkeypatch.setattr(
+        project_deployments,
         "_install_path_summary",
         lambda package_id, success: "removed_by_package_manager" if success else "not_removed",
     )
@@ -265,6 +270,11 @@ def test_phase52_chat_host_install_confirm_requires_post_install_verification(
         "_detect_installed_version",
         fake_detect_installed_version,
     )
+    monkeypatch.setattr(
+        project_deployments,
+        "_detect_installed_version_for_terms",
+        lambda terms, package_id=None: fake_detect_installed_version(str(package_id or "")),
+    )
 
     body = _turn(client, "phase52-host-install-verify-fails", "帮我安装 TestApp。")
     assert body["status"] == "completed"
@@ -334,16 +344,85 @@ def test_phase52_chat_manifest_id_install_generates_official_plan(
     plan = payload["host_install_plan"]
     assert plan["status"] == "waiting_approval"
     assert plan["approval_id"]
-    assert plan["install_source"]["source_type"] == "winget"
+    assert plan["install_source"]["source_type"] == "official_manifest_installer_fallback"
     assert plan["install_source"]["resolved_via"] == "official_winget_manifest"
     assert plan["install_source"]["package_id"].lower() == "dynamic.package"
-    assert plan["install_source"]["fallback_source"]["installer_sha256"]
-    assert plan["command_preview"]["steps"][0]["step_type"] == "package_manager_bootstrap"
-    assert plan["command_preview"]["steps"][-1]["target_package_id"].lower() == "dynamic.package"
-    assert (
-        plan["command_preview"]["fallback_steps"][0]["step_type"]
-        == "official_manifest_installer"
+    assert plan["install_source"]["installer_sha256"]
+    assert plan["impact_summary"]["bootstrap_required"] is False
+    assert plan["impact_summary"]["bootstrap_skipped_reason"] == (
+        "official_manifest_installer_available"
     )
+    assert not any(
+        step["step_type"] == "package_manager_bootstrap"
+        for step in plan["command_preview"]["steps"]
+    )
+    assert plan["command_preview"]["steps"][0]["step_type"] == "official_manifest_installer"
+    assert plan["command_preview"]["steps"][-1]["target_package_id"].lower() == "dynamic.package"
+
+
+def test_phase52_chat_qq_prefers_official_manifest_over_choco(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_resolve_host_package_candidate(
+        software: str,
+    ) -> project_deployments.HostPackageCandidate:
+        assert software == "QQ"
+        return project_deployments.HostPackageCandidate(
+            source_type="choco",
+            package_id="tencentqq",
+            publisher="Chocolatey community package",
+            confidence=0.90,
+            match_reason="choco_exact_search",
+            version="9.9.9",
+            name="tencentqq",
+        )
+
+    async def fake_manifest_candidate(
+        *_: Any, **__: Any
+    ) -> project_deployments.HostPackageCandidate:
+        return project_deployments.HostPackageCandidate(
+            source_type="winget_manifest",
+            package_id="Tencent.QQ",
+            publisher="Tencent",
+            confidence=0.92,
+            match_reason="official_winget_manifest_dynamic",
+            version="9.9.19",
+            name="QQ",
+            installer_url="https://dldir1.qq.com/qqfile/qq/QQNT/Windows/QQ.exe",
+            installer_sha256="F" * 64,
+            installer_type="nullsoft",
+            official_manifest="https://raw.githubusercontent.com/example/Tencent.QQ.installer.yaml",
+        )
+
+    monkeypatch.setattr(
+        project_deployments,
+        "_resolve_host_package_candidate",
+        fake_resolve_host_package_candidate,
+    )
+    monkeypatch.setattr(
+        project_deployments,
+        "_resolve_winget_manifest_candidate",
+        fake_manifest_candidate,
+    )
+    monkeypatch.setattr(
+        project_deployments,
+        "_official_source_assisted_manifest_lookup",
+        lambda software: None,
+    )
+    body = _turn(client, "phase52-host-install-qq-official", "帮我安装 QQ。")
+    assert body["status"] == "completed"
+    events = _events(client, body["turn_id"])
+    payload = _completed_payload(events)["response_plan"]["structured_payload"]
+    plan = payload["host_install_plan"]
+    assert plan["install_source"]["source_type"] == "official_manifest_installer_primary"
+    assert plan["install_source"]["resolved_via"] == "official_winget_manifest_installer_primary"
+    assert plan["install_source"]["package_id"] == "Tencent.QQ"
+    assert plan["install_source"]["preferred_over_source"]["package_id"] == "tencentqq"
+    steps = plan["command_preview"]["steps"]
+    assert steps[0]["step_type"] == "official_manifest_installer"
+    assert steps[0]["target_package_id"] == "Tencent.QQ"
+    assert all(step["step_key"] != "choco_install_tencentqq" for step in steps)
 
 
 def test_phase52_release_eval_and_diagnostic_summary(client: TestClient) -> None:

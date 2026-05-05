@@ -13,7 +13,10 @@ from app.schemas.chat import (
     ChatClarificationDecisionResponse,
     ChatPersistedEvent,
     ChatPersistedEventsResponse,
+    ChatTurnCompactionsResponse,
     ChatTurnDetail,
+    ChatTurnEnvelopeResponse,
+    ChatTurnQueueResponse,
     ChatTurnRecoveryAttempt,
     ChatTurnRecoveryAttemptListResponse,
     ChatTurnRequest,
@@ -236,6 +239,40 @@ async def get_turn_events(
         raise AppError(ErrorCode.NOT_FOUND, "turn 不存在", status_code=404)
     rows = await registry.chat.list_events(turn_id)
     return ChatPersistedEventsResponse(items=[ChatPersistedEvent(**row) for row in rows])
+
+
+@router.get("/turns/{turn_id}/envelope", response_model=ChatTurnEnvelopeResponse)
+async def get_turn_envelope(
+    turn_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> ChatTurnEnvelopeResponse:
+    if await registry.chat.get_turn(turn_id) is None:
+        raise AppError(ErrorCode.NOT_FOUND, "turn 不存在", status_code=404)
+    envelope = await registry.chat.get_message_envelope_by_turn(turn_id)
+    if envelope is None:
+        raise AppError(ErrorCode.NOT_FOUND, "turn envelope 不存在", status_code=404)
+    return ChatTurnEnvelopeResponse(**envelope)
+
+
+@router.get("/turns/{turn_id}/queue", response_model=ChatTurnQueueResponse)
+async def get_turn_queue(
+    turn_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> ChatTurnQueueResponse:
+    if await registry.chat.get_turn(turn_id) is None:
+        raise AppError(ErrorCode.NOT_FOUND, "turn 不存在", status_code=404)
+    return ChatTurnQueueResponse(item=await registry.chat.get_queue_item_by_turn(turn_id))
+
+
+@router.get("/turns/{turn_id}/compactions", response_model=ChatTurnCompactionsResponse)
+async def get_turn_compactions(
+    turn_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> ChatTurnCompactionsResponse:
+    if await registry.chat.get_turn(turn_id) is None:
+        raise AppError(ErrorCode.NOT_FOUND, "turn 不存在", status_code=404)
+    rows = await registry.chat.list_context_compactions(turn_id)
+    return ChatTurnCompactionsResponse(items=rows)
 
 
 @router.get(

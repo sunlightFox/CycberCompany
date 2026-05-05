@@ -20,6 +20,7 @@ from trace_service import TraceService, redact
 
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.execution_boundary_repo import ExecutionBoundaryRepository
+from app.services.safety_policy import RuntimeSafetyPolicyService
 from app.services.terminal_sandbox import (
     TerminalSandboxRequest,
     TerminalSandboxResult,
@@ -144,9 +145,11 @@ class ExecutionBoundaryService:
         *,
         repo: ExecutionBoundaryRepository,
         trace_service: TraceService,
+        safety_policy_service: RuntimeSafetyPolicyService | None = None,
     ) -> None:
         self._repo = repo
         self._trace = trace_service
+        self._safety_policy = safety_policy_service
         self._sandbox_runner = TerminalSandboxRunner()
 
     def set_terminal_sandbox_backend_override(self, backend: str | None) -> None:
@@ -277,6 +280,7 @@ class ExecutionBoundaryService:
             if tool_name == "terminal.run"
             else None
         )
+        readonly_chat_terminal = bool(args.get("chat_readonly_command"))
         action_category = _action_category_for_request(tool_name, args, policy)
         terminal_network = (
             command_network_policy(str(args.get("command") or ""))
@@ -287,9 +291,16 @@ class ExecutionBoundaryService:
             action_category = terminal_network["category"]
         requested = requested_risk_level
         policy_risk = policy.risk_level
+        if (
+            tool_name == "terminal.run"
+            and readonly_chat_terminal
+            and command_policy is not None
+            and command_policy["reason"] == "sandboxed_terminal"
+        ):
+            policy_risk = requested
         if tool_name == "browser.download" and args.get("workflow_low_risk_download"):
             policy_risk = requested
-        command_risk = (
+        command_risk = requested if readonly_chat_terminal else (
             _risk_from_class(command_policy["command_class"])
             if command_policy is not None
             else RiskLevel.R1
@@ -347,6 +358,27 @@ class ExecutionBoundaryService:
                 decision = "approval_required"
             reason_codes.append("risk_requires_approval")
 
+        active_policy = None
+        if self._safety_policy is not None:
+            active_policy = await self._safety_policy.get_policy(
+                organization_id=organization_id
+            )
+        if (
+            active_policy is not None
+            and decision == "approval_required"
+            and active_policy.should_skip_approval(
+                action=tool_name,
+                risk_level=effective_risk,
+                action_category=action_category,
+                payload=args,
+                reason_codes=reason_codes,
+                terminal_command_policy=command_policy if command_policy is not None else {},
+            )
+        ):
+            decision = "allow"
+            required_controls = active_policy.without_approval_controls(required_controls)
+            reason_codes.append("balanced_personal_auto_approved")
+
         sandbox_profile_id = (
             DEFAULT_SANDBOX_PROFILE_ID if tool_name.startswith("terminal.") else None
         )
@@ -361,6 +393,9 @@ class ExecutionBoundaryService:
             "required_capabilities": policy.required_capabilities,
             "required_assets": policy.required_asset_kinds,
             "output_dlp_policy": policy.output_dlp_policy,
+            "approval_profile": (
+                active_policy.approval_profile if active_policy is not None else "strict"
+            ),
             "sandbox_profile_id": sandbox_profile_id,
             "boundary": "phase27_execution_boundary",
             "os_sandbox_backend": (

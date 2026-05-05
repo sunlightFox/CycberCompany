@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "case_id": "wechat-real-001",
+      "category": "no_turn",
+      "group": "routing",
+      "severity": "P0",
+      "summary": "没有匹配到 chat turn，可能入站、配对或 worker 链路未通。"
+    }
+  ]
+}

@@ -25,6 +25,7 @@ from app.schemas.channels import (
     ChannelBindStartRequest,
     ChannelBindStartResponse,
     ChannelBindStatusResponse,
+    FeishuBindCallbackResponse,
     ChannelInboundWechatRequest,
     ChannelInboundWechatResponse,
     ChannelProviderHealthResponse,
@@ -401,6 +402,87 @@ class ChannelBindingService:
         )
         return ChannelBindSession(**(await self._require_bind_session(bind_session_id)))
 
+    async def confirm_feishu_bind_callback(
+        self,
+        *,
+        bind_session_id: str,
+        code: str | None = None,
+        tenant_key: str | None = None,
+        open_id: str | None = None,
+        trace_id: str | None = None,
+    ) -> FeishuBindCallbackResponse:
+        row = await self._require_bind_session(bind_session_id)
+        connector = self._connectors.get("feishu")
+        recorder = getattr(connector, "record_bind_callback", None)
+        callback_state: dict[str, Any] = {}
+        if callable(recorder):
+            callback_state = recorder(
+                bind_session_id=bind_session_id,
+                code=code,
+                tenant_key=tenant_key,
+                open_id=open_id,
+            )
+        now = utc_now_iso()
+        updates: dict[str, Any] = {
+            "status": "confirmed",
+            "confirmed_at": now,
+            "provider_status": {
+                "callback_received": True,
+                "transport_mode": "websocket",
+                "bind_mode": "qr_oauth_callback",
+                "callback_keys": [
+                    key
+                    for key, value in (
+                        ("code", code),
+                        ("tenant_key", tenant_key),
+                        ("open_id", open_id),
+                    )
+                    if value is not None
+                ],
+            },
+            "updated_at": now,
+        }
+        if callback_state:
+            if callback_state.get("provider_account_ref"):
+                updates["provider_account_ref_redacted"] = _redacted_ref(
+                    str(callback_state["provider_account_ref"])
+                )
+            if callback_state.get("status") == "confirmed":
+                updates["confirmed_at"] = callback_state.get("confirmed_at") or now
+            updates["provider_status"].update(
+                {
+                    key: value
+                    for key, value in callback_state.items()
+                    if key not in {"provider_account_ref", "status"}
+                }
+            )
+        await self._repo.update_bind_session(bind_session_id, updates)
+        row = await self._require_bind_session(bind_session_id)
+        await self._audit.write_event(
+            actor_type="system",
+            action="channel.bind.callback.confirmed",
+            object_type="channel_bind_session",
+            object_id=bind_session_id,
+            summary="飞书扫码回调已确认",
+            risk_level=RiskLevel.R2,
+            payload={
+                "provider": row["provider"],
+                "confirmed_at": row.get("confirmed_at"),
+            },
+            trace_id=trace_id,
+        )
+        return FeishuBindCallbackResponse(
+            status=row["status"],
+            bind_session_id=bind_session_id,
+            provider="feishu",
+            provider_account_ref_redacted=row.get("provider_account_ref_redacted"),
+            confirmed_at=row.get("confirmed_at"),
+            diagnostic={
+                "bind_mode": "qr_oauth_callback",
+                "redirect_target": "finalize_bind_session",
+            },
+        )
+
     async def list_accounts(
         self,
         *,
@@ -495,6 +577,36 @@ class ChannelBindingService:
         )
         content = str(message.get("content_text") or message.get("text") or "")
         provider_event_ref = _redacted_ref(request.provider_event_id or content or now)
+        inserted = await self._repo.insert_event_offset(
+            {
+                "offset_id": new_id("choff"),
+                "organization_id": account["organization_id"],
+                "channel_account_id": account["channel_account_id"],
+                "provider": account["provider"],
+                "provider_event_id_redacted": provider_event_ref,
+                "channel_event_id": None,
+                "status": "processing",
+                "received_at": request.received_at or now,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        if not inserted:
+            existing_event = await self._repo.get_event_by_offset(
+                channel_account_id=account["channel_account_id"],
+                provider_event_id_redacted=provider_event_ref,
+            )
+            if existing_event is None:
+                raise AppError(
+                    ErrorCode.NOT_FOUND,
+                    "微信入站事件重复但原事件不存在",
+                    status_code=409,
+                )
+            return ChannelInboundWechatResponse(
+                event=ChannelEvent(**existing_event),
+                notification_inbound=None,
+                status="duplicate",
+            )
         event_data = {
             "channel_event_id": new_id("chevt"),
             "organization_id": account["organization_id"],
@@ -533,6 +645,15 @@ class ChannelBindingService:
             "created_at": now,
         }
         await self._repo.insert_event(event_data)
+        await self._repo.update_event_offset(
+            channel_account_id=account["channel_account_id"],
+            provider_event_id_redacted=provider_event_ref,
+            fields={
+                "channel_event_id": event_data["channel_event_id"],
+                "status": event_data["status"],
+                "updated_at": now,
+            },
+        )
         notification_payload = None
         if event_data["status"] == "received" and account.get("channel_id"):
             inbound = await self._notifications.receive_inbound(
@@ -582,6 +703,26 @@ class ChannelBindingService:
             provider_state=provider_state,
             recipient=recipient,
             text=text,
+        )
+
+    async def send_channel_audio(
+        self,
+        *,
+        provider: str,
+        provider_state_ref: str | None,
+        recipient: str,
+        audio_bytes: bytes,
+        content_type: str | None,
+        filename: str | None,
+    ) -> ChannelSendResult:
+        provider_state = self._load_provider_state(provider_state_ref)
+        return await self._connectors.get(provider).send_audio(
+            provider_state_ref=provider_state_ref,
+            provider_state=provider_state,
+            recipient=recipient,
+            audio_bytes=audio_bytes,
+            content_type=content_type,
+            filename=filename,
         )
 
     async def _grant_channel_actions(

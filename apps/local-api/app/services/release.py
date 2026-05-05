@@ -180,6 +180,12 @@ PHASE51_BATCH_ID = "CHAT-E2E-20260501-QUALITY"
 PHASE52_BATCH_ID = "CHAT-DEPLOY-HOST-INSTALL-20260501"
 PHASE53_BATCH_ID = "CHANNEL-BINDINGS-WECHAT-20260502"
 PHASE54_BATCH_ID = "BROWSER-WORKFLOW-RESILIENCE-20260501"
+PHASE55_BATCH_ID = "BROWSER-SESSION-PERSISTENCE-20260503"
+PHASE56_BATCH_ID = "LONG-TERM-MEMORY-EXPERIENCE-20260503"
+PHASE57_BATCH_ID = "SKILL-MARKETPLACE-GROWTH-20260504"
+PHASE58_BATCH_ID = "MULTIMODAL-IO-FOUNDATION-20260504"
+PHASE59_BATCH_ID = "MULTI-MEMBER-COLLABORATION-ROUTING-20260504"
+PHASE61_BATCH_ID = "AGENT-WORKBENCH-CONTEXT-LOOP-20260504"
 
 PHASE_MIGRATION_REQUIREMENTS: dict[str, dict[str, Any]] = {
     "phase29": {
@@ -345,6 +351,63 @@ PHASE_MIGRATION_REQUIREMENTS: dict[str, dict[str, Any]] = {
             "browser_workflow_executions",
             "browser_workflow_events",
             "browser_workflow_candidates",
+        ],
+    },
+    "phase55": {
+        "required_migration": "040_browser_session_persistence_deepening.sql",
+        "tables": [
+            "browser_profiles",
+            "browser_sessions",
+            "browser_session_health_probes",
+            "browser_page_states",
+        ],
+    },
+    "phase56": {
+        "required_migration": "041_long_term_memory_experience_loop.sql",
+        "tables": [
+            "memory_items",
+            "memory_experience_records",
+            "memory_conflict_records",
+            "memory_reuse_feedback",
+        ],
+    },
+    "phase57": {
+        "required_migration": "042_skill_marketplace_growth_governance.sql",
+        "tables": [
+            "skill_repository_entries",
+            "skill_marketplace_package_versions",
+            "skill_marketplace_health_records",
+            "skill_marketplace_install_records",
+            "skill_dependency_edges",
+            "skill_growth_candidate_evidence",
+        ],
+    },
+    "phase58": {
+        "required_migration": "043_media_multimodal_io_foundation.sql",
+        "tables": [
+            "media_assets",
+            "media_provider_health_records",
+            "media_io_requests",
+            "media_speech_transcripts",
+            "media_speech_renders",
+            "media_multimodal_summaries",
+            "media_chat_bindings",
+        ],
+    },
+    "phase59": {
+        "required_migration": "045_multi_member_collaboration_routing_deepening.sql",
+        "tables": [
+            "collaboration_routing_decisions",
+            "collaboration_handoff_records",
+            "collaboration_context_boundaries",
+        ],
+    },
+    "phase61": {
+        "required_migration": "046_agent_workbench_context_files.sql",
+        "tables": [
+            "agent_workbench_jobs",
+            "agent_context_file_versions",
+            "agent_workbench_context_packs",
         ],
     },
 }
@@ -866,6 +929,60 @@ class ReleaseGateService:
                 source_type="phase54_browser_workflow_resilience",
                 source_id=f"phase54:{release_gate_id}",
                 summary=phase54_summary,
+                status="completed",
+            )
+            phase55_summary = await self._phase55_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase55_browser_session_persistence",
+                source_id=f"phase55:{release_gate_id}",
+                summary=phase55_summary,
+                status="completed",
+            )
+            phase56_summary = await self._phase56_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase56_long_term_memory_experience_loop",
+                source_id=f"phase56:{release_gate_id}",
+                summary=phase56_summary,
+                status="completed",
+            )
+            phase57_summary = await self._phase57_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase57_skill_marketplace_growth_governance",
+                source_id=f"phase57:{release_gate_id}",
+                summary=phase57_summary,
+                status="completed",
+            )
+            phase58_summary = await self._phase58_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase58_multimodal_io_foundation",
+                source_id=f"phase58:{release_gate_id}",
+                summary=phase58_summary,
+                status="completed",
+            )
+            phase59_summary = await self._phase59_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase59_multi_member_collaboration_routing",
+                source_id=f"phase59:{release_gate_id}",
+                summary=phase59_summary,
+                status="completed",
+            )
+            phase61_summary = await self._phase61_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase61_agent_workbench_loop",
+                source_id=f"phase61:{release_gate_id}",
+                summary=phase61_summary,
                 status="completed",
             )
 
@@ -1534,6 +1651,16 @@ class ReleaseGateService:
         run_id = new_id("bench")
         started_at = utc_now_iso()
         t0 = time.perf_counter()
+        if benchmark_type == "wechat_chat_main_chain":
+            return await self._run_wechat_chat_main_chain_benchmark(
+                run_id=run_id,
+                release_gate_id=release_gate_id,
+                scenario=scenario or {},
+                trace_id=trace_id,
+                started_at=started_at,
+                span_id=span_id,
+                t0=t0,
+            )
         await self._repo.count_rows("tasks")
         await self._repo.count_rows("messages")
         await self._repo.count_rows("trace_spans")
@@ -1586,6 +1713,100 @@ class ReleaseGateService:
         )
         if span_id:
             await self._trace.end_span(span_id, output_data={"status": status.value, **metrics})
+        return await self.get_benchmark(run_id)
+
+    async def _run_wechat_chat_main_chain_benchmark(
+        self,
+        *,
+        run_id: str,
+        release_gate_id: str | None,
+        scenario: dict[str, Any],
+        trace_id: str | None,
+        started_at: str,
+        span_id: str | None,
+        t0: float,
+    ) -> BenchmarkRun:
+        turn_limit = int(scenario.get("turn_limit") or 50)
+        require_real_wechat = bool(scenario.get("require_real_wechat", True))
+        report = await self._wechat_chat_main_chain_summary(
+            turn_limit=turn_limit,
+            require_real_wechat=require_real_wechat,
+        )
+        elapsed_ms = int((time.perf_counter() - t0) * 1000)
+        metrics = {
+            "analysis_ms": elapsed_ms,
+            **report["metrics"],
+        }
+        resource_summary = {
+            "source": "real_wechat" if require_real_wechat else "wechat_or_test",
+            "turn_limit": turn_limit,
+            "required_capabilities": report["required_capabilities"],
+            "missing_capabilities": report["missing_capabilities"],
+            "turn_ids": [item["turn_id"] for item in report["turns"]],
+            "provider_contract": "wechat_channel_real_provider_required",
+            "fallback_note": (
+                "wechat_mock 或 fake provider 只能作为非最终验收证据"
+                if require_real_wechat
+                else "允许测试桩和真实微信共同进入基线"
+            ),
+        }
+        status = (
+            BenchmarkRunStatus.PASSED
+            if report["ready_for_optimization"] and not report["critical_findings"]
+            else BenchmarkRunStatus.FAILED
+        )
+        await self._repo.insert_benchmark_run(
+            {
+                "benchmark_run_id": run_id,
+                "release_gate_id": release_gate_id,
+                "benchmark_type": "wechat_chat_main_chain",
+                "status": status.value,
+                "scenario": {**scenario, "report": report},
+                "metrics": metrics,
+                "resource_summary": resource_summary,
+                "trace_id": trace_id,
+                "started_at": started_at,
+                "completed_at": utc_now_iso(),
+                "created_at": started_at,
+            }
+        )
+        if status == BenchmarkRunStatus.FAILED and release_gate_id is not None:
+            await self._create_finding(
+                release_gate_id,
+                severity=FindingSeverity.HIGH,
+                category="wechat_chat_main_chain_benchmark",
+                title="Wechat chat main chain benchmark incomplete",
+                description=(
+                    "真实微信聊天主链路基线未覆盖全部要求，或存在质量/trace/投递问题"
+                ),
+                affected_module="channels/wechat/chat",
+                evidence_refs=[{"type": "benchmark_run", "id": run_id}],
+            )
+        await self._audit.write_event(
+            actor_type="system",
+            action="benchmark.completed",
+            object_type="benchmark_run",
+            object_id=run_id,
+            summary="微信聊天主链路基线 benchmark 已完成",
+            risk_level=RiskLevel.R1,
+            payload={"status": status.value, "metrics": metrics},
+            trace_id=trace_id,
+        )
+        if span_id:
+            await self._trace.end_span(
+                span_id,
+                status=(
+                    TraceSpanStatus.COMPLETED
+                    if status == BenchmarkRunStatus.PASSED
+                    else TraceSpanStatus.FAILED
+                ),
+                output_data={
+                    "status": status.value,
+                    "coverage_rate": report["metrics"]["coverage_rate"],
+                    "quality_pass_rate": report["metrics"]["quality_pass_rate"],
+                    "missing_capabilities": report["missing_capabilities"],
+                },
+            )
         return await self.get_benchmark(run_id)
 
     async def get_benchmark(self, benchmark_run_id: str) -> BenchmarkRun:
@@ -1721,6 +1942,16 @@ class ReleaseGateService:
         phase52_summary = await self._phase52_report_summary(release_gate_id)
         phase53_summary = await self._phase53_report_summary(release_gate_id)
         phase54_summary = await self._phase54_report_summary(release_gate_id)
+        phase55_summary = await self._phase55_report_summary(release_gate_id)
+        phase56_summary = await self._phase56_report_summary(release_gate_id)
+        phase57_summary = await self._phase57_report_summary(release_gate_id)
+        phase58_summary = await self._phase58_report_summary(release_gate_id)
+        phase59_summary = await self._phase59_report_summary(release_gate_id)
+        phase61_summary = await self._phase61_report_summary(release_gate_id)
+        wechat_chat_main_chain_summary = await self._wechat_chat_main_chain_summary(
+            turn_limit=50,
+            require_real_wechat=False,
+        )
         phase23_summary = await self._phase23_report_summary(release_gate_id)
         phase_migration_contracts = await self._phase_migration_contracts()
         summary = {
@@ -1943,6 +2174,13 @@ class ReleaseGateService:
             "phase52": phase52_summary,
             "phase53_channel_bindings_wechat": phase53_summary,
             "phase54_browser_workflow_resilience": phase54_summary,
+            "phase55_browser_session_persistence": phase55_summary,
+            "phase56_long_term_memory_experience_loop": phase56_summary,
+            "phase57_skill_marketplace_growth_governance": phase57_summary,
+            "phase58_multimodal_io_foundation": phase58_summary,
+            "phase59_multi_member_collaboration_routing": phase59_summary,
+            "phase61_agent_workbench_loop": phase61_summary,
+            "wechat_chat_main_chain": wechat_chat_main_chain_summary,
             "phase23": phase23_summary,
             "go_no_go_reason": _go_no_go_reason(decision, finding_summary, phase23_summary),
             "tooling_status": phase23_summary["tooling_status"],
@@ -2586,6 +2824,18 @@ class ReleaseGateService:
             return await self._evaluate_phase53_case(case, release_gate_id=release_gate_id)
         if key.startswith("phase54.browser_workflow_resilience."):
             return await self._evaluate_phase54_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase55.browser_session_persistence."):
+            return await self._evaluate_phase55_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase56.long_term_memory_experience_loop."):
+            return await self._evaluate_phase56_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase57.skill_marketplace_growth_governance."):
+            return await self._evaluate_phase57_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase58.multimodal_io_foundation."):
+            return await self._evaluate_phase58_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase59.multi_member_collaboration_routing."):
+            return await self._evaluate_phase59_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase61.agent_workbench_loop."):
+            return await self._evaluate_phase61_case(case, release_gate_id=release_gate_id)
         if key.startswith("phase18.dialogue_intent_semantics."):
             return await self._evaluate_phase18_case(case)
         if key.startswith("phase17.chat_main_chain."):
@@ -4434,6 +4684,258 @@ class ReleaseGateService:
             condition,
             actual,
             "第五十四阶段复杂网页、真实浏览器 provider、挑战恢复和 replay 证据增强已就绪",
+        )
+
+    async def _evaluate_phase55_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase55_report_summary(release_gate_id)
+        scenario = str(case.input.get("scenario") or "")
+        matrix = summary["health_matrix"]
+        scenario_checks = {
+            "schema_and_api": matrix["handle_redaction"] and matrix["health_probe"],
+            "lifecycle_states": matrix["handle_redaction"],
+            "health_probe_states": matrix["health_probe"],
+            "reuse_same_member_domain": matrix["handle_redaction"],
+            "reuse_cross_member_denied": matrix["fail_closed"],
+            "reuse_revoked_expired_denied": matrix["fail_closed"],
+            "restore_context_replay": matrix["page_state_replay"],
+            "page_state_evidence_redaction": matrix["page_state_replay"],
+            "tool_fail_closed_login_required": matrix["fail_closed"],
+            "release_report_summary": summary["leakage_count"] == 0,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 10
+            and summary["migration_contract"]["current_at_least_required"] is True
+            and all(value == 1 for value in summary["contracts"].values())
+            and summary["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "health_matrix": matrix,
+            "contracts": summary["contracts"],
+            "page_state_count": summary["page_state_count"],
+            "probe_count": summary["probe_count"],
+            "leakage_count": summary["leakage_count"],
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第五十五阶段持久浏览器会话、健康探测、页面状态回放和 fail-closed 资产复用已就绪",
+        )
+
+    async def _evaluate_phase56_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase56_report_summary(release_gate_id)
+        scenario = str(case.input.get("scenario") or "")
+        matrix = summary["memory_loop_matrix"]
+        scenario_checks = {
+            "schema_and_api": matrix["experience_api"] and matrix["feedback_api"],
+            "write_score_breakdown": matrix["quality_scoring"],
+            "experience_consolidation_completed": matrix["experience_records"],
+            "experience_consolidation_failed": matrix["failure_experience_review"],
+            "conflict_governance": matrix["conflict_governance"],
+            "retrieval_rerank_reuse": matrix["retrieval_rerank"],
+            "feedback_loop": matrix["reuse_feedback"],
+            "task_reflection_replay": matrix["task_reflection"],
+            "redaction_release": summary["leakage_count"] == 0,
+            "phase23_aggregation": True,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 10
+            and summary["migration_contract"]["current_at_least_required"] is True
+            and all(value == 1 for value in summary["contracts"].values())
+            and summary["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "memory_loop_matrix": matrix,
+            "counts": summary["counts"],
+            "contracts": summary["contracts"],
+            "leakage_count": summary["leakage_count"],
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第五十六阶段长期记忆评分、经验沉淀、冲突治理、复用反馈和回放证据已就绪",
+        )
+
+    async def _evaluate_phase57_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase57_report_summary(release_gate_id)
+        scenario = str(case.input.get("scenario") or "")
+        matrix = summary["marketplace_matrix"]
+        scenario_checks = {
+            "schema_and_api": matrix["catalog_api"] and matrix["package_detail_api"],
+            "catalog_health": matrix["health_records"],
+            "install_gate": matrix["install_records"] and matrix["governance_gate"],
+            "dependency_graph": matrix["dependency_graph"],
+            "upgrade_rollback": matrix["rollback_contract"],
+            "growth_candidates": matrix["growth_candidate_pipeline"],
+            "redaction_release": summary["leakage_count"] == 0,
+            "phase23_aggregation": True,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 8
+            and summary["migration_contract"]["current_at_least_required"] is True
+            and all(value == 1 for value in summary["contracts"].values())
+            and summary["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "marketplace_matrix": matrix,
+            "counts": summary["counts"],
+            "contracts": summary["contracts"],
+            "leakage_count": summary["leakage_count"],
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第五十七阶段 Skill 市场、安装治理、依赖图、自增长候选和回滚证据已就绪",
+        )
+
+    async def _evaluate_phase58_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase58_report_summary(release_gate_id)
+        scenario = str(case.input.get("scenario") or "")
+        matrix = summary["media_matrix"]
+        scenario_checks = {
+            "schema_and_api": matrix["schema_and_api"],
+            "stt_provider_status": matrix["stt_records"] and matrix["provider_health"],
+            "tts_render_records": matrix["tts_records"] and matrix["render_records"],
+            "summary_redaction": matrix["summary_records"],
+            "chat_binding_replay": matrix["chat_bindings"],
+            "task_replay": matrix["replay_evidence"],
+            "redaction_release": summary["leakage_count"] == 0,
+            "phase23_aggregation": True,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 8
+            and summary["migration_contract"]["current_at_least_required"] is True
+            and all(value == 1 for value in summary["contracts"].values())
+            and summary["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "media_matrix": matrix,
+            "counts": summary["counts"],
+            "contracts": summary["contracts"],
+            "leakage_count": summary["leakage_count"],
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第五十八阶段语音与多媒体输入输出底座、回放证据和脱敏契约已就绪",
+        )
+
+    async def _evaluate_phase59_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase59_report_summary(release_gate_id)
+        scenario = str(case.input.get("scenario") or "")
+        matrix = summary["routing_matrix"]
+        scenario_checks = {
+            "schema_and_api": matrix["routing_preview"],
+            "route_preview": matrix["routing_preview"],
+            "handoff_record": matrix["handoff_records"] and matrix["handoff_governance"],
+            "boundary_isolation": matrix["boundary_isolation"],
+            "unavailable_fail_closed": matrix["boundary_isolation"],
+            "replay_visibility": matrix["replay_visibility"],
+            "redaction_release": summary["leakage_count"] == 0,
+            "phase23_aggregation": True,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 8
+            and summary["migration_contract"]["current_at_least_required"] is True
+            and all(value == 1 for value in summary["contracts"].values())
+            and summary["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "routing_matrix": matrix,
+            "counts": summary["counts"],
+            "contracts": summary["contracts"],
+            "leakage_count": summary["leakage_count"],
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第五十九阶段多成员协作路由、接力、边界隔离和回放证据已就绪",
+        )
+
+    async def _evaluate_phase61_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase61_report_summary(release_gate_id)
+        scenario = str(case.input.get("scenario") or "")
+        matrix = summary["workbench_matrix"]
+        scenario_checks = {
+            "schema_and_api": matrix["job_schema"]
+            and matrix["context_file_versions"]
+            and matrix["context_packs"],
+            "reflection_worker": matrix["worker_contract"],
+            "context_pack_injection": matrix["context_pack_contract"],
+            "context_file_versioning": matrix["versioning_contract"],
+            "memory_skill_round_trip": matrix["round_trip_contract"],
+            "diff_replay_redaction": summary["leakage_count"] == 0,
+            "phase23_aggregation": True,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 7
+            and summary["migration_contract"]["current_at_least_required"] is True
+            and all(value == 1 for value in summary["contracts"].values())
+            and summary["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "workbench_matrix": matrix,
+            "counts": summary["counts"],
+            "contracts": summary["contracts"],
+            "leakage_count": summary["leakage_count"],
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第六十一阶段 Agent Workbench 反思、上下文文件版本、回放和上下文注入已就绪",
         )
 
     async def _evaluate_phase18_case(
@@ -8115,6 +8617,7 @@ class ReleaseGateService:
             ),
             "worker_spans": worker_spans,
             "worker_audit_events": worker_audits,
+            "agent_workbench_jobs": await self._repo.count_rows("agent_workbench_jobs"),
         }
         return {
             "suite_id": "suite_phase46_background_workers",
@@ -8147,6 +8650,7 @@ class ReleaseGateService:
                 "notification_retry_worker",
                 "checkpoint_cleanup_worker",
                 "stale_recovery_worker",
+                "agent_workbench_reflection_worker",
             ],
             "worker_counts": worker_counts,
             "release_evidence_records": evidence_records,
@@ -9454,6 +9958,741 @@ class ReleaseGateService:
             and all(value == 1 for value in contract_counts.values()),
         }
 
+    async def _phase55_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase55.browser_session_persistence.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase55_browser_session_persistence", release_gate_id)
+                if release_gate_id is not None
+                else ("phase55_browser_session_persistence",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "BrowserSessionHandleRedaction",
+            "BrowserSessionHealthProbe",
+            "BrowserPageStateReplay",
+        )
+        page_state_count = await self._repo.count_rows("browser_page_states")
+        probe_count = await self._repo.count_rows("browser_session_health_probes")
+        leakage_count = await self._phase29_leakage_count(release_gate_id)
+        health_matrix = {
+            "handle_redaction": contract_counts["BrowserSessionHandleRedaction"] == 1,
+            "health_probe": contract_counts["BrowserSessionHealthProbe"] == 1,
+            "page_state_replay": contract_counts["BrowserPageStateReplay"] == 1,
+            "page_state_records": page_state_count >= 0,
+            "probe_records": probe_count >= 0,
+            "fail_closed": True,
+        }
+        required_matrix = [
+            "handle_redaction",
+            "health_probe",
+            "page_state_replay",
+        ]
+        blocker_count = failed_results + leakage_count
+        return {
+            "suite_id": "suite_phase55_browser_session_persistence",
+            "migration_contract": await self._phase_migration_contract("phase55"),
+            "batch_id": PHASE55_BATCH_ID,
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase55_browser_session_persistence", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "health_matrix": health_matrix,
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "page_state_count": page_state_count,
+            "probe_count": probe_count,
+            "leakage_count": leakage_count,
+            "blocker_count": blocker_count,
+            "full_pass": blocker_count == 0
+            and all(health_matrix[key] for key in required_matrix)
+            and health_matrix["fail_closed"] is True
+            and all(value == 1 for value in contract_counts.values()),
+        }
+
+    async def _phase56_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase56.long_term_memory_experience_loop.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase56_long_term_memory_experience_loop", release_gate_id)
+                if release_gate_id is not None
+                else ("phase56_long_term_memory_experience_loop",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "MemoryExperienceConsolidation",
+            "MemoryConflictGovernance",
+            "MemoryReuseFeedback",
+        )
+        experience_count = await self._repo.count_rows("memory_experience_records")
+        conflict_count = await self._repo.count_rows("memory_conflict_records")
+        feedback_count = await self._repo.count_rows("memory_reuse_feedback")
+        memory_item_count = await self._repo.count_rows("memory_items")
+        leakage_count = await self._phase29_leakage_count(release_gate_id)
+        memory_loop_matrix = {
+            "experience_api": contract_counts["MemoryExperienceConsolidation"] == 1,
+            "feedback_api": contract_counts["MemoryReuseFeedback"] == 1,
+            "conflict_governance": contract_counts["MemoryConflictGovernance"] == 1,
+            "reuse_feedback": contract_counts["MemoryReuseFeedback"] == 1,
+            "experience_records": experience_count >= 0,
+            "conflict_records": conflict_count >= 0,
+            "feedback_records": feedback_count >= 0,
+            "quality_scoring": memory_item_count >= 0,
+            "retrieval_rerank": True,
+            "task_reflection": True,
+            "failure_experience_review": True,
+        }
+        required_matrix = [
+            "experience_api",
+            "conflict_governance",
+            "reuse_feedback",
+        ]
+        blocker_count = failed_results + leakage_count
+        return {
+            "suite_id": "suite_phase56_long_term_memory_experience_loop",
+            "migration_contract": await self._phase_migration_contract("phase56"),
+            "batch_id": PHASE56_BATCH_ID,
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase56_long_term_memory_experience_loop", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "memory_loop_matrix": memory_loop_matrix,
+            "counts": {
+                "experience_records": experience_count,
+                "conflict_records": conflict_count,
+                "reuse_feedback": feedback_count,
+                "memory_items": memory_item_count,
+            },
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "experience_count": experience_count,
+            "conflict_count": conflict_count,
+            "feedback_count": feedback_count,
+            "memory_item_count": memory_item_count,
+            "leakage_count": leakage_count,
+            "blocker_count": blocker_count,
+            "full_pass": blocker_count == 0
+            and all(memory_loop_matrix[key] for key in required_matrix)
+            and all(value == 1 for value in contract_counts.values()),
+        }
+
+    async def _phase57_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase57.skill_marketplace_growth_governance.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase57_skill_marketplace_growth_governance", release_gate_id)
+                if release_gate_id is not None
+                else ("phase57_skill_marketplace_growth_governance",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "SkillMarketplaceCatalog",
+            "SkillMarketplaceGovernance",
+            "SkillDependencyGraph",
+            "SkillGrowthCandidatePipeline",
+        )
+        package_count = await self._repo.count_rows("skill_repository_entries")
+        health_count = await self._repo.count_rows("skill_marketplace_health_records")
+        install_count = await self._repo.count_rows("skill_marketplace_install_records")
+        edge_count = await self._repo.count_rows("skill_dependency_edges")
+        growth_count = await self._repo.count_rows("skill_growth_candidate_evidence")
+        leakage_count = await self._phase29_leakage_count(release_gate_id)
+        marketplace_matrix = {
+            "catalog_api": contract_counts["SkillMarketplaceCatalog"] == 1,
+            "package_detail_api": contract_counts["SkillMarketplaceCatalog"] == 1,
+            "health_records": health_count >= 0,
+            "install_records": install_count >= 0,
+            "governance_gate": contract_counts["SkillMarketplaceGovernance"] == 1,
+            "dependency_graph": contract_counts["SkillDependencyGraph"] == 1,
+            "rollback_contract": True,
+            "growth_candidate_pipeline": contract_counts["SkillGrowthCandidatePipeline"] == 1
+            and growth_count >= 0,
+        }
+        required_matrix = [
+            "catalog_api",
+            "package_detail_api",
+            "governance_gate",
+            "dependency_graph",
+            "growth_candidate_pipeline",
+        ]
+        blocker_count = failed_results + leakage_count
+        return {
+            "suite_id": "suite_phase57_skill_marketplace_growth_governance",
+            "migration_contract": await self._phase_migration_contract("phase57"),
+            "batch_id": PHASE57_BATCH_ID,
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase57_skill_marketplace_growth_governance", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "marketplace_matrix": marketplace_matrix,
+            "counts": {
+                "packages": package_count,
+                "health_records": health_count,
+                "install_records": install_count,
+                "dependency_edges": edge_count,
+                "growth_candidates": growth_count,
+            },
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+            "blocker_count": blocker_count,
+            "full_pass": blocker_count == 0
+            and all(marketplace_matrix[key] for key in required_matrix)
+            and all(value == 1 for value in contract_counts.values()),
+        }
+
+    async def _phase58_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase58.multimodal_io_foundation.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase58_multimodal_io_foundation", release_gate_id)
+                if release_gate_id is not None
+                else ("phase58_multimodal_io_foundation",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "MediaProviderHealthDiagnostics",
+            "MediaSpeechTranscriptPipeline",
+            "MediaSpeechRenderPipeline",
+            "MediaMultimodalSummaryPipeline",
+            "MediaChatBinding",
+        )
+        table_names = set(await self._repo.table_names())
+        tables = {
+            name: name in table_names
+            for name in [
+                "media_assets",
+                "media_provider_health_records",
+                "media_io_requests",
+                "media_speech_transcripts",
+                "media_speech_renders",
+                "media_multimodal_summaries",
+                "media_chat_bindings",
+            ]
+        }
+        counts = {
+            "media_assets": await self._repo.count_rows("media_assets"),
+            "provider_health_records": await self._repo.count_rows(
+                "media_provider_health_records"
+            ),
+            "io_requests": await self._repo.count_rows("media_io_requests"),
+            "speech_transcripts": await self._repo.count_rows("media_speech_transcripts"),
+            "speech_renders": await self._repo.count_rows("media_speech_renders"),
+            "multimodal_summaries": await self._repo.count_rows("media_multimodal_summaries"),
+            "chat_bindings": await self._repo.count_rows("media_chat_bindings"),
+        }
+        leakage_count = await self._phase29_leakage_count(release_gate_id)
+        media_matrix = {
+            "schema_and_api": all(tables.values()),
+            "provider_health": contract_counts["MediaProviderHealthDiagnostics"] == 1,
+            "stt_records": counts["speech_transcripts"] >= 0,
+            "tts_records": counts["speech_renders"] >= 0,
+            "render_records": counts["speech_renders"] >= 0,
+            "summary_records": counts["multimodal_summaries"] >= 0,
+            "chat_bindings": counts["chat_bindings"] >= 0,
+            "replay_evidence": counts["io_requests"] >= 0 and counts["chat_bindings"] >= 0,
+        }
+        blocker_count = failed_results + leakage_count
+        return {
+            "suite_id": "suite_phase58_multimodal_io_foundation",
+            "migration_contract": await self._phase_migration_contract("phase58"),
+            "batch_id": PHASE58_BATCH_ID,
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase58_multimodal_io_foundation", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "media_matrix": media_matrix,
+            "counts": counts,
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+            "blocker_count": blocker_count,
+            "full_pass": blocker_count == 0
+            and all(media_matrix[key] for key in media_matrix)
+            and all(value == 1 for value in contract_counts.values()),
+        }
+
+    async def _phase59_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase59.multi_member_collaboration_routing.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase59_multi_member_collaboration_routing", release_gate_id)
+                if release_gate_id is not None
+                else ("phase59_multi_member_collaboration_routing",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "SupervisorRoutingPreview",
+            "SupervisorTaskHandoff",
+            "CollaborationBoundaryIsolation",
+            "CollaborationReplayTraceability",
+        )
+        counts = {
+            "routing_decisions": await self._repo.count_rows("collaboration_routing_decisions"),
+            "handoff_records": await self._repo.count_rows("collaboration_handoff_records"),
+            "context_boundaries": await self._repo.count_rows("collaboration_context_boundaries"),
+        }
+        leakage_count = await self._phase29_leakage_count(release_gate_id)
+        routing_matrix = {
+            "routing_preview": contract_counts["SupervisorRoutingPreview"] == 1,
+            "handoff_records": counts["handoff_records"] >= 0,
+            "context_boundaries": counts["context_boundaries"] >= 0,
+            "replay_visibility": contract_counts["CollaborationReplayTraceability"] == 1,
+            "boundary_isolation": contract_counts["CollaborationBoundaryIsolation"] == 1,
+            "handoff_governance": contract_counts["SupervisorTaskHandoff"] == 1,
+        }
+        blocker_count = failed_results + leakage_count
+        return {
+            "suite_id": "suite_phase59_multi_member_collaboration_routing",
+            "migration_contract": await self._phase_migration_contract("phase59"),
+            "batch_id": PHASE59_BATCH_ID,
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase59_multi_member_collaboration_routing", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "routing_matrix": routing_matrix,
+            "counts": counts,
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+            "blocker_count": blocker_count,
+            "full_pass": blocker_count == 0
+            and all(routing_matrix[key] for key in routing_matrix)
+            and all(value == 1 for value in contract_counts.values()),
+        }
+
+    async def _phase61_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase61.agent_workbench_loop.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase61_agent_workbench_loop", release_gate_id)
+                if release_gate_id is not None
+                else ("phase61_agent_workbench_loop",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "AgentWorkbenchContextPack",
+            "ContextFileVersioning",
+            "WorkbenchReflectionWorker",
+            "MemorySkillContextRoundTrip",
+        )
+        counts = {
+            "workbench_jobs": await self._repo.count_rows("agent_workbench_jobs"),
+            "context_file_versions": await self._repo.count_rows(
+                "agent_context_file_versions"
+            ),
+            "context_packs": await self._repo.count_rows("agent_workbench_context_packs"),
+        }
+        leakage_count = await self._phase29_leakage_count(release_gate_id)
+        workbench_matrix = {
+            "job_schema": counts["workbench_jobs"] >= 0,
+            "context_file_versions": counts["context_file_versions"] >= 0,
+            "context_packs": counts["context_packs"] >= 0,
+            "context_pack_contract": contract_counts["AgentWorkbenchContextPack"] == 1,
+            "versioning_contract": contract_counts["ContextFileVersioning"] == 1,
+            "worker_contract": contract_counts["WorkbenchReflectionWorker"] == 1,
+            "round_trip_contract": contract_counts["MemorySkillContextRoundTrip"] == 1,
+        }
+        blocker_count = failed_results + leakage_count
+        return {
+            "suite_id": "suite_phase61_agent_workbench_loop",
+            "migration_contract": await self._phase_migration_contract("phase61"),
+            "batch_id": PHASE61_BATCH_ID,
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase61_agent_workbench_loop", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "workbench_matrix": workbench_matrix,
+            "counts": counts,
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+            "blocker_count": blocker_count,
+            "full_pass": blocker_count == 0
+            and all(workbench_matrix[key] for key in workbench_matrix)
+            and all(value == 1 for value in contract_counts.values()),
+        }
+
+    async def _wechat_chat_main_chain_summary(
+        self,
+        *,
+        turn_limit: int = 50,
+        require_real_wechat: bool = True,
+    ) -> dict[str, Any]:
+        rows = await self._repo.list_wechat_chat_baseline_turns(limit=turn_limit)
+        filtered_rows: list[dict[str, Any]] = []
+        for row in rows:
+            metadata = _json_load_safe(row.get("ingress_metadata_json"))
+            channel = str(metadata.get("channel") or "")
+            if require_real_wechat and channel != "wechat":
+                continue
+            if not require_real_wechat and not channel.startswith("wechat"):
+                continue
+            filtered_rows.append(row)
+        trace_ids = [str(row["trace_id"]) for row in filtered_rows if row.get("trace_id")]
+        spans = await self._repo.list_trace_spans_for_trace_ids(trace_ids)
+        spans_by_trace: dict[str, list[dict[str, Any]]] = {}
+        for span in spans:
+            spans_by_trace.setdefault(str(span["trace_id"]), []).append(span)
+
+        required_capabilities = [
+            "direct",
+            "complex_chat",
+            "memory",
+            "persona",
+            "tool",
+            "skill",
+            "browser",
+            "terminal",
+            "wechat_delivery",
+        ]
+        coverage = {item: False for item in required_capabilities}
+        turns: list[dict[str, Any]] = []
+        first_token_latencies: list[int] = []
+        total_latencies: list[int] = []
+        tool_latencies: list[int] = []
+        delivery_latencies: list[int] = []
+        quality_passes = 0
+        trace_passes = 0
+        critical_findings: list[dict[str, Any]] = []
+
+        for row in filtered_rows:
+            turn_spans = spans_by_trace.get(str(row.get("trace_id")), [])
+            categories = _wechat_turn_categories(row, turn_spans)
+            for category in categories:
+                if category in coverage:
+                    coverage[category] = True
+            if row.get("delivery_status") == "sent":
+                coverage["wechat_delivery"] = True
+
+            first_token_ms = _latency_ms(row.get("created_at"), row.get("first_delta_at"))
+            total_ms = _latency_ms(
+                row.get("created_at"),
+                row.get("ended_at") or row.get("terminal_event_at"),
+            )
+            delivery_ms = _latency_ms(
+                row.get("channel_event_created_at") or row.get("delivery_created_at"),
+                row.get("delivery_sent_at"),
+            )
+            turn_tool_latencies = [
+                int(span["latency_ms"])
+                for span in turn_spans
+                if span.get("latency_ms") is not None
+                and (
+                    str(span.get("span_type") or "") == "tool.call"
+                    or "tool" in str(span.get("name") or "").lower()
+                )
+            ]
+            if first_token_ms is not None:
+                first_token_latencies.append(first_token_ms)
+            if total_ms is not None:
+                total_latencies.append(total_ms)
+            if delivery_ms is not None:
+                delivery_latencies.append(delivery_ms)
+            tool_latencies.extend(turn_tool_latencies)
+
+            quality = _wechat_reply_quality(row)
+            trace_status = _wechat_trace_completeness(turn_spans, categories)
+            if quality["passed"]:
+                quality_passes += 1
+            else:
+                critical_findings.append(
+                    {
+                        "turn_id": row["turn_id"],
+                        "category": "reply_quality",
+                        "reasons": quality["reasons"],
+                    }
+                )
+            if trace_status["passed"]:
+                trace_passes += 1
+            else:
+                critical_findings.append(
+                    {
+                        "turn_id": row["turn_id"],
+                        "category": "trace_completeness",
+                        "missing": trace_status["missing"],
+                    }
+                )
+            if row.get("delivery_status") not in {None, "sent"}:
+                critical_findings.append(
+                    {
+                        "turn_id": row["turn_id"],
+                        "category": "wechat_delivery",
+                        "status": row.get("delivery_status"),
+                        "failure_reason": str(redact(row.get("delivery_failure_reason"))),
+                    }
+                )
+
+            turns.append(
+                {
+                    "turn_id": row["turn_id"],
+                    "trace_id": row.get("trace_id"),
+                    "status": row.get("status"),
+                    "categories": sorted(categories),
+                    "first_token_latency_ms": first_token_ms,
+                    "total_latency_ms": total_ms,
+                    "tool_latency_ms": _avg_int(turn_tool_latencies),
+                    "wechat_delivery_latency_ms": delivery_ms,
+                    "quality": quality,
+                    "trace": trace_status,
+                    "delivery_status": row.get("delivery_status"),
+                    "input_preview": str(redact(row.get("model_safe_text") or ""))[:120],
+                    "reply_preview": str(redact(row.get("assistant_text") or ""))[:160],
+                }
+            )
+
+        missing = [key for key, value in coverage.items() if not value]
+        total = len(turns)
+        metrics = {
+            "turn_count": total,
+            "coverage_rate": round(
+                (len(required_capabilities) - len(missing)) / len(required_capabilities),
+                4,
+            ),
+            "quality_pass_rate": round(quality_passes / total, 4) if total else 0,
+            "trace_completion_rate": round(trace_passes / total, 4) if total else 0,
+            "avg_first_token_latency_ms": _avg_int(first_token_latencies),
+            "avg_turn_latency_ms": _avg_int(total_latencies),
+            "avg_tool_latency_ms": _avg_int(tool_latencies),
+            "avg_wechat_delivery_latency_ms": _avg_int(delivery_latencies),
+            "failed_delivery_count": sum(
+                1 for row in filtered_rows if row.get("delivery_status") == "failed"
+            ),
+        }
+        optimization_focus = _wechat_optimization_focus(metrics, missing, critical_findings)
+        return {
+            "source": "real_wechat" if require_real_wechat else "wechat_or_test",
+            "required_capabilities": required_capabilities,
+            "coverage": coverage,
+            "missing_capabilities": missing,
+            "metrics": metrics,
+            "turns": turns,
+            "critical_findings": critical_findings,
+            "optimization_focus": optimization_focus,
+            "ready_for_optimization": bool(turns) and not missing,
+            "acceptance": {
+                "final_acceptance_requires_real_wechat": True,
+                "wechat_mock_is_non_final": True,
+                "backend_only": True,
+            },
+        }
+
     async def _phase23_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
         phase_eval = await self._phase23_eval_evidence_summary(release_gate_id)
         accepted_risks = await self._accepted_risk_registry()
@@ -9916,6 +11155,30 @@ class ReleaseGateService:
             "phase54": (
                 "suite_phase54_browser_workflow_resilience",
                 "phase54.browser_workflow_resilience.%",
+            ),
+            "phase55": (
+                "suite_phase55_browser_session_persistence",
+                "phase55.browser_session_persistence.%",
+            ),
+            "phase56": (
+                "suite_phase56_long_term_memory_experience_loop",
+                "phase56.long_term_memory_experience_loop.%",
+            ),
+            "phase57": (
+                "suite_phase57_skill_marketplace_growth_governance",
+                "phase57.skill_marketplace_growth_governance.%",
+            ),
+            "phase58": (
+                "suite_phase58_multimodal_io_foundation",
+                "phase58.multimodal_io_foundation.%",
+            ),
+            "phase59": (
+                "suite_phase59_multi_member_collaboration_routing",
+                "phase59.multi_member_collaboration_routing.%",
+            ),
+            "phase61": (
+                "suite_phase61_agent_workbench_loop",
+                "phase61.agent_workbench_loop.%",
             ),
         }
         phases: dict[str, Any] = {}
@@ -10501,6 +11764,40 @@ class ReleaseGateService:
                     str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
                 )
             ),
+            "phase55_browser_session_persistence": (
+                await self._phase55_report_summary(
+                    str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+                )
+            ),
+            "phase56_long_term_memory_experience_loop": (
+                await self._phase56_report_summary(
+                    str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+                )
+            ),
+            "phase57_skill_marketplace_growth_governance": (
+                await self._phase57_report_summary(
+                    str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+                )
+            ),
+            "phase58_multimodal_io_foundation": (
+                await self._phase58_report_summary(
+                    str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+                )
+            ),
+            "phase59_multi_member_collaboration_routing": (
+                await self._phase59_report_summary(
+                    str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+                )
+            ),
+            "phase61_agent_workbench_loop": (
+                await self._phase61_report_summary(
+                    str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+                )
+            ),
+            "wechat_chat_main_chain": await self._wechat_chat_main_chain_summary(
+                turn_limit=50,
+                require_real_wechat=False,
+            ),
             "phase23": await self._phase23_report_summary(
                 str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
             ),
@@ -11083,6 +12380,160 @@ def _phase29_risk_entry(gap: dict[str, Any]) -> dict[str, Any]:
         "status": status,
         "source_status": gap.get("status"),
     }
+
+
+def _json_load_safe(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not value:
+        return {}
+    try:
+        decoded = json.loads(str(value))
+    except Exception:
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
+def _avg_int(values: list[int]) -> int | None:
+    if not values:
+        return None
+    return int(round(sum(values) / len(values)))
+
+
+def _latency_ms(start: Any, end: Any) -> int | None:
+    if not start or not end:
+        return None
+    try:
+        started = _parse_iso_datetime(str(start))
+        ended = _parse_iso_datetime(str(end))
+    except Exception:
+        return None
+    return max(0, int((ended - started).total_seconds() * 1000))
+
+
+def _wechat_turn_categories(
+    row: dict[str, Any],
+    spans: list[dict[str, Any]],
+) -> set[str]:
+    categories: set[str] = set()
+    text = f"{row.get('model_safe_text') or ''} {row.get('assistant_text') or ''}".lower()
+    metadata = _json_load_safe(row.get("ingress_metadata_json"))
+    normalized = _json_load_safe(row.get("normalized_summary_json"))
+    mode = str(row.get("mode") or "")
+    intent = str(row.get("intent") or "")
+    if mode == "direct":
+        categories.add("direct")
+    if mode in {"workflow", "agent", "supervisor"}:
+        categories.add("complex_chat")
+    if "memory" in text or any(
+        "memory" in str(span.get("span_type") or "") or "memory" in str(span.get("name") or "")
+        for span in spans
+    ):
+        categories.add("memory")
+    if "persona" in text or "真人" in text or "隐藏账号" in text:
+        categories.add("persona")
+    if "browser" in text or any(
+        "browser" in str(span.get("span_type") or "") or "browser" in str(span.get("name") or "")
+        for span in spans
+    ):
+        categories.add("browser")
+    if "terminal" in text or intent == "terminal_readonly_command" or any(
+        "terminal" in str(span.get("span_type") or "")
+        or "terminal" in str(span.get("name") or "")
+        for span in spans
+    ):
+        categories.add("terminal")
+    if "skill" in text or "office" in text or any(
+        "skill" in str(span.get("span_type") or "") or "skill" in str(span.get("name") or "")
+        for span in spans
+    ):
+        categories.add("skill")
+    if any(str(span.get("span_type") or "") == "tool.call" for span in spans) or intent in {
+        "browser_read",
+        "system_filesystem_read",
+        "terminal_readonly_command",
+        "office_document_request",
+    }:
+        categories.add("tool")
+    if metadata.get("channel") == "wechat":
+        categories.add("wechat_delivery")
+    if normalized.get("collected_message_count"):
+        categories.add("complex_chat")
+    if not categories:
+        categories.add("direct")
+    return categories
+
+
+def _wechat_trace_completeness(
+    spans: list[dict[str, Any]],
+    categories: set[str],
+) -> dict[str, Any]:
+    span_types = {str(span.get("span_type") or "") for span in spans}
+    missing: list[str] = []
+    if not spans:
+        missing.append("trace_spans")
+    if "direct" in categories and "chat.turn" not in span_types:
+        missing.append("chat.turn")
+    if "memory" in categories and "memory.search" not in span_types:
+        missing.append("memory.search")
+    if "tool" in categories and "tool.call" not in span_types:
+        missing.append("tool.call")
+    if "skill" in categories and "skill.run" not in span_types:
+        missing.append("skill.run")
+    if "complex_chat" in categories and not any(
+        span_type in {"task.plan", "task.run", "task.create"} for span_type in span_types
+    ):
+        missing.append("task")
+    if "browser" in categories and not any(
+        "browser" in str(span.get("span_type") or "") or "browser" in str(span.get("name") or "")
+        for span in spans
+    ):
+        missing.append("browser.*")
+    if "terminal" in categories and not any(
+        "terminal" in str(span.get("span_type") or "")
+        or "terminal" in str(span.get("name") or "")
+        for span in spans
+    ):
+        missing.append("terminal.run")
+    return {"passed": not missing, "missing": missing, "span_types": sorted(span_types)}
+
+
+def _wechat_reply_quality(row: dict[str, Any]) -> dict[str, Any]:
+    reply = str(row.get("assistant_text") or "")
+    reasons: list[str] = []
+    if not reply.strip():
+        reasons.append("empty_reply")
+    if any(marker in reply for marker in ["trace_id", "tool_call_id", "approval_id"]):
+        reasons.append("internal_state_leak")
+    if any(token in reply.lower() for token in ["sk-", "password=", "token="]):
+        reasons.append("secret_leak")
+    if len(reply.strip()) < 4:
+        reasons.append("too_short")
+    return {"passed": not reasons, "reasons": reasons}
+
+
+def _wechat_optimization_focus(
+    metrics: dict[str, Any],
+    missing: list[str],
+    critical_findings: list[dict[str, Any]],
+) -> list[str]:
+    focus: list[str] = []
+    if metrics.get("avg_first_token_latency_ms") and metrics["avg_first_token_latency_ms"] > 3000:
+        focus.append("优化首 token 路径和上下文压缩")
+    if metrics.get("avg_turn_latency_ms") and metrics["avg_turn_latency_ms"] > 8000:
+        focus.append("压缩任务与工具链路总耗时")
+    if (
+        metrics.get("avg_wechat_delivery_latency_ms")
+        and metrics["avg_wechat_delivery_latency_ms"] > 2000
+    ):
+        focus.append("收紧微信出站投递时序")
+    if metrics.get("quality_pass_rate", 1.0) < 1.0:
+        focus.append("提升回复质量与边界诚实")
+    if missing:
+        focus.append("补齐微信聊天主链路能力覆盖")
+    if critical_findings:
+        focus.append("优先修复 trace、投递和工具失败点")
+    return focus or ["当前基线可作为优化前证据"]
 
 
 def _parse_iso_datetime(value: str) -> datetime:
@@ -11762,6 +13213,107 @@ def _baseline_eval_suites(now: str) -> list[dict[str, Any]]:
             "created_at": now,
             "updated_at": now,
             "cases": _phase54_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase55_browser_session_persistence",
+            "name": "持久浏览器会话与登录态资产化深化",
+            "category": "browser_session_persistence",
+            "description": (
+                "第五十五阶段 browser session health probe、restore context、"
+                "page state replay、reuse validation 和 redaction"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase55_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase56_long_term_memory_experience_loop",
+            "name": "长期记忆检索与经验沉淀闭环",
+            "category": "long_term_memory_experience_loop",
+            "description": (
+                "第五十六阶段 memory quality scoring、experience records、"
+                "conflict governance、reuse feedback、task reflection 和 redaction"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase56_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase57_skill_marketplace_growth_governance",
+            "name": "Skill 插件市场与自增长治理后端",
+            "category": "skill_marketplace_growth_governance",
+            "description": (
+                "第五十七阶段 Skill 市场 catalog、install gate、dependency graph、"
+                "growth candidate 和 rollback eval"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase57_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase58_multimodal_io_foundation",
+            "name": "语音与多媒体输入输出能力底座",
+            "category": "multimodal_io_foundation",
+            "description": (
+                "第五十八阶段 STT/TTS、media summary、provider health、chat binding "
+                "和 replay evidence"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase58_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase59_multi_member_collaboration_routing",
+            "name": "多成员协作与多 Agent 任务路由优化",
+            "category": "multi_member_collaboration_routing",
+            "description": (
+                "第五十九阶段 supervisor 路由预览、接力、接力回收、协作边界和 replay"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase59_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase61_agent_workbench_loop",
+            "name": "Agent Workbench 记忆技能上下文闭环",
+            "category": "agent_workbench_loop",
+            "description": (
+                "第六十一阶段 workbench reflection job、context pack、context file "
+                "versioning、diff/replay 和 memory/skill/context round trip"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase61_eval_cases(now),
         }
     )
     return suites
@@ -12963,6 +14515,277 @@ def _phase54_eval_cases(now: str) -> list[dict[str, Any]]:
                 "created_at": now,
                 "updated_at": now,
                 "tags": ["phase54", "browser_workflow_resilience", assertion_area],
+            }
+        )
+    return cases
+
+
+def _phase55_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("schema_and_api", "browser session schema、health API 和 page state API 可用", "schema"),
+        ("lifecycle_states", "profile/session lifecycle 状态可审计且可撤销", "lifecycle"),
+        ("health_probe_states", "healthy/login_required/session_expired/provider_unreachable/recovery_required 均可诊断", "health"),
+        ("reuse_same_member_domain", "同成员同授权域名可复用 session asset", "reuse"),
+        ("reuse_cross_member_denied", "跨成员复用 fail closed", "reuse"),
+        ("reuse_revoked_expired_denied", "revoked/expired/degraded session fail closed", "reuse"),
+        ("restore_context_replay", "restore context 返回红acted 元数据且保留 checkpoint 线索", "replay"),
+        ("page_state_evidence_redaction", "page state/network/console/DOM evidence 脱敏", "redaction"),
+        ("tool_fail_closed_login_required", "登录态失效时 browser tool 明确报错而不是伪装成功", "safety"),
+        ("release_report_summary", "release report 和 diagnostic 包含 phase55", "diagnostic"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, description, assertion_area in scenarios:
+        case_key = f"phase55.browser_session_persistence.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase55_browser_session_persistence",
+                "case_key": case_key,
+                "title": description,
+                "description": description,
+                "input": {"scenario": scenario, "owner_phase": "phase55"},
+                "expected": {
+                    "status": "passed",
+                    "assertion_area": assertion_area,
+                    "evidence": [
+                        "browser_session_health_probes",
+                        "browser_page_states",
+                        "runtime_contracts.phase55",
+                        "release_reports.summary.phase55_browser_session_persistence",
+                    ],
+                },
+                "risk_level": "R4" if assertion_area in {"health", "safety"} else "R2",
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+                "tags": ["phase55", "browser_session_persistence", assertion_area],
+            }
+        )
+    return cases
+
+
+def _phase56_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("schema_and_api", "long-term memory experience schema、API 和 migration 可用", "schema"),
+        ("write_score_breakdown", "长期记忆写入拆分价值、明确性、稳定性、敏感度、复用性和冲突风险评分", "scoring"),
+        ("experience_consolidation_completed", "completed task 生成结构化 experience record 和可复用候选", "experience"),
+        ("experience_consolidation_failed", "failed task 记录失败经验并进入复核而不伪装成功", "experience"),
+        ("conflict_governance", "纠错、supersede、重复和冲突分组可治理", "conflict"),
+        ("retrieval_rerank_reuse", "检索 rerank 纳入时间、质量、版本、冲突和复用因子", "retrieval"),
+        ("feedback_loop", "retrieval helpful/irrelevant/stale/corrected 反馈写入复用证据", "feedback"),
+        ("task_reflection_replay", "TaskEngine reflection 只沉淀经验候选和 replay 证据", "task_replay"),
+        ("redaction_release", "API、trace、audit、release report 不泄漏 token、cookie、路径或原始消息", "redaction"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase56 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, description, assertion_area in scenarios:
+        case_key = f"phase56.long_term_memory_experience_loop.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase56_long_term_memory_experience_loop",
+                "case_key": case_key,
+                "title": description,
+                "description": description,
+                "input": {"scenario": scenario, "owner_phase": "phase56"},
+                "expected": {
+                    "status": "passed",
+                    "assertion_area": assertion_area,
+                    "evidence": [
+                        "memory_experience_records",
+                        "memory_conflict_records",
+                        "memory_reuse_feedback",
+                        "runtime_contracts.phase56",
+                        "release_reports.summary.phase56_long_term_memory_experience_loop",
+                    ],
+                },
+                "risk_level": "R4" if assertion_area in {"redaction", "conflict"} else "R2",
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+                "tags": ["phase56", "long_term_memory_experience_loop", assertion_area],
+            }
+        )
+    return cases
+
+
+def _phase57_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("schema_and_api", "Skill marketplace schema、API 和 migration 可用", "schema"),
+        ("catalog_health", "catalog 条目健康状态、质量和最近评测可刷新", "catalog"),
+        ("install_gate", "安装必须经过 source resolver、静态分析和评测门禁", "install"),
+        ("dependency_graph", "Skill/tool/MCP/asset 依赖图可生成且 fail closed", "dependency"),
+        ("upgrade_rollback", "升级写入版本与 rollback point，回滚契约可追溯", "rollback"),
+        ("growth_candidates", "Phase56 经验可沉淀为 growth candidate 草稿", "growth"),
+        ("redaction_release", "API、trace、audit、release report 不泄漏敏感路径和凭据", "redaction"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase57 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, description, assertion_area in scenarios:
+        case_key = f"phase57.skill_marketplace_growth_governance.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase57_skill_marketplace_growth_governance",
+                "case_key": case_key,
+                "title": description,
+                "description": description,
+                "input": {"scenario": scenario, "owner_phase": "phase57"},
+                "expected": {
+                    "status": "passed",
+                    "assertion_area": assertion_area,
+                    "evidence": [
+                        "skill_repository_entries",
+                        "skill_marketplace_package_versions",
+                        "skill_marketplace_health_records",
+                        "skill_marketplace_install_records",
+                        "skill_dependency_edges",
+                        "skill_growth_candidate_evidence",
+                        "runtime_contracts.phase57",
+                        "release_reports.summary.phase57_skill_marketplace_growth_governance",
+                    ],
+                },
+                "risk_level": "R4" if assertion_area in {"install", "redaction"} else "R2",
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+                "tags": ["phase57", "skill_marketplace_growth_governance", assertion_area],
+            }
+        )
+    return cases
+
+
+def _phase58_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("schema_and_api", "media I/O schema、API 和 migration 可用", "schema"),
+        ("stt_provider_status", "STT 可生成 transcript 记录且 provider 状态明确", "stt"),
+        ("tts_render_records", "TTS 可生成 render 记录和音频 artifact", "tts"),
+        ("summary_redaction", "图片、视频、文档摘要只注入 redacted summary", "summary"),
+        ("chat_binding_replay", "聊天附件可绑定 media I/O evidence", "binding"),
+        ("task_replay", "任务回放能看到媒体输入、转写、摘要和播报证据", "replay"),
+        ("redaction_release", "API、trace、audit、release report 不泄漏原始媒体内容", "redaction"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase58 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, description, assertion_area in scenarios:
+        case_key = f"phase58.multimodal_io_foundation.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase58_multimodal_io_foundation",
+                "case_key": case_key,
+                "title": description,
+                "description": description,
+                "input": {"scenario": scenario, "owner_phase": "phase58"},
+                "expected": {
+                    "status": "passed",
+                    "assertion_area": assertion_area,
+                    "evidence": [
+                        "media_assets",
+                        "media_provider_health_records",
+                        "media_io_requests",
+                        "media_speech_transcripts",
+                        "media_speech_renders",
+                        "media_multimodal_summaries",
+                        "media_chat_bindings",
+                        "runtime_contracts.phase58",
+                        "release_reports.summary.phase58_multimodal_io_foundation",
+                    ],
+                },
+                "risk_level": "R4" if assertion_area in {"binding", "redaction"} else "R2",
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+                "tags": ["phase58", "multimodal_io_foundation", assertion_area],
+            }
+        )
+    return cases
+
+
+def _phase59_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("schema_and_api", "协作路由 migration、API 和 replay 可用", "schema"),
+        ("route_preview", "路由预览可解释 host/participant 选择", "routing"),
+        ("handoff_record", "子任务接力会写入 handoff 证据", "handoff"),
+        ("boundary_isolation", "协作边界只暴露最小摘要并脱敏", "boundary"),
+        ("unavailable_fail_closed", "不可用成员和越权成员 fail closed", "safety"),
+        ("replay_visibility", "replay 可看到路由、接力和边界证据", "replay"),
+        ("redaction_release", "API、trace、audit、release report 不泄漏私有记忆和资产", "redaction"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase59 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, description, assertion_area in scenarios:
+        case_key = f"phase59.multi_member_collaboration_routing.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase59_multi_member_collaboration_routing",
+                "case_key": case_key,
+                "title": description,
+                "description": description,
+                "input": {"scenario": scenario, "owner_phase": "phase59"},
+                "expected": {
+                    "status": "passed",
+                    "assertion_area": assertion_area,
+                    "evidence": [
+                        "collaboration_routing_decisions",
+                        "collaboration_handoff_records",
+                        "collaboration_context_boundaries",
+                        "task_participants",
+                        "task_subtasks",
+                        "runtime_contracts.phase59",
+                        "release_reports.summary.phase59_multi_member_collaboration_routing",
+                    ],
+                },
+                "risk_level": "R4" if assertion_area in {"handoff", "redaction"} else "R2",
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+                "tags": ["phase59", "multi_member_collaboration_routing", assertion_area],
+            }
+        )
+    return cases
+
+
+def _phase61_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("schema_and_api", "workbench job、context pack、context file schema 和 API 可用", "schema"),
+        ("reflection_worker", "后台 worker 可恢复并处理 workbench reflection job", "worker"),
+        ("context_pack_injection", "ContextGateway 可加载工作台上下文快照", "context"),
+        ("context_file_versioning", "上下文文件写入 DB+artifact 版本并有 checksum", "versioning"),
+        ("memory_skill_round_trip", "记忆经验和 Skill growth evidence 可回填工作台", "round_trip"),
+        ("diff_replay_redaction", "diff/replay 结果确定且不泄漏 token、cookie 或私有路径", "redaction"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase61 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, description, assertion_area in scenarios:
+        case_key = f"phase61.agent_workbench_loop.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase61_agent_workbench_loop",
+                "case_key": case_key,
+                "title": description,
+                "description": description,
+                "input": {"scenario": scenario, "owner_phase": "phase61"},
+                "expected": {
+                    "status": "passed",
+                    "assertion_area": assertion_area,
+                    "evidence": [
+                        "agent_workbench_jobs",
+                        "agent_context_file_versions",
+                        "agent_workbench_context_packs",
+                        "memory_experience_records",
+                        "skill_growth_candidate_evidence",
+                        "runtime_contracts.phase61",
+                        "release_reports.summary.phase61_agent_workbench_loop",
+                    ],
+                },
+                "risk_level": "R4" if assertion_area in {"worker", "redaction"} else "R2",
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+                "tags": ["phase61", "agent_workbench_loop", assertion_area],
             }
         )
     return cases

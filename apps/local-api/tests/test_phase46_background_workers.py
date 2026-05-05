@@ -23,15 +23,17 @@ def test_phase46_worker_health_and_manual_tick_api(client: TestClient) -> None:
         "scheduled_due_worker",
         "notification_retry_worker",
         "wechat_inbound_worker",
+        "feishu_inbound_worker",
         "checkpoint_cleanup_worker",
         "stale_recovery_worker",
+        "agent_workbench_reflection_worker",
     }
 
     tick = client.post("/api/system/background-workers/tick")
     assert tick.status_code == 200, tick.text
     tick_payload = tick.json()
     assert tick_payload["status"] == "completed"
-    assert tick_payload["worker_count"] == 5
+    assert tick_payload["worker_count"] == 7
     assert all(item["status"] == "healthy" for item in tick_payload["results"].values())
     assert _payload_leakage_count(tick_payload) == 0
 

@@ -1,0 +1,32 @@
+{
+  "conversation_id": null,
+  "ended_at": "2026-05-03T09:39:05.341484Z",
+  "root_span_id": "spn_01a000a376f4440ab3be36ace3e3e063",
+  "spans": [
+    {
+      "ended_at": "2026-05-03T09:39:05.336470Z",
+      "error_code": null,
+      "input": null,
+      "latency_ms": 8,
+      "metadata": {
+        "method": "GET",
+        "path": "/api/project-deployments/dep_3a86c349050041a9b12694c4e5cc7bc6/logs"
+      },
+      "name": "GET /api/project-deployments/dep_3a86c349050041a9b12694c4e5cc7bc6/logs",
+      "output": {
+        "status_code": 200
+      },
+      "parent_span_id": null,
+      "span_id": "spn_01a000a376f4440ab3be36ace3e3e063",
+      "span_type": "api.request",
+      "started_at": "2026-05-03T09:39:05.327642Z",
+      "status": "completed",
+      "trace_id": "trc_47e6eb89a21f47c58ff8804f0349bfc0"
+    }
+  ],
+  "started_at": "2026-05-03T09:39:05.324547Z",
+  "status": "completed",
+  "task_id": null,
+  "trace_id": "trc_47e6eb89a21f47c58ff8804f0349bfc0",
+  "turn_id": null
+}

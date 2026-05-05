@@ -6,13 +6,19 @@ from fastapi import APIRouter, Depends, Query, Request
 from app.api.dependencies import get_registry
 from app.core.errors import AppError
 from app.schemas.memory import (
+    MemoryConflictRecordListResponse,
     MemoryCandidateDecisionResponse,
     MemoryCandidateListResponse,
+    MemoryExperienceConsolidateRequest,
+    MemoryExperienceConsolidateResponse,
+    MemoryExperienceRecordListResponse,
     MemoryDeleteResponse,
     MemoryExtractRequest,
     MemoryExtractResponse,
     MemoryJobListResponse,
     MemoryListResponse,
+    MemoryReuseFeedbackRequest,
+    MemoryReuseFeedbackResponse,
     MemoryRelationItem,
     MemoryRelationsResponse,
     MemorySearchApiRequest,
@@ -154,6 +160,78 @@ async def reject_memory_candidate(
     return MemoryCandidateDecisionResponse(candidate=candidate, memory=None)
 
 
+@router.post("/experience/consolidate", response_model=MemoryExperienceConsolidateResponse)
+async def consolidate_experience(
+    payload: MemoryExperienceConsolidateRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> MemoryExperienceConsolidateResponse:
+    return await registry.memory_service.consolidate_experience(
+        member_id=payload.member_id,
+        task_id=payload.task_id,
+        conversation_id=payload.conversation_id,
+        outcome=payload.outcome,
+        summary_text=payload.summary_text,
+        source=payload.source,
+        evidence=payload.evidence,
+        steps=payload.steps,
+        trace_id=payload.trace_id or getattr(request.state, "trace_id", None),
+    )
+
+
+@router.get("/experience-records", response_model=MemoryExperienceRecordListResponse)
+async def list_experience_records(
+    member_id: str | None = None,
+    task_id: str | None = None,
+    outcome: str | None = None,
+    status: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> MemoryExperienceRecordListResponse:
+    return MemoryExperienceRecordListResponse(
+        items=await registry.memory_service.list_experience_records(
+            member_id=member_id,
+            task_id=task_id,
+            outcome=outcome,
+            status=status,
+            limit=limit,
+        )
+    )
+
+
+@router.get("/conflicts", response_model=MemoryConflictRecordListResponse)
+async def list_memory_conflicts(
+    member_id: str | None = None,
+    status: str | None = None,
+    conflict_group_id: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> MemoryConflictRecordListResponse:
+    return MemoryConflictRecordListResponse(
+        items=await registry.memory_service.list_conflicts(
+            member_id=member_id,
+            status=status,
+            conflict_group_id=conflict_group_id,
+            limit=limit,
+        )
+    )
+
+
+@router.post("/retrievals/{retrieval_id}/feedback", response_model=MemoryReuseFeedbackResponse)
+async def record_retrieval_feedback(
+    retrieval_id: str,
+    payload: MemoryReuseFeedbackRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> MemoryReuseFeedbackResponse:
+    feedback = await registry.memory_service.record_retrieval_feedback(
+        retrieval_id,
+        payload,
+        trace_id=payload.trace_id or getattr(request.state, "trace_id", None),
+    )
+    return MemoryReuseFeedbackResponse(feedback=feedback)
+
+
 @router.get("/{memory_id}", response_model=MemoryItem)
 async def get_memory(
     memory_id: str,
@@ -232,6 +310,24 @@ async def get_memory_source(
     return MemorySourceResponse(
         memory_id=source["memory_id"],
         source=source["source"],
-        source_message=MemorySourceMessage(**message) if message else None,
+        source_message=MemorySourceMessage(**_memory_source_message_payload(message))
+        if message
+        else None,
         trace_id=source.get("trace_id"),
     )
+
+
+def _memory_source_message_payload(message: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "message_id",
+        "conversation_id",
+        "turn_id",
+        "author_type",
+        "author_id",
+        "content_type",
+        "content_text",
+        "content",
+        "trace_id",
+        "created_at",
+    }
+    return {key: message.get(key) for key in allowed if key in message}

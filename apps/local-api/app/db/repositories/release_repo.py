@@ -573,6 +573,81 @@ class ReleaseRepository:
         )
         return _benchmark_run_from_row(dict(row)) if row else None
 
+    async def list_wechat_chat_baseline_turns(self, limit: int = 50) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT
+              turn.turn_id,
+              turn.conversation_id,
+              turn.member_id,
+              turn.trace_id,
+              turn.status,
+              turn.intent,
+              turn.mode,
+              turn.privacy_level,
+              turn.error_code,
+              turn.error_message,
+              turn.created_at,
+              turn.updated_at,
+              turn.ended_at,
+              envelope.model_safe_text,
+              envelope.ingress_metadata_json,
+              envelope.normalized_summary_json,
+              queue.status AS queue_status,
+              queue.started_at AS queue_started_at,
+              queue.completed_at AS queue_completed_at,
+              assistant.content_text AS assistant_text,
+              delivery.channel_delivery_binding_id,
+              delivery.status AS delivery_status,
+              delivery.attempts AS delivery_attempts,
+              delivery.failure_reason AS delivery_failure_reason,
+              delivery.created_at AS delivery_created_at,
+              delivery.sent_at AS delivery_sent_at,
+              channel_event.created_at AS channel_event_created_at,
+              channel_event.received_at AS channel_event_received_at,
+              (
+                SELECT MIN(event.created_at)
+                FROM chat_events event
+                WHERE event.turn_id = turn.turn_id
+                  AND event.event_type = 'response.delta'
+              ) AS first_delta_at,
+              (
+                SELECT MAX(event.created_at)
+                FROM chat_events event
+                WHERE event.turn_id = turn.turn_id
+                  AND event.event_type IN ('response.completed', 'turn.completed', 'turn.failed')
+              ) AS terminal_event_at
+            FROM chat_turns turn
+            JOIN chat_message_envelopes envelope ON envelope.turn_id = turn.turn_id
+            LEFT JOIN chat_turn_queue queue ON queue.turn_id = turn.turn_id
+            LEFT JOIN messages assistant ON assistant.message_id = turn.assistant_message_id
+            LEFT JOIN channel_delivery_bindings delivery ON delivery.turn_id = turn.turn_id
+            LEFT JOIN channel_events channel_event
+              ON channel_event.channel_event_id = delivery.channel_event_id
+            WHERE envelope.ingress_metadata_json LIKE '%wechat%'
+            ORDER BY turn.created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return [dict(row) for row in rows]
+
+    async def list_trace_spans_for_trace_ids(self, trace_ids: list[str]) -> list[dict[str, Any]]:
+        if not trace_ids:
+            return []
+        placeholders = ",".join("?" for _ in trace_ids)
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT trace_id, span_type, name, status, latency_ms, error_code,
+                   input_json, output_json, metadata_json, started_at, ended_at
+            FROM trace_spans
+            WHERE trace_id IN ({placeholders})
+            ORDER BY started_at ASC
+            """,
+            tuple(trace_ids),
+        )
+        return [dict(row) for row in rows]
+
     async def insert_diagnostic_bundle(self, data: dict[str, Any]) -> None:
         await self._db.execute(
             """

@@ -5,7 +5,7 @@ from typing import Any
 from core_types import ResponsePlan
 
 from app.services.chat_safety import ChatVisibleOutputFilter, response_filter_payload
-from app.services.natural_chat import visible_text_guard
+from app.services.chat_visible_guard import visible_text_guard
 
 
 class ChatResponseCoordinator:

@@ -10,6 +10,9 @@ from core_types import (
     CollaborationOutput,
     CollaborationPlan,
     CollaborationRound,
+    CollaborationContextBoundary,
+    CollaborationHandoffRecord,
+    CollaborationRoutingDecision,
     ErrorCode,
     HostDecision,
     PlanCandidate,
@@ -737,6 +740,13 @@ class TaskEngine:
                 checkpoints=checkpoint_data[0],
                 rollback_events=checkpoint_data[1],
                 trace={"trace_id": task.trace_id, "span_refs": []},
+                memory_writes=[
+                    item.model_dump(mode="json")
+                    for item in await self._memory.list_experience_records(
+                        task_id=task_id,
+                        limit=50,
+                    )
+                ],
                 planner_decisions=[
                     PlannerDecision(**row)
                     for row in await self._repo.list_planner_decisions(task_id)
@@ -786,11 +796,23 @@ class TaskEngine:
                     if (plan_row := await self._repo.get_collaboration_plan(task_id))
                     else None
                 ),
+                routing_decisions=[
+                    CollaborationRoutingDecision(**row)
+                    for row in await self._repo.list_routing_decisions(task_id)
+                ],
                 participants=[
                     TaskParticipant(**row)
                     for row in await self._repo.list_participants(task_id)
                 ],
                 subtasks=[TaskSubtask(**row) for row in await self._repo.list_subtasks(task_id)],
+                handoff_records=[
+                    CollaborationHandoffRecord(**row)
+                    for row in await self._repo.list_handoff_records(task_id)
+                ],
+                context_boundaries=[
+                    CollaborationContextBoundary(**row)
+                    for row in await self._repo.list_context_boundaries(task_id)
+                ],
                 rounds=[CollaborationRound(**row) for row in await self._repo.list_rounds(task_id)],
                 outputs=[
                     CollaborationOutput(**row)
@@ -900,6 +922,7 @@ class TaskEngine:
                     payload={"error": str(redact(str(exc)))},
                     trace_id=trace_id,
                 )
+                await self._safe_reflect(task_id, trace_id=trace_id)
                 if not isinstance(exc, AppError):
                     raise
             return
@@ -949,6 +972,7 @@ class TaskEngine:
                             "updated_at": utc_now_iso(),
                         },
                     )
+                    await self._safe_reflect(task_id, trace_id=trace_id)
                     await self._end_span(span_id, output_data={"status": "failed"})
                     return
                 await self._run_step(fresh, step, trace_id=trace_id)
@@ -1031,6 +1055,7 @@ class TaskEngine:
                     suggested_actions=["自动恢复会重试可恢复步骤", "必要时请缩小任务范围"],
                     trace_id=trace_id,
                 )
+            await self._safe_reflect(task_id, trace_id=trace_id)
             await self._end_span(
                 span_id,
                 status=TraceSpanStatus.FAILED,
@@ -1448,6 +1473,9 @@ class TaskEngine:
                     return
                 if current["status"] in {TaskStatus.FAILED.value, TaskStatus.PAUSED.value}:
                     break
+            final_task = await self._get_task(task_id)
+            if final_task["status"] == TaskStatus.FAILED.value:
+                await self._safe_reflect(task_id, trace_id=trace_id)
             if stop_reason == "budget_exhausted":
                 next_pending_step_key = _next_pending_step_key(await self._repo.list_steps(task_id))
                 budget_observation = await self._create_observation(
@@ -1628,6 +1656,7 @@ class TaskEngine:
                 suggested_actions=["检查失败步骤后重试", "缩小范围后重试"],
                 trace_id=trace_id,
             )
+            await self._safe_reflect(task_id, trace_id=trace_id)
             await self._end_span(span_id, status=TraceSpanStatus.FAILED)
             if isinstance(exc, AppError):
                 return
@@ -1928,7 +1957,18 @@ class TaskEngine:
             payload={"task_id": task_id},
             trace_id=trace_id,
         )
-        await self._reflect(task_id, trace_id=trace_id)
+        await self._safe_reflect(task_id, trace_id=trace_id)
+
+    async def _safe_reflect(self, task_id: str, *, trace_id: str | None) -> None:
+        try:
+            await self._reflect(task_id, trace_id=trace_id)
+        except Exception as exc:
+            await self._event(
+                task_id,
+                "task.reflection_failed",
+                {"error": str(redact(str(exc)))},
+                trace_id=trace_id,
+            )
 
     async def _reflect(self, task_id: str, *, trace_id: str | None) -> None:
         span_id = await self._start_span(
@@ -1938,14 +1978,45 @@ class TaskEngine:
             input_data={"task_id": task_id},
         )
         task = await self._get_task(task_id)
-        text = f"任务经历：{task['title']} 已完成。目标：{task['goal']}"
+        steps = await self._repo.list_steps(task_id)
+        result_summary = str(
+            task.get("result", {}).get("summary")
+            or task.get("result", {}).get("message")
+            or "任务已完成"
+        )
         try:
-            await self._memory.extract_from_text(
-                text,
+            await self._memory.consolidate_experience(
                 member_id=task["owner_member_id"],
+                task_id=task_id,
                 conversation_id=task.get("conversation_id"),
+                outcome=task["status"],
+                summary_text=(
+                    f"任务经验：{task['title']}。目标：{task['goal']}。结果：{result_summary}"
+                ),
+                source={
+                    "type": "task",
+                    "task_id": task_id,
+                    "conversation_id": task.get("conversation_id"),
+                    "trace_id": trace_id,
+                },
+                evidence={
+                    "task_status": task["status"],
+                    "goal": task["goal"],
+                    "result": task.get("result", {}),
+                    "steps": [
+                        {
+                            "step_id": step["step_id"],
+                            "step_key": step["step_key"],
+                            "step_type": step["step_type"],
+                            "status": step["status"],
+                            "error_code": step.get("error_code"),
+                        }
+                        for step in steps
+                    ],
+                },
+                steps=steps,
                 trace_id=trace_id,
-                force=True,
+                root_span_id=span_id,
             )
         except Exception:
             pass
@@ -1953,8 +2024,13 @@ class TaskEngine:
             task,
             candidate_type="memory_candidate",
             summary=f"任务经历可作为长期记忆候选：{task['title']}",
-            payload={"goal": task["goal"], "status": task["status"]},
-            confidence=0.72,
+            payload={
+                "goal": task["goal"],
+                "status": task["status"],
+                "result": task.get("result", {}),
+                "step_count": len(steps),
+            },
+            confidence=0.72 if task["status"] == TaskStatus.COMPLETED.value else 0.58,
             trace_id=trace_id,
         )
         if task["mode"] in {TaskMode.WORKFLOW.value, TaskMode.AGENT.value}:
@@ -1964,9 +2040,10 @@ class TaskEngine:
                 summary=f"可复用流程候选：{task['title']}",
                 payload={
                     "mode": task["mode"],
+                    "task_status": task["status"],
                     "steps": [
                         {"step_key": step["step_key"], "step_type": step["step_type"]}
-                        for step in await self._repo.list_steps(task_id)
+                        for step in steps
                     ],
                     "default_status": "disabled",
                 },

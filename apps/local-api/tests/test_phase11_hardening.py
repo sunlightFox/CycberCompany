@@ -17,6 +17,10 @@ def test_phase11_settings_api_reads_updates_and_redacts(client: TestClient) -> N
                 "reserved_output_tokens": 2048,
                 "allow_cloud_fallback": False,
             },
+            "safety": {
+                "approval_profile": "balanced_personal",
+                "chat_visible_redaction": "relaxed",
+            },
             "mcp": {"allowed_stdio_commands": ["fake-mcp", "phase11-mcp"]},
             "updated_by_member_id": "mem_xiaoyao",
         },
@@ -40,6 +44,8 @@ def test_phase11_settings_api_reads_updates_and_redacts(client: TestClient) -> N
     assert updated.json()["version"] == 1
     assert fetched["settings"]["model_routing"]["reserved_output_tokens"] == 2048
     assert fetched["settings"]["model_routing"]["allow_cloud_fallback"] is False
+    assert fetched["settings"]["safety"]["approval_profile"] == "balanced_personal"
+    assert fetched["settings"]["safety"]["chat_visible_redaction"] == "relaxed"
     assert "phase11-mcp" in fetched["settings"]["mcp"]["allowed_stdio_commands"]
     assert rejected.status_code == 422
     assert rejected.json()["error"]["code"] == "CONFIG_ERROR"
@@ -143,6 +149,47 @@ def test_phase11_terminal_artifact_has_sandbox_profile(client: TestClient) -> No
         "container_not_enabled",
         "windows_low_integrity_not_enabled",
     }
+
+
+def test_phase11_balanced_personal_skips_safe_terminal_but_keeps_file_delete_approval(
+    client: TestClient,
+) -> None:
+    patched = client.patch(
+        "/api/settings",
+        json={
+            "safety": {
+                "approval_profile": "balanced_personal",
+                "chat_visible_redaction": "relaxed",
+            },
+            "updated_by_member_id": "mem_xiaoyao",
+        },
+    )
+    task = client.post(
+        "/api/tasks",
+        json={"goal": "phase11 personal safety", "auto_start": False},
+    ).json()
+    terminal = client.post(
+        "/api/tools/execute",
+        json={
+            "task_id": task["task_id"],
+            "tool_name": "terminal.run",
+            "args": {"command": "echo phase11-personal"},
+        },
+    ).json()
+    delete = client.post(
+        "/api/tools/execute",
+        json={
+            "task_id": task["task_id"],
+            "tool_name": "file.delete",
+            "args": {"path": "outputs/phase11-delete.txt"},
+        },
+    ).json()
+
+    assert patched.status_code == 200, patched.text
+    assert terminal.get("approval") is None
+    assert terminal["tool_call"]["status"] == "completed"
+    assert delete["approval"]["approval_id"]
+    assert delete["tool_call"]["status"] == "approval_required"
 
 
 def test_phase11_mcp_member_scope_policy_blocks_unauthorized_member(

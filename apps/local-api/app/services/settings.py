@@ -206,6 +206,10 @@ class SettingsService:
                         "task_artifact_sandbox",
                     )
                 ),
+                "approval_profile": str(safety_risk.get("approval_profile") or "strict"),
+                "chat_visible_redaction": str(
+                    safety_risk.get("chat_visible_redaction") or "strict"
+                ),
                 "approval_policy": _mapping(safety_risk.get("approval_policy")),
             },
             vector={

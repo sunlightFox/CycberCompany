@@ -9,8 +9,13 @@ from core_types import (
     PluginBundle,
     PluginEvent,
     SkillCandidateRecord,
+    SkillDependencyEdge,
     SkillEvalRun,
+    SkillGrowthCandidate,
     SkillMatch,
+    SkillMarketplaceHealthRecord,
+    SkillMarketplaceInstallRecord,
+    SkillMarketplacePackageDetail,
     SkillRecord,
     SkillRepositoryEntry,
     SkillRepositoryRecord,
@@ -128,3 +133,30 @@ class SkillRepositoryRefreshResponse(ApiModel):
 
 class SkillCatalogSearchResponse(ApiModel):
     items: list[SkillRepositoryEntry] = Field(default_factory=list)
+
+
+class SkillMarketplacePackageResponse(ApiModel):
+    package: SkillMarketplacePackageDetail
+
+
+class SkillMarketplaceHealthRefreshResponse(ApiModel):
+    items: list[SkillMarketplaceHealthRecord] = Field(default_factory=list)
+
+
+class SkillMarketplaceInstallRecordsResponse(ApiModel):
+    items: list[SkillMarketplaceInstallRecord] = Field(default_factory=list)
+
+
+class SkillDependencyEdgesResponse(ApiModel):
+    items: list[SkillDependencyEdge] = Field(default_factory=list)
+
+
+class SkillGrowthCandidateConsolidateRequest(ApiModel):
+    member_id: EntityId | None = "mem_xiaoyao"
+    task_id: EntityId | None = None
+    experience_id: EntityId | None = None
+    limit: int = Field(default=20, ge=1, le=100)
+
+
+class SkillGrowthCandidateResponse(ApiModel):
+    items: list[SkillGrowthCandidate] = Field(default_factory=list)

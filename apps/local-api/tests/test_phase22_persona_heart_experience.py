@@ -112,6 +112,8 @@ def test_phase22_high_risk_preview_stays_low_anthropomorphic(client: TestClient)
     plan = preview["response_plan"]
 
     assert plan["tone_mode"] == "safety_boundary"
+    assert plan["tone_metadata"]["safety_overrides_tone"] is True
+    assert plan["tone_metadata"]["deescalation_required"] is True
     assert plan["tone_metadata"]["anthropomorphic_level"] <= 0.2
     assert plan["boundary_notice"] == "高风险动作需要审批"
     assert "已删除" not in plan["plain_text"]

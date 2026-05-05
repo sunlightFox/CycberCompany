@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import cast
 
 import anyio
-from app.services.bootstrap import DEFAULT_ORGANIZATION_ID
+from app.services.bootstrap import DEFAULT_MEMBER_VOICE_IDS, DEFAULT_ORGANIZATION_ID
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -21,15 +21,31 @@ def test_boot_001_first_start_creates_default_foundation(client: TestClient) -> 
     assert organization.json()["display_name"] == "我的一人公司"
     assert members.status_code == 200
     member_items = members.json()["items"]
-    assert len(member_items) == 5
+    assert len(member_items) == 6
     member_by_id = {item["member_id"]: item for item in member_items}
     assert member_by_id["mem_xiaoyao"]["display_name"] == "小曜"
     assert member_by_id["mem_xiaoyao"]["default_brain_id"] == "brain_not_configured"
+    assert member_by_id["mem_xiaowu"]["display_name"] == "小吴"
+    assert member_by_id["mem_xiaowu"]["default_brain_id"] == "brain_not_configured"
+    assert member_by_id["mem_xiaowu"]["created_from_template_id"] is None
     assert {"mem_aheng", "mem_ningning", "mem_mobai", "mem_xiaoqi"}.issubset(
         set(member_by_id)
     )
     assert conversations.status_code == 200
     assert conversations.json()["items"][0]["primary_member_id"] == "mem_xiaoyao"
+    member_voice_ids: dict[str, str] = {}
+    for member in member_items:
+        bindings = client.get(f"/api/voice/members/{member['member_id']}/bindings")
+        assert bindings.status_code == 200
+        items = bindings.json()["items"]
+        assert len(items) == 1
+        binding = items[0]
+        assert binding["provider"] == "edge"
+        assert binding["voice_profile_id"].startswith("vpr_member_")
+        member_voice_ids[member["member_id"]] = binding["provider_voice_id"]
+    assert len(set(member_voice_ids.values())) == len(member_voice_ids)
+    assert member_voice_ids["mem_xiaoyao"] == DEFAULT_MEMBER_VOICE_IDS["xiaoyao"]
+    assert member_voice_ids["mem_xiaowu"] == DEFAULT_MEMBER_VOICE_IDS["xiaowu"]
     status = client.get("/api/system/bootstrap-status").json()
     assert all(status.values())
 
@@ -48,7 +64,8 @@ def test_boot_002_repeated_start_does_not_duplicate_defaults(
         members = second_client.get("/api/members").json()["items"]
         conversations = second_client.get("/api/chat/conversations").json()["items"]
 
-    assert len(members) == 5
+    assert len(members) == 6
+    assert [item["member_id"] for item in members].count("mem_xiaowu") == 1
     assert len(conversations) == 1
 
 
@@ -75,6 +92,42 @@ def test_boot_004_bootstrap_does_not_overwrite_existing_organization(
     organization = client.get("/api/organization/current").json()
 
     assert organization["display_name"] == "用户自己的组织名"
+
+
+def test_boot_005_bootstrap_does_not_overwrite_member_voice_binding(
+    client: TestClient,
+) -> None:
+    registry = cast(FastAPI, client.app).state.registry
+    profile = client.post(
+        "/api/voice/profiles",
+        json={
+            "display_name": "小曜用户自定义声音",
+            "provider": "edge",
+            "provider_voice_id": "zh-CN-YunxiNeural",
+            "output_format": "wav",
+        },
+    )
+    assert profile.status_code == 200, profile.text
+    profile_id = profile.json()["voice_profile_id"]
+    binding = client.post(
+        "/api/voice/bindings",
+        json={
+            "member_id": "mem_xiaoyao",
+            "voice_profile_id": profile_id,
+            "binding_scope": "default",
+            "reply_mode": "explicit_request_only",
+            "priority": 1000,
+            "status": "active",
+        },
+    )
+    assert binding.status_code == 200, binding.text
+
+    anyio.run(registry.bootstrap_service.ensure_defaults)
+    bindings = client.get("/api/voice/members/mem_xiaoyao/bindings").json()["items"]
+
+    assert len(bindings) == 1
+    assert bindings[0]["voice_profile_id"] == profile_id
+    assert bindings[0]["provider_voice_id"] == "zh-CN-YunxiNeural"
 
 
 async def _delete_welcome_message(registry) -> None:

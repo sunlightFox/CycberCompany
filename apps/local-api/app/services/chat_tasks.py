@@ -26,7 +26,15 @@ class ScheduledTaskIntentCoordinator:
     """Parses conservative scheduled-task requests from ordinary chat text."""
 
     def parse(self, text: str) -> ScheduledTaskIntent | None:
-        direct_only_markers = ["不要执行", "不要创建任务", "不要调用工具", "只给方案"]
+        direct_only_markers = [
+            "不要执行",
+            "不要假装执行",
+            "别假装执行",
+            "不要声称执行",
+            "不要创建任务",
+            "不要调用工具",
+            "只给方案",
+        ]
         if any(marker in text for marker in direct_only_markers):
             return None
         clean = " ".join(text.strip().split())
@@ -61,7 +69,7 @@ class ScheduledTaskIntentCoordinator:
                 schedule = {"type": "interval", "every_seconds": amount * multiplier}
         if schedule is None:
             return None
-        scheduled_markers = ["帮我", "提醒", "定时", "每周", "每天", "每日", "每隔"]
+        scheduled_markers = ["帮我", "提醒", "定时", "创建定时任务", "新建定时任务"]
         if not any(marker in clean for marker in scheduled_markers):
             return None
         goal = clean
@@ -96,7 +104,10 @@ class ChatTaskCoordinator:
         )
         if direct_only:
             return None
-        plan_only = any(marker in clean for marker in ["只给方案", "不要执行", "不要渲染"])
+        plan_only = any(
+            marker in clean
+            for marker in ["只给方案", "不要执行", "不要假装执行", "不要渲染"]
+        )
         return {
             "request_type": "edit_plan" if "剪" in clean or "剪辑" in clean else "analysis",
             "plan_only": plan_only,
@@ -154,7 +165,16 @@ class ChatTaskCoordinator:
 def _direct_only(text: str) -> bool:
     return any(
         marker in text
-        for marker in ["只解释", "只给方案", "不要执行", "不要创建任务", "不要调用工具"]
+        for marker in [
+            "只解释",
+            "只给方案",
+            "不要执行",
+            "不要假装执行",
+            "别假装执行",
+            "不要声称执行",
+            "不要创建任务",
+            "不要调用工具",
+        ]
     )
 
 

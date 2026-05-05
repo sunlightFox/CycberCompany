@@ -79,10 +79,40 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await registry.bootstrap_service.ensure_defaults()
         await registry.trace_service.end_span(bootstrap_span_id)
 
+        soul_span_id = await registry.trace_service.start_span(
+            startup_trace_id,
+            span_type=TraceSpanType.PERSONA_PROFILE,
+            name="ensure member SOUL.md manifests",
+            parent_span_id=root_span_id,
+        )
+        soul_manifests = await registry.persona_heart_service.ensure_soul_manifests_for_members(
+            trace_id=startup_trace_id
+        )
+        await registry.trace_service.end_span(
+            soul_span_id,
+            output_data={"manifest_count": len(soul_manifests)},
+        )
+
         await registry.chat_service.recover_incomplete_turns()
         await registry.tool_runtime.ensure_builtin_tools()
-        await registry.skill_repository_service.ensure_configured(trace_id=startup_trace_id)
-        await registry.skill_repository_service.refresh_all(trace_id=startup_trace_id)
+        try:
+            await registry.skill_repository_service.ensure_configured(
+                trace_id=startup_trace_id
+            )
+            await registry.skill_repository_service.refresh_all(trace_id=startup_trace_id)
+        except Exception as exc:
+            skill_span_id = await registry.trace_service.start_span(
+                startup_trace_id,
+                span_type=TraceSpanType.APP_STARTUP,
+                name="refresh skill repositories",
+                parent_span_id=root_span_id,
+                metadata={"status": "degraded"},
+            )
+            await registry.trace_service.end_span(
+                skill_span_id,
+                status=TraceSpanStatus.FAILED,
+                output_data={"error": str(exc)},
+            )
         await registry.task_engine.recover_stale_jobs()
         await registry.memory_service.recover_stale_jobs()
         await registry.memory_service.process_pending_jobs()

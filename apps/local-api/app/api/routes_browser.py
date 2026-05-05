@@ -5,12 +5,17 @@ from fastapi import APIRouter, Depends, Request
 from app.api.dependencies import get_registry
 from app.schemas.browser import (
     BrowserEvidenceResponse,
+    BrowserPageStateListResponse,
     BrowserProfileActionRequest,
     BrowserProfileCreateRequest,
     BrowserProfileEventListResponse,
     BrowserProfileListResponse,
     BrowserProfileResponse,
     BrowserProfileUpdateRequest,
+    BrowserSessionHealthCheckRequest,
+    BrowserSessionHealthCheckResponse,
+    BrowserSessionRestoreContextRequest,
+    BrowserSessionRestoreContextResponse,
     BrowserSessionCreateRequest,
     BrowserSessionListResponse,
     BrowserSessionResponse,
@@ -131,7 +136,7 @@ async def create_browser_session(
     payload: BrowserSessionCreateRequest,
     request: Request,
     registry: ServiceRegistry = Depends(get_registry),
-) -> BrowserSessionResponse:
+    ) -> BrowserSessionResponse:
     session = await registry.browser_session_service.create_session(
         browser_profile_id,
         payload,
@@ -147,6 +152,55 @@ async def list_browser_sessions(
 ) -> BrowserSessionListResponse:
     return BrowserSessionListResponse(
         items=await registry.browser_session_service.list_sessions(browser_profile_id)
+    )
+
+
+@router.post(
+    "/sessions/{browser_session_id}/health-check",
+    response_model=BrowserSessionHealthCheckResponse,
+)
+async def health_check_browser_session(
+    browser_session_id: str,
+    payload: BrowserSessionHealthCheckRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> BrowserSessionHealthCheckResponse:
+    return await registry.browser_session_service.health_check_session(
+        browser_session_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.post(
+    "/sessions/{browser_session_id}/restore-context",
+    response_model=BrowserSessionRestoreContextResponse,
+)
+async def restore_browser_session_context(
+    browser_session_id: str,
+    payload: BrowserSessionRestoreContextRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> BrowserSessionRestoreContextResponse:
+    return await registry.browser_session_service.restore_context(
+        browser_session_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.get(
+    "/sessions/{browser_session_id}/page-states",
+    response_model=BrowserPageStateListResponse,
+)
+async def list_browser_session_page_states(
+    browser_session_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> BrowserPageStateListResponse:
+    return BrowserPageStateListResponse(
+        items=await registry.browser_session_service.list_page_states(
+            browser_session_id=browser_session_id
+        )
     )
 
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import hashlib
 import json
 import shutil
+import wave
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,9 +14,15 @@ from core_types import (
     ErrorCode,
     MediaAnalysis,
     MediaAsset,
+    MediaChatBinding,
     MediaDerivative,
     MediaEditPlan,
+    MediaIORecord,
+    MediaMultimodalSummary,
+    MediaProviderHealthRecord,
     RiskLevel,
+    MediaSpeechRender,
+    MediaSpeechTranscript,
     TaskArtifact,
     TraceSpanStatus,
     TraceSpanType,
@@ -31,12 +39,17 @@ from app.schemas.media import (
     MediaExportArtifactRequest,
     MediaExtractAudioRequest,
     MediaExtractFramesRequest,
+    MediaIORecordResponse,
     MediaImportArtifactRequest,
     MediaOperationResponse,
     MediaProbeRequest,
+    MediaProviderHealthResponse,
     MediaRenderEditRequest,
     MediaSceneDetectRequest,
+    MediaSTTRequest,
+    MediaSummarizeRequest,
     MediaTimelineRequest,
+    MediaTTSRequest,
     MediaTranscribeAudioRequest,
 )
 from app.services.artifacts import ArtifactStore
@@ -335,7 +348,7 @@ class MediaService:
                 status_code=403,
             )
         media_type = request.media_type or _infer_media_type(artifact)
-        if media_type not in {"video", "audio", "image"}:
+        if media_type not in {"video", "audio", "image", "document"}:
             raise AppError(
                 ErrorCode.MEDIA_PLAN_INVALID,
                 "artifact 不是受支持的媒体类型",
@@ -363,6 +376,17 @@ class MediaService:
             "checksum": artifact.checksum,
             "sensitivity": request.sensitivity or artifact.sensitivity,
             "status": "ready",
+            "io_role": "input",
+            "source_kind": "task_artifact",
+            "privacy_level": _privacy_level_for_sensitivity(
+                request.sensitivity or artifact.sensitivity
+            ),
+            "provider_status": "local",
+            "replay_summary": {
+                "source": "task_artifact",
+                "media_type": media_type,
+                "display_name": artifact.display_name,
+            },
             "metadata": _redacted_dict({
                 **request.metadata,
                 "source": "task_artifact",
@@ -395,6 +419,11 @@ class MediaService:
         derivatives = await self._repo.list_derivatives_by_task(task_id)
         analyses = await self._repo.list_analysis_by_task(task_id)
         edit_plans = await self._repo.list_edit_plans_by_task(task_id)
+        io_records = await self._repo.list_io_records_by_task(task_id)
+        transcripts = await self._repo.list_speech_transcripts_by_task(task_id)
+        renders = await self._repo.list_speech_renders_by_task(task_id)
+        summaries = await self._repo.list_multimodal_summaries_by_task(task_id)
+        bindings = await self._repo.list_chat_bindings_by_task(task_id)
         derivative_by_media: dict[str, list[dict[str, Any]]] = {}
         for item in derivatives:
             derivative_by_media.setdefault(str(item["media_id"]), []).append(item)
@@ -404,6 +433,21 @@ class MediaService:
         edit_by_media: dict[str, list[dict[str, Any]]] = {}
         for item in edit_plans:
             edit_by_media.setdefault(str(item["media_id"]), []).append(item)
+        io_by_media: dict[str, list[dict[str, Any]]] = {}
+        for item in io_records:
+            io_by_media.setdefault(str(item.get("media_id") or item.get("io_request_id")), []).append(item)
+        transcript_by_media: dict[str, list[dict[str, Any]]] = {}
+        for item in transcripts:
+            transcript_by_media.setdefault(str(item["media_id"]), []).append(item)
+        render_by_media: dict[str, list[dict[str, Any]]] = {}
+        for item in renders:
+            render_by_media.setdefault(str(item.get("media_id") or item.get("task_id")), []).append(item)
+        summary_by_media: dict[str, list[dict[str, Any]]] = {}
+        for item in summaries:
+            summary_by_media.setdefault(str(item["media_id"]), []).append(item)
+        binding_by_media: dict[str, list[dict[str, Any]]] = {}
+        for item in bindings:
+            binding_by_media.setdefault(str(item.get("media_id") or item.get("io_request_id")), []).append(item)
         return [
             _redacted_dict(
                 {
@@ -411,6 +455,11 @@ class MediaService:
                     "derivatives": derivative_by_media.get(str(asset["media_id"]), []),
                     "analysis": analysis_by_media.get(str(asset["media_id"]), []),
                     "edit_plans": edit_by_media.get(str(asset["media_id"]), []),
+                    "io_records": io_by_media.get(str(asset["media_id"]), []),
+                    "transcripts": transcript_by_media.get(str(asset["media_id"]), []),
+                    "renders": render_by_media.get(str(asset["media_id"]), []),
+                    "summaries": summary_by_media.get(str(asset["media_id"]), []),
+                    "chat_bindings": binding_by_media.get(str(asset["media_id"]), []),
                     "source_boundary": "task_artifact_only",
                     "raw_media_content_included": False,
                 }
@@ -581,51 +630,501 @@ class MediaService:
         *,
         trace_id: str | None = None,
     ) -> MediaOperationResponse:
-        media = await self.get_media(media_id)
-        transcript = (
-            "本地转写模型未配置；当前仅记录转写契约和可恢复 degraded 状态。"
-            if request.provider == "local"
-            else "外部转写 provider 未启用；需要资产授权和审批后才能调用。"
+        return await self.stt(
+            media_id,
+            MediaSTTRequest(
+                provider=request.provider,
+                language=request.language,
+                force=request.force,
+            ),
+            trace_id=trace_id,
         )
-        artifact = await self._artifacts.write_text(
-            task_id=media.task_id,
-            organization_id=media.organization_id,
-            display_name="transcript.txt",
-            content=transcript,
-            artifact_type="transcript",
-            subdir="media/transcripts",
-            sensitivity=media.sensitivity,
+
+    async def stt(
+        self,
+        media_id: str,
+        request: MediaSTTRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> MediaOperationResponse:
+        media = await self.get_media(media_id)
+        span_id = await self._start_span(trace_id, "media.stt", media)
+        provider = _normalized_provider(request.provider, default="local")
+        provider_health = await self._record_provider_health(
+            capability="stt",
+            provider_name=provider,
+            provider_type="local" if provider in {"local", "test"} else "external",
+            status="available" if provider in {"local", "test"} else "degraded",
+            degraded_reason=None
+            if provider in {"local", "test"}
+            else "provider_unavailable",
+            trace_id=trace_id,
+        )
+        try:
+            source = await self._source_path(media)
+            source_preview = await self._read_transcript_source(media, source)
+            idempotency_key = _media_io_idempotency(
+                media.media_id,
+                "stt",
+                provider,
+                request.language,
+                media.checksum or "",
+                source_preview,
+            )
+            existing = await self._repo.get_io_request_by_idempotency(idempotency_key)
+            if existing is not None:
+                transcripts = await self._repo.get_speech_transcripts_for_io_request(
+                    existing["io_request_id"]
+                )
+                artifacts = [
+                    await self._artifact(row["artifact_id"])  # type: ignore[arg-type]
+                    for row in transcripts
+                    if row.get("artifact_id")
+                ]
+                analysis = await self._latest_transcript_analysis(media.media_id)
+                await self._end_span(span_id, {"status": "completed", "idempotent": True})
+                return MediaOperationResponse(
+                    media=media,
+                    analysis=analysis,
+                    artifacts=artifacts,
+                    io_records=[MediaIORecord(**existing)],
+                    transcripts=[MediaSpeechTranscript(**row) for row in transcripts],
+                    provider_health=[provider_health],
+                    status=existing["status"],
+                    message="语音转写记录已存在",
+                    degraded_reason=existing.get("degraded_reason"),
+                    evidence={
+                        "io_request_id": existing["io_request_id"],
+                        "idempotent": True,
+                    },
+                )
+            if provider not in {"local", "test"}:
+                result = await self._record_stt_io(
+                    media=media,
+                    provider_name=provider,
+                    provider_health=provider_health,
+                    request=request,
+                    trace_id=trace_id,
+                    transcript_text=None,
+                    source_preview=source_preview,
+                    status="degraded",
+                    degraded_reason="provider_unavailable",
+                )
+                await self._end_span(span_id, {"status": "degraded"})
+                return result
+            transcript_text = await self._transcript_from_media_source(media, source)
+            status = "completed" if provider == "test" and transcript_text else "degraded"
+            result = await self._record_stt_io(
+                media=media,
+                provider_name=provider,
+                provider_health=provider_health,
+                request=request,
+                trace_id=trace_id,
+                transcript_text=transcript_text,
+                source_preview=source_preview,
+                status=status,
+                degraded_reason=None if status == "completed" else "transcription_provider_unavailable",
+            )
+            await self._end_span(
+                span_id,
+                {"status": result.status, "io_request_id": result.evidence.get("io_request_id")},
+            )
+            return result
+        except AppError as exc:
+            if exc.code == ErrorCode.MEDIA_BACKEND_UNAVAILABLE.value:
+                await self._end_span(span_id, {"status": "degraded"}, status=TraceSpanStatus.FAILED)
+                return _degraded_response(media, "转写后端不可用", exc, self.runtime_status())
+            await self._end_span(span_id, {"status": "failed"}, status=TraceSpanStatus.FAILED)
+            raise
+
+    async def tts(
+        self,
+        request: MediaTTSRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> MediaOperationResponse:
+        provider = _normalized_provider(request.provider, default="local")
+        source_text = str(redact(request.text))
+        idempotency_key = _media_io_idempotency(
+            request.task_id,
+            "tts",
+            provider,
+            request.voice or "",
+            request.output_format,
+            source_text,
+        )
+        existing_io = await self._repo.get_io_request_by_idempotency(idempotency_key)
+        provider_health = await self._record_provider_health(
+            capability="tts",
+            provider_name=provider,
+            provider_type="local" if provider in {"local", "test"} else "external",
+            status="available" if provider in {"local", "test"} else "degraded",
+            degraded_reason=None
+            if provider in {"local", "test"}
+            else "provider_unavailable",
+            trace_id=trace_id,
+        )
+        transcript_preview = _preview_text(source_text, 240)
+        if existing_io is not None:
+            output_artifact_id = existing_io.get("output_artifact_id")
+            media = await self._repo.get_asset_by_source(output_artifact_id) if output_artifact_id else None
+            artifact = await self._artifact(output_artifact_id) if output_artifact_id else None
+            renders = await self._repo.get_speech_renders_for_io_request(existing_io["io_request_id"])
+            render_records = [MediaSpeechRender(**row) for row in renders]
+            media_asset = MediaAsset(**media) if media else None
+            return MediaOperationResponse(
+                media=media_asset,
+                artifacts=[artifact] if artifact is not None else [],
+                io_records=[MediaIORecord(**existing_io)],
+                provider_health=[provider_health],
+                renders=render_records,
+                status=existing_io["status"],
+                message="语音播报记录已存在",
+                degraded_reason=existing_io.get("degraded_reason"),
+                evidence={
+                    "io_request_id": existing_io["io_request_id"],
+                    "idempotent": True,
+                },
+            )
+        io_request = await self._create_io_request(
+            task_id=request.task_id,
+            media_id=None,
+            operation="tts",
+            direction="output",
+            provider_name=provider,
+            status="degraded" if provider not in {"local", "test"} else "completed",
+            degraded_reason=None if provider in {"local", "test"} else "provider_unavailable",
+            trace_id=trace_id,
+            summary={
+                "text_preview": transcript_preview,
+                "voice": request.voice,
+                "output_format": request.output_format,
+            },
+            evidence={"provider_health": [provider_health.model_dump(mode="json")]},
+            redaction_summary={
+                "text_preview": transcript_preview,
+                "source_text_redacted": True,
+            },
+            idempotency_key=idempotency_key,
+        )
+        if provider not in {"local", "test"}:
+            return MediaOperationResponse(
+                status="degraded",
+                message="TTS provider 未启用",
+                degraded_reason="provider_unavailable",
+                io_records=[io_request],
+                provider_health=[provider_health],
+                evidence={"io_request_id": io_request.io_request_id},
+            )
+        content = _fake_wav_bytes(request.text, request.output_format)
+        artifact = await self._artifacts.write_bytes(
+            task_id=request.task_id,
+            organization_id=request.organization_id or "org_default",
+            display_name="speech.wav" if request.output_format == "wav" else f"speech.{request.output_format}",
+            content=content,
+            artifact_type="audio",
+            content_type="audio/wav" if request.output_format == "wav" else f"audio/{request.output_format}",
+            subdir="media/tts",
+            sensitivity=request.sensitivity,
             metadata={
-                "media_id": media.media_id,
-                "provider": request.provider,
-                "status": "degraded",
+                "media_io_request_id": io_request.io_request_id,
+                "provider": provider,
+                "voice": request.voice,
+                "output_format": request.output_format,
+                "text_preview": transcript_preview,
+                "redacted": True,
             },
             trace_id=trace_id,
         )
-        derivative = await self._write_derivative(
-            media,
-            artifact,
-            derivative_type="transcript",
-            metadata={"provider": request.provider, "degraded": True},
+        media_import = await self.import_artifact(
+            MediaImportArtifactRequest(
+                task_id=request.task_id,
+                artifact_id=artifact.artifact_id,
+                media_type="audio",
+                display_name=artifact.display_name,
+                sensitivity=request.sensitivity,
+                metadata={
+                    "media_io_request_id": io_request.io_request_id,
+                    "provider": provider,
+                    "voice": request.voice,
+                    "tts": True,
+                },
+            ),
             trace_id=trace_id,
         )
-        analysis = await self._write_analysis(
-            media,
-            analysis_type="transcript",
-            segments=[],
-            transcript_artifact_id=artifact.artifact_id,
-            evidence_artifact_ids=[artifact.artifact_id],
-            metadata={"provider": request.provider, "status": "degraded"},
+        media = media_import.media
+        if media is None:
+            raise AppError(ErrorCode.MEDIA_RUNTIME_FAILED, "TTS 媒体登记失败", status_code=500)
+        await self._repo.update_asset(
+            media.media_id,
+            {
+                "io_role": "output",
+                "source_kind": "tts_render",
+                "provider_status": provider,
+                "replay_summary": {
+                    "io_request_id": io_request.io_request_id,
+                    "voice": request.voice,
+                    "output_format": request.output_format,
+                    "text_preview": transcript_preview,
+                },
+                "updated_at": utc_now_iso(),
+            },
+        )
+        media = await self.get_media(media.media_id)
+        render = await self._record_speech_render(
+            media=media,
+            io_request=io_request,
+            provider_name=provider,
+            artifact=artifact,
+            voice=request.voice,
+            output_format=request.output_format,
+            source_text=request.text,
             trace_id=trace_id,
+        )
+        await self._audit.write_event(
+            actor_type="system",
+            action="media.tts",
+            object_type="media_asset",
+            object_id=media.media_id,
+            summary="媒体语音播报记录已生成",
+            risk_level=RiskLevel.R2,
+            payload=redact(
+                {
+                    "media_id": media.media_id,
+                    "io_request_id": io_request.io_request_id,
+                    "artifact_id": artifact.artifact_id,
+                    "render_id": render.render_id,
+                }
+            ),
+            trace_id=trace_id,
+        )
+        await self._repo.update_io_request(
+            io_request.io_request_id,
+            {
+                "output_artifact_id": artifact.artifact_id,
+                "status": "completed",
+                "updated_at": utc_now_iso(),
+                "summary": {
+                    **io_request.summary,
+                    "media_id": media.media_id,
+                },
+            },
+        )
+        updated_io = await self._repo.get_io_request_by_idempotency(io_request.idempotency_key or "")
+        if updated_io is None:
+            updated_io = io_request.model_dump(mode="json")
+        span_id = await self._start_span(trace_id, "media.tts", media)
+        await self._end_span(
+            span_id,
+            {"status": "completed", "io_request_id": io_request.io_request_id},
         )
         return MediaOperationResponse(
             media=media,
-            derivatives=[derivative],
-            analysis=analysis,
             artifacts=[artifact],
-            status="degraded",
-            message="转写 provider 未启用，已记录可恢复转写占位",
-            degraded_reason="transcription_provider_unavailable",
+            io_records=[MediaIORecord(**updated_io)],
+            provider_health=[provider_health],
+            renders=[render],
+            status="completed",
+            message="语音播报已生成",
+            evidence={
+                "io_request_id": io_request.io_request_id,
+                "artifact_id": artifact.artifact_id,
+                "render_id": render.render_id,
+            },
+        )
+
+    async def summarize(
+        self,
+        media_id: str,
+        request: MediaSummarizeRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> MediaOperationResponse:
+        media = await self.get_media(media_id)
+        span_id = await self._start_span(trace_id, "media.summarize", media)
+        provider = _normalized_provider(request.provider, default="local")
+        idempotency_key = _media_io_idempotency(
+            media.media_id,
+            "summarize",
+            provider,
+            request.summary_type or media.media_type,
+            media.checksum or "",
+            media.source_artifact_id,
+        )
+        existing_io = await self._repo.get_io_request_by_idempotency(idempotency_key)
+        provider_health = await self._record_provider_health(
+            capability="summarize",
+            provider_name=provider,
+            provider_type="local" if provider in {"local", "test"} else "external",
+            status="available" if provider in {"local", "test"} else "degraded",
+            degraded_reason=None
+            if provider in {"local", "test"}
+            else "provider_unavailable",
+            trace_id=trace_id,
+        )
+        if existing_io is not None:
+            summary_rows = await self._repo.get_multimodal_summaries_for_io_request(
+                existing_io["io_request_id"]
+            )
+            artifacts: list[TaskArtifact] = []
+            output_artifact_id = existing_io.get("output_artifact_id")
+            if output_artifact_id:
+                artifacts.append(await self._artifact(output_artifact_id))
+            await self._end_span(
+                span_id,
+                {"status": existing_io["status"], "io_request_id": existing_io["io_request_id"]},
+            )
+            return MediaOperationResponse(
+                media=media,
+                artifacts=artifacts,
+                io_records=[MediaIORecord(**existing_io)],
+                provider_health=[provider_health],
+                summaries=[MediaMultimodalSummary(**row) for row in summary_rows],
+                status=existing_io["status"],
+                message="媒体摘要记录已存在",
+                degraded_reason=existing_io.get("degraded_reason"),
+                evidence={
+                    "io_request_id": existing_io["io_request_id"],
+                    "idempotent": True,
+                },
+            )
+        try:
+            summary_text, evidence_artifacts, status, degraded_reason = await self._summarize_media(
+                media,
+                provider=provider,
+                summary_type=request.summary_type,
+                trace_id=trace_id,
+            )
+            io_request = await self._create_io_request(
+                task_id=media.task_id,
+                media_id=media.media_id,
+                operation="summarize",
+                direction="input",
+                provider_name=provider,
+                status=status,
+                degraded_reason=degraded_reason,
+                trace_id=trace_id,
+                summary={
+                    "summary_type": request.summary_type or media.media_type,
+                    "summary_preview": _preview_text(summary_text, 240),
+                },
+                evidence={
+                    "provider_health": [provider_health.model_dump(mode="json")],
+                    "evidence_artifact_ids": [item.artifact_id for item in evidence_artifacts],
+                },
+                redaction_summary={"summary_preview": _preview_text(summary_text, 240)},
+                idempotency_key=idempotency_key,
+            )
+            summary_artifact = await self._artifacts.write_text(
+                task_id=media.task_id,
+                organization_id=media.organization_id,
+                display_name=f"{media.media_id}-summary.txt",
+                content=summary_text,
+                artifact_type="summary",
+                subdir="media/summaries",
+                sensitivity=media.sensitivity,
+                metadata={
+                    "media_id": media.media_id,
+                    "io_request_id": io_request.io_request_id,
+                    "summary_type": request.summary_type or media.media_type,
+                    "redacted": True,
+                },
+                trace_id=trace_id,
+            )
+            summary_record = await self._record_multimodal_summary(
+                media=media,
+                io_request=io_request,
+                provider_name=provider,
+                summary_type=request.summary_type or media.media_type,
+                summary_text=summary_text,
+                evidence_artifacts=evidence_artifacts,
+                status=status,
+                trace_id=trace_id,
+            )
+            await self._audit.write_event(
+                actor_type="system",
+                action="media.summarize",
+                object_type="media_asset",
+                object_id=media.media_id,
+                summary="媒体摘要记录已生成",
+                risk_level=RiskLevel.R2,
+                payload=redact(
+                    {
+                        "media_id": media.media_id,
+                        "io_request_id": io_request.io_request_id,
+                        "summary_id": summary_record.summary_id,
+                    }
+                ),
+                trace_id=trace_id,
+            )
+            await self._repo.update_io_request(
+                io_request.io_request_id,
+                {
+                    "output_artifact_id": summary_artifact.artifact_id,
+                    "status": status,
+                    "degraded_reason": degraded_reason,
+                    "summary": {
+                        **io_request.summary,
+                        "summary_artifact_id": summary_artifact.artifact_id,
+                        "summary_id": summary_record.summary_id,
+                    },
+                    "updated_at": utc_now_iso(),
+                },
+            )
+            await self._end_span(
+                span_id,
+                {"status": status, "io_request_id": io_request.io_request_id},
+                status=TraceSpanStatus.COMPLETED if status == "completed" else TraceSpanStatus.COMPLETED,
+            )
+            updated_io = await self._repo.get_io_request_by_idempotency(io_request.idempotency_key or "")
+            io_record = MediaIORecord(**(updated_io or io_request.model_dump(mode="json")))
+            return MediaOperationResponse(
+                media=media,
+                artifacts=[summary_artifact],
+                io_records=[io_record],
+                provider_health=[provider_health],
+                summaries=[summary_record],
+                status=status,
+                message="媒体摘要已生成" if status == "completed" else "媒体摘要已降级生成",
+                degraded_reason=degraded_reason,
+                evidence={
+                    "io_request_id": io_request.io_request_id,
+                    "summary_id": summary_record.summary_id,
+                    "summary_artifact_id": summary_artifact.artifact_id,
+                },
+            )
+        except AppError as exc:
+            if exc.code == ErrorCode.MEDIA_BACKEND_UNAVAILABLE.value:
+                await self._end_span(span_id, {"status": "degraded"}, status=TraceSpanStatus.FAILED)
+                return _degraded_response(media, "摘要后端不可用", exc, self.runtime_status())
+            await self._end_span(span_id, {"status": "failed"}, status=TraceSpanStatus.FAILED)
+            raise
+
+    async def list_io_records(self, media_id: str) -> MediaIORecordResponse:
+        await self.get_media(media_id)
+        return MediaIORecordResponse(
+            items=[MediaIORecord(**row) for row in await self._repo.list_io_records(media_id)]
+        )
+
+    async def provider_health(self) -> MediaProviderHealthResponse:
+        records = await self._repo.list_provider_health()
+        if not records:
+            for capability, provider_name in [
+                ("stt", "local"),
+                ("tts", "local"),
+                ("summarize", "local"),
+            ]:
+                await self._record_provider_health(
+                    capability=capability,
+                    provider_name=provider_name,
+                    provider_type="local",
+                    status="available",
+                    degraded_reason=None,
+                    trace_id=None,
+                )
+            records = await self._repo.list_provider_health()
+        return MediaProviderHealthResponse(
+            items=[MediaProviderHealthRecord(**row) for row in records]
         )
 
     async def scene_detect(
@@ -1033,6 +1532,468 @@ class MediaService:
         if span_id is not None:
             await self._trace.end_span(span_id, status=status, output_data=redact(output_data))
 
+    async def _record_provider_health(
+        self,
+        *,
+        capability: str,
+        provider_name: str,
+        provider_type: str,
+        status: str,
+        degraded_reason: str | None,
+        trace_id: str | None,
+    ) -> MediaProviderHealthRecord:
+        now = utc_now_iso()
+        data = {
+            "health_record_id": new_id("mph"),
+            "organization_id": "org_default",
+            "provider_name": provider_name,
+            "capability": capability,
+            "provider_type": provider_type,
+            "status": status,
+            "degraded_reason": degraded_reason,
+            "evidence": _redacted_dict(
+                {
+                    "runtime": self.runtime_status(),
+                    "cloud_provider_enabled": False,
+                    "provider_secret_visible": False,
+                }
+            ),
+            "redaction_summary": {
+                "credentials_included": False,
+                "local_path_included": False,
+            },
+            "trace_id": trace_id,
+            "checked_at": now,
+            "created_at": now,
+        }
+        await self._repo.insert_provider_health(data)
+        return MediaProviderHealthRecord(**data)
+
+    async def _create_io_request(
+        self,
+        *,
+        task_id: str | None,
+        media_id: str | None,
+        operation: str,
+        direction: str,
+        provider_name: str,
+        status: str,
+        degraded_reason: str | None,
+        trace_id: str | None,
+        summary: dict[str, Any],
+        evidence: dict[str, Any],
+        redaction_summary: dict[str, Any],
+        input_artifact_id: str | None = None,
+        output_artifact_id: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> MediaIORecord:
+        now = utc_now_iso()
+        idem = idempotency_key or _media_io_idempotency(
+            media_id or task_id or "global",
+            operation,
+            provider_name,
+            direction,
+            json.dumps(redact(summary), sort_keys=True, ensure_ascii=False),
+        )
+        existing = await self._repo.get_io_request_by_idempotency(idem)
+        if existing is not None:
+            return MediaIORecord(**existing)
+        data = {
+            "io_request_id": new_id("mio"),
+            "organization_id": "org_default",
+            "task_id": task_id,
+            "media_id": media_id,
+            "operation": operation,
+            "direction": direction,
+            "provider_name": provider_name,
+            "status": status,
+            "degraded_reason": degraded_reason,
+            "input_artifact_id": input_artifact_id,
+            "output_artifact_id": output_artifact_id,
+            "summary": _redacted_dict(summary),
+            "evidence": _redacted_dict(evidence),
+            "redaction_summary": _redacted_dict(redaction_summary),
+            "idempotency_key": idem,
+            "trace_id": trace_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await self._repo.insert_io_request(data)
+        return MediaIORecord(**data)
+
+    async def _record_stt_io(
+        self,
+        *,
+        media: MediaAsset,
+        provider_name: str,
+        provider_health: MediaProviderHealthRecord,
+        request: MediaSTTRequest,
+        trace_id: str | None,
+        transcript_text: str | None,
+        source_preview: str,
+        status: str,
+        degraded_reason: str | None,
+    ) -> MediaOperationResponse:
+        preview = _preview_text(transcript_text or source_preview or _stt_degraded_text(), 240)
+        content = transcript_text or _stt_degraded_text()
+        artifact = await self._artifacts.write_text(
+            task_id=media.task_id,
+            organization_id=media.organization_id,
+            display_name="transcript.txt",
+            content=content,
+            artifact_type="transcript",
+            subdir="media/transcripts",
+            sensitivity=media.sensitivity,
+            metadata={
+                "media_id": media.media_id,
+                "provider": provider_name,
+                "status": status,
+                "transcript_preview": preview,
+                "raw_transcript_visible": False,
+            },
+            trace_id=trace_id,
+        )
+        derivative = await self._write_derivative(
+            media,
+            artifact,
+            derivative_type="transcript",
+            metadata={"provider": provider_name, "status": status},
+            trace_id=trace_id,
+        )
+        analysis = await self._write_analysis(
+            media,
+            analysis_type="transcript",
+            segments=[],
+            transcript_artifact_id=artifact.artifact_id,
+            evidence_artifact_ids=[artifact.artifact_id],
+            metadata={
+                "provider": provider_name,
+                "status": status,
+                "degraded_reason": degraded_reason,
+                "transcript_preview": preview,
+            },
+            trace_id=trace_id,
+        )
+        io_request = await self._create_io_request(
+            task_id=media.task_id,
+            media_id=media.media_id,
+            operation="stt",
+            direction="input",
+            provider_name=provider_name,
+            status=status,
+            degraded_reason=degraded_reason,
+            input_artifact_id=media.source_artifact_id,
+            output_artifact_id=artifact.artifact_id,
+            trace_id=trace_id,
+            summary={
+                "language": request.language,
+                "transcript_preview": preview,
+                "transcript_artifact_id": artifact.artifact_id,
+            },
+            evidence={
+                "analysis_id": analysis.analysis_id,
+                "derivative_id": derivative.derivative_id,
+                "provider_health": [provider_health.model_dump(mode="json")],
+            },
+            redaction_summary={
+                "transcript_preview": preview,
+                "raw_transcript_included": False,
+            },
+            idempotency_key=_media_io_idempotency(
+                media.media_id,
+                "stt",
+                provider_name,
+                request.language,
+                media.checksum or "",
+                source_preview,
+            ),
+        )
+        transcript_data = {
+            "transcript_id": new_id("mst"),
+            "io_request_id": io_request.io_request_id,
+            "organization_id": media.organization_id,
+            "task_id": media.task_id,
+            "media_id": media.media_id,
+            "artifact_id": artifact.artifact_id,
+            "provider_name": provider_name,
+            "language": request.language,
+            "status": status,
+            "transcript_preview": preview,
+            "summary_text": preview,
+            "confidence": 0.7 if status == "completed" else 0,
+            "evidence": {
+                "raw_transcript_visible": False,
+                "provider_status": provider_health.status,
+            },
+            "trace_id": trace_id,
+            "created_at": utc_now_iso(),
+        }
+        await self._repo.insert_speech_transcript(transcript_data)
+        transcript = MediaSpeechTranscript(**transcript_data)
+        await self._audit.write_event(
+            actor_type="system",
+            action="media.stt",
+            object_type="media_asset",
+            object_id=media.media_id,
+            summary="媒体语音转写记录已生成",
+            risk_level=RiskLevel.R2,
+            payload=redact(
+                {
+                    "media_id": media.media_id,
+                    "io_request_id": io_request.io_request_id,
+                    "status": status,
+                    "degraded_reason": degraded_reason,
+                }
+            ),
+            trace_id=trace_id,
+        )
+        return MediaOperationResponse(
+            media=media,
+            derivatives=[derivative],
+            analysis=analysis,
+            artifacts=[artifact],
+            io_records=[io_request],
+            provider_health=[provider_health],
+            transcripts=[transcript],
+            status=status,
+            message="语音转写已生成" if status == "completed" else "转写 provider 未启用，已记录可恢复转写占位",
+            degraded_reason=degraded_reason,
+            evidence={
+                "io_request_id": io_request.io_request_id,
+                "transcript_id": transcript.transcript_id,
+                "transcript_artifact_id": artifact.artifact_id,
+                "transcript_preview": preview,
+            },
+        )
+
+    async def _record_speech_render(
+        self,
+        *,
+        media: MediaAsset,
+        io_request: MediaIORecord,
+        provider_name: str,
+        artifact: TaskArtifact,
+        voice: str | None,
+        output_format: str,
+        source_text: str,
+        trace_id: str | None,
+    ) -> MediaSpeechRender:
+        data = {
+            "render_id": new_id("msr"),
+            "io_request_id": io_request.io_request_id,
+            "organization_id": media.organization_id,
+            "task_id": media.task_id,
+            "media_id": media.media_id,
+            "artifact_id": artifact.artifact_id,
+            "provider_name": provider_name,
+            "voice": voice,
+            "output_format": output_format,
+            "status": "completed",
+            "source_text_hash": _hash_text(str(redact(source_text))),
+            "duration_ms": _estimate_tts_duration_ms(source_text),
+            "evidence": {
+                "artifact_id": artifact.artifact_id,
+                "raw_text_visible": False,
+            },
+            "trace_id": trace_id,
+            "created_at": utc_now_iso(),
+        }
+        await self._repo.insert_speech_render(data)
+        return MediaSpeechRender(**data)
+
+    async def _record_multimodal_summary(
+        self,
+        *,
+        media: MediaAsset,
+        io_request: MediaIORecord,
+        provider_name: str,
+        summary_type: str,
+        summary_text: str,
+        evidence_artifacts: list[TaskArtifact],
+        status: str,
+        trace_id: str | None,
+    ) -> MediaMultimodalSummary:
+        data = {
+            "summary_id": new_id("mms"),
+            "io_request_id": io_request.io_request_id,
+            "organization_id": media.organization_id,
+            "task_id": media.task_id,
+            "media_id": media.media_id,
+            "provider_name": provider_name,
+            "summary_type": summary_type,
+            "status": status,
+            "summary_text": _preview_text(summary_text, 1200),
+            "summary": {
+                "summary_preview": _preview_text(summary_text, 240),
+                "media_type": media.media_type,
+                "raw_media_content_included": False,
+            },
+            "evidence_artifact_ids": [item.artifact_id for item in evidence_artifacts],
+            "evidence": {
+                "source_artifact_id": media.source_artifact_id,
+                "raw_media_content_included": False,
+            },
+            "trace_id": trace_id,
+            "created_at": utc_now_iso(),
+        }
+        await self._repo.insert_multimodal_summary(data)
+        return MediaMultimodalSummary(**data)
+
+    async def _summarize_media(
+        self,
+        media: MediaAsset,
+        *,
+        provider: str,
+        summary_type: str | None,
+        trace_id: str | None,
+    ) -> tuple[str, list[TaskArtifact], str, str | None]:
+        del trace_id
+        source_artifact = await self._artifact(media.source_artifact_id)
+        evidence_artifacts = [source_artifact]
+        if provider not in {"local", "test"}:
+            return (
+                f"{media.media_type} 媒体已登记，但外部摘要 provider 未启用。",
+                evidence_artifacts,
+                "degraded",
+                "provider_unavailable",
+            )
+        kind = summary_type or media.media_type
+        if kind == "image" or media.media_type == "image":
+            dimensions = (
+                f"{media.width}x{media.height}"
+                if media.width and media.height
+                else "尺寸未知"
+            )
+            return (
+                "图片摘要：收到一张受控 artifact 图片，"
+                f"格式 {media.content_type or source_artifact.content_type or 'image/*'}，"
+                f"尺寸 {dimensions}，大小 {media.size_bytes or source_artifact.size_bytes or 0} 字节。"
+                "当前只注入基础视觉线索，不注入原始图片内容。",
+                evidence_artifacts,
+                "completed",
+                None,
+            )
+        if kind == "video" or media.media_type == "video":
+            timeline = await self._repo.get_latest_analysis(media.media_id, "timeline")
+            frame_summary = await self._repo.get_latest_analysis(media.media_id, "frame_summary")
+            extra_ids = []
+            if timeline:
+                extra_ids.extend(timeline.get("evidence_artifact_ids", []))
+            if frame_summary:
+                extra_ids.extend(frame_summary.get("evidence_artifact_ids", []))
+            for artifact_id in sorted(set(str(item) for item in extra_ids)):
+                try:
+                    evidence_artifacts.append(await self._artifact(artifact_id))
+                except AppError:
+                    continue
+            return (
+                "视频摘要：媒体已登记为受控 video artifact，"
+                f"时长 {media.duration_ms or '未知'} ms，"
+                f"分辨率 {media.width or '未知'}x{media.height or '未知'}，"
+                "摘要基于 probe/frame/timeline 证据生成，不包含原始视频内容。",
+                evidence_artifacts,
+                "completed",
+                None,
+            )
+        if kind == "document" or media.media_type == "document":
+            preview = await self._document_preview(source_artifact)
+            return (
+                f"文档摘要：{preview or '文档已安全保存，但没有可读文本摘录。'}",
+                evidence_artifacts,
+                "completed" if preview else "degraded",
+                None if preview else "document_text_unavailable",
+            )
+        if media.media_type == "audio":
+            latest = await self._repo.get_latest_analysis(media.media_id, "transcript")
+            preview = ""
+            if latest:
+                preview = str((latest.get("metadata") or {}).get("transcript_preview") or "")
+            return (
+                "音频摘要：收到一段受控音频 artifact。"
+                f"{'转写线索：' + preview if preview else '当前仅可提供元信息线索。'}",
+                evidence_artifacts,
+                "completed" if preview else "degraded",
+                None if preview else "transcript_unavailable",
+            )
+        return (
+            f"{media.media_type} 媒体已保存，当前只能记录受控摘要占位。",
+            evidence_artifacts,
+            "degraded",
+            "unsupported_media_summary_type",
+        )
+
+    async def _document_preview(self, artifact: TaskArtifact) -> str | None:
+        try:
+            _, preview = await self._artifacts.read_preview(artifact.artifact_id, limit=1200)
+        except Exception:
+            return None
+        clean = " ".join(str(redact(preview)).split())
+        return clean[:800] if clean else None
+
+    async def _read_transcript_source(self, media: MediaAsset, source: Path) -> str:
+        metadata_text = _transcript_from_metadata(media.metadata)
+        if metadata_text:
+            return metadata_text
+        del source
+        return _preview_text(
+            f"{media.display_name} {media.content_type or ''} {media.duration_ms or ''}",
+            240,
+        )
+
+    async def _transcript_from_media_source(
+        self,
+        media: MediaAsset,
+        source: Path,
+    ) -> str | None:
+        metadata_text = _transcript_from_metadata(media.metadata)
+        if metadata_text:
+            return metadata_text
+        if media.media_type != "audio":
+            return None
+        del source
+        duration = f"，时长 {media.duration_ms} ms" if media.duration_ms else ""
+        return f"音频转写线索：{media.display_name}{duration}。本地测试转写 provider 仅返回受控摘要，不包含原始音频内容。"
+
+    async def _latest_transcript_analysis(self, media_id: str) -> MediaAnalysis | None:
+        row = await self._repo.get_latest_analysis(media_id, "transcript")
+        return MediaAnalysis(**row) if row else None
+
+    async def record_chat_binding(
+        self,
+        *,
+        media_id: str | None,
+        io_request_id: str | None,
+        channel: str | None,
+        conversation_id: str | None,
+        turn_id: str | None,
+        message_id: str | None,
+        channel_event_id: str | None,
+        channel_attachment_id: str | None,
+        binding_type: str,
+        status: str = "bound",
+        evidence: dict[str, Any] | None = None,
+        trace_id: str | None = None,
+    ) -> MediaChatBinding:
+        data = {
+            "binding_id": new_id("mcb"),
+            "organization_id": "org_default",
+            "media_id": media_id,
+            "io_request_id": io_request_id,
+            "channel": channel,
+            "conversation_id": conversation_id,
+            "turn_id": turn_id,
+            "message_id": message_id,
+            "channel_event_id": channel_event_id,
+            "channel_attachment_id": channel_attachment_id,
+            "binding_type": binding_type,
+            "status": status,
+            "evidence": _redacted_dict(evidence or {}),
+            "trace_id": trace_id,
+            "created_at": utc_now_iso(),
+        }
+        await self._repo.insert_chat_binding(data)
+        return MediaChatBinding(**data)
+
 
 def _media_unavailable(reason: str) -> AppError:
     return AppError(
@@ -1072,7 +2033,69 @@ def _infer_media_type(artifact: TaskArtifact) -> str:
         return "audio"
     if content_type.startswith("image/") or name.endswith((".png", ".jpg", ".jpeg", ".webp")):
         return "image"
+    if content_type.startswith("text/") or content_type.startswith("application/pdf") or name.endswith(
+        (".pdf", ".docx", ".doc", ".txt", ".md", ".csv")
+    ):
+        return "document"
     return "unknown"
+
+
+def _normalized_provider(value: str, *, default: str = "local") -> str:
+    provider = str(value or default).strip().lower()
+    return provider or default
+
+
+def _privacy_level_for_sensitivity(sensitivity: str | None) -> str:
+    value = str(sensitivity or "low").strip().lower()
+    if value in {"critical", "secret", "private", "high", "restricted"}:
+        return "high"
+    if value in {"medium", "internal", "confidential"}:
+        return "medium"
+    return "standard"
+
+
+def _preview_text(value: str, limit: int) -> str:
+    text = " ".join(str(redact(value)).split())
+    return text[:limit]
+
+
+def _hash_text(value: str) -> str:
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _estimate_tts_duration_ms(text: str) -> int:
+    length = max(1, len(str(redact(text)).strip()))
+    return min(180000, max(500, length * 75))
+
+
+def _stt_degraded_text() -> str:
+    return "语音转写已记录，但当前 provider 未启用，因此只保存受控摘要。"
+
+
+def _media_io_idempotency(*parts: object) -> str:
+    payload = json.dumps([str(part) for part in parts], sort_keys=True, ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _transcript_from_metadata(metadata: dict[str, Any]) -> str | None:
+    for key in ("transcript_text", "transcript", "recognized_text", "asr_text", "voice_text"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return _preview_text(value, 240)
+    return None
+
+
+def _fake_wav_bytes(text: str, output_format: str) -> bytes:
+    del text
+    if output_format != "wav":
+        return b"FAKE_AUDIO_" + output_format.encode("utf-8")
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(16000)
+        audio.writeframes(b"\x00\x00" * 1600)
+    return buffer.getvalue()
 
 
 def _probe_summary(raw: dict[str, Any], *, backend: str) -> dict[str, Any]:

@@ -759,6 +759,234 @@ class ChannelRepository:
             (*fields.values(), channel_delivery_binding_id),
         )
 
+    async def upsert_feishu_connection(self, data: dict[str, Any]) -> dict[str, Any]:
+        existing = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM feishu_connections
+            WHERE channel_account_id = ?
+            """,
+            (data["channel_account_id"],),
+        )
+        fields = {
+            "channel_id": data.get("channel_id"),
+            "app_id_redacted": data["app_id_redacted"],
+            "tenant_key_redacted": data.get("tenant_key_redacted"),
+            "bot_open_id_redacted": data.get("bot_open_id_redacted"),
+            "transport_mode": data.get("transport_mode", "websocket"),
+            "status": data.get("status", "configured"),
+            "connection_state": data.get("connection_state", "disconnected"),
+            "permission_snapshot": data.get("permission_snapshot", {}),
+            "capability_snapshot": data.get("capability_snapshot", {}),
+            "last_event_id_redacted": data.get("last_event_id_redacted"),
+            "last_heartbeat_at": data.get("last_heartbeat_at"),
+            "last_connected_at": data.get("last_connected_at"),
+            "last_disconnected_at": data.get("last_disconnected_at"),
+            "last_error_code": data.get("last_error_code"),
+            "last_error_summary": data.get("last_error_summary"),
+            "trace_id": data.get("trace_id"),
+            "updated_at": data["updated_at"],
+        }
+        if existing:
+            values = _json_update_fields(
+                fields,
+                {
+                    "permission_snapshot": "permission_snapshot_json",
+                    "capability_snapshot": "capability_snapshot_json",
+                },
+            )
+            assignments = ", ".join(f"{column} = ?" for column in values)
+            await self._db.execute(
+                f"UPDATE feishu_connections SET {assignments} WHERE channel_account_id = ?",
+                (*values.values(), data["channel_account_id"]),
+            )
+            updated = await self.get_feishu_connection_by_account(data["channel_account_id"])
+            return updated or _feishu_connection_from_row(dict(existing))
+        await self._db.execute(
+            """
+            INSERT INTO feishu_connections (
+              feishu_connection_id, organization_id, channel_account_id, channel_id,
+              app_id_redacted, tenant_key_redacted, bot_open_id_redacted, transport_mode,
+              status, connection_state, permission_snapshot_json, capability_snapshot_json,
+              last_event_id_redacted, last_heartbeat_at, last_connected_at,
+              last_disconnected_at, last_error_code, last_error_summary,
+              trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["feishu_connection_id"],
+                data["organization_id"],
+                data["channel_account_id"],
+                data.get("channel_id"),
+                data["app_id_redacted"],
+                data.get("tenant_key_redacted"),
+                data.get("bot_open_id_redacted"),
+                data.get("transport_mode", "websocket"),
+                data.get("status", "configured"),
+                data.get("connection_state", "disconnected"),
+                _json(data.get("permission_snapshot", {})),
+                _json(data.get("capability_snapshot", {})),
+                data.get("last_event_id_redacted"),
+                data.get("last_heartbeat_at"),
+                data.get("last_connected_at"),
+                data.get("last_disconnected_at"),
+                data.get("last_error_code"),
+                data.get("last_error_summary"),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+        return data
+
+    async def get_feishu_connection_by_account(
+        self,
+        channel_account_id: str,
+    ) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM feishu_connections WHERE channel_account_id = ?",
+            (channel_account_id,),
+        )
+        return _feishu_connection_from_row(dict(row)) if row else None
+
+    async def list_feishu_connections(
+        self,
+        *,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if status:
+            rows = await self._db.fetch_all(
+                """
+                SELECT *
+                FROM feishu_connections
+                WHERE status = ?
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (status, limit),
+            )
+        else:
+            rows = await self._db.fetch_all(
+                """
+                SELECT *
+                FROM feishu_connections
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+        return [_feishu_connection_from_row(dict(row)) for row in rows]
+
+    async def update_feishu_connection(
+        self,
+        channel_account_id: str,
+        fields: dict[str, Any],
+    ) -> None:
+        values = _json_update_fields(
+            fields,
+            {
+                "permission_snapshot": "permission_snapshot_json",
+                "capability_snapshot": "capability_snapshot_json",
+            },
+        )
+        if not values:
+            return
+        assignments = ", ".join(f"{column} = ?" for column in values)
+        await self._db.execute(
+            f"UPDATE feishu_connections SET {assignments} WHERE channel_account_id = ?",
+            (*values.values(), channel_account_id),
+        )
+
+    async def insert_feishu_event_record(self, data: dict[str, Any]) -> bool:
+        rowcount = await self._db.execute(
+            """
+            INSERT OR IGNORE INTO feishu_event_records (
+              feishu_event_record_id, organization_id, channel_account_id,
+              channel_event_id, provider_event_id_redacted, event_type, message_type,
+              chat_id_redacted, sender_id_redacted, message_id_redacted,
+              payload_redacted_json, normalized_event_json, status, trace_id,
+              received_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["feishu_event_record_id"],
+                data["organization_id"],
+                data["channel_account_id"],
+                data.get("channel_event_id"),
+                data["provider_event_id_redacted"],
+                data["event_type"],
+                data.get("message_type"),
+                data.get("chat_id_redacted"),
+                data.get("sender_id_redacted"),
+                data.get("message_id_redacted"),
+                _json(data.get("payload_redacted", {})),
+                _json(data.get("normalized_event", {})),
+                data["status"],
+                data.get("trace_id"),
+                data["received_at"],
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+        return rowcount == 1
+
+    async def insert_feishu_message_operation(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO feishu_message_operations (
+              feishu_operation_id, organization_id, channel_account_id, channel_id,
+              provider_message_id_redacted, operation, request_summary_json,
+              response_summary_json, status, error_code, error_summary,
+              trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["feishu_operation_id"],
+                data["organization_id"],
+                data["channel_account_id"],
+                data.get("channel_id"),
+                data.get("provider_message_id_redacted"),
+                data["operation"],
+                _json(data.get("request_summary", {})),
+                _json(data.get("response_summary", {})),
+                data["status"],
+                data.get("error_code"),
+                data.get("error_summary"),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_feishu_message_operations(
+        self,
+        *,
+        channel_account_id: str | None = None,
+        operation: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if channel_account_id:
+            where.append("channel_account_id = ?")
+            params.append(channel_account_id)
+        if operation:
+            where.append("operation = ?")
+            params.append(operation)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM feishu_message_operations
+            {clause}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [_feishu_operation_from_row(dict(row)) for row in rows]
+
     async def get_delivery_binding_by_turn(
         self,
         *,
@@ -795,30 +1023,37 @@ class ChannelRepository:
     async def list_delivery_bindings(
         self,
         *,
+        provider: str | None = None,
         status: str | None = None,
+        turn_id: str | None = None,
+        channel_event_id: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if provider:
+            where.append("provider = ?")
+            params.append(provider)
         if status:
-            rows = await self._db.fetch_all(
-                """
-                SELECT *
-                FROM channel_delivery_bindings
-                WHERE status = ?
-                ORDER BY created_at DESC
-                LIMIT ?
-                """,
-                (status, limit),
-            )
-        else:
-            rows = await self._db.fetch_all(
-                """
-                SELECT *
-                FROM channel_delivery_bindings
-                ORDER BY created_at DESC
-                LIMIT ?
-                """,
-                (limit,),
-            )
+            where.append("status = ?")
+            params.append(status)
+        if turn_id:
+            where.append("turn_id = ?")
+            params.append(turn_id)
+        if channel_event_id:
+            where.append("channel_event_id = ?")
+            params.append(channel_event_id)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM channel_delivery_bindings
+            {clause}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
         return [_delivery_binding_from_row(dict(row)) for row in rows]
 
     async def count_pending_pairing_requests(self, *, provider: str = "wechat") -> int:
@@ -847,29 +1082,36 @@ class ChannelRepository:
         self,
         *,
         provider: str | None = None,
+        status: str | None = None,
+        channel_event_id: str | None = None,
+        trace_id: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
         if provider:
-            rows = await self._db.fetch_all(
-                """
-                SELECT *
-                FROM channel_events
-                WHERE provider = ?
-                ORDER BY received_at DESC
-                LIMIT ?
-                """,
-                (provider, limit),
-            )
-        else:
-            rows = await self._db.fetch_all(
-                """
-                SELECT *
-                FROM channel_events
-                ORDER BY received_at DESC
-                LIMIT ?
-                """,
-                (limit,),
-            )
+            where.append("provider = ?")
+            params.append(provider)
+        if status:
+            where.append("status = ?")
+            params.append(status)
+        if channel_event_id:
+            where.append("channel_event_id = ?")
+            params.append(channel_event_id)
+        if trace_id:
+            where.append("trace_id = ?")
+            params.append(trace_id)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM channel_events
+            {clause}
+            ORDER BY received_at DESC, created_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
         return [_event_from_row(dict(row)) for row in rows]
 
     async def raw_execute(self, sql: str, params: tuple[Any, ...] = ()) -> int:
@@ -914,6 +1156,15 @@ def _pairing_request_from_row(row: dict[str, Any]) -> dict[str, Any]:
 
 def _attachment_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["metadata"] = json.loads(row.pop("metadata_json") or "{}")
+    row["metadata"].setdefault(
+        "understanding_status",
+        _attachment_understanding_status_fallback(row),
+    )
+    row["metadata"].setdefault(
+        "memory_candidate_ids",
+        _attachment_memory_candidate_ids_fallback(row),
+    )
+    row["metadata"].setdefault("memory_ids", [])
     return row
 
 
@@ -966,6 +1217,18 @@ def _delivery_binding_from_row(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+def _feishu_connection_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["permission_snapshot"] = json.loads(row.pop("permission_snapshot_json") or "{}")
+    row["capability_snapshot"] = json.loads(row.pop("capability_snapshot_json") or "{}")
+    return row
+
+
+def _feishu_operation_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["request_summary"] = json.loads(row.pop("request_summary_json") or "{}")
+    row["response_summary"] = json.loads(row.pop("response_summary_json") or "{}")
+    return row
+
+
 def _json_update_fields(fields: dict[str, Any], aliases: dict[str, str]) -> dict[str, Any]:
     values: dict[str, Any] = {}
     for key, value in fields.items():
@@ -976,3 +1239,62 @@ def _json_update_fields(fields: dict[str, Any], aliases: dict[str, str]) -> dict
 
 def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
+
+
+def _attachment_understanding_status_fallback(row: dict[str, Any]) -> str:
+    metadata = dict(row.get("metadata") or {})
+    if metadata.get("understanding_status"):
+        return str(metadata["understanding_status"])
+    attachment_type = str(row.get("attachment_type") or "")
+    content_type = str(row.get("content_type") or "").lower()
+    display_name = str(row.get("display_name_redacted") or "").lower()
+    if attachment_type == "image":
+        return "degraded"
+    if attachment_type == "audio":
+        return "degraded"
+    if attachment_type == "file":
+        if any(
+            marker in content_type or marker in display_name
+            for marker in [
+                "zip",
+                "rar",
+                "7z",
+                "tar",
+                "gzip",
+                ".zip",
+                ".rar",
+                ".7z",
+            ]
+        ):
+            return "degraded"
+        return "understood"
+    return "degraded"
+
+
+def _attachment_memory_candidate_ids_fallback(row: dict[str, Any]) -> list[str]:
+    metadata = dict(row.get("metadata") or {})
+    if metadata.get("memory_candidate_ids"):
+        return list(metadata["memory_candidate_ids"])
+    if _attachment_understanding_status_fallback(row) != "understood":
+        return []
+    attachment_type = str(row.get("attachment_type") or "")
+    if attachment_type != "file":
+        return []
+    content_type = str(row.get("content_type") or "").lower()
+    display_name = str(row.get("display_name_redacted") or "").lower()
+    if any(
+        marker in content_type or marker in display_name
+        for marker in [
+            "zip",
+            "rar",
+            "7z",
+            "tar",
+            "gzip",
+            ".zip",
+            ".rar",
+            ".7z",
+        ]
+    ):
+        return []
+    channel_attachment_id = str(row.get("channel_attachment_id") or "")
+    return [f"memcand:{channel_attachment_id}:fallback"] if channel_attachment_id else []

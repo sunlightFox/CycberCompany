@@ -84,7 +84,7 @@ class BrainDecisionService:
             if trace_id
             else None
         )
-        capability_snapshot = await self._capability_snapshot()
+        capability_snapshot = await self._capability_snapshot(text=text)
         working_state = (
             await self._chat_repo.get_working_state(conversation_id)
             if conversation_id
@@ -338,7 +338,7 @@ class BrainDecisionService:
         if merge is not None:
             await self._chat_repo.insert_semantic_review_merge_result(merge)
 
-    async def _capability_snapshot(self) -> dict[str, Any]:
+    async def _capability_snapshot(self, *, text: str = "") -> dict[str, Any]:
         rows = await self._design_repo.list_runtime_contracts()
         contracts = {
             str(row["name"]): {
@@ -351,7 +351,8 @@ class BrainDecisionService:
         enabled_skill_count = 0
         ready_mcp_server_count = 0
         active_mcp_tool_count = 0
-        if self._skill_mcp_repo is not None:
+        live_skill_mcp_snapshot = _needs_live_skill_mcp_snapshot(text)
+        if self._skill_mcp_repo is not None and live_skill_mcp_snapshot:
             enabled_skill_count = len(await self._skill_mcp_repo.list_skills(status="enabled"))
             for server in await self._skill_mcp_repo.list_mcp_servers():
                 if server.get("status") != "ready":
@@ -392,6 +393,7 @@ class BrainDecisionService:
                 "status": "implemented_with_fallback",
                 "reason": "phase24_model_semantic_verifier_fallback_contract",
             },
+            "snapshot_scope": "live_skill_mcp" if live_skill_mcp_snapshot else "base_runtime",
         }
 
 
@@ -862,6 +864,12 @@ def _clarification_decision(
         "destructive_action" in intent.risk_signals
         or "filesystem_scope_required" in intent.risk_signals
     ) and _ambiguous_scope(text):
+        if (
+            "destructive_action" not in intent.risk_signals
+            and "filesystem_scope_required" in intent.risk_signals
+            and _multimodal_attachment_context(text)
+        ):
+            return _no_clarification()
         if "任务" in text and "destructive_action" not in intent.risk_signals:
             return _no_clarification()
         return _clarify(
@@ -960,6 +968,15 @@ def _safe_plan_only(text: str) -> bool:
             "不要执行",
             "不执行",
             "别执行",
+            "不要假装执行",
+            "别假装执行",
+            "不要声称执行",
+            "不能点击",
+            "不能提交",
+            "不点击",
+            "不提交",
+            "不要点击",
+            "不要提交",
             "不要创建任务",
             "不要使用工具",
             "不要使用浏览器",
@@ -1007,6 +1024,21 @@ def _safe_plan_only(text: str) -> bool:
             "不要安装",
             "不要匹配",
             "不要运行",
+        ]
+    )
+
+
+def _multimodal_attachment_context(text: str) -> bool:
+    return any(
+        marker in text
+        for marker in [
+            "图片内容线索：",
+            "语音内容线索：",
+            "语音转成文字：",
+            "文件内容摘录：",
+            "用户还附带了一个文件：",
+            "用户还附带了一段语音：",
+            "用户还附带了一张图片：",
         ]
     )
 
@@ -1091,6 +1123,15 @@ def _mcp_request(text: str) -> bool:
     return "mcp" in lowered or "外部服务" in text
 
 
+def _needs_live_skill_mcp_snapshot(text: str) -> bool:
+    clean = text.strip()
+    if not clean:
+        return False
+    if is_office_document_request(clean):
+        return True
+    return _skill_request(clean) or _mcp_request(clean)
+
+
 def _persona_boundary_question(text: str) -> bool:
     lowered = text.lower()
     identity_markers = [
@@ -1107,6 +1148,9 @@ def _persona_boundary_question(text: str) -> bool:
     hidden_capability_markers = [
         "隐藏账号",
         "隐藏账户",
+        "能直接帮我登录",
+        "直接帮我登录",
+        "帮我登录",
         "直接替我登录",
         "替我登录",
         "绕过系统",

@@ -12,12 +12,66 @@ from app.schemas.design_alignment import (
     PersonaProfileListResponse,
     PersonaProfileResponse,
     PersonaProfileUpdateRequest,
+    SoulCompiledResponse,
+    SoulManifestResponse,
+    SoulManifestUpdateRequest,
 )
 from app.services.registry import ServiceRegistry
 
 persona_router = APIRouter(prefix="/api/persona", tags=["persona"])
 heart_router = APIRouter(prefix="/api/heart", tags=["heart"])
 persona_heart_router = APIRouter(prefix="/api/persona-heart", tags=["persona-heart"])
+
+
+@persona_router.get("/{member_id}/soul", response_model=SoulManifestResponse)
+async def get_member_soul_manifest(
+    member_id: str,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SoulManifestResponse:
+    return await registry.persona_heart_service.get_soul_manifest(
+        member_id,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@persona_router.put("/{member_id}/soul", response_model=SoulManifestResponse)
+async def update_member_soul_manifest(
+    member_id: str,
+    payload: SoulManifestUpdateRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SoulManifestResponse:
+    return await registry.persona_heart_service.update_soul_manifest(
+        member_id,
+        payload.content,
+        source=payload.source,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@persona_router.post("/{member_id}/soul/compile", response_model=SoulCompiledResponse)
+async def compile_member_soul_manifest(
+    member_id: str,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SoulCompiledResponse:
+    return await registry.persona_heart_service.compile_soul_manifest(
+        member_id,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@persona_router.get("/{member_id}/soul/compiled", response_model=SoulCompiledResponse)
+async def get_member_compiled_soul(
+    member_id: str,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SoulCompiledResponse:
+    return await registry.persona_heart_service.get_soul_compiled(
+        member_id,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
 
 
 @persona_router.get("/profiles", response_model=PersonaProfileListResponse)

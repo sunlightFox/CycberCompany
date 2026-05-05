@@ -39,6 +39,14 @@ class PersonaSummary(ApiModel):
     forbidden_claims: list[str] = Field(default_factory=list)
     mode_switch_rules: list[dict[str, Any]] = Field(default_factory=list)
     consistency_markers: list[str] = Field(default_factory=list)
+    soul_snapshot: dict[str, Any] = Field(default_factory=dict)
+    soul_content_hash: str | None = None
+    soul_compiled_at: str | None = None
+    soul_validation_status: str | None = None
+    soul_validation_errors: list[dict[str, Any]] = Field(default_factory=list)
+    catchphrases: list[str] = Field(default_factory=list)
+    custom_sections: list[dict[str, Any]] = Field(default_factory=list)
+    memory_policy: dict[str, Any] = Field(default_factory=dict)
 
 
 class HeartSummary(ApiModel):
@@ -105,6 +113,18 @@ class ConversationContext(ApiModel):
     last_messages: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class WorkbenchContext(ApiModel):
+    context_pack_id: EntityId | None = None
+    context_file_version_id: EntityId | None = None
+    summary: str | None = None
+    memory_refs: list[dict[str, Any]] = Field(default_factory=list)
+    skill_refs: list[dict[str, Any]] = Field(default_factory=list)
+    context_file_refs: list[dict[str, Any]] = Field(default_factory=list)
+    source_refs: list[dict[str, Any]] = Field(default_factory=list)
+    token_estimate: int = 0
+    generated_at: str | None = None
+
+
 class ContextPacket(ApiModel):
     context_packet_id: EntityId
     member: MemberSummary
@@ -117,6 +137,7 @@ class ContextPacket(ApiModel):
     resource_handles: list[ResourceHandleSummary] = Field(default_factory=list)
     safety_notes: list[SafetyNote] = Field(default_factory=list)
     untrusted_context: list[dict[str, Any]] = Field(default_factory=list)
+    workbench: WorkbenchContext | None = None
 
 
 class ResponsePlan(ApiModel):

@@ -5,10 +5,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core_types import ChatEventType, ErrorCode
-from trace_service import redact
-
 from app.core.errors import AppError
-from app.services.natural_chat import visible_text_guard
+from response_composer.opening_copy import opening_copy
+from app.services.chat_visible_guard import VISIBLE_GUARD_VERSION, visible_text_guard
 
 _INTERNAL_ID_PATTERNS = {
     "trace_ref": re.compile(r"\b(?:trc|trace)_[A-Za-z0-9_-]+\b", re.IGNORECASE),
@@ -71,6 +70,9 @@ _INTERNAL_TOOL_LEAK_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
 )
 
+def _task_status_copy(key: str, *, seed: str = "", **values: Any) -> str:
+    return opening_copy(f"task.{key}", seed or key, **values)
+
 
 @dataclass
 class ChatVisibleOutputFilter:
@@ -87,6 +89,7 @@ class ChatVisibleOutputFilter:
     _seen_browser_evidence: bool = False
     _seen_browser_artifact: bool = False
     _seen_browser_selector: bool = False
+    _strict_format_output: bool = False
 
     def feed(self, text: str) -> str:
         if not text:
@@ -115,6 +118,7 @@ class ChatVisibleOutputFilter:
     def summary(self) -> dict[str, Any]:
         return {
             "component": "ChatVisibleOutputFilter",
+            "version": VISIBLE_GUARD_VERSION,
             "input_chars": self.input_chars,
             "output_chars": self.output_chars,
             "changed_count": self.changed_count,
@@ -141,7 +145,7 @@ class ChatVisibleOutputFilter:
         if not text:
             return ""
         original = text
-        filtered = visible_text_guard(str(redact(text)))
+        filtered = visible_text_guard(text)
         for pattern, label in _INTERNAL_TOOL_LEAK_PATTERNS:
             if pattern.search(filtered):
                 self.blocked_terms.add(label)
@@ -158,6 +162,8 @@ class ChatVisibleOutputFilter:
             if pattern.search(filtered):
                 self.blocked_terms.add(category)
                 filtered = pattern.sub(_replacement_for_internal_ref(category), filtered)
+        if _looks_like_strict_format(filtered):
+            self._strict_format_output = True
         self._update_browser_evidence_flags(filtered)
         if filtered != original:
             self.changed_count += 1
@@ -178,6 +184,8 @@ class ChatVisibleOutputFilter:
             self._seen_browser_selector = True
 
     def _browser_evidence_appendix(self) -> str:
+        if self._strict_format_output:
+            return ""
         if (
             self._seen_browser_snapshot
             and self._seen_browser_screenshot
@@ -189,6 +197,20 @@ class ChatVisibleOutputFilter:
                 "便于把网页快照中的按钮、输入框和链接映射到可复核的操作证据。"
             )
         return ""
+
+
+def _looks_like_strict_format(text: str) -> bool:
+    stripped = str(text or "").strip()
+    if not stripped:
+        return False
+    if "```" in stripped:
+        return True
+    if (stripped.startswith("{") and stripped.endswith("}")) or (
+        stripped.startswith("[") and stripped.endswith("]")
+    ):
+        return True
+    lines = [line.strip() for line in stripped.splitlines() if line.strip()]
+    return len(lines) >= 2 and any("|---" in line or "---|" in line for line in lines[:4])
 
 
 class ChatTurnAccessPolicy:
@@ -241,11 +263,7 @@ class ChatTaskStatusPresenter:
         payload = {"task_id": task_id, "status": status}
         if status == "completed":
             return TaskStatusPresentation(
-                text=(
-                    f"任务已创建并完成：{title}。"
-                    "结果应能通过任务回放、步骤记录、工件或页面状态证据复核；"
-                    "没有这些证据时，我不会额外声称完成了外部动作。"
-                ),
+                text=_task_status_copy("completed", seed=f"{status}|{title}", title=title),
                 task_status={
                     **base_status,
                     "user_visible_text": "completed",
@@ -260,46 +278,48 @@ class ChatTaskStatusPresenter:
             )
         if status == "waiting_approval":
             return TaskStatusPresentation(
-                text=(
-                    "任务已创建，但有一步操作正在等待确认，尚未完成；"
-                    "确认前我不会声称已经执行。"
-                ),
+                text=_task_status_copy("waiting_approval", seed=f"{status}|{title}", title=title),
                 task_status={**base_status, "user_visible_text": "waiting_approval"},
                 event_type=None,
                 event_payload=payload,
-                safety_notice="任务正在等待确认；高风险步骤尚未执行。",
+                safety_notice="这一步还等你点头，确认前不会往前执行。",
             )
         if status == "failed":
             return TaskStatusPresentation(
-                text=f"任务已创建，但执行失败，尚未完成：{title}。你可以查看失败原因后重试或调整范围。",
+                text=_task_status_copy("failed", seed=f"{status}|{title}", title=title),
                 task_status={**base_status, "user_visible_text": "failed"},
                 event_type=ChatEventType.TASK_FAILED,
                 event_payload=payload,
-                tool_notice="任务失败不会被标记为完成。",
+                tool_notice="这轮没有跑完，我不会把失败标成完成。",
             )
         if status == "paused":
             return TaskStatusPresentation(
-                text=f"任务已创建并暂停，尚未完成：{title}。需要补充信息、确认范围或解决阻断后才能继续。",
+                text=_task_status_copy("paused", seed=f"{status}|{title}", title=title),
                 task_status={**base_status, "user_visible_text": "paused"},
                 event_type=ChatEventType.TASK_PAUSED,
                 event_payload=payload,
             )
         if status == "cancelled":
             return TaskStatusPresentation(
-                text=f"任务已取消，没有继续执行：{title}。",
+                text=_task_status_copy("cancelled", seed=f"{status}|{title}", title=title),
                 task_status={**base_status, "user_visible_text": "cancelled"},
                 event_type=ChatEventType.TASK_CANCELLED_EVENT,
                 event_payload=payload,
             )
         if status == "running":
             return TaskStatusPresentation(
-                text=f"任务已创建并开始处理，目前仍在运行，尚未完成：{title}。",
+                text=_task_status_copy("running", seed=f"{status}|{title}", title=title),
                 task_status={**base_status, "user_visible_text": "running"},
                 event_type=ChatEventType.TASK_STARTED,
                 event_payload=payload,
             )
         return TaskStatusPresentation(
-            text=f"任务已创建并进入{_visible_state(status)}状态，尚未完成：{title}。",
+            text=_task_status_copy(
+                "default",
+                seed=f"{status}|{title}",
+                title=title,
+                state=_visible_state(status),
+            ),
             task_status={**base_status, "user_visible_text": "not_completed"},
             event_type=None,
             event_payload=payload,

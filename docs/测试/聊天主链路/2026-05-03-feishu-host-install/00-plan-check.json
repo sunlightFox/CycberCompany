@@ -1,0 +1,121 @@
+{
+  "health_status_code": 200,
+  "health": {
+    "status": "ok",
+    "db": "ok",
+    "default_shell": "company",
+    "version": "0.1.0",
+    "trace_id": "trc_d9a53e59a7354bf086ecfeb82b69de64"
+  },
+  "plan_status_code": 200,
+  "plan": {
+    "host_install_plan_id": "hip_bb43a295e4ff4181881a1f2d8d8bff7e",
+    "organization_id": "org_default",
+    "task_id": "tsk_e595bf9e69804888a6d7442d5b458534",
+    "requested_software": "飞书",
+    "install_source": {
+      "candidate_attempts": [
+        {
+          "match_confidence": 0.0,
+          "query": "飞书",
+          "source_type": "package_manager_search",
+          "status": "no_match"
+        },
+        {
+          "candidate_count": 0,
+          "query": "飞书",
+          "source_type": "model_candidate_expansion",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "飞书",
+          "source_type": "package_manager_search_model_candidates",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "飞书",
+          "source_type": "official_winget_manifest",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "飞书",
+          "source_type": "official_website_verified_source",
+          "status": "no_match",
+          "verification": null
+        }
+      ],
+      "model_assisted": false,
+      "model_candidate_count": 0,
+      "official_source_assisted": false,
+      "reason": "package_manager_candidate_unavailable",
+      "resolved_via": "no_high_confidence_candidate",
+      "source_type": "manual_only"
+    },
+    "command_preview": {},
+    "impact_summary": {
+      "host_action": "install",
+      "manual_only": true,
+      "package_resolution": {
+        "candidate_attempts": [
+          {
+            "match_confidence": 0.0,
+            "query": "飞书",
+            "source_type": "package_manager_search",
+            "status": "no_match"
+          },
+          {
+            "candidate_count": 0,
+            "query": "飞书",
+            "source_type": "model_candidate_expansion",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "飞书",
+            "source_type": "package_manager_search_model_candidates",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "飞书",
+            "source_type": "official_winget_manifest",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "飞书",
+            "source_type": "official_website_verified_source",
+            "status": "no_match",
+            "verification": null
+          }
+        ],
+        "model_assisted": false,
+        "model_candidate_count": 0,
+        "official_source_assisted": false,
+        "resolved_via": "no_high_confidence_candidate"
+      },
+      "reason_codes": [
+        "no_high_confidence_healthy_package_candidate"
+      ],
+      "safe_next_step": "请提供可信包管理器 ID、官网安装源，或修复当前包管理器环境后重试。"
+    },
+    "risk_level": "R6",
+    "status": "manual_only",
+    "approval_id": null,
+    "trace_id": "trc_1e552e703aeb4a8bbded78809d4e9490",
+    "created_at": "2026-05-03T00:59:27.837036Z",
+    "updated_at": "2026-05-03T00:59:27.837036Z"
+  },
+  "timings": {
+    "api_health_ms": 18,
+    "host_install_plan_ms": 22107,
+    "total_ms": 22125
+  },
+  "trace_ids": {
+    "health": "trc_d9a53e59a7354bf086ecfeb82b69de64",
+    "plan": "trc_1e552e703aeb4a8bbded78809d4e9490"
+  }
+}

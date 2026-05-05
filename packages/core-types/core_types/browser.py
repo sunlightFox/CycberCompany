@@ -27,6 +27,10 @@ class BrowserProfile(ApiModel):
     revoked_at: datetime | None = None
     cleared_at: datetime | None = None
     expires_at: datetime | None = None
+    health_status: str = "unknown"
+    last_probe_at: datetime | None = None
+    recovery_hint: str | None = None
+    reuse_policy: dict[str, Any] = Field(default_factory=dict)
 
 
 class BrowserSession(ApiModel):
@@ -47,6 +51,13 @@ class BrowserSession(ApiModel):
     last_used_at: datetime | None = None
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
+    health_status: str = "unknown"
+    login_state: str = "unknown"
+    last_probe_at: datetime | None = None
+    invalidation_reason: str | None = None
+    recovery_hint: str | None = None
+    reuse_policy: dict[str, Any] = Field(default_factory=dict)
+    restore_context_ref: str | None = None
 
 
 class BrowserProfileEvent(ApiModel):
@@ -105,4 +116,44 @@ class BrowserConsoleEvent(ApiModel):
     level: str
     message_preview: str
     redaction_summary: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class BrowserSessionHealthProbe(ApiModel):
+    probe_id: EntityId
+    organization_id: EntityId
+    browser_profile_id: EntityId
+    browser_session_id: EntityId
+    probe_type: str
+    health_status: str
+    login_state: str
+    provider_status: str | None = None
+    failure_reason: str | None = None
+    recovery_hint: str | None = None
+    evidence_redacted: dict[str, Any] = Field(default_factory=dict)
+    redaction_summary: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
+    probed_at: datetime
+
+
+class BrowserPageState(ApiModel):
+    page_state_id: EntityId
+    organization_id: EntityId
+    task_id: EntityId | None = None
+    tool_call_id: EntityId | None = None
+    browser_profile_id: EntityId | None = None
+    browser_session_id: EntityId | None = None
+    browser_evidence_id: EntityId | None = None
+    page_key: str
+    action: str
+    action_status: str
+    current_url: str | None = None
+    title: str | None = None
+    http_status: int | None = None
+    dom_summary: dict[str, Any] = Field(default_factory=dict)
+    network_summary: dict[str, Any] = Field(default_factory=dict)
+    console_summary: dict[str, Any] = Field(default_factory=dict)
+    task_checkpoint: dict[str, Any] = Field(default_factory=dict)
+    redaction_summary: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
     created_at: datetime

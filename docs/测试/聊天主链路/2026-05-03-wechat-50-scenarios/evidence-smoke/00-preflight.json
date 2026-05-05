@@ -1,0 +1,198 @@
+{
+  "gateway_health": {
+    "active_accounts": 1,
+    "enabled": true,
+    "immediate_delivery": {
+      "last_delivery_error": null,
+      "last_delivery_latency_ms": null,
+      "watchers_delivered": 0,
+      "watchers_failed": 0,
+      "watchers_started": 0
+    },
+    "last_poll_result": {
+      "chat_turns_created": 0,
+      "created_pairing_requests": 0,
+      "deliveries_sent": 0,
+      "details": {},
+      "duplicate_events": 0,
+      "failures": 0,
+      "media_attachments": 0,
+      "processed_accounts": 0,
+      "processed_events": 0,
+      "rejected_events": 0,
+      "status": "healthy"
+    },
+    "pending_deliveries": 0,
+    "pending_pairing_requests": 0,
+    "poll_enabled": true,
+    "provider": "wechat",
+    "provider_health": {
+      "details": {
+        "state_dir": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\data\\channel-providers\\wechat"
+      },
+      "enabled": true,
+      "last_error_code": null,
+      "login_state": "sdk_available",
+      "provider": "wechat",
+      "reachable": true,
+      "version": "0.4.0"
+    }
+  },
+  "provider_health": {
+    "details": {
+      "state_dir": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\data\\channel-providers\\wechat"
+    },
+    "enabled": true,
+    "last_error_code": null,
+    "login_state": "sdk_available",
+    "provider": "wechat",
+    "reachable": true,
+    "version": "0.4.0"
+  },
+  "worker": {
+    "component": "BackgroundWorkerService",
+    "degraded": false,
+    "enabled": true,
+    "healthy_worker_count": 5,
+    "interval_seconds": 5.0,
+    "last_loop_error": null,
+    "last_loop_finished_at": "2026-05-03T12:25:02.360518+00:00",
+    "last_loop_started_at": "2026-05-03T12:25:07.357154+00:00",
+    "loop_started_at": "2026-05-03T10:57:32.825717+00:00",
+    "loop_status": "running",
+    "loop_stopped_at": null,
+    "running": true,
+    "timeout_seconds": 60.0,
+    "worker_count": 5,
+    "workers": {
+      "checkpoint_cleanup_worker": {
+        "consecutive_failure_count": 0,
+        "enabled": true,
+        "failure_count": 0,
+        "last_duration_ms": 489,
+        "last_error": null,
+        "last_error_code": null,
+        "last_finished_at": "2026-05-03T12:25:01.500269+00:00",
+        "last_heartbeat_at": "2026-05-03T12:25:01.500269+00:00",
+        "last_result": {
+          "expired_checkpoints": 0,
+          "mode": "mark_expired"
+        },
+        "last_started_at": "2026-05-03T12:25:01.006248+00:00",
+        "last_status": "healthy",
+        "last_trace_id": "trc_aa5a218deef94bce8cb544a6d1cf69a3",
+        "name": "checkpoint_cleanup_worker",
+        "success_count": 324,
+        "tick_count": 324
+      },
+      "notification_retry_worker": {
+        "consecutive_failure_count": 0,
+        "enabled": true,
+        "failure_count": 0,
+        "last_duration_ms": 21,
+        "last_error": null,
+        "last_error_code": null,
+        "last_finished_at": "2026-05-03T12:25:07.400982+00:00",
+        "last_heartbeat_at": "2026-05-03T12:25:07.400982+00:00",
+        "last_result": {
+          "notification_ids": [],
+          "processed_messages": 0,
+          "statuses": []
+        },
+        "last_started_at": "2026-05-03T12:25:07.379539+00:00",
+        "last_status": "healthy",
+        "last_trace_id": "trc_9d02aeb9a4e14050a9644f6f71f0bf40",
+        "name": "notification_retry_worker",
+        "success_count": 325,
+        "tick_count": 325
+      },
+      "scheduled_due_worker": {
+        "consecutive_failure_count": 0,
+        "enabled": true,
+        "failure_count": 0,
+        "last_duration_ms": 22,
+        "last_error": null,
+        "last_error_code": null,
+        "last_finished_at": "2026-05-03T12:25:07.379539+00:00",
+        "last_heartbeat_at": "2026-05-03T12:25:07.379539+00:00",
+        "last_result": {
+          "due_runs": 0,
+          "run_ids": [],
+          "task_ids": []
+        },
+        "last_started_at": "2026-05-03T12:25:07.357154+00:00",
+        "last_status": "healthy",
+        "last_trace_id": "trc_7e465620463b46088d968736530ec8ce",
+        "name": "scheduled_due_worker",
+        "success_count": 325,
+        "tick_count": 325
+      },
+      "stale_recovery_worker": {
+        "consecutive_failure_count": 0,
+        "enabled": true,
+        "failure_count": 0,
+        "last_duration_ms": 860,
+        "last_error": null,
+        "last_error_code": null,
+        "last_finished_at": "2026-05-03T12:25:02.360518+00:00",
+        "last_heartbeat_at": "2026-05-03T12:25:02.360518+00:00",
+        "last_result": {
+          "memory_jobs_processed": 0,
+          "memory_jobs_restored": 0,
+          "scheduled_runs_recovered": 0,
+          "task_jobs_recovered": "best_effort"
+        },
+        "last_started_at": "2026-05-03T12:25:01.500269+00:00",
+        "last_status": "healthy",
+        "last_trace_id": "trc_44b6d39567664ca7a894a6a9cf6b406d",
+        "name": "stale_recovery_worker",
+        "success_count": 324,
+        "tick_count": 324
+      },
+      "wechat_inbound_worker": {
+        "consecutive_failure_count": 0,
+        "enabled": true,
+        "failure_count": 0,
+        "last_duration_ms": 10371,
+        "last_error": null,
+        "last_error_code": null,
+        "last_finished_at": "2026-05-03T12:25:01.006248+00:00",
+        "last_heartbeat_at": "2026-05-03T12:25:07.400982+00:00",
+        "last_result": {
+          "inbound": {
+            "chat_turns_created": 0,
+            "created_pairing_requests": 0,
+            "deliveries_sent": 0,
+            "details": {},
+            "duplicate_events": 0,
+            "failures": 0,
+            "media_attachments": 0,
+            "processed_accounts": 1,
+            "processed_events": 0,
+            "rejected_events": 0,
+            "status": "healthy"
+          },
+          "outbound": {
+            "chat_turns_created": 0,
+            "created_pairing_requests": 0,
+            "deliveries_sent": 0,
+            "details": {},
+            "duplicate_events": 0,
+            "failures": 0,
+            "media_attachments": 0,
+            "processed_accounts": 0,
+            "processed_events": 0,
+            "rejected_events": 0,
+            "status": "healthy"
+          }
+        },
+        "last_started_at": "2026-05-03T12:25:07.400982+00:00",
+        "last_status": "healthy",
+        "last_trace_id": "trc_028761f88a4141be80fdb4e76b895a1a",
+        "name": "wechat_inbound_worker",
+        "success_count": 330,
+        "tick_count": 331
+      }
+    }
+  }
+}

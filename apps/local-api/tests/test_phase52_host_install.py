@@ -41,6 +41,11 @@ def test_phase52_host_install_plan_requires_approval_then_auto_executes(
         "_detect_installed_version",
         fake_detect_installed_version,
     )
+    monkeypatch.setattr(
+        project_deployments,
+        "_detect_installed_version_for_terms",
+        lambda terms, package_id=None: fake_detect_installed_version(str(package_id or "")),
+    )
     plan_response = client.post(
         "/api/host-installs/plan",
         json={"requested_software": "jq"},
@@ -76,6 +81,17 @@ def test_phase52_host_install_plan_requires_approval_then_auto_executes(
     assert approved_body["result"]["host_action"] == "install"
     assert approved_body["result"]["status"] == "installed"
     assert approved_body["result"]["host_install_execution_id"]
+    log_artifact_id = approved_body["result"]["log_artifact_id"]
+    assert log_artifact_id
+    log_response = client.get(f"/api/artifacts/{log_artifact_id}")
+    assert log_response.status_code == 200, log_response.text
+    log_preview = log_response.json()["content_preview"]
+    assert "step[1].phase=primary" in log_preview
+    assert "step[1].started_at=" in log_preview
+    assert "step[1].ended_at=" in log_preview
+    assert "step[1].duration_ms=" in log_preview
+    assert "detect.phase=detect" in log_preview
+    assert "detect.duration_ms=" in log_preview
 
     detail = client.get(f"/api/host-installs/{plan['host_install_plan_id']}")
     assert detail.status_code == 200, detail.text
@@ -232,6 +248,130 @@ async def test_phase52_wecom_install_prefers_enterprise_wechat_hint(
 
 
 @pytest.mark.asyncio
+async def test_phase52_doubao_chinese_name_resolves_model_suggested_official_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_package_candidate(software: str) -> None:
+        return None
+
+    async def fake_resolver(query: str) -> list[project_deployments.HostSoftwareModelCandidate]:
+        assert query == "豆包"
+        return [
+            project_deployments.HostSoftwareModelCandidate(
+                query="Doubao",
+                package_id="ByteDance.Doubao",
+                source_type="winget",
+                confidence=0.97,
+                reason="model suggested official winget id",
+                queries=("Doubao", "豆包"),
+                package_ids=("ByteDance.Doubao",),
+                aliases=("Doubao",),
+                publisher_hints=("ByteDance",),
+                official_sites=("https://www.doubao.com/",),
+                download_pages=("https://www.doubao.com/",),
+                vendor_domains=("doubao.com", "lf-flow-web-cdn.doubao.com"),
+            )
+        ]
+
+    monkeypatch.setattr(
+        project_deployments,
+        "_resolve_host_package_candidate",
+        fake_package_candidate,
+    )
+    monkeypatch.setattr(
+        project_deployments.shutil,
+        "which",
+        lambda name: "powershell" if name == "powershell" else None,
+    )
+
+    seen_queries: list[str] = []
+
+    def fake_manifest(query: str) -> project_deployments.HostPackageCandidate | None:
+        seen_queries.append(query)
+        if query != "ByteDance.Doubao":
+            return None
+        return project_deployments.HostPackageCandidate(
+            source_type="winget_manifest",
+            package_id="ByteDance.Doubao",
+            publisher="ByteDance",
+            confidence=0.96,
+            match_reason="official_winget_manifest_dynamic",
+            version="2.8.7",
+            name="ByteDance.Doubao",
+            installer_url=(
+                "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/"
+                "doubao_pc/2.8.7/Doubao_installer_2.8.7.exe"
+            ),
+            installer_sha256="8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891",
+            installer_type="exe",
+            official_manifest=(
+                "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/"
+                "manifests/b/ByteDance/Doubao/2.8.7/ByteDance.Doubao.installer.yaml"
+            ),
+            installer_switches={"Silent": "--command=quiet_install"},
+        )
+
+    monkeypatch.setattr(
+        project_deployments,
+        "_winget_manifest_candidate_for_query",
+        fake_manifest,
+    )
+
+    source, command, impact, status = await project_deployments._host_install_plan_for(
+        "豆包",
+        model_candidates_provider=fake_resolver,
+    )
+
+    assert "ByteDance.Doubao" in seen_queries
+    assert status == "waiting_approval"
+    assert source["source_type"] == "official_manifest_installer_fallback"
+    assert source["package_id"] == "ByteDance.Doubao"
+    assert source["official_source_assisted"] is True
+    assert source["model_assisted"] is True
+    assert source["model_candidate_count"] == 1
+    assert command["steps"][0]["target_package_id"] == "ByteDance.Doubao"
+    assert command["steps"][0]["sha256"]
+    assert impact["checksum_verification"] == "sha256"
+
+
+def test_phase52_manifest_lookup_preserves_package_id_case(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        project_deployments,
+        "_github_contents_json",
+        lambda path: [{"type": "dir", "name": "2.8.7"}]
+        if path == "manifests/b/ByteDance/Doubao"
+        else [],
+    )
+    monkeypatch.setattr(
+        project_deployments,
+        "_http_text",
+        lambda url: (
+            "PackageIdentifier: ByteDance.Doubao\n"
+            "PackageVersion: 2.8.7\n"
+            "InstallerType: exe\n"
+            "InstallerSwitches:\n"
+            "  Silent: --command=quiet_install\n"
+            "Installers:\n"
+            "- Architecture: x64\n"
+            "  InstallerUrl: https://lf-flow-web-cdn.doubao.com/installer.exe\n"
+            "  InstallerSha256: "
+            "8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891\n"
+        )
+        if "manifests/b/ByteDance/Doubao/2.8.7/ByteDance.Doubao.installer.yaml" in url
+        else None,
+    )
+
+    candidate = project_deployments._winget_manifest_candidate_for_query("ByteDance.Doubao")
+
+    assert candidate is not None
+    assert candidate.package_id == "ByteDance.Doubao"
+    assert candidate.installer_switches is not None
+    assert candidate.installer_switches["Silent"] == "--command=quiet_install"
+
+
+@pytest.mark.asyncio
 async def test_phase52_official_website_candidate_requires_trusted_https_domain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -345,6 +485,11 @@ def test_phase52_host_uninstall_approval_auto_executes(
         project_deployments,
         "_detect_installed_version",
         fake_detect_installed_version,
+    )
+    monkeypatch.setattr(
+        project_deployments,
+        "_detect_installed_version_for_terms",
+        lambda terms, package_id=None: fake_detect_installed_version(str(package_id or "")),
     )
     monkeypatch.setattr(
         project_deployments,
@@ -664,7 +809,7 @@ def test_phase52_windows_registry_matches_chinese_display_name(
 
 
 @pytest.mark.asyncio
-async def test_phase52_official_winget_manifest_id_bootstraps_package_manager(
+async def test_phase52_official_winget_manifest_id_uses_installer_when_winget_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -698,18 +843,24 @@ async def test_phase52_official_winget_manifest_id_bootstraps_package_manager(
     )
 
     assert status == "waiting_approval"
-    assert source["source_type"] == "winget"
+    assert source["source_type"] == "official_manifest_installer_fallback"
     assert source["package_id"].lower() == "dynamic.package"
-    assert source["trust"] == "official_package_manager_dynamic"
-    assert source["official_manifest"].startswith("https://")
+    assert source["trust"] == "official_manifest_with_sha256"
     assert impact["risk_level"] == "R6"
-    assert impact["bootstrap_required"] is True
-    assert impact["bootstrap_package_manager"] == "winget"
+    assert impact["bootstrap_required"] is False
+    assert impact["bootstrap_skipped_reason"] == "official_manifest_installer_available"
+    assert "bootstrap_package_manager" not in impact
     assert impact["checksum_verification"] == "sha256"
-    assert command["steps"][0]["step_type"] == "package_manager_bootstrap"
-    assert command["steps"][-1]["package_manager"] == "winget"
+    assert command["steps"][0]["step_type"] == "official_manifest_installer"
     assert command["steps"][-1]["target_package_id"].lower() == "dynamic.package"
-    assert command["fallback_steps"][0]["step_type"] == "official_manifest_installer"
+    assert "fallback_steps" not in command
+
+
+def test_phase52_winget_bootstrap_script_has_valid_try_catch_shape() -> None:
+    script = project_deployments._winget_bootstrap_script()
+
+    assert "}} catch" not in script
+    assert "} catch {" in script
 
 
 def test_phase52_jq_uses_chocolatey_approval_plan(client: TestClient) -> None:
@@ -790,14 +941,14 @@ async def test_phase52_model_candidate_can_resolve_unknown_display_name_to_manif
     )
 
     assert status == "waiting_approval"
-    assert source["source_type"] == "winget"
+    assert source["source_type"] == "official_manifest_installer_fallback"
     assert source["package_id"].lower() == "dynamic.package"
-    assert source["trust"] == "official_package_manager_dynamic"
-    assert command["steps"][0]["step_type"] == "package_manager_bootstrap"
+    assert source["trust"] == "official_manifest_with_sha256"
+    assert command["steps"][0]["step_type"] == "official_manifest_installer"
     assert command["steps"][-1]["target_package_id"].lower() == "dynamic.package"
-    assert command["fallback_steps"][0]["sha256"]
+    assert command["steps"][0]["sha256"]
     assert impact["checksum_verification"] == "sha256"
-    assert impact["bootstrap_required"] is True
+    assert impact["bootstrap_required"] is False
 
 
 def test_phase52_short_package_suffix_can_resolve_choco_candidate() -> None:

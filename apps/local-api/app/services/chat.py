@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import html
 import re
+import time
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from brain import BrainRouteRequest, ModelRouter
@@ -43,7 +45,9 @@ from app.services.asset_broker import AssetBrokerService
 from app.services.audit import AuditEventService
 from app.services.brain_decision import BrainDecisionService
 from app.services.chat_context import ChatContextCoordinator
+from app.services.chat_continuation import ChatContinuationCoordinator, ContinuationEvaluation
 from app.services.chat_experience import ChatExperienceService, ClarificationDecision
+from app.services.chat_ingress import ChatContentNormalizer, ChatIngressService
 from app.services.chat_intent_router import (
     ChatIntentRouter,
     OfficeChatRequest,
@@ -65,7 +69,10 @@ from app.services.natural_chat import (
     NaturalChatActionGateway,
     pending_action_from_approval,
     response_plan_for_pending_action,
+    reset_visible_redaction_profile,
+    set_visible_redaction_profile,
 )
+from app.services.safety_policy import RuntimeSafetyPolicyService
 from app.services.secrets import SecretStore
 from app.services.turn_events import TurnEventStore
 from app.services.turn_execution import TurnExecutionManager
@@ -89,6 +96,94 @@ def _reply_option_items(options: list[str]) -> list[dict[str, str]]:
     return items
 
 
+def _request_text(request: ChatTurnRequest) -> str:
+    if request.input.text:
+        return request.input.text
+    text_parts = [
+        str(part.text)
+        for part in request.input.content_parts
+        if part.type == "text" and part.text
+    ]
+    if text_parts:
+        return "\n".join(text_parts)
+    labels = [
+        str(part.name or part.ref_id or part.uri or part.type)
+        for part in request.input.content_parts
+    ]
+    return "\n".join(labels) or "multi_part"
+
+
+def _content_payload(envelope: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "envelope_id": envelope["envelope_id"],
+        "content_parts": envelope.get("content_parts") or [],
+        "context_refs": envelope.get("context_refs") or [],
+        "normalized_summary": envelope.get("normalized_summary") or {},
+        "model_safe_text_chars": len(str(envelope.get("model_safe_text") or "")),
+    }
+
+
+def _queue_payload(queue_item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "queue_id": queue_item["queue_id"],
+        "status": queue_item["status"],
+        "session_id": queue_item["session_id"],
+        "queue_policy": queue_item.get("queue_policy") or "immediate",
+        "position": int(queue_item.get("position") or 0),
+    }
+
+
+def _model_failure_type(error: ModelAdapterError | None) -> str:
+    if error is None:
+        return "model_unavailable"
+    code = error.code
+    if code == ErrorCode.MODEL_NOT_CONFIGURED:
+        return "model_not_configured"
+    if code == ErrorCode.MODEL_TIMEOUT:
+        return "model_timeout"
+    if code == ErrorCode.MODEL_PROTOCOL_ERROR:
+        return "model_invalid_response"
+    return "model_unavailable"
+
+
+def _error_signature(stage: str, failure_type: str, root_cause: str) -> str:
+    value = f"{stage}:{failure_type}:{redact(root_cause)}"
+    import hashlib
+
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _context_compaction_summary(context: ContextPacket) -> str:
+    messages = context.conversation.last_messages[-4:]
+    lines: list[str] = []
+    if context.conversation.recent_summary:
+        lines.append(str(redact(context.conversation.recent_summary))[:400])
+    for message in messages:
+        text = str(
+            message.get("model_safe_content_text")
+            or message.get("content_text")
+            or ""
+        ).strip()
+        if text:
+            lines.append(str(redact(text))[:240])
+    summary = "\n".join(lines).strip()
+    return summary[:1200] or "上下文已压缩为当前用户输入和最近对话摘要。"
+
+
+def _debounce_delay_seconds(metadata: dict[str, Any], queue_policy: str) -> float:
+    if queue_policy != "collect":
+        return 0.0
+    try:
+        debounce_ms = int(metadata.get("debounce_ms") or 0)
+    except (TypeError, ValueError):
+        debounce_ms = 0
+    return max(0.0, min(float(debounce_ms) / 1000.0, 30.0))
+
+
+def _queue_lock_until(seconds: int = 300) -> str:
+    return (datetime.now(UTC) + timedelta(seconds=seconds)).isoformat()
+
+
 class ChatService:
     def __init__(
         self,
@@ -98,6 +193,7 @@ class ChatService:
         model_routing: ModelRoutingService,
         secret_store: SecretStore,
         memory_service: MemoryService,
+        agent_workbench_service: Any | None = None,
         asset_broker_service: AssetBrokerService | None = None,
         persona_heart_service: Any | None = None,
         task_engine: Any | None = None,
@@ -110,6 +206,8 @@ class ChatService:
         skill_plugin_service: Any | None = None,
         skill_governance_service: Any | None = None,
         tool_runtime: Any | None = None,
+        voice_service: Any | None = None,
+        safety_policy_service: RuntimeSafetyPolicyService | None = None,
     ) -> None:
         self._db = db
         self._chat_repo = ChatRepository(db)
@@ -120,6 +218,7 @@ class ChatService:
         self._model_routing = model_routing
         self._secrets = secret_store
         self._memory = memory_service
+        self._agent_workbench = agent_workbench_service
         self._asset_broker = asset_broker_service
         self._persona_heart = persona_heart_service
         self._task_engine = task_engine
@@ -132,6 +231,8 @@ class ChatService:
         self._skill_plugins = skill_plugin_service
         self._skill_governance = skill_governance_service
         self._tool_runtime = tool_runtime
+        self._voice = voice_service
+        self._safety_policy = safety_policy_service
         self._natural_chat = (
             NaturalChatActionGateway(
                 chat_repo=self._chat_repo,
@@ -151,11 +252,19 @@ class ChatService:
         self._memory_coordinator = ChatMemoryCoordinator()
         self._task_coordinator = ChatTaskCoordinator()
         self._context_coordinator = ChatContextCoordinator()
+        self._continuation = ChatContinuationCoordinator()
         self._response_coordinator = ChatResponseCoordinator()
         self._turn_orchestrator = ChatTurnOrchestrator()
         self._access_policy = ChatTurnAccessPolicy()
         self._intent_router = ChatIntentRouter()
         self._events = TurnEventStore()
+        self._ingress = ChatIngressService(
+            chat_repo=self._chat_repo,
+            normalizer=ChatContentNormalizer(
+                asset_broker=asset_broker_service,
+                trace_service=trace_service,
+            ),
+        )
         self._turn_recovery = (
             TurnRecoveryService(
                 chat_repo=self._chat_repo,
@@ -175,6 +284,7 @@ class ChatService:
             asset_broker_service=asset_broker_service,
             persona_heart_service=persona_heart_service,
             chat_experience_service=chat_experience_service,
+            agent_workbench_service=agent_workbench_service,
         )
         self._execution = TurnExecutionManager(self.run_turn)
 
@@ -188,10 +298,11 @@ class ChatService:
         if member is None:
             raise AppError(ErrorCode.NOT_FOUND, "成员不存在", status_code=404)
 
+        input_text = _request_text(request)
         conversation_id = request.conversation_id
         created_conversation_title: str | None = None
         if conversation_id is None:
-            created_conversation_title = _title_from_text(request.input.text)
+            created_conversation_title = _title_from_text(input_text)
             conversation_id = await self._create_conversation(
                 member,
                 created_conversation_title,
@@ -215,11 +326,69 @@ class ChatService:
             input_data={
                 "conversation_id": conversation_id,
                 "member_id": request.member_id,
-                "input": {"type": request.input.type, "text": redact(request.input.text)},
+                "input": {
+                    "type": request.input.type,
+                    "text": redact(input_text),
+                    "content_part_count": len(request.input.content_parts),
+                    "context_ref_count": len(request.context_refs),
+                },
                 "retry_of_turn_id": retry_of_turn_id,
             },
             metadata={"session_id": request.session_id},
         )
+        ingress_plan = await self._ingress.prepare(
+            request=request,
+            turn_id=turn_id,
+            conversation_id=conversation_id,
+            trace_id=trace_id,
+            root_span_id=root_span_id,
+        )
+        if ingress_plan.duplicate_turn_id:
+            duplicate = await self._chat_repo.get_turn(ingress_plan.duplicate_turn_id)
+            duplicate_envelope = await self._chat_repo.get_message_envelope_by_turn(
+                ingress_plan.duplicate_turn_id
+            )
+            await self._trace.end_span(
+                root_span_id,
+                output_data={
+                    "status": "deduped",
+                    "duplicate_turn_id": ingress_plan.duplicate_turn_id,
+                },
+            )
+            await self._trace.end_trace(trace_id)
+            if duplicate is not None:
+                return ChatTurnResponse(
+                    turn_id=duplicate["turn_id"],
+                    conversation_id=duplicate["conversation_id"],
+                    message_id=duplicate["user_message_id"],
+                    assistant_message_id=duplicate["assistant_message_id"],
+                    task_id=None,
+                    trace_id=duplicate["trace_id"],
+                    status="superseded",
+                    stream_url=f"/api/chat/stream/{duplicate['turn_id']}",
+                    queue_status="superseded",
+                    envelope_id=(
+                        duplicate_envelope["envelope_id"] if duplicate_envelope else None
+                    ),
+                )
+        if ingress_plan.collect_turn_id:
+            collected = await self._collect_into_existing_turn(
+                request=request,
+                collect_turn_id=ingress_plan.collect_turn_id,
+                incoming_envelope=ingress_plan.envelope,
+                trace_id=trace_id,
+                root_span_id=root_span_id,
+            )
+            await self._trace.end_span(
+                root_span_id,
+                output_data={
+                    "status": "debounce_collected",
+                    "collect_turn_id": collected.turn_id,
+                    "envelope_id": collected.envelope_id,
+                },
+            )
+            await self._trace.end_trace(trace_id)
+            return collected
         if created_conversation_title is not None:
             title_span = await self._trace.start_span(
                 trace_id,
@@ -250,15 +419,18 @@ class ChatService:
                     author_type="user",
                     author_id=DEFAULT_USER_ID,
                     content_type=request.input.type,
-                    content_text=request.input.text,
+                    content_text=ingress_plan.envelope.model_safe_text,
                     content={
                         "type": request.input.type,
-                        "text": request.input.text,
+                        "text": ingress_plan.envelope.model_safe_text,
                         "session_id": request.session_id,
+                        "content_parts": ingress_plan.envelope.content_parts,
+                        "context_refs": ingress_plan.envelope.context_refs,
                         "attachments": [
-                            item.model_dump(mode="json")
-                            for item in request.attachments
+                            item.model_dump(mode="json") for item in request.attachments
                         ],
+                        "ingress_metadata": ingress_plan.envelope.ingress_metadata,
+                        "normalized_summary": ingress_plan.envelope.normalized_summary,
                         "client_context": request.client_context.model_dump(mode="json"),
                         "retry_of_turn_id": retry_of_turn_id,
                     },
@@ -279,13 +451,67 @@ class ChatService:
                     retry_of_turn_id=retry_of_turn_id,
                     created_at=now,
                 )
+                await self._chat_repo.update_turn(
+                    turn_id,
+                    experience={
+                        "client_context": request.client_context.model_dump(mode="json"),
+                    },
+                    updated_at=now,
+                )
+                await self._chat_repo.insert_message_envelope(
+                    {
+                        "envelope_id": ingress_plan.envelope.envelope_id,
+                        "turn_id": turn_id,
+                        "conversation_id": conversation_id,
+                        "session_id": request.session_id,
+                        "member_id": request.member_id,
+                        "user_message_id": user_message_id,
+                        "dedupe_key": ingress_plan.envelope.dedupe_key,
+                        "raw_payload_redacted": ingress_plan.envelope.raw_payload_redacted,
+                        "content_parts": ingress_plan.envelope.content_parts,
+                        "context_refs": ingress_plan.envelope.context_refs,
+                        "model_safe_text": ingress_plan.envelope.model_safe_text,
+                        "normalized_summary": ingress_plan.envelope.normalized_summary,
+                        "ingress_metadata": ingress_plan.envelope.ingress_metadata,
+                        "status": "normalized",
+                        "trace_id": trace_id,
+                        "created_at": now,
+                    }
+                )
+                await self._chat_repo.insert_queue_item(
+                    {
+                        "queue_id": new_id("chatq"),
+                        "turn_id": turn_id,
+                        "session_id": request.session_id,
+                        "conversation_id": conversation_id,
+                        "member_id": request.member_id,
+                        "status": ingress_plan.queue_status,
+                        "queue_policy": ingress_plan.queue_policy,
+                        "position": 0,
+                        "dedupe_key": ingress_plan.envelope.dedupe_key,
+                        "created_at": now,
+                    }
+                )
                 await self._chat_repo.touch_conversation(conversation_id, now)
         except Exception:
             await self._trace.end_span(root_span_id, status=TraceSpanStatus.FAILED)
             await self._trace.end_trace(trace_id, status=TraceStatus.FAILED)
             raise
 
-        self._execution.schedule(turn_id)
+        should_delay = _debounce_delay_seconds(
+            ingress_plan.envelope.ingress_metadata,
+            ingress_plan.queue_policy,
+        )
+        if should_delay > 0:
+            self._execution.schedule(turn_id, delay_seconds=should_delay)
+        elif await self._chat_repo.has_running_session_turn(request.session_id, turn_id):
+            await self._chat_repo.update_queue_item(
+                turn_id,
+                status="queued",
+                updated_at=utc_now_iso(),
+            )
+        else:
+            self._execution.schedule(turn_id)
         return ChatTurnResponse(
             turn_id=turn_id,
             conversation_id=conversation_id,
@@ -295,6 +521,8 @@ class ChatService:
             trace_id=trace_id,
             status="created",
             stream_url=f"/api/chat/stream/{turn_id}",
+            queue_status=ingress_plan.queue_status,
+            envelope_id=ingress_plan.envelope.envelope_id,
         )
 
     async def stream_turn_events(self, turn_id: str) -> AsyncIterator[ChatEvent]:
@@ -320,6 +548,17 @@ class ChatService:
         if turn is None or turn["status"] in {"completed", "failed", "cancelled", "retried"}:
             await self._events.mark_completed(turn_id)
             return
+        queue_item = await self._chat_repo.get_queue_item_by_turn(turn_id)
+        if queue_item is not None and queue_item["status"] == "queued":
+            claimed_queue = await self._chat_repo.claim_turn_for_session(
+                turn_id,
+                session_id=queue_item["session_id"],
+                locked_by="local-api",
+                locked_until=_queue_lock_until(),
+                updated_at=utc_now_iso(),
+            )
+            if not claimed_queue:
+                return
         if turn["status"] == "created":
             claimed = await self._chat_repo.try_mark_turn_running(turn_id, utc_now_iso())
             if not claimed:
@@ -335,8 +574,25 @@ class ChatService:
                     await self._finalize_created_cancel(latest)
                 return
             turn["status"] = "running"
+            if queue_item is None:
+                await self._chat_repo.update_queue_item(
+                    turn_id,
+                    status="running",
+                    updated_at=utc_now_iso(),
+                    started_at=utc_now_iso(),
+                    locked_by="local-api",
+                    locked_until=_queue_lock_until(),
+                )
 
         events: list[dict[str, Any]] = []
+        visible_profile_token = None
+        if self._safety_policy is not None:
+            policy = await self._safety_policy.get_policy(
+                organization_id=str(turn.get("organization_id") or "org_default")
+            )
+            visible_profile_token = set_visible_redaction_profile(
+                policy.chat_visible_redaction
+            )
         try:
             async for _event in self._execute_turn(turn, events):
                 pass
@@ -360,7 +616,31 @@ class ChatService:
             ):
                 pass
         finally:
+            latest = await self._chat_repo.get_turn(turn_id)
+            queue_item = await self._chat_repo.get_queue_item_by_turn(turn_id)
+            if queue_item is not None:
+                queue_status = (
+                    latest["status"]
+                    if latest
+                    and latest["status"] in {"completed", "failed", "cancelled", "retried"}
+                    else "failed"
+                )
+                await self._chat_repo.update_queue_item(
+                    turn_id,
+                    status=queue_status,
+                    updated_at=utc_now_iso(),
+                    completed_at=utc_now_iso(),
+                )
+            if queue_item is not None:
+                next_item = await self._chat_repo.next_queued_turn_for_session(
+                    queue_item["session_id"],
+                    exclude_turn_id=turn_id,
+                )
+                if next_item is not None:
+                    self._execution.schedule(next_item["turn_id"])
             await self._events.mark_completed(turn_id)
+            if visible_profile_token is not None:
+                reset_visible_redaction_profile(visible_profile_token)
 
     async def recover_incomplete_turns(self) -> int:
         running_turns = await self._chat_repo.list_running_turns()
@@ -518,6 +798,87 @@ class ChatService:
         )
         return await self.create_turn(request, retry_of_turn_id=turn_id)
 
+    async def _collect_into_existing_turn(
+        self,
+        *,
+        request: ChatTurnRequest,
+        collect_turn_id: str,
+        incoming_envelope: Any,
+        trace_id: str,
+        root_span_id: str | None,
+    ) -> ChatTurnResponse:
+        existing_turn = await self._chat_repo.get_turn(collect_turn_id)
+        existing_envelope = await self._chat_repo.get_message_envelope_by_turn(collect_turn_id)
+        if existing_turn is None or existing_envelope is None:
+            raise AppError(ErrorCode.NOT_FOUND, "可合并的聊天 turn 不存在", status_code=404)
+        merged = self._ingress.merge_envelopes(existing_envelope, incoming_envelope)
+        now = utc_now_iso()
+        content_type = "multi_part" if len(merged.content_parts) > 1 else request.input.type
+        async with self._db.transaction():
+            await self._chat_repo.merge_message_envelope(
+                collect_turn_id,
+                raw_payload_redacted=merged.raw_payload_redacted,
+                content_parts=merged.content_parts,
+                context_refs=merged.context_refs,
+                model_safe_text=merged.model_safe_text,
+                normalized_summary=merged.normalized_summary,
+                ingress_metadata=merged.ingress_metadata,
+                status="normalized",
+                updated_at=now,
+            )
+            await self._chat_repo.update_user_message_content(
+                existing_turn["user_message_id"],
+                content_type=content_type,
+                content_text=merged.model_safe_text,
+                content={
+                    "type": content_type,
+                    "text": merged.model_safe_text,
+                    "session_id": request.session_id,
+                    "content_parts": merged.content_parts,
+                    "context_refs": merged.context_refs,
+                    "attachments": [
+                        item.model_dump(mode="json") for item in request.attachments
+                    ],
+                    "ingress_metadata": merged.ingress_metadata,
+                    "normalized_summary": merged.normalized_summary,
+                    "client_context": request.client_context.model_dump(mode="json"),
+                    "collected_into_turn_id": collect_turn_id,
+                },
+            )
+            await self._chat_repo.update_queue_policy(
+                collect_turn_id,
+                status="queued",
+                queue_policy="collect",
+                updated_at=now,
+                locked_until=None,
+            )
+            await self._chat_repo.update_turn(
+                collect_turn_id,
+                updated_at=now,
+            )
+            await self._chat_repo.touch_conversation(existing_turn["conversation_id"], now)
+        if not self._execution.is_running(collect_turn_id):
+            self._execution.schedule(
+                collect_turn_id,
+                delay_seconds=_debounce_delay_seconds(
+                    merged.ingress_metadata,
+                    "collect",
+                ),
+            )
+        del root_span_id
+        return ChatTurnResponse(
+            turn_id=collect_turn_id,
+            conversation_id=existing_turn["conversation_id"],
+            message_id=existing_turn["user_message_id"],
+            assistant_message_id=existing_turn["assistant_message_id"],
+            task_id=None,
+            trace_id=existing_turn["trace_id"],
+            status="superseded",
+            stream_url=f"/api/chat/stream/{collect_turn_id}",
+            queue_status="superseded",
+            envelope_id=merged.envelope_id,
+        )
+
     async def placeholder_events(self, turn_id: str) -> list[ChatEvent]:
         rows = await self._chat_repo.list_events(turn_id)
         if rows:
@@ -539,6 +900,37 @@ class ChatService:
         ) -> ChatEvent:
             return await self._emit_and_record(turn_id, trace_id, events, event_type, payload)
 
+        queue_item = await self._chat_repo.get_queue_item_by_turn(turn_id)
+        envelope = await self._chat_repo.get_message_envelope_by_turn(turn_id)
+        if queue_item is not None:
+            yield await emit(
+                ChatEventType.TURN_QUEUED,
+                {
+                    "queue_id": queue_item["queue_id"],
+                    "status": "queued",
+                    "session_id": queue_item["session_id"],
+                    "queue_policy": queue_item["queue_policy"],
+                    "position": queue_item["position"],
+                },
+            )
+            yield await emit(
+                ChatEventType.TURN_QUEUE_STARTED,
+                {
+                    "queue_id": queue_item["queue_id"],
+                    "status": "running",
+                    "session_id": queue_item["session_id"],
+                },
+            )
+        if envelope is not None:
+            yield await emit(
+                ChatEventType.CONTENT_NORMALIZED,
+                {
+                    "envelope_id": envelope["envelope_id"],
+                    "dedupe_key": envelope["dedupe_key"],
+                    "normalized_summary": envelope["normalized_summary"],
+                    "content": _content_payload(envelope),
+                },
+            )
         yield await emit(ChatEventType.TURN_STARTED, {"status": "running"})
         yield await emit(ChatEventType.CONTEXT_STARTED)
 
@@ -592,8 +984,17 @@ class ChatService:
                 root_span_id=root_span_id,
                 context_decision=brain_decision.context if brain_decision else None,
             )
-        except Exception:
+        except Exception as exc:
             await self._trace.end_span(context_span, status=TraceSpanStatus.FAILED)
+            await self._record_stage_recovery_attempt(
+                turn=turn,
+                stage="context",
+                failure_type="context_build_failed",
+                root_cause=str(exc),
+                recovery_action="rebuild_minimal_context",
+                status="failed",
+                diagnostic_payload={"reason": "context_build_exception"},
+            )
             async for event in self._fail_turn(
                 turn,
                 events,
@@ -657,6 +1058,14 @@ class ChatService:
             "conversation_depth": (turn.get("experience") or {}).get("conversation_depth"),
             "context_redaction": context_filter_summary,
         }
+        async for compaction_event in self._maybe_record_context_compaction(
+            turn,
+            context,
+            context_filter_summary,
+            root_span_id,
+            emit,
+        ):
+            yield compaction_event
         yield await emit(ChatEventType.CONTEXT_READY, context_ready_payload)
         if self._events.token_for(turn_id).cancelled:
             async for event in self._cancel_turn_during_stream(turn, events, root_span_id):
@@ -806,8 +1215,8 @@ class ChatService:
                 trace_id=trace_id,
             )
             text = (
-                "已创建定时任务。到时间后我会先按后台执行策略创建受控任务；"
-                "涉及下载、登录、删除、终端或外发等高风险动作时，会等待你重新确认。"
+                "定时任务已经建好了。到时间后我会先按后台流程往下推；"
+                "一碰到下载、登录、删除、终端或外发这类高风险动作，我会停一下，再找你确认。"
             )
             response_plan = self._composer.response_plan_for_status(
                 summary=text,
@@ -877,6 +1286,16 @@ class ChatService:
             return
         if route_decision.route_type == "browser_read_page":
             async for event in self._handle_browser_read_page(
+                turn,
+                events,
+                route_decision.metadata,
+                root_span_id,
+                trace_id=trace_id,
+            ):
+                yield event
+            return
+        if route_decision.route_type == "terminal_readonly_command":
+            async for event in self._handle_terminal_readonly_command(
                 turn,
                 events,
                 route_decision.metadata,
@@ -1347,8 +1766,6 @@ class ChatService:
                 yield event
             return
 
-        available_brains = await self._brains.list_routable_brains()
-        routing_config = await self._model_routing.get_config()
         intent = brain_decision.intent.primary_intent if brain_decision else "chat"
         mode = self._task_mode_from_brain(brain_decision.mode.mode if brain_decision else None)
         needs_tool = (
@@ -1358,18 +1775,6 @@ class ChatService:
             or brain_decision.intent.needs_mcp
             if brain_decision
             else False
-        )
-        route_request = BrainRouteRequest(
-            text=user_text,
-            member_id=turn["member_id"],
-            conversation_id=turn["conversation_id"],
-            default_brain_id=context.member.default_brain_id,
-            privacy_level=privacy.privacy_level,
-            estimated_input_tokens=estimate_messages_tokens(
-                self._model_messages(context, privacy.redacted_text)
-            ),
-            available_brains=available_brains,
-            model_routing_config=routing_config,
         )
 
         intent_span = await self._trace.start_span(
@@ -1549,6 +1954,7 @@ class ChatService:
                                 "structured_payload": {
                                     **response_plan.structured_payload,
                                     "task_status_semantics": presentation.task_status,
+                                    "recovery": recovery.recovery_payload,
                                 },
                             }
                         )
@@ -1575,6 +1981,7 @@ class ChatService:
                                 "structured_payload": {
                                     **response_plan.structured_payload,
                                     "task_status_semantics": presentation.task_status,
+                                    "recovery": recovery.recovery_payload,
                                 },
                             }
                         )
@@ -1611,6 +2018,18 @@ class ChatService:
                             },
                         }
                     )
+                    if recovery.recovery_payload.get("status") == "exhausted":
+                        async for event in self._fail_turn(
+                            turn,
+                            events,
+                            ErrorCode.TASK_STEP_FAILED,
+                            text,
+                            root_span_id,
+                            persist_assistant=True,
+                            response_plan=response_plan,
+                        ):
+                            yield event
+                        return
                 async for event in self._complete_without_model(
                     turn,
                     events,
@@ -1626,7 +2045,7 @@ class ChatService:
             response_plan = self._composer.response_plan_for_tool_boundary(
                 summary=text,
                 required_capability=intent,
-                next_actions=["创建受控任务", "补充范围后重试", "先生成执行计划"],
+                next_actions=["创建任务并执行", "补充范围后重试", "先生成执行计划"],
                 safety_notice="未找到可执行工具路径；没有执行任何外部动作。",
             )
             async for event in self._complete_without_model(
@@ -1641,6 +2060,24 @@ class ChatService:
                 yield event
             return
 
+        available_brains = await self._brains.list_routable_brains()
+        routing_config = await self._model_routing.get_config()
+        route_request = BrainRouteRequest(
+            text=user_text,
+            member_id=turn["member_id"],
+            conversation_id=turn["conversation_id"],
+            default_brain_id=context.member.default_brain_id,
+            privacy_level=privacy.privacy_level,
+            estimated_input_tokens=estimate_messages_tokens(
+                self._model_messages(
+                    context,
+                    privacy.redacted_text,
+                    turn_id=turn["turn_id"],
+                )
+            ),
+            available_brains=available_brains,
+            model_routing_config=routing_config,
+        )
         route_selection = self._model_router.select_route_result(route_request)
         model_route = route_selection.route
         if model_route is None:
@@ -1683,8 +2120,9 @@ class ChatService:
                 return
             if intent == "boundary_question" and code == ErrorCode.MODEL_NOT_CONFIGURED:
                 boundary_text = (
-                    "我不是隐藏真人账号，也不能绕过系统替你登录或直接操作；"
-                    "登录、工具、文件、浏览器和外部动作必须走受控任务、安全和审批链路。"
+                    "我不是隐藏真人账号，也不会绕过系统替你登录或直接操作；"
+                    "涉及登录、工具、文件、浏览器和外部动作时，我会先走安全流程，"
+                    "该确认的地方停住等你点头。"
                 )
                 response_plan = self._composer.response_plan_for_status(
                     summary=boundary_text,
@@ -1712,6 +2150,19 @@ class ChatService:
                     payload={"privacy_level": privacy.privacy_level},
                     trace_id=trace_id,
                 )
+            await self._record_stage_recovery_attempt(
+                turn=turn,
+                stage="model",
+                failure_type="model_not_configured"
+                if code == ErrorCode.MODEL_NOT_CONFIGURED
+                else "model_route_failed",
+                root_cause=code.value,
+                recovery_action="ask_user_for_missing_input"
+                if code == ErrorCode.MODEL_NOT_CONFIGURED
+                else "stop_unrecoverable",
+                status="failed",
+                diagnostic_payload={"error_code": code.value},
+            )
             async for event in self._fail_turn(
                 turn,
                 events,
@@ -1760,6 +2211,168 @@ class ChatService:
         ):
             yield event
 
+    async def _chat_payloads_for_turn(self, turn: dict[str, Any]) -> dict[str, Any]:
+        envelope = await self._chat_repo.get_message_envelope_by_turn(turn["turn_id"])
+        queue_item = await self._chat_repo.get_queue_item_by_turn(turn["turn_id"])
+        payloads: dict[str, Any] = {}
+        if envelope is not None:
+            payloads["content"] = _content_payload(envelope)
+        if queue_item is not None:
+            payloads["queue"] = _queue_payload(queue_item)
+        return payloads
+
+    async def _decorate_chat_payloads(
+        self,
+        turn: dict[str, Any],
+        response_plan: ResponsePlan,
+    ) -> ResponsePlan:
+        payloads = await self._chat_payloads_for_turn(turn)
+        if not payloads:
+            return response_plan
+        return response_plan.model_copy(
+            update={
+                "structured_payload": {
+                    **response_plan.structured_payload,
+                    **payloads,
+                }
+            }
+        )
+
+    async def _record_stage_recovery_attempt(
+        self,
+        *,
+        turn: dict[str, Any],
+        stage: str,
+        failure_type: str,
+        root_cause: str,
+        recovery_action: str,
+        status: str,
+        diagnostic_payload: dict[str, Any] | None = None,
+        action_result: dict[str, Any] | None = None,
+    ) -> None:
+        attempts = await self._chat_repo.list_recovery_attempts(turn["turn_id"])
+        now = utc_now_iso()
+        await self._chat_repo.insert_recovery_attempt(
+            {
+                "recovery_attempt_id": new_id("trra"),
+                "turn_id": turn["turn_id"],
+                "task_id": None,
+                "attempt_index": len(attempts) + 1,
+                "failure_type": failure_type,
+                "root_cause": str(redact(root_cause)),
+                "recovery_action": recovery_action,
+                "status": status,
+                "recovery_stage": stage,
+                "error_signature": _error_signature(stage, failure_type, root_cause),
+                "diagnostic_payload": redact(diagnostic_payload or {}),
+                "action_result": redact(action_result or {}),
+                "trace_id": turn["trace_id"],
+                "started_at": now,
+                "completed_at": now,
+            }
+        )
+        if status == "recovered":
+            try:
+                await self._memory.record_recovery_lesson_candidate(
+                    turn_id=turn["turn_id"],
+                    stage=stage,
+                    failure_type=failure_type,
+                    recovery_action=recovery_action,
+                    trace_id=turn["trace_id"],
+                )
+            except Exception:
+                return
+
+    async def _maybe_record_context_compaction(
+        self,
+        turn: dict[str, Any],
+        context: ContextPacket,
+        context_filter_summary: dict[str, Any],
+        root_span_id: str | None,
+        emit: Any,
+    ) -> AsyncIterator[ChatEvent]:
+        messages = [
+            {
+                "role": str(item.get("role") or "user"),
+                "content": str(
+                    item.get("model_safe_content_text")
+                    or item.get("content_text")
+                    or ""
+                ),
+            }
+            for item in context.conversation.last_messages
+        ]
+        if context.conversation.recent_summary:
+            messages.append({"role": "system", "content": context.conversation.recent_summary})
+        token_before = estimate_messages_tokens(messages)
+        if token_before < 2400 and len(context.conversation.last_messages) <= 12:
+            return
+        compaction_id = new_id("ctxcmp")
+        yield await emit(
+            ChatEventType.CONTEXT_COMPACTION_STARTED,
+            {
+                "compaction_id": compaction_id,
+                "reason": "context_budget_guard",
+                "token_estimate_before": token_before,
+            },
+        )
+        span_id = await self._trace.start_span(
+            turn["trace_id"],
+            span_type=TraceSpanType.CONTEXT_COMPACTION,
+            name="compact chat context evidence",
+            parent_span_id=root_span_id,
+            input_data={
+                "token_estimate_before": token_before,
+                "message_count": len(context.conversation.last_messages),
+            },
+        )
+        summary = _context_compaction_summary(context)
+        token_after = estimate_messages_tokens([{"role": "system", "content": summary}])
+        await self._chat_repo.insert_context_compaction(
+            {
+                "compaction_id": compaction_id,
+                "turn_id": turn["turn_id"],
+                "conversation_id": turn["conversation_id"],
+                "reason": "context_budget_guard",
+                "status": "completed",
+                "token_estimate_before": token_before,
+                "token_estimate_after": token_after,
+                "summary": summary,
+                "payload": {
+                    "context_redaction": context_filter_summary,
+                    "message_count": len(context.conversation.last_messages),
+                },
+                "trace_id": turn["trace_id"],
+                "created_at": utc_now_iso(),
+                "completed_at": utc_now_iso(),
+            }
+        )
+        await self._record_stage_recovery_attempt(
+            turn=turn,
+            stage="context",
+            failure_type="context_over_budget",
+            root_cause="context_budget_guard",
+            recovery_action="rebuild_minimal_context",
+            status="recovered",
+            diagnostic_payload={"token_estimate_before": token_before},
+            action_result={"token_estimate_after": token_after, "compaction_id": compaction_id},
+        )
+        await self._trace.end_span(
+            span_id,
+            output_data={
+                "compaction_id": compaction_id,
+                "token_estimate_after": token_after,
+            },
+        )
+        yield await emit(
+            ChatEventType.CONTEXT_COMPACTION_COMPLETED,
+            {
+                "compaction_id": compaction_id,
+                "status": "completed",
+                "token_estimate_after": token_after,
+            },
+        )
+
     async def _run_model_path(
         self,
         turn: dict[str, Any],
@@ -1797,6 +2410,18 @@ class ChatService:
                     },
                 )
                 await self._trace.end_span(fallback_span)
+                await self._record_stage_recovery_attempt(
+                    turn=turn,
+                    stage="model",
+                    failure_type=_model_failure_type(last_error),
+                    root_cause=last_error.message if last_error else "fallback",
+                    recovery_action="fallback_model_route",
+                    status="recovered",
+                    diagnostic_payload={
+                        "failed_error_code": last_error.code.value if last_error else None,
+                    },
+                    action_result={"fallback_brain_id": brain_id},
+                )
                 yield await self._emit_and_record(
                     turn_id,
                     trace_id,
@@ -1834,6 +2459,17 @@ class ChatService:
                         yield event
                     return
                 if index == len(candidate_ids) - 1:
+                    await self._record_stage_recovery_attempt(
+                        turn=turn,
+                        stage="model",
+                        failure_type=_model_failure_type(exc),
+                        root_cause=exc.message,
+                        recovery_action="ask_user_for_missing_input"
+                        if exc.code == ErrorCode.MODEL_NOT_CONFIGURED
+                        else "stop_unrecoverable",
+                        status="failed",
+                        diagnostic_payload={"error_code": exc.code.value},
+                    )
                     async for event in self._fail_turn(
                         turn,
                         events,
@@ -1862,7 +2498,24 @@ class ChatService:
     ) -> AsyncIterator[ChatEvent]:
         turn_id = turn["turn_id"]
         trace_id = turn["trace_id"]
-        messages = self._model_messages(context, user_text)
+        channel_profile = _channel_profile_for_turn(turn)
+        prompt_assembly = self._model_coordinator.model_assembly(
+            context,
+            user_text,
+            channel_profile=channel_profile,
+            delivery_mode="final",
+            turn_id=turn_id,
+        )
+        messages = prompt_assembly.messages
+        prompt_metadata = prompt_assembly.metadata
+        continuation_decision = self._continuation.decide(
+            turn=turn,
+            user_text=user_text,
+            context=context,
+            intent=intent,
+            mode=mode,
+        )
+        buffer_visible_response = continuation_decision.enabled
         model_span = await self._trace.start_span(
             trace_id,
             span_type=TraceSpanType.MODEL_CALL,
@@ -1874,10 +2527,14 @@ class ChatService:
                 "model_name": brain["model_name"],
                 "is_local": brain["is_local"],
                 "fallback_used": fallback_used,
+                "continuation_enabled": continuation_decision.enabled,
+                "continuation_reason_codes": continuation_decision.reason_codes,
+                "prompt_assembly": prompt_metadata,
             },
             input_data={
                 "message_count": len(messages),
                 "input_token_estimate": estimate_messages_tokens(messages),
+                **_prompt_payload_from_metadata(prompt_metadata),
             },
         )
         if not brain["is_local"]:
@@ -1915,6 +2572,7 @@ class ChatService:
         finish_reason = "stop"
         delta_filter = self._composer.begin_delta_stream()
         visible_filter = self._response_coordinator.begin_visible_stream()
+        model_call_started = time.perf_counter()
         try:
             async for model_event in client.stream_chat(request, cancel_token):
                 if model_event.event == "started":
@@ -1930,13 +2588,14 @@ class ChatService:
                     text = visible_filter.feed(delta_filter.feed(model_event.text))
                     if text:
                         output_parts.append(text)
-                        yield await self._emit_and_record(
-                            turn_id,
-                            trace_id,
-                            events,
-                            ChatEventType.RESPONSE_DELTA,
-                            {"text": text, "response_filter": visible_filter.summary()},
-                        )
+                        if not buffer_visible_response:
+                            yield await self._emit_and_record(
+                                turn_id,
+                                trace_id,
+                                events,
+                                ChatEventType.RESPONSE_DELTA,
+                                {"text": text, "response_filter": visible_filter.summary()},
+                            )
                 elif model_event.event == "usage_delta":
                     usage.update(model_event.usage)
                 elif model_event.event == "completed":
@@ -1946,13 +2605,14 @@ class ChatService:
                     tail_text += visible_filter.finish()
                     if tail_text:
                         output_parts.append(tail_text)
-                        yield await self._emit_and_record(
-                            turn_id,
-                            trace_id,
-                            events,
-                            ChatEventType.RESPONSE_DELTA,
-                            {"text": tail_text, "response_filter": visible_filter.summary()},
-                        )
+                        if not buffer_visible_response:
+                            yield await self._emit_and_record(
+                                turn_id,
+                                trace_id,
+                                events,
+                                ChatEventType.RESPONSE_DELTA,
+                                {"text": tail_text, "response_filter": visible_filter.summary()},
+                            )
                     yield await self._emit_and_record(
                         turn_id,
                         trace_id,
@@ -1962,6 +2622,7 @@ class ChatService:
                             "finish_reason": finish_reason,
                             "usage": usage,
                             "response_filter": visible_filter.summary(),
+                            "continuation_enabled": continuation_decision.enabled,
                         },
                     )
                     break
@@ -1996,8 +2657,247 @@ class ChatService:
                 "finish_reason": finish_reason,
                 "usage": usage,
                 "response_filter": response_filter,
+                "continuation_enabled": continuation_decision.enabled,
             },
         )
+        response_plan = None
+        if continuation_decision.enabled:
+            initial_latency_ms = int((time.perf_counter() - model_call_started) * 1000)
+            continuation_started = time.perf_counter()
+            evaluation = self._continuation.evaluate(
+                text=assistant_text,
+                user_text=user_text,
+                decision=continuation_decision,
+            )
+            iterations = 0
+            used_revision = False
+            budget_exhausted = False
+            usage = {"initial": usage, "continuation_iterations": 0}
+            revision_latency_ms: int | None = None
+            if evaluation.should_revise and continuation_decision.max_iterations > 0:
+                try:
+                    revision_started = time.perf_counter()
+                    revision = await self._run_continuation_revision(
+                        turn=turn,
+                        events=events,
+                        messages=messages,
+                        user_text=user_text,
+                        draft_text=assistant_text,
+                        evaluation=evaluation,
+                        brain=brain,
+                        model_params=model_params,
+                        root_span_id=root_span_id,
+                    )
+                    revision_latency_ms = int((time.perf_counter() - revision_started) * 1000)
+                    iterations = 1
+                    usage["continuation_iterations"] = 1
+                    usage["revision"] = revision["usage"]
+                    revised_text = str(revision["text"] or "").strip()
+                    revised_evaluation = self._continuation.evaluate(
+                        text=revised_text,
+                        user_text=user_text,
+                        decision=continuation_decision,
+                    )
+                    if revised_text and not (
+                        set(revised_evaluation.tags)
+                        & {
+                            "missing_reply",
+                            "internal_jargon",
+                            "secret_leak",
+                            "false_done",
+                            "strict_format_polluted",
+                        }
+                    ):
+                        assistant_text = revised_text
+                        finish_reason = str(revision.get("finish_reason") or finish_reason)
+                        used_revision = True
+                except ModelAdapterError as exc:
+                    if exc.code == ErrorCode.TURN_CANCELLED:
+                        raise
+                    budget_exhausted = exc.code == ErrorCode.MODEL_TIMEOUT
+                    usage["continuation_error"] = exc.code.value
+            compose_result = await self._composer.compose(
+                ComposeRequest(
+                    user_text=user_text,
+                    result_summary=assistant_text,
+                    scenario="direct",
+                    persona=(
+                        context.persona.model_dump(mode="json")
+                        if getattr(context, "persona", None) is not None
+                        and hasattr(context.persona, "model_dump")
+                        else {}
+                    ),
+                    heart=(
+                        context.heart.model_dump(mode="json")
+                        if getattr(context, "heart", None) is not None
+                        and hasattr(context.heart, "model_dump")
+                        else {}
+                    ),
+                    route_profile=str((turn.get("experience") or {}).get("route_profile") or ""),
+                    channel_profile=channel_profile,
+                    prompt_mode=str(prompt_metadata.get("prompt_mode") or "full"),
+                    prompt_snapshot_id=str(prompt_metadata.get("prompt_snapshot_id") or ""),
+                    prompt_assembly_version=str(
+                        prompt_metadata.get("prompt_assembly_version") or ""
+                    )
+                    or None,
+                    stable_prompt_hash=str(prompt_metadata.get("stable_prompt_hash") or "")
+                    or None,
+                    dynamic_context_hash=str(prompt_metadata.get("dynamic_context_hash") or "")
+                    or None,
+                    trusted_context_hash=str(prompt_metadata.get("trusted_context_hash") or "")
+                    or None,
+                    untrusted_context_hash=str(prompt_metadata.get("untrusted_context_hash") or "")
+                    or None,
+                    history_context_hash=str(prompt_metadata.get("history_context_hash") or "")
+                    or None,
+                    current_message_hash=str(prompt_metadata.get("current_message_hash") or "")
+                    or None,
+                    prompt_section_ids=[
+                        str(item) for item in prompt_metadata.get("prompt_section_ids") or []
+                    ],
+                    prompt_sections=[
+                        dict(item)
+                        for item in prompt_metadata.get("prompt_sections") or []
+                        if isinstance(item, dict)
+                    ],
+                )
+            )
+            response_plan = compose_result.response_plan
+            final_text_for_quality = self._style_visible_text(
+                turn,
+                assistant_text,
+                response_plan=response_plan,
+            )
+            final_text_for_quality, final_filter = self._response_coordinator.filter_text(
+                final_text_for_quality
+            )
+            assistant_text = final_text_for_quality
+            response_filter = final_filter
+            evaluation = self._continuation.evaluate(
+                text=assistant_text,
+                user_text=user_text,
+                decision=continuation_decision,
+                elapsed_ms=int((time.perf_counter() - continuation_started) * 1000),
+                response_quality_guard=response_plan.structured_payload.get(
+                    "response_quality_guard"
+                ),
+            )
+            used_safe_fallback = False
+            if evaluation.verdict == "block":
+                used_safe_fallback = True
+                fallback_text = self._continuation.safe_fallback_text(
+                    user_text=user_text,
+                    evaluation=evaluation,
+                )
+                fallback_scenario = (
+                    "tool_boundary"
+                    if set(evaluation.tags)
+                    & {"internal_jargon", "secret_leak", "false_done"}
+                    else "direct"
+                )
+                fallback_result = await self._composer.compose(
+                    ComposeRequest(
+                        user_text=user_text,
+                        result_summary=fallback_text,
+                        scenario=fallback_scenario,
+                        persona=(
+                            context.persona.model_dump(mode="json")
+                            if getattr(context, "persona", None) is not None
+                            and hasattr(context.persona, "model_dump")
+                            else {}
+                        ),
+                        heart=(
+                            context.heart.model_dump(mode="json")
+                            if getattr(context, "heart", None) is not None
+                            and hasattr(context.heart, "model_dump")
+                            else {}
+                        ),
+                        route_profile=str((turn.get("experience") or {}).get("route_profile") or ""),
+                        channel_profile=channel_profile,
+                        prompt_mode=str(prompt_metadata.get("prompt_mode") or "full"),
+                        prompt_snapshot_id=str(prompt_metadata.get("prompt_snapshot_id") or ""),
+                        prompt_assembly_version=str(
+                            prompt_metadata.get("prompt_assembly_version") or ""
+                        )
+                        or None,
+                        stable_prompt_hash=str(prompt_metadata.get("stable_prompt_hash") or "")
+                        or None,
+                        dynamic_context_hash=str(prompt_metadata.get("dynamic_context_hash") or "")
+                        or None,
+                        trusted_context_hash=str(prompt_metadata.get("trusted_context_hash") or "")
+                        or None,
+                        untrusted_context_hash=str(prompt_metadata.get("untrusted_context_hash") or "")
+                        or None,
+                        history_context_hash=str(prompt_metadata.get("history_context_hash") or "")
+                        or None,
+                        current_message_hash=str(prompt_metadata.get("current_message_hash") or "")
+                        or None,
+                        prompt_section_ids=[
+                            str(item) for item in prompt_metadata.get("prompt_section_ids") or []
+                        ],
+                        prompt_sections=[
+                            dict(item)
+                            for item in prompt_metadata.get("prompt_sections") or []
+                            if isinstance(item, dict)
+                        ],
+                    )
+                )
+                response_plan = fallback_result.response_plan
+                assistant_text = self._style_visible_text(
+                    turn,
+                    fallback_result.text,
+                    response_plan=response_plan,
+                )
+                assistant_text, final_filter = self._response_coordinator.filter_text(
+                    assistant_text
+                )
+                response_filter = final_filter
+                evaluation = self._continuation.evaluate(
+                    text=assistant_text,
+                    user_text=user_text,
+                    decision=continuation_decision,
+                    elapsed_ms=int((time.perf_counter() - continuation_started) * 1000),
+                    response_quality_guard=response_plan.structured_payload.get(
+                        "response_quality_guard"
+                    ),
+                )
+            continuation_payload = self._continuation.payload(
+                decision=continuation_decision,
+                evaluation=evaluation,
+                iterations=iterations,
+                budget_exhausted=budget_exhausted,
+                used_revision=used_revision,
+                used_safe_fallback=used_safe_fallback,
+                initial_latency_ms=initial_latency_ms,
+                revision_latency_ms=revision_latency_ms,
+                total_latency_ms=int((time.perf_counter() - continuation_started) * 1000),
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **response_plan.structured_payload,
+                        "continuation": continuation_payload,
+                    },
+                    "quality_markers": {
+                        **response_plan.quality_markers,
+                        "continuation_quality_verdict": evaluation.verdict,
+                        "continuation_quality_tags": evaluation.tags,
+                        "continuation_diagnostics": evaluation.diagnostics,
+                    },
+                }
+            )
+            yield await self._emit_and_record(
+                turn_id,
+                trace_id,
+                events,
+                ChatEventType.RESPONSE_DELTA,
+                {
+                    "text": assistant_text,
+                    "response_filter": final_filter,
+                    "continuation": continuation_payload,
+                },
+            )
         async for event in self._complete_model_turn(
             turn,
             events,
@@ -2008,9 +2908,157 @@ class ChatService:
             route={"brain_id": brain["brain_id"], "fallback_used": fallback_used},
             intent=intent,
             mode=mode,
+            response_plan=response_plan,
             response_filter=response_filter,
+            prompt_metadata=prompt_metadata,
         ):
             yield event
+
+    async def _run_continuation_revision(
+        self,
+        *,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+        messages: list[dict[str, str]],
+        user_text: str,
+        draft_text: str,
+        evaluation: ContinuationEvaluation,
+        brain: dict[str, Any],
+        model_params: dict[str, Any],
+        root_span_id: str | None,
+    ) -> dict[str, Any]:
+        trace_id = turn["trace_id"]
+        turn_id = turn["turn_id"]
+        revision_messages = self._continuation.revision_messages(
+            messages=messages,
+            user_text=user_text,
+            draft_text=draft_text,
+            evaluation=evaluation,
+        )
+        revision_span = await self._trace.start_span(
+            trace_id,
+            span_type=TraceSpanType.MODEL_CALL,
+            name="call chat model continuation revision",
+            parent_span_id=root_span_id,
+            metadata={
+                "brain_id": brain["brain_id"],
+                "provider": brain["provider"],
+                "model_name": brain["model_name"],
+                "continuation_iteration": 1,
+                "quality_verdict": evaluation.verdict,
+                "quality_tags": evaluation.tags,
+            },
+            input_data={
+                "message_count": len(revision_messages),
+                "input_token_estimate": estimate_messages_tokens(revision_messages),
+            },
+        )
+        client = OpenAICompatibleClient(
+            str(brain["endpoint"]),
+            self._secrets.get_secret(brain.get("api_key_ref")),
+        )
+        request = ModelChatRequest(
+            model=str(brain["model_name"]),
+            messages=revision_messages,
+            temperature=min(float(model_params.get("temperature") or 0.3), 0.25),
+            max_output_tokens=int(model_params.get("max_output_tokens") or 1024),
+            top_p=float(model_params.get("top_p") or 0.9),
+            timeout_seconds=min(
+                int(model_params.get("timeout_seconds") or 180),
+                20,
+            ),
+            stream=True,
+            trace_id=trace_id,
+            turn_id=turn_id,
+            route_id=f"route_{brain['brain_id']}:continuation:1",
+            privacy_level=turn.get("privacy_level") or "medium",
+            first_token_timeout_seconds=20,
+            retry_count=0,
+        )
+        token = self._events.token_for(turn_id)
+        output_parts: list[str] = []
+        usage: dict[str, Any] = {}
+        finish_reason = "stop"
+        delta_filter = self._composer.begin_delta_stream()
+        visible_filter = self._response_coordinator.begin_visible_stream()
+        try:
+            async for model_event in client.stream_chat(request, token):
+                if model_event.event == "started":
+                    await self._emit_and_record(
+                        turn_id,
+                        trace_id,
+                        events,
+                        ChatEventType.MODEL_STARTED,
+                        {
+                            "brain_id": brain["brain_id"],
+                            "continuation_iteration": 1,
+                        },
+                    )
+                elif model_event.event == "delta":
+                    usage.update(model_event.usage)
+                    text = visible_filter.feed(delta_filter.feed(model_event.text))
+                    if text:
+                        output_parts.append(text)
+                elif model_event.event == "usage_delta":
+                    usage.update(model_event.usage)
+                elif model_event.event == "completed":
+                    usage.update(model_event.usage)
+                    finish_reason = model_event.finish_reason or "stop"
+                    tail_text = visible_filter.feed(delta_filter.finish())
+                    tail_text += visible_filter.finish()
+                    if tail_text:
+                        output_parts.append(tail_text)
+                    await self._emit_and_record(
+                        turn_id,
+                        trace_id,
+                        events,
+                        ChatEventType.MODEL_COMPLETED,
+                        {
+                            "finish_reason": finish_reason,
+                            "usage": usage,
+                            "response_filter": visible_filter.summary(),
+                            "continuation_iteration": 1,
+                        },
+                    )
+                    break
+                elif model_event.event == "cancelled":
+                    token.cancel()
+                    break
+        except ModelAdapterError as exc:
+            await self._trace.end_span(
+                revision_span,
+                status=TraceSpanStatus.FAILED,
+                output_data={"error_code": exc.code.value, "message": exc.message},
+                error_code=exc.code.value,
+            )
+            raise
+        if token.cancelled:
+            await self._trace.end_span(
+                revision_span,
+                status=TraceSpanStatus.FAILED,
+                output_data={"error_code": ErrorCode.TURN_CANCELLED.value},
+                error_code=ErrorCode.TURN_CANCELLED.value,
+            )
+            raise ModelAdapterError(ErrorCode.TURN_CANCELLED, "生成已取消")
+        text = "".join(output_parts).strip()
+        if not text:
+            await self._trace.end_span(
+                revision_span,
+                status=TraceSpanStatus.FAILED,
+                output_data={"error_code": ErrorCode.MODEL_PROTOCOL_ERROR.value},
+                error_code=ErrorCode.MODEL_PROTOCOL_ERROR.value,
+            )
+            raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "续跑修订没有返回可用文本")
+        await self._trace.end_span(
+            revision_span,
+            output_data={
+                "finish_reason": finish_reason,
+                "usage": usage,
+                "response_filter": visible_filter.summary(),
+                "text_chars": len(text),
+            },
+        )
+        return {"text": text, "usage": usage, "finish_reason": finish_reason}
 
     async def _complete_without_model(
         self,
@@ -2024,6 +3072,7 @@ class ChatService:
         response_plan: ResponsePlan | None = None,
         clarification_decision: ClarificationDecision | None = None,
     ) -> AsyncIterator[ChatEvent]:
+        text = self._style_visible_text(turn, text, response_plan=response_plan)
         text, response_filter = self._response_coordinator.filter_text(text)
         yield await self._emit_and_record(
             turn["turn_id"],
@@ -2343,6 +3392,203 @@ class ChatService:
         ):
             yield event
 
+    async def _handle_terminal_readonly_command(
+        self,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+        metadata: dict[str, Any],
+        root_span_id: str | None,
+        *,
+        trace_id: str | None,
+    ) -> AsyncIterator[ChatEvent]:
+        if self._tool_runtime is None or self._task_engine is None:
+            text = "当前终端工具不可用；我没有执行系统命令，也不会假装已经执行。"
+            response_plan = self._composer.response_plan_for_tool_boundary(
+                summary=text,
+                required_capability="terminal.run",
+                next_actions=["检查工具注册", "稍后重试"],
+                safety_notice="没有执行任何系统命令。",
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="terminal_readonly_command",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+        command = str(metadata.get("command") or "").strip()
+        if not command:
+            text = "我没拿到可执行的系统命令，所以没有运行。"
+            response_plan = self._composer.response_plan_for_tool_boundary(
+                summary=text,
+                required_capability="terminal.run",
+                next_actions=["重新说明命令", "直接贴出命令字符串"],
+                safety_notice="没有执行任何系统命令。",
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="terminal_readonly_command",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.INTENT_DETECTED,
+            {
+                "intent": "terminal_readonly_command",
+                "reason_codes": ["terminal_readonly_command"],
+            },
+        )
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.MODE_SELECTED,
+            {"mode": TaskMode.WORKFLOW.value, "needs_tool": True},
+        )
+        from app.schemas.tasks import TaskCreateRequest, ToolExecuteRequest
+
+        task = await self._task_engine.create_task(
+            TaskCreateRequest(
+                conversation_id=turn["conversation_id"],
+                owner_member_id=turn["member_id"],
+                goal=command,
+                mode_hint=TaskMode.WORKFLOW,
+                planner_context={
+                    "intent": {
+                        "primary_intent": "terminal_readonly_command",
+                        "reason_codes": ["terminal_readonly_command"],
+                    },
+                    "route": "terminal_readonly_command",
+                    "command": command,
+                },
+                auto_start=False,
+                client_request_id=f"chat:{turn['turn_id']}:terminal-readonly",
+            ),
+            trace_id=trace_id,
+        )
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.TASK_CREATED,
+            {"task_id": task.task_id, "title": task.title, "status": task.status.value},
+        )
+        try:
+            response = await self._tool_runtime.execute(
+                ToolExecuteRequest(
+                    task_id=task.task_id,
+                    member_id=turn["member_id"],
+                    tool_name="terminal.run",
+                    args={"command": command, "chat_readonly_command": True},
+                    idempotency_key=f"chat:{turn['turn_id']}:terminal.run:{command}",
+                ),
+                trace_id=trace_id,
+            )
+        except AppError as exc:
+            text = _terminal_command_error_reply(command, exc)
+            response_plan = self._composer.response_plan_for_tool_boundary(
+                summary=text,
+                required_capability="terminal.run",
+                next_actions=["换成只读命令", "先确认命令是否安全"],
+                safety_notice="命令被终端安全策略拦截；没有执行危险操作。",
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **response_plan.structured_payload,
+                        "terminal_route": {
+                            "command": command,
+                            "status": "blocked",
+                            "error_code": exc.code,
+                            "details": exc.details,
+                        },
+                    },
+                }
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="terminal_readonly_command",
+                mode=TaskMode.WORKFLOW.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
+        result = response.result
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.TOOL_COMPLETED,
+            {
+                "tool_call_id": response.tool_call.tool_call_id,
+                "tool_name": "terminal.run",
+                "risk_level": response.tool_call.risk_level.value
+                if hasattr(response.tool_call.risk_level, "value")
+                else str(response.tool_call.risk_level),
+            },
+        )
+        text = _terminal_command_reply(command, result)
+        response_plan = self._composer.response_plan_for_status(
+            summary=text,
+            task_status={"status": "completed", "reason": "terminal_readonly_command"},
+            tool_notice="命令在受控终端沙箱中执行，未使用自定义 cwd，输出已脱敏。",
+        )
+        response_plan = response_plan.model_copy(
+            update={
+                "structured_payload": {
+                    **response_plan.structured_payload,
+                    "terminal_route": {
+                        "command": command,
+                        "status": "completed",
+                        "tool_call_id": response.tool_call.tool_call_id,
+                        "task_id": task.task_id,
+                        "output_preview": str(result.get("output_preview") or "")[:1000],
+                        "sandbox_profile": result.get("sandbox_profile"),
+                        "backend_status": result.get("backend_status"),
+                        "fallback_chain": result.get("fallback_chain"),
+                        "degraded_reason": result.get("degraded_reason"),
+                        "resource_usage": result.get("resource_usage"),
+                        "cleanup": result.get("cleanup"),
+                        "dlp_report_id": result.get("dlp_report_id"),
+                    },
+                    "route_semantics": {
+                        "route": "terminal_readonly_command",
+                        "model_called": False,
+                        "task_created": True,
+                        "tool_created": True,
+                        "tool_name": "terminal.run",
+                        "tool_call_id": response.tool_call.tool_call_id,
+                        "reason_code": "terminal_readonly_command",
+                    },
+                },
+            }
+        )
+        async for event in self._complete_without_model(
+            turn,
+            events,
+            text,
+            root_span_id,
+            intent="terminal_readonly_command",
+            mode=TaskMode.WORKFLOW.value,
+            response_plan=response_plan,
+        ):
+            yield event
+
     async def _handle_office_chat_request(
         self,
         turn: dict[str, Any],
@@ -2386,7 +3632,7 @@ class ChatService:
                 summary=text,
                 required_capability=f"office.{office_request.document_type}.{office_request.operation}",
                 next_actions=self._office_next_actions(office_request, missing_reason),
-                safety_notice="没有生成或编辑 Office 文件；我不会把未执行说成已完成。",
+                safety_notice="Office 文件这步还没真正走完，我先不把结果说满。",
             )
             response_plan = response_plan.model_copy(
                 update={
@@ -2523,6 +3769,18 @@ class ChatService:
                 },
             }
         )
+        if recovery.recovery_payload.get("status") == "exhausted":
+            async for event in self._fail_turn(
+                turn,
+                events,
+                ErrorCode.TASK_STEP_FAILED,
+                text,
+                root_span_id,
+                persist_assistant=True,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
         async for event in self._complete_without_model(
             turn,
             events,
@@ -2591,22 +3849,75 @@ class ChatService:
         response_plan: ResponsePlan | None = None,
         clarification_decision: ClarificationDecision | None = None,
         response_filter: dict[str, Any] | None = None,
+        prompt_metadata: dict[str, Any] | None = None,
     ) -> AsyncIterator[ChatEvent]:
+        text = self._style_visible_text(turn, text, response_plan=response_plan)
         filtered_text, final_filter = self._response_coordinator.filter_text(text)
         text = filtered_text
         merged_filter = self._response_coordinator.merge_filter(response_filter, final_filter)
         if response_plan is None:
+            prompt_mode = str((prompt_metadata or {}).get("prompt_mode") or "full")
+            prompt_snapshot_id = str((prompt_metadata or {}).get("prompt_snapshot_id") or "")
+            channel_profile = str((prompt_metadata or {}).get("channel_profile") or "local")
             compose_result = await self._composer.compose(
-                ComposeRequest(user_text="", result_summary=text)
+                ComposeRequest(
+                    user_text="",
+                    result_summary=text,
+                    prompt_mode=prompt_mode,
+                    prompt_snapshot_id=prompt_snapshot_id or None,
+                    channel_profile=channel_profile,
+                    delivery_mode=str((prompt_metadata or {}).get("delivery_mode") or "final"),
+                    prompt_assembly_version=str(
+                        (prompt_metadata or {}).get("prompt_assembly_version") or ""
+                    )
+                    or None,
+                    stable_prompt_hash=str((prompt_metadata or {}).get("stable_prompt_hash") or "")
+                    or None,
+                    dynamic_context_hash=str(
+                        (prompt_metadata or {}).get("dynamic_context_hash") or ""
+                    )
+                    or None,
+                    trusted_context_hash=str(
+                        (prompt_metadata or {}).get("trusted_context_hash") or ""
+                    )
+                    or None,
+                    untrusted_context_hash=str(
+                        (prompt_metadata or {}).get("untrusted_context_hash") or ""
+                    )
+                    or None,
+                    history_context_hash=str(
+                        (prompt_metadata or {}).get("history_context_hash") or ""
+                    )
+                    or None,
+                    current_message_hash=str(
+                        (prompt_metadata or {}).get("current_message_hash") or ""
+                    )
+                    or None,
+                    prompt_section_ids=[
+                        str(item)
+                        for item in (prompt_metadata or {}).get("prompt_section_ids") or []
+                    ],
+                    prompt_sections=[
+                        dict(item)
+                        for item in (prompt_metadata or {}).get("prompt_sections") or []
+                        if isinstance(item, dict)
+                    ],
+                )
             )
             response_plan = compose_result.response_plan.model_copy(
                 update={
                     "structured_payload": {
                         **compose_result.response_plan.structured_payload,
+                        **_prompt_payload_from_metadata(prompt_metadata),
                         "finish_reason": finish_reason,
                         "mode": mode,
                         "intent": intent,
                         "response_filter": merged_filter,
+                        **(
+                            {"prompt_assembly": prompt_metadata}
+                            if prompt_metadata is not None
+                            else {}
+                        ),
                     }
                 }
             )
@@ -2616,17 +3927,24 @@ class ChatService:
                     **self._response_coordinator.normalize_plan_text(response_plan, text),
                     "structured_payload": {
                         **response_plan.structured_payload,
+                        **_prompt_payload_from_metadata(prompt_metadata),
                         "finish_reason": finish_reason,
                         "mode": mode,
                         "intent": intent,
                         "response_filter": merged_filter,
+                        **(
+                            {"prompt_assembly": prompt_metadata}
+                            if prompt_metadata is not None
+                            else {}
+                        ),
                     },
                 }
             )
         if intent == "boundary_question":
             boundary_notice = (
                 "我是本地智能体成员，不是真人，也没有隐藏账号或绕过系统的能力；"
-                "登录、工具、文件、浏览器和外部动作必须经过受控任务、安全和审批链路。"
+                "登录、工具、文件、浏览器和外部动作都得先走安全流程，"
+                "该确认的地方我会先停一下。"
             )
             response_plan = response_plan.model_copy(
                 update={
@@ -2647,11 +3965,24 @@ class ChatService:
                 }
             )
         response_plan = self._with_experience_payload(turn, response_plan)
+        response_plan = await self._decorate_chat_payloads(turn, response_plan)
         response_plan = await self._decorate_response_plan(
             turn,
             response_plan,
             assistant_text=text,
         )
+        text = await self._repair_voice_capability_refusal(
+            turn=turn,
+            response_plan=response_plan,
+            assistant_text=text,
+        )
+        voice_reply = await self._decorate_voice_reply(
+            turn=turn,
+            assistant_text=text,
+            response_plan=response_plan,
+            root_span_id=root_span_id,
+        )
+        response_plan = self._with_voice_reply(response_plan, voice_reply)
         compose_span = await self._trace.start_span(
             turn["trace_id"],
             span_type=TraceSpanType.RESPONSE_COMPOSE,
@@ -2680,6 +4011,7 @@ class ChatService:
                 "status": "completed",
                 "response_plan": response_plan.model_dump(mode="json"),
                 "response_filter": merged_filter,
+                "voice_reply": voice_reply,
             },
             root_span_id,
         )
@@ -2730,7 +4062,10 @@ class ChatService:
                 clarification=clarification_decision,
             )
         if intent != "memory_update":
-            await self._memory.enqueue_extract_after_turn(turn["turn_id"], schedule=True)
+            if self._agent_workbench is not None:
+                await self._agent_workbench.enqueue_reflect_after_turn(turn["turn_id"])
+            else:
+                await self._memory.enqueue_extract_after_turn(turn["turn_id"], schedule=True)
         if root_span_id:
             await self._trace.end_span(
                 root_span_id,
@@ -2770,10 +4105,17 @@ class ChatService:
         root_span_id: str | None,
         *,
         persist_assistant: bool = False,
+        response_plan: ResponsePlan | None = None,
     ) -> AsyncIterator[ChatEvent]:
+        message = self._style_visible_text(turn, message, response_plan=response_plan)
         message, response_filter = self._response_coordinator.filter_text(message)
         assistant_message_id = None
-        response_plan = self._composer.response_plan_for_failure(code=code, message=message)
+        response_plan = response_plan or self._composer.response_plan_for_failure(
+            code=code,
+            message=message,
+        )
+        recovery_payload = response_plan.structured_payload.get("recovery")
+        recovery_payload = recovery_payload if isinstance(recovery_payload, dict) else None
         if self._chat_experience is not None:
             turn["experience"] = await self._chat_experience.mark_failure(
                 turn=turn,
@@ -2795,6 +4137,7 @@ class ChatService:
                 recoverable=True,
                 suggested_next_actions=turn["experience"].get("suggested_next_actions", []),
                 base_plan=response_plan,
+                recovery=recovery_payload,
             )
         response_plan = response_plan.model_copy(
             update={
@@ -2805,6 +4148,7 @@ class ChatService:
             }
         )
         response_plan = self._with_experience_payload(turn, response_plan)
+        response_plan = await self._decorate_chat_payloads(turn, response_plan)
         response_plan = await self._decorate_response_plan(
             turn,
             response_plan,
@@ -2924,7 +4268,7 @@ class ChatService:
             for event in events
             if event.get("event") == ChatEventType.RESPONSE_DELTA.value
         )
-        text = self._composer.compose_cancelled(partial)
+        text = self._style_visible_text(turn, self._composer.compose_cancelled(partial))
         response_plan = self._composer.response_plan_for_status(
             summary=text,
             task_status={"status": "cancelled", "finish_reason": "cancelled"},
@@ -3014,18 +4358,43 @@ class ChatService:
         session_id = None
         if user_message and isinstance(user_message.get("content"), dict):
             session_id = user_message["content"].get("session_id")
+        voice_reply = metadata.get("voice_reply") if isinstance(metadata, dict) else None
+        voice_reply = voice_reply if isinstance(voice_reply, dict) else {}
+        content_type = "audio" if voice_reply.get("should_render") else "text"
         await self._chat_repo.insert_message(
             message_id=message_id,
             conversation_id=turn["conversation_id"],
             turn_id=turn["turn_id"],
             author_type="assistant",
             author_id=turn["member_id"],
-            content_type="text",
+            content_type=content_type,
             content_text=text,
-            content={"type": "text", "text": text, "session_id": session_id, **metadata},
+            content={
+                "type": content_type,
+                "text": text,
+                "session_id": session_id,
+                **metadata,
+            },
             trace_id=turn["trace_id"],
+            voice_profile_id=str(voice_reply.get("voice_profile_id"))
+            if voice_reply.get("voice_profile_id")
+            else None,
+            voice_render_job_id=str(voice_reply.get("render_job_id"))
+            if voice_reply.get("render_job_id")
+            else None,
+            audio_uri=str(voice_reply.get("audio_uri")) if voice_reply.get("audio_uri") else None,
+            audio_content_type=str(voice_reply.get("audio_content_type"))
+            if voice_reply.get("audio_content_type")
+            else None,
+            voice_metadata=voice_reply,
             created_at=now,
         )
+        if voice_reply.get("render_job_id") and self._voice is not None:
+            await self._voice.attach_message(
+                render_job_id=str(voice_reply["render_job_id"]),
+                message_id=message_id,
+                trace_id=turn["trace_id"],
+            )
         await self._chat_repo.touch_conversation(turn["conversation_id"], now)
         await self._trace.end_span(span_id, output_data={"message_id": message_id})
         return message_id
@@ -3064,8 +4433,9 @@ class ChatService:
         return sequence
 
     async def _finalize_created_cancel(self, turn: dict[str, Any]) -> None:
+        summary = self._style_visible_text(turn, "已停止生成。")
         response_plan = self._composer.response_plan_for_status(
-            summary="已停止生成。",
+            summary=summary,
             task_status={"status": "cancelled", "finish_reason": "cancelled"},
         )
         if self._chat_experience is not None:
@@ -3074,7 +4444,7 @@ class ChatService:
                 partial_text="",
             )
             response_plan = self._composer.response_plan_for_recovery(
-                summary="已停止生成。",
+                summary=summary,
                 error_code=ErrorCode.TURN_CANCELLED.value,
                 recoverable=True,
                 suggested_next_actions=turn["experience"].get("suggested_next_actions", []),
@@ -3084,7 +4454,7 @@ class ChatService:
         response_plan = await self._decorate_response_plan(
             turn,
             response_plan,
-            assistant_text="已停止生成。",
+            assistant_text=summary,
         )
         event = self._runtime.event(
             ChatEventType.TURN_CANCELLED,
@@ -3092,7 +4462,7 @@ class ChatService:
             trace_id=turn["trace_id"],
             payload={
                 "code": ErrorCode.TURN_CANCELLED.value,
-                "message": "已停止生成",
+                "message": summary,
                 "response_plan": response_plan.model_dump(mode="json"),
             },
         )
@@ -3100,7 +4470,7 @@ class ChatService:
         cancelled = await self._chat_repo.cancel_created_turn(
             turn["turn_id"],
             error_code=ErrorCode.TURN_CANCELLED.value,
-            error_message="已停止生成",
+            error_message=summary,
             events=[event_data],
             updated_at=utc_now_iso(),
         )
@@ -3153,6 +4523,29 @@ class ChatService:
             }
         )
 
+    def _style_visible_text(
+        self,
+        turn: dict[str, Any],
+        text: str,
+        *,
+        response_plan: ResponsePlan | None = None,
+    ) -> str:
+        return self._composer.style_text(
+            text,
+            ui_mode=self._ui_mode_for_turn(turn),
+            response_plan=response_plan,
+        )
+
+    def _ui_mode_for_turn(self, turn: dict[str, Any]) -> str | None:
+        experience = turn.get("experience") or {}
+        client_context = experience.get("client_context")
+        if not isinstance(client_context, dict):
+            return None
+        ui_mode = client_context.get("ui_mode")
+        if ui_mode is None:
+            return None
+        return str(ui_mode)
+
     async def _decorate_response_plan(
         self,
         turn: dict[str, Any],
@@ -3168,8 +4561,144 @@ class ChatService:
             assistant_text=assistant_text,
         )
 
-    def _model_messages(self, context: ContextPacket, user_text: str) -> list[dict[str, str]]:
-        return self._model_coordinator.model_messages(context, user_text)
+    async def _decorate_voice_reply(
+        self,
+        *,
+        turn: dict[str, Any],
+        assistant_text: str,
+        response_plan: ResponsePlan,
+        root_span_id: str | None,
+    ) -> dict[str, Any]:
+        if self._voice is None:
+            return {
+                "requested": False,
+                "should_render": False,
+                "reason": "voice_service_unavailable",
+            }
+        user_message = await self._chat_repo.get_message(turn["user_message_id"])
+        user_text = str(user_message.get("content_text") if user_message else "")
+        persona, heart = await self._voice_context(turn)
+        risk_level = str((response_plan.structured_payload or {}).get("risk_level") or "R1")
+        voice_reply = await self._voice.resolve_voice_reply(
+            turn=turn,
+            user_text=user_text,
+            assistant_text=assistant_text,
+            response_plan=response_plan.model_dump(mode="json"),
+            persona=persona,
+            heart=heart,
+            risk_level=risk_level,
+            trace_id=turn["trace_id"],
+        )
+        payload = voice_reply.model_dump(mode="json")
+        if root_span_id:
+            span_id = await self._trace.start_span(
+                turn["trace_id"],
+                span_type=TraceSpanType.VOICE_RENDER,
+                name="voice reply decision",
+                parent_span_id=root_span_id,
+                metadata={
+                    "turn_id": turn["turn_id"],
+                    "requested": payload.get("requested"),
+                    "should_render": payload.get("should_render"),
+                    "reason": payload.get("reason"),
+                },
+            )
+            await self._trace.end_span(
+                span_id,
+                output_data={
+                    "requested": payload.get("requested"),
+                    "should_render": payload.get("should_render"),
+                    "reason": payload.get("reason"),
+                    "voice_profile_id": payload.get("voice_profile_id"),
+                },
+            )
+        return payload
+
+    async def _repair_voice_capability_refusal(
+        self,
+        *,
+        turn: dict[str, Any],
+        response_plan: ResponsePlan,
+        assistant_text: str,
+    ) -> str:
+        if self._voice is None:
+            return assistant_text
+        user_message = await self._chat_repo.get_message(turn["user_message_id"])
+        user_text = str(user_message.get("content_text") if user_message else "")
+        if not _looks_like_voice_reply_request(user_text):
+            return assistant_text
+        lowered = assistant_text.lower()
+        refusal_markers = (
+            "只能发文字",
+            "没办法用声音",
+            "不能用声音",
+            "无法用声音",
+            "不能发语音",
+            "无法发语音",
+            "can't send voice",
+            "cannot send voice",
+        )
+        if not any(marker in lowered for marker in refusal_markers):
+            return assistant_text
+        member_name = "小耀" if str(turn.get("member_id")) == "mem_xiaoyao" else "我"
+        return f"可以，我用{member_name}自己的声音回复你。"
+
+    async def _voice_context(self, turn: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        persona: dict[str, Any] = {}
+        heart: dict[str, Any] = {}
+        if self._persona_heart is None:
+            return persona, heart
+        try:
+            member = await self._members.get_member(turn["member_id"])
+            if member and member.get("persona_profile_id"):
+                profile = await self._persona_heart.get_profile(str(member["persona_profile_id"]))
+                persona = profile.model_dump(mode="json") if hasattr(profile, "model_dump") else dict(profile)
+        except Exception:
+            persona = {}
+        try:
+            state = await self._persona_heart.heart_state(
+                turn["member_id"],
+                text=None,
+                trace_id=turn.get("trace_id"),
+            )
+            heart = (
+                state.model_dump(mode="json")
+                if hasattr(state, "model_dump")
+                else dict(state)
+            )
+        except Exception:
+            heart = {}
+        return persona, heart
+
+    def _with_voice_reply(self, response_plan: ResponsePlan, voice_reply: dict[str, Any]) -> ResponsePlan:
+        if not voice_reply:
+            return response_plan
+        structured = {
+            **response_plan.structured_payload,
+            "voice_reply": voice_reply,
+            "voice_reply_requested": bool(voice_reply.get("requested")),
+            "voice_reply_rendered": bool(voice_reply.get("should_render")),
+        }
+        return response_plan.model_copy(update={"structured_payload": structured})
+
+    def _model_messages(
+        self,
+        context: ContextPacket,
+        user_text: str,
+        *,
+        channel_profile: str | None = None,
+        delivery_mode: str | None = None,
+        sender_label: str | None = None,
+        turn_id: str | None = None,
+    ) -> list[dict[str, str]]:
+        return self._model_coordinator.model_messages(
+            context,
+            user_text,
+            channel_profile=channel_profile,
+            delivery_mode=delivery_mode,
+            sender_label=sender_label,
+            turn_id=turn_id,
+        )
 
     async def _create_conversation(self, member: dict[str, Any], title: str) -> str:
         conversation_id = new_id("conv")
@@ -3304,14 +4833,14 @@ class ChatService:
         source_ref = f"clawhub:official/office/{_office_package_ref_suffix(office_request)}"
         if reason == "missing_enabled_skill":
             return (
-                f"我看出来你要{action}{doc_name}，但对应 Office Skill 还没安装并启用。"
-                "我先停在这里，没有假装生成文件。"
-                f"可以用 CLI 安装：cycber skills install {source_ref} --enable --grant-default。"
+                f"你是想{action}{doc_name}，但对应 Office Skill 还没装好。\n"
+                "我先把这步按住，没有假装已经生成。\n"
+                f"可以用 CLI 装上：cycber skills install {source_ref} --enable --grant-default。"
             )
         return (
-            f"我看出来你要{action}{doc_name}，对应 Skill 已找到，但当前成员还没有授权"
-            f" `{preferred_office_tool_name(office_request)}`。"
-            "没有授权我就不写文件，这点我比较守规矩。"
+            f"你是想{action}{doc_name}，Skill 已经找到了，但当前成员还没授权"
+            f" `{preferred_office_tool_name(office_request)}`。\n"
+            "没有授权我先不写文件，免得把边界踩歪。"
         )
 
     def _office_next_actions(self, office_request: OfficeChatRequest, reason: str) -> list[str]:
@@ -3333,23 +4862,23 @@ class ChatService:
         if task.status.value != "completed":
             if task.status.value == "waiting_approval":
                 return (
-                    f"{doc_name}{action}任务已创建，但还在等待确认；"
-                    "确认前不会写入或改动文件。"
+                    f"{doc_name}{action}任务已经起好了，但还在等确认；"
+                    "你点头前我不会写入或改动文件。"
                 )
             if task.status.value == "failed":
                 return (
-                    f"{doc_name}{action}任务没有完成。"
-                    "你可以让我缩小范围、换内容，或查看失败原因后重试。"
+                    f"{doc_name}{action}任务这次没跑完。"
+                    "你可以让我缩小范围、换内容，或者看一下失败原因再来一遍。"
                 )
             return (
-                f"{doc_name}{action}任务已创建，当前状态是 {task.status.value}，"
-                "我会按真实状态继续反馈。"
+                f"{doc_name}{action}任务已经起步，当前状态是 {task.status.value}，"
+                "我会按真实状态继续告诉你。"
             )
         office_artifact = _first_office_artifact(artifacts, office_request.document_type)
         if office_artifact is None:
             return (
-                f"{doc_name}{action}任务已跑完，但没有发现对应 Office 文件 artifact。"
-                "我不会把这当成真正完成，需要检查 Skill 输出。"
+                f"{doc_name}{action}任务已经跑完，但没找到对应的文件结果。"
+                "我不会把这当成真正完成，还是得回头看一下 Skill 输出。"
             )
         detail = _office_reply_detail(office_request)
         summary = _office_content_summary(office_request)
@@ -3394,16 +4923,16 @@ def _direct_route_reply(
         text = (
             "可以补下载端点说明，但我不会触发真实下载。建议把 artifact 下载设计成只读接口："
             "先校验成员对该任务的访问权限，再按 artifact id 读取元数据和文件流；响应头设置"
-            "准确的文件名、content type 和长度，并记录一次审计事件。这样用户拿到的是已生成"
-            "工件，不会因为一句“下载端点”就让浏览器跑出去。"
+            "准确的文件名、content type 和长度，并留下一条记录。这样用户拿到的是已生成"
+            "结果文件，不会因为一句“下载端点”就让浏览器跑出去。"
         )
         return text, "download_topic_explanation", {"download_topic": {"real_download": False}}
     if route_type == "skill_mcp_concept":
         text = (
-            "Skill 更像“做事方法包”：定义什么时候用、需要哪些受控工具、权限和步骤。"
+            "方法包更像“做事说明书”：定义什么时候用、需要哪些工具、权限和步骤。"
             "MCP 更像“外部工具插座”：把浏览器、数据库、SaaS 或本地服务以统一协议接进来。"
-            "简单说，Skill 决定怎么做，MCP 提供能调用的外部能力；两者都应该经过权限、"
-            "安全检查和审计记录，而不是绕过系统直接执行。"
+            "简单说，方法包决定怎么做，MCP 提供能调用的外部能力；两者都应该经过权限和"
+            "安全检查，而不是绕过系统直接执行。"
         )
         return text, "skill_mcp_concept", {"concept_answer": {"task_created": False}}
     return None
@@ -3478,7 +5007,7 @@ def _browser_read_page_error_reply(exc: AppError) -> str:
     if blocked_reason == "unsupported_scheme":
         return "这个链接不是可安全访问的 http/https 地址，所以没有打开。"
     if "task_binding_required" in reason_codes:
-        return "当前浏览器只读策略还没有生效，所以这次没有打开网页；需要刷新工具边界配置后重试。"
+        return "当前浏览器只读策略还没有生效，所以这次没有打开网页；需要刷新只读访问配置后重试。"
     return f"我没能打开这个网页：{exc.message}"
 
 
@@ -3497,6 +5026,33 @@ def _browser_read_page_payload(result: dict[str, Any]) -> dict[str, Any]:
         "redaction_summary": result.get("redaction_summary"),
         "untrusted_external_content": True,
     }
+
+
+def _terminal_command_reply(command: str, result: dict[str, Any]) -> str:
+    output = _clean_terminal_output(str(result.get("output_preview") or ""))
+    exit_code = result.get("exit_code")
+    if output:
+        return (
+            f"命令已在受控终端沙箱里执行完成，退出码是 {exit_code}。"
+            f"输出摘要：{_truncate_browser_text(output, 500)}"
+        )
+    return f"命令已在受控终端沙箱里执行完成，退出码是 {exit_code}，没有可展示输出。"
+
+
+def _terminal_command_error_reply(command: str, exc: AppError) -> str:
+    del command
+    if exc.code in {
+        ErrorCode.TOOL_APPROVAL_REQUIRED.value,
+        ErrorCode.TOOL_PERMISSION_DENIED.value,
+        ErrorCode.TOOL_OUTPUT_BLOCKED.value,
+        ErrorCode.SAFETY_BLOCKED.value,
+    }:
+        return "这条系统命令没有执行：终端安全策略认为它需要确认、越界，或风险过高。"
+    return f"这条系统命令没有执行：{exc.message}"
+
+
+def _clean_terminal_output(value: str) -> str:
+    return re.sub(r"\s+", " ", str(redact(value))).strip()
 
 
 def _browser_visible_text(raw: str) -> str:
@@ -3630,6 +5186,50 @@ def _title_from_text(text: str) -> str:
     if len(clean) <= 18:
         return clean or "新的对话"
     return f"{clean[:18]}..."
+
+
+def _channel_profile_for_turn(turn: dict[str, Any]) -> str:
+    experience = turn.get("experience") if isinstance(turn, dict) else {}
+    client_context = experience.get("client_context") if isinstance(experience, dict) else {}
+    if isinstance(client_context, dict) and client_context.get("ui_mode"):
+        return str(client_context["ui_mode"])
+    channel = experience.get("channel") if isinstance(experience, dict) else None
+    return str(channel or "local")
+
+
+def _prompt_payload_from_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    if not metadata:
+        return {}
+    keys = [
+        "prompt_assembly_version",
+        "prompt_snapshot_id",
+        "stable_prompt_hash",
+        "dynamic_context_hash",
+        "trusted_context_hash",
+        "history_context_hash",
+        "current_message_hash",
+        "untrusted_context_hash",
+        "prompt_section_ids",
+        "prompt_sections",
+        "prompt_mode",
+        "channel_profile",
+        "delivery_mode",
+    ]
+    return {key: metadata[key] for key in keys if key in metadata}
+
+
+def _looks_like_voice_reply_request(text: str) -> bool:
+    if not text:
+        return False
+    patterns = (
+        r"用(?:声音|语音|语言)回复",
+        r"用(?:你的|你)?(?:声音|语音)回",
+        r"(?:发|回)语音",
+        r"语音回复",
+        r"声音回复",
+        r"请(?:用|以)(?:声音|语音|语言)",
+    )
+    return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
 
 
 def _event_from_persisted(row: dict[str, Any]) -> ChatEvent:

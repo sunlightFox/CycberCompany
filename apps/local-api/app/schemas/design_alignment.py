@@ -95,6 +95,54 @@ class PersonaProfileListResponse(ApiModel):
     items: list[PersonaProfileResponse] = Field(default_factory=list)
 
 
+class SoulManifestUpdateRequest(ApiModel):
+    content: str
+    source: str = "api"
+
+
+class SoulManifestResponse(ApiModel):
+    member_id: EntityId
+    persona_profile_id: EntityId | None = None
+    file_path: str
+    content: str
+    content_hash: str
+    validation_status: str
+    validation_errors: list[dict[str, Any]] = Field(default_factory=list)
+    compiled_profile_id: EntityId | None = None
+    compiled_at: str | None = None
+    source: str = "file"
+    trace_id: EntityId | None = None
+    updated_at: str | None = None
+
+
+class SoulCompiledResponse(ApiModel):
+    member_id: EntityId
+    persona_profile_id: EntityId
+    display_name: str
+    summary: str
+    tone_policy: dict[str, Any] = Field(default_factory=dict)
+    disclosure_policy: dict[str, Any] = Field(default_factory=dict)
+    risk_tone_policy: dict[str, Any] = Field(default_factory=dict)
+    allowed_modes: list[str] = Field(default_factory=list)
+    default_mode: str = "default"
+    style_principles: list[str] = Field(default_factory=list)
+    forbidden_claims: list[str] = Field(default_factory=list)
+    mode_switch_rules: list[dict[str, Any]] = Field(default_factory=list)
+    consistency_markers: list[str] = Field(default_factory=list)
+    identity: str = ""
+    voice: dict[str, Any] = Field(default_factory=dict)
+    work_style: dict[str, Any] = Field(default_factory=dict)
+    boundaries: dict[str, Any] = Field(default_factory=dict)
+    memory_policy: dict[str, Any] = Field(default_factory=dict)
+    catchphrases: list[str] = Field(default_factory=list)
+    custom_notes: dict[str, Any] = Field(default_factory=dict)
+    custom_sections: list[dict[str, Any]] = Field(default_factory=list)
+    content_hash: str
+    validation_status: str
+    validation_errors: list[dict[str, Any]] = Field(default_factory=list)
+    compiled_at: str | None = None
+
+
 class HeartStateResponse(ApiModel):
     snapshot_id: EntityId
     organization_id: EntityId = "org_default"

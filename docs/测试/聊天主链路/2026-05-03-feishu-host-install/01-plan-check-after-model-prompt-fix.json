@@ -1,0 +1,155 @@
+{
+  "plan_status_code": 200,
+  "plan": {
+    "host_install_plan_id": "hip_750a57a127f84dc6bebe30069a55014b",
+    "organization_id": "org_default",
+    "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+    "requested_software": "飞书",
+    "install_source": {
+      "candidate_attempts": [
+        {
+          "match_confidence": 0.0,
+          "query": "飞书",
+          "source_type": "package_manager_search",
+          "status": "no_match"
+        },
+        {
+          "candidate_count": 1,
+          "query": "飞书",
+          "source_type": "model_candidate_expansion",
+          "status": "matched"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "飞书",
+          "source_type": "package_manager_search_model_candidates",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.96,
+          "query": "飞书",
+          "source_type": "official_winget_manifest",
+          "status": "matched"
+        }
+      ],
+      "final_match_confidence": 0.96,
+      "installer_sha256": "31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F",
+      "installer_url": "https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe",
+      "match_confidence": 0.96,
+      "match_reason": "official_winget_manifest_dynamic",
+      "model_assisted": true,
+      "model_candidate_count": 1,
+      "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+      "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Feishu/7.67.9/ByteDance.Feishu.installer.yaml",
+      "official_source_assisted": true,
+      "package_id": "ByteDance.Feishu",
+      "package_manager": "winget_manifest",
+      "publisher": "ByteDance",
+      "resolved_via": "official_winget_manifest",
+      "source_type": "official_manifest_installer_fallback",
+      "target_source_type": "official_installer_from_winget_manifest",
+      "trust": "official_manifest_with_sha256",
+      "version": "7.67.9"
+    },
+    "command_preview": {
+      "action": "install",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_feishu.exe'; try { Invoke-WebRequest -Uri 'https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }"
+      ],
+      "cwd": "host_default",
+      "env_policy": "minimal",
+      "executable": "pwsh",
+      "steps": [
+        {
+          "action": "install",
+          "args": [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_feishu.exe'; try { Invoke-WebRequest -Uri 'https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }"
+          ],
+          "cwd": "host_default",
+          "env_policy": "minimal",
+          "executable": "pwsh",
+          "fallback_for": "package_manager_install_failed",
+          "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Feishu/7.67.9/ByteDance.Feishu.installer.yaml",
+          "official_source": "https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe",
+          "package_manager": "winget_manifest",
+          "sha256": "31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F",
+          "step_key": "official_manifest_install_bytedance_feishu",
+          "step_type": "official_manifest_installer",
+          "target_package_id": "ByteDance.Feishu",
+          "timeout_seconds": 1800
+        }
+      ]
+    },
+    "impact_summary": {
+      "bootstrap_required": false,
+      "bootstrap_skipped_reason": "official_manifest_installer_available",
+      "checksum_verification": "sha256",
+      "host_action": "install",
+      "may_require_admin": true,
+      "modifies_global_environment": true,
+      "modifies_path_or_registry": true,
+      "package_resolution": {
+        "candidate_attempts": [
+          {
+            "match_confidence": 0.0,
+            "query": "飞书",
+            "source_type": "package_manager_search",
+            "status": "no_match"
+          },
+          {
+            "candidate_count": 1,
+            "query": "飞书",
+            "source_type": "model_candidate_expansion",
+            "status": "matched"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "飞书",
+            "source_type": "package_manager_search_model_candidates",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.96,
+            "query": "飞书",
+            "source_type": "official_winget_manifest",
+            "status": "matched"
+          }
+        ],
+        "final_match_confidence": 0.96,
+        "match_confidence": 0.96,
+        "match_reason": "official_winget_manifest_dynamic",
+        "model_assisted": true,
+        "model_candidate_count": 1,
+        "official_source_assisted": true,
+        "resolved_via": "official_winget_manifest",
+        "source_type": "official_winget_manifest",
+        "target_package_id": "ByteDance.Feishu"
+      },
+      "preserve_preexisting_install": true,
+      "real_execution_default": false,
+      "risk_level": "R6",
+      "rollback": "winget uninstall --id ByteDance.Feishu 或通过系统应用卸载 ByteDance.Feishu",
+      "writes_system_locations": true
+    },
+    "risk_level": "R6",
+    "status": "waiting_approval",
+    "approval_id": "apr_416de391be7141159b2a356d6bab3947",
+    "trace_id": "trc_b6d32bb97be844348bab3552db44388d",
+    "created_at": "2026-05-03T01:02:06.358290Z",
+    "updated_at": "2026-05-03T01:02:06.426274Z"
+  },
+  "timings": {
+    "host_install_plan_ms": 64251
+  },
+  "trace_ids": {
+    "plan": "trc_b6d32bb97be844348bab3552db44388d"
+  }
+}

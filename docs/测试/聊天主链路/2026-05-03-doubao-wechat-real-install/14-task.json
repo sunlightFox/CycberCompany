@@ -1,0 +1,283 @@
+{
+  "artifact_count": 1,
+  "artifact_plan": {
+    "expected_outputs": [
+      "task_report"
+    ]
+  },
+  "budget": {
+    "max_artifact_bytes": 10000000,
+    "max_loop_steps": 8,
+    "max_model_calls": 20,
+    "max_runtime_seconds": 1800,
+    "max_steps": 20,
+    "max_tool_calls": 30,
+    "max_total_cost": 0.0
+  },
+  "cancellation_reason": null,
+  "collaboration_plan_id": null,
+  "conversation_id": "conv_a65a519f36f2417ea05ecb86c34e44e0",
+  "created_at": "2026-05-02T18:49:36.900650Z",
+  "current_approval_id": null,
+  "failure_reason": null,
+  "goal": "安装本机软件 豆包",
+  "host_member_id": null,
+  "mode": "agent",
+  "organization_id": "org_default",
+  "owner_member_id": "mem_xiaoyao",
+  "parent_task_id": null,
+  "plan": {
+    "approval_strategy": {
+      "high_risk_step_keys": [],
+      "phase19_candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+      "phase25_selected_candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+      "required_before_execution": false,
+      "strategy": "step_gate"
+    },
+    "artifact_plan": {
+      "expected_outputs": [
+        "task_report"
+      ]
+    },
+    "assumptions": [
+      "规则优先 planner；未启用模型辅助规划。",
+      "Agent loop 只按预算执行当前任务步骤，不做后台自主动作。",
+      "未声明资产句柄，步骤只能使用无需资产的能力。"
+    ],
+    "budget": {
+      "max_artifact_bytes": 10000000,
+      "max_loop_steps": 8,
+      "max_model_calls": 20,
+      "max_runtime_seconds": 1800,
+      "max_steps": 20,
+      "max_tool_calls": 30,
+      "max_total_cost": 0.0
+    },
+    "checkpoint_policy": {
+      "checkpoint_after_each_step": true,
+      "persist_observations": true
+    },
+    "collaboration": {},
+    "constraints": {
+      "action": "install",
+      "phase52": "host_install",
+      "requested_software": "豆包"
+    },
+    "failure_policy": {
+      "allow_alternate_path_without_approval": false,
+      "on_step_failure": "pause_and_create_retry_plan"
+    },
+    "goal": "安装本机软件 豆包",
+    "host_member_id": null,
+    "mode": "agent",
+    "owner_member_id": "mem_xiaoyao",
+    "participants": [],
+    "planner_reason_codes": [
+      "mode_agent",
+      "rule_first_planner",
+      "explicit_mode_hint"
+    ],
+    "planner_type": "agent_exploratory_planner",
+    "preflight": {
+      "blocked_actions": [],
+      "brain_decision_id": null,
+      "capability_snapshot": {
+        "active_mcp_tool_count": 0,
+        "enabled_skill_count": 0,
+        "explicit_skill_available": false,
+        "mcp_tool_refs": [],
+        "model_assist": {
+          "enabled": false,
+          "reason": "rule_first_planner"
+        },
+        "ready_mcp_server_count": 0,
+        "reason_codes": [],
+        "skill_match_refs": []
+      },
+      "mcp_tool_refs": [],
+      "phase19": {
+        "candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+        "capability_candidate_count": 0,
+        "fallback_used": true,
+        "model_assist_enabled": false,
+        "policy_prune_count": 0,
+        "safe_final_step_count": 1,
+        "unsafe_prune_types": [],
+        "verification_status": "passed"
+      },
+      "phase25": {
+        "candidate_count": 1,
+        "candidate_only": true,
+        "fallback_reason": "no_routable_planner_brain",
+        "fallback_used": true,
+        "generation_id": "plangen_6ebc8007056b470abdee367c997bc52b",
+        "model_assist_attempted": false,
+        "model_call": {
+          "adapter": "brain_openai_compatible",
+          "fallback_reason": "no_routable_planner_brain",
+          "privacy_level": "medium",
+          "status": "fallback"
+        },
+        "quality_score": {
+          "artifact_clarity": 0.9,
+          "budget_efficiency": 1.0,
+          "candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+          "capability_fit": 1.0,
+          "created_at": "2026-05-02T18:49:36.911639+00:00",
+          "goal_coverage": 0.5,
+          "missing_information_handling": 0.72,
+          "reason_codes": [
+            "quality_scored",
+            "source_deterministic_rule_surrogate"
+          ],
+          "recoverability": 0.85,
+          "safety_compliance": 1.0,
+          "score_id": "planscore_8e8cc5c7a08046618fca91d4de20feeb",
+          "selected": true,
+          "step_coherence": 1.0,
+          "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+          "total_score": 0.8712
+        },
+        "selected_candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+        "selected_candidate_source": "deterministic_rule_surrogate",
+        "selected_quality_score": 0.8712
+      },
+      "planner_context": {
+        "phase52": {
+          "action": "install",
+          "workflow": "host_install"
+        }
+      },
+      "required_approvals": [],
+      "required_handles": [],
+      "skill_match_refs": []
+    },
+    "reflection_policy": {
+      "candidate_only": true,
+      "candidate_types": [
+        "memory_candidate",
+        "workflow_template_candidate",
+        "skill_candidate",
+        "failure_pattern_candidate"
+      ]
+    },
+    "required_assets": [],
+    "required_capabilities": [],
+    "risk_level": "R2",
+    "steps": [
+      {
+        "input": {},
+        "risk_level": "R1",
+        "step_key": "compose_report",
+        "step_type": "compose",
+        "title": "生成任务报告"
+      }
+    ],
+    "success_criteria": [
+      "任务产生可回放结果"
+    ],
+    "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+    "title": "安装本机软件 豆包"
+  },
+  "preflight": {
+    "blocked_actions": [],
+    "brain_decision_id": null,
+    "capability_snapshot": {
+      "active_mcp_tool_count": 0,
+      "enabled_skill_count": 0,
+      "explicit_skill_available": false,
+      "mcp_tool_refs": [],
+      "model_assist": {
+        "enabled": false,
+        "reason": "rule_first_planner"
+      },
+      "ready_mcp_server_count": 0,
+      "reason_codes": [],
+      "skill_match_refs": []
+    },
+    "mcp_tool_refs": [],
+    "phase19": {
+      "candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+      "capability_candidate_count": 0,
+      "fallback_used": true,
+      "model_assist_enabled": false,
+      "policy_prune_count": 0,
+      "safe_final_step_count": 1,
+      "unsafe_prune_types": [],
+      "verification_status": "passed"
+    },
+    "phase25": {
+      "candidate_count": 1,
+      "candidate_only": true,
+      "fallback_reason": "no_routable_planner_brain",
+      "fallback_used": true,
+      "generation_id": "plangen_6ebc8007056b470abdee367c997bc52b",
+      "model_assist_attempted": false,
+      "model_call": {
+        "adapter": "brain_openai_compatible",
+        "fallback_reason": "no_routable_planner_brain",
+        "privacy_level": "medium",
+        "status": "fallback"
+      },
+      "quality_score": {
+        "artifact_clarity": 0.9,
+        "budget_efficiency": 1.0,
+        "candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+        "capability_fit": 1.0,
+        "created_at": "2026-05-02T18:49:36.911639+00:00",
+        "goal_coverage": 0.5,
+        "missing_information_handling": 0.72,
+        "reason_codes": [
+          "quality_scored",
+          "source_deterministic_rule_surrogate"
+        ],
+        "recoverability": 0.85,
+        "safety_compliance": 1.0,
+        "score_id": "planscore_8e8cc5c7a08046618fca91d4de20feeb",
+        "selected": true,
+        "step_coherence": 1.0,
+        "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+        "total_score": 0.8712
+      },
+      "selected_candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+      "selected_candidate_source": "deterministic_rule_surrogate",
+      "selected_quality_score": 0.8712
+    },
+    "planner_context": {
+      "phase52": {
+        "action": "install",
+        "workflow": "host_install"
+      }
+    },
+    "required_approvals": [],
+    "required_handles": [],
+    "skill_match_refs": []
+  },
+  "progress": {
+    "completed_steps": 0,
+    "current_step_key": null,
+    "total_steps": 1
+  },
+  "result": {
+    "dry_run": false,
+    "exit_code": 0,
+    "host_action": "install",
+    "host_install_execution_id": "hie_a21abbba776a4b11b3ec75edaae81154",
+    "host_install_plan_id": "hip_d80f4351cce24aaabe3ffe8580b3128d",
+    "install_path_summary": "installed_by_package_manager",
+    "log_artifact_id": "art_da6c9bc29b314f7ba1c3e3aa294ff7d1",
+    "status": "installed",
+    "version_detected": "2.8.7",
+    "workflow": "host_install"
+  },
+  "risk_level": "R2",
+  "status": "completed",
+  "success_criteria": [
+    "任务产生可回放结果"
+  ],
+  "supervisor_mode": null,
+  "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+  "title": "安装本机软件 豆包",
+  "trace_id": "trc_2d43ab50205c4b099907edd330aaa97a",
+  "updated_at": "2026-05-02T18:51:13.875149Z"
+}

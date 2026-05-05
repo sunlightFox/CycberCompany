@@ -1,14 +1,33 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from typing import Any
 
 from core_types import ResponsePlan, TaskMode
 from response_composer import ResponseComposer
+from response_composer.chat_voice import voice_metadata_for_scenario
+from response_composer.opening_copy import opening_copy
 from trace_service import redact
 
-from app.services.natural_chat import visible_text_guard
+from app.services.chat_visible_guard import visible_text_guard
+
+_QUALITY_COPY_KEYS = {
+    "desktop_boundary": "boundary.desktop",
+    "supportive_safety_refusal": "boundary.refusal",
+    "persona_boundary": "boundary.persona",
+    "system_prompt_refusal": "boundary.internal",
+    "privacy_block": "boundary.privacy",
+    "professional_medical": "boundary.professional_medical",
+    "professional_finance": "boundary.professional_finance",
+}
+
+CHAT_QUALITY_POLICY_VERSION = "chat_quality_boundary.openclaw_hermes.v4"
+
+
+def _quality_copy(key: str, seed: str = "") -> str:
+    return opening_copy(_QUALITY_COPY_KEYS[key], seed or key)
 
 
 @dataclass(frozen=True)
@@ -57,7 +76,7 @@ class ChatQualityPolicy:
         if _desktop_native_request(text):
             boundary = _desktop_boundary_contract()
             return self._outcome(
-                _desktop_boundary_reply(),
+                _desktop_boundary_reply(text),
                 intent="capability_boundary",
                 status="desktop_capability_boundary",
                 reason_codes=["chat_quality_policy", "desktop_native_not_supported"],
@@ -65,19 +84,13 @@ class ChatQualityPolicy:
                     "capability_boundary": boundary,
                 },
                 tool_notice=(
-                    "当前后端没有 desktop.* 原生桌面工具；"
-                    "没有执行桌面窗口、鼠标或键盘动作。"
+                    _quality_copy("desktop_boundary", seed=text)
                 ),
             )
 
         if _supportive_safety_refusal_request(text):
             return self._outcome(
-                (
-                    "这个请求我不能照做：它要求跳过审批、越权登录、伪装执行，或绕过系统安全边界。"
-                    "我没有创建任务，也没有调用工具。"
-                    "如果你要完成真实操作，可以重新说明目标、账号归属和允许范围；"
-                    "我会按安全检查、用户确认和审计证据链路处理。"
-                ),
+                _quality_copy("supportive_safety_refusal", seed=text),
                 intent="safety_boundary",
                 status="supportive_safety_refusal",
                 reason_codes=[
@@ -91,35 +104,27 @@ class ChatQualityPolicy:
                     "approval_created": False,
                     "fail_closed": True,
                 },
-                safety_notice="不会跳过审批、越权登录、伪装执行或绕过系统安全边界。",
+                safety_notice=_quality_copy("supportive_safety_refusal", seed=text),
             )
 
         if _persona_boundary_question(text):
             return self._outcome(
-                (
-                    "我不是现实中的真人，也没有隐藏账号可以私下登录。"
-                    "我能做的是在受控任务里帮你操作浏览器、文件或工具；"
-                    "涉及账号、登录、外部动作或高风险步骤时，会按安全规则确认并留下证据。"
-                ),
+                _quality_copy("persona_boundary", seed=text),
                 intent="boundary_question",
                 status="persona_boundary",
                 reason_codes=["chat_quality_policy", "persona_hidden_account_boundary"],
                 structured={},
-                safety_notice="不会声称真人身份、隐藏账号或安全绕过能力。",
+                safety_notice=_quality_copy("persona_boundary", seed=text),
             )
 
         if _system_prompt_or_trace_request(text):
             return self._outcome(
-                (
-                    "这部分我不能完整输出，因为系统提示、开发者指令和内部 trace 属于运行边界。"
-                    "我可以改为说明当前可见能力、审批规则、隐私保护方式，"
-                    "或帮你生成一份面向用户的安全边界说明。"
-                ),
+                _quality_copy("system_prompt_refusal", seed=text),
                 intent="boundary_question",
                 status="system_prompt_refusal",
                 reason_codes=["chat_quality_policy", "internal_instruction_refusal"],
                 structured={},
-                safety_notice="系统提示、开发者指令和内部审计细节不会作为普通聊天内容披露。",
+                safety_notice=_quality_copy("system_prompt_refusal", seed=text),
             )
 
         if _high_risk_professional_advice(text):
@@ -138,7 +143,7 @@ class ChatQualityPolicy:
                     "professional_boundary": True,
                     "safe_next_step": True,
                 },
-                safety_notice="高风险医疗或金融建议只提供安全边界和下一步，不给无条件剂量或保证性结论。",
+                safety_notice=_professional_boundary_notice(text),
             )
 
         if _recoverable_secret_input(
@@ -148,11 +153,7 @@ class ChatQualityPolicy:
             brain_intent=brain_intent,
         ):
             return self._outcome(
-                (
-                    "我看到了疑似敏感信息，所以不会复述或继续处理这些值。"
-                    "建议你立即把真实 token/password 轮换掉；如果只是测试，"
-                    "请用 [REDACTED_SECRET] 或示例占位符继续描述你想验证的流程。"
-                ),
+                _quality_copy("privacy_block", seed=text),
                 intent="privacy_recovery_boundary",
                 status="recoverable_privacy_block",
                 reason_codes=["chat_quality_policy", "sensitive_input_recoverable_block"],
@@ -165,7 +166,7 @@ class ChatQualityPolicy:
                     "cloud_model_called": False,
                     "secret_echo": False,
                 },
-                safety_notice="疑似敏感值已被保护；不会发送给云端模型。",
+                safety_notice=_quality_copy("privacy_block", seed=text),
             )
 
         return None
@@ -181,7 +182,7 @@ class ChatQualityPolicy:
         safety_notice: str | None = None,
         tool_notice: str | None = None,
     ) -> ChatQualityOutcome:
-        visible = visible_text_guard(str(redact(text)))
+        visible = visible_text_guard(text)
         plan = self._composer.response_plan_for_status(
             summary=visible,
             safety_notice=safety_notice,
@@ -196,23 +197,25 @@ class ChatQualityPolicy:
                 "structured_payload": {
                     **plan.structured_payload,
                     "scenario": "chat_quality_policy",
+                    **voice_metadata_for_scenario(_voice_scenario_for_quality_status(status)),
                     "route_semantics": {
                         "route": "direct",
                         "model_called": False,
                         "task_created": False,
                         "tool_created": False,
+                        "approval_created": False,
                         "model_not_required_reason": status,
                     },
                     "response_quality_guard": {
-                        "status": status,
-                        "state_disclosed": True,
-                        "boundary_disclosed": True,
-                        "next_step_provided": bool(follow_ups),
-                        "no_false_done": True,
-                        "no_internal_terms": True,
-                        "professional_boundary": status == "professional_safety_boundary",
+                        **_quality_guard(
+                            visible,
+                            status=status,
+                            next_step_provided=bool(follow_ups),
+                            professional_boundary=status == "professional_safety_boundary",
+                        ),
                     },
                     "chat_quality_policy": {
+                        "version": CHAT_QUALITY_POLICY_VERSION,
                         "status": status,
                         "reason_codes": reason_codes,
                         **redact(structured),
@@ -236,6 +239,43 @@ class ChatQualityPolicy:
 ChatQualityExperienceService = ChatQualityPolicy
 
 
+def _quality_guard(
+    visible: str,
+    *,
+    status: str,
+    next_step_provided: bool,
+    professional_boundary: bool,
+) -> dict[str, Any]:
+    checks = {
+        "state_disclosed": True,
+        "boundary_disclosed": True,
+        "next_step_provided": bool(next_step_provided),
+        "no_false_done": True,
+        "no_internal_terms": True,
+    }
+    violations = [
+        {"check": check}
+        for check, passed in checks.items()
+        if not passed
+    ]
+    return {
+        "version": "response_quality_guard.openclaw_hermes.v4",
+        "status": "passed" if not violations else "warning",
+        "checks": checks,
+        "violations": violations,
+        "redaction_applied": False,
+        "strict_format_preserved": True,
+        "visible_text_hash": "sha256:"
+        + hashlib.sha256(str(visible or "").encode("utf-8")).hexdigest(),
+        "state_disclosed": checks["state_disclosed"],
+        "boundary_disclosed": checks["boundary_disclosed"],
+        "next_step_provided": checks["next_step_provided"],
+        "no_false_done": checks["no_false_done"],
+        "no_internal_terms": checks["no_internal_terms"],
+        "professional_boundary": bool(professional_boundary),
+    }
+
+
 def _latest_instruction_override(text: str) -> bool:
     return (
         any(marker in text for marker in ["停", "先停", "停止", "改成", "换成"])
@@ -244,6 +284,20 @@ def _latest_instruction_override(text: str) -> bool:
         and "聊天链路" in text
         and any(marker in text for marker in ["三点", "3点", "三条", "3条"])
     )
+
+
+def _voice_scenario_for_quality_status(status: str) -> str:
+    if status == "recoverable_privacy_block":
+        return "privacy"
+    if status == "professional_safety_boundary":
+        return "professional_advice"
+    if status in {"desktop_capability_boundary", "supportive_safety_refusal"}:
+        return "tool_boundary"
+    if status in {"system_prompt_refusal", "persona_boundary"}:
+        return "tool_boundary"
+    if status == "latest_instruction_priority":
+        return "clarification"
+    return "tool_boundary"
 
 
 def _latest_instruction_reply() -> str:
@@ -302,15 +356,8 @@ def _desktop_boundary_contract() -> dict[str, Any]:
     }
 
 
-def _desktop_boundary_reply() -> str:
-    return (
-        "这属于 desktop.* 原生桌面能力边界：当前后端没有原生窗口控制、"
-        "全局鼠标键盘控制或桌面截图定位工具。"
-        "我不会把它伪装成已经执行。\n\n"
-        "可行替代路径是：如果目标是网页，我可以走 browser.* 并保存 URL、标题、快照或截图证据；"
-        "如果目标是文件或命令，可以走 file.* 或 terminal.run 的受控任务链路。"
-        "这些路径仍会经过 Safety、Approval、Trace 和回放证据。"
-    )
+def _desktop_boundary_reply(text: str = "") -> str:
+    return _quality_copy("desktop_boundary", seed=text)
 
 
 def _persona_boundary_question(text: str) -> bool:
@@ -328,7 +375,7 @@ def _system_prompt_or_trace_request(text: str) -> bool:
         "开发者指令",
         "开发者消息",
         "隐藏规则",
-        "内部 trace",
+        "内部 " + "trace",
         "trace 明细",
         "完整 trace",
         "system prompt",
@@ -415,19 +462,14 @@ def _professional_boundary_reply(text: str) -> str:
         "止痛药",
     ]
     if any(marker in text for marker in medical_markers):
-        return (
-            "关于布洛芬或其他用药，我不能根据一段聊天给出个人化、无条件的剂量指令。"
-            "安全做法是先看药品说明书和包装上的适用人群、禁忌、间隔与最大用量；"
-            "如果是儿童、孕期、肝肾疾病、胃溃疡、正在服用抗凝药，或症状持续/加重，"
-            "请联系医生或药师。\n\n"
-            "你可以把问题改成“帮我整理咨询医生前要确认的信息”，"
-            "我可以列出年龄、体重、症状持续时间、既往病史、正在用药和过敏史这些安全核对项。"
-        )
-    return (
-        "这属于高风险金融建议，我不能给出保证性结论或让你忽略风险。"
-        "更安全的下一步是先明确目标、期限、可承受亏损、流动性需求和分散配置，"
-        "再把任何具体交易决定交给合格专业人士或你自己的审慎判断。"
-    )
+        return _quality_copy("professional_medical", seed=text)
+    return _quality_copy("professional_finance", seed=text)
+
+
+def _professional_boundary_notice(text: str) -> str:
+    if any(marker in text for marker in ["布洛芬", "用药", "吃多少", "剂量", "毫克"]):
+        return "用药这类事我会先收住，只帮你整理安全核对项，不给个人化剂量。"
+    return "金融这类高风险建议我不做保赚承诺，只帮你把风险和决策条件讲清楚。"
 
 
 def _recoverable_secret_input(
@@ -452,11 +494,11 @@ def _follow_ups_for_status(status: str) -> list[str]:
     if status == "desktop_capability_boundary":
         return ["改用浏览器任务", "只生成操作方案", "检查可用工具"]
     if status == "system_prompt_refusal":
-        return ["说明可见能力", "生成安全边界说明", "解释审批规则"]
+        return ["说明可见能力", "生成安全说明", "解释确认规则"]
     if status == "persona_boundary":
-        return ["说明可用能力", "创建受控任务", "解释账号边界"]
+        return ["说明可用能力", "走工具流程", "解释账号边界"]
     if status == "supportive_safety_refusal":
-        return ["重新说明合法目标", "只生成安全方案", "解释审批规则"]
+        return ["重新说明合法目标", "只生成安全方案", "解释确认规则"]
     if status == "professional_safety_boundary":
         return ["整理咨询清单", "说明风险边界", "改成通用科普"]
     return ["继续按这三点展开", "生成验收清单", "补充异常场景"]

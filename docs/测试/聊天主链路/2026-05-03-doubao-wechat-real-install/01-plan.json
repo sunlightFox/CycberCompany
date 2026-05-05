@@ -1,0 +1,101 @@
+{
+  "approval_id": null,
+  "command_preview": {},
+  "created_at": "2026-05-02T18:44:18.547326Z",
+  "host_install_plan_id": "hip_844fcd8f740b4710abd2048796b44c06",
+  "impact_summary": {
+    "host_action": "install",
+    "manual_only": true,
+    "package_resolution": {
+      "candidate_attempts": [
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "package_manager_search",
+          "status": "no_match"
+        },
+        {
+          "candidate_count": 0,
+          "query": "豆包",
+          "source_type": "model_candidate_expansion",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "package_manager_search_model_candidates",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "official_winget_manifest",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "official_website_verified_source",
+          "status": "no_match",
+          "verification": null
+        }
+      ],
+      "model_assisted": false,
+      "model_candidate_count": 0,
+      "official_source_assisted": false,
+      "resolved_via": "no_high_confidence_candidate"
+    },
+    "reason_codes": [
+      "no_high_confidence_healthy_package_candidate"
+    ],
+    "safe_next_step": "请提供可信包管理器 ID、官网安装源，或修复当前包管理器环境后重试。"
+  },
+  "install_source": {
+    "candidate_attempts": [
+      {
+        "match_confidence": 0.0,
+        "query": "豆包",
+        "source_type": "package_manager_search",
+        "status": "no_match"
+      },
+      {
+        "candidate_count": 0,
+        "query": "豆包",
+        "source_type": "model_candidate_expansion",
+        "status": "no_match"
+      },
+      {
+        "match_confidence": 0.0,
+        "query": "豆包",
+        "source_type": "package_manager_search_model_candidates",
+        "status": "no_match"
+      },
+      {
+        "match_confidence": 0.0,
+        "query": "豆包",
+        "source_type": "official_winget_manifest",
+        "status": "no_match"
+      },
+      {
+        "match_confidence": 0.0,
+        "query": "豆包",
+        "source_type": "official_website_verified_source",
+        "status": "no_match",
+        "verification": null
+      }
+    ],
+    "model_assisted": false,
+    "model_candidate_count": 0,
+    "official_source_assisted": false,
+    "reason": "package_manager_candidate_unavailable",
+    "resolved_via": "no_high_confidence_candidate",
+    "source_type": "manual_only"
+  },
+  "organization_id": "org_default",
+  "requested_software": "豆包",
+  "risk_level": "R6",
+  "status": "manual_only",
+  "task_id": "tsk_2ce8fcd837484e6594c5b1acbd7ee05b",
+  "trace_id": "trc_86c5200be4aa4ad1a7203eece6a8e5e7",
+  "updated_at": "2026-05-02T18:44:18.547326Z"
+}

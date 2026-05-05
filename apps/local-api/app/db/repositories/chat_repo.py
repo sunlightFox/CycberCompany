@@ -87,7 +87,9 @@ class ChatRepository:
         rows = await self._db.fetch_all(
             """
             SELECT message_id, conversation_id, turn_id, author_type, author_id, content_type,
-                   content_text, content_json, trace_id, created_at
+                   content_text, content_json, trace_id, voice_profile_id,
+                   voice_render_job_id, audio_uri, audio_content_type, voice_metadata_json,
+                   created_at
             FROM messages
             WHERE conversation_id = ?
             ORDER BY created_at ASC
@@ -104,7 +106,9 @@ class ChatRepository:
         rows = await self._db.fetch_all(
             """
             SELECT message_id, conversation_id, turn_id, author_type, author_id, content_type,
-                   content_text, content_json, trace_id, created_at
+                   content_text, content_json, trace_id, voice_profile_id,
+                   voice_render_job_id, audio_uri, audio_content_type, voice_metadata_json,
+                   created_at
             FROM messages
             WHERE conversation_id = ?
             ORDER BY created_at DESC
@@ -121,7 +125,9 @@ class ChatRepository:
         row = await self._db.fetch_one(
             """
             SELECT message_id, conversation_id, turn_id, author_type, author_id, content_type,
-                   content_text, content_json, trace_id, created_at
+                   content_text, content_json, trace_id, voice_profile_id,
+                   voice_render_job_id, audio_uri, audio_content_type, voice_metadata_json,
+                   created_at
             FROM messages
             WHERE message_id = ?
             """,
@@ -141,14 +147,20 @@ class ChatRepository:
         content_text: str | None,
         content: dict[str, Any],
         trace_id: str | None,
+        voice_profile_id: str | None = None,
+        voice_render_job_id: str | None = None,
+        audio_uri: str | None = None,
+        audio_content_type: str | None = None,
+        voice_metadata: dict[str, Any] | None = None,
         created_at: str,
     ) -> None:
         await self._db.execute(
             """
             INSERT INTO messages (
               message_id, conversation_id, turn_id, author_type, author_id, content_type,
-              content_text, content_json, trace_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              content_text, content_json, trace_id, voice_profile_id, voice_render_job_id,
+              audio_uri, audio_content_type, voice_metadata_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 message_id,
@@ -160,6 +172,11 @@ class ChatRepository:
                 content_text,
                 json.dumps(content, ensure_ascii=False),
                 trace_id,
+                voice_profile_id,
+                voice_render_job_id,
+                audio_uri,
+                audio_content_type,
+                json.dumps(voice_metadata or {}, ensure_ascii=False),
                 created_at,
             ),
         )
@@ -168,6 +185,36 @@ class ChatRepository:
                 "INSERT INTO messages_fts (content_text, message_id) VALUES (?, ?)",
                 (content_text, message_id),
             )
+
+    async def update_message_voice_refs(
+        self,
+        message_id: str,
+        *,
+        voice_profile_id: str | None = None,
+        voice_render_job_id: str | None = None,
+        audio_uri: str | None = None,
+        audio_content_type: str | None = None,
+        voice_metadata: dict[str, Any] | None = None,
+    ) -> None:
+        await self._db.execute(
+            """
+            UPDATE messages
+            SET voice_profile_id = COALESCE(?, voice_profile_id),
+                voice_render_job_id = COALESCE(?, voice_render_job_id),
+                audio_uri = COALESCE(?, audio_uri),
+                audio_content_type = COALESCE(?, audio_content_type),
+                voice_metadata_json = COALESCE(?, voice_metadata_json)
+            WHERE message_id = ?
+            """,
+            (
+                voice_profile_id,
+                voice_render_job_id,
+                audio_uri,
+                audio_content_type,
+                json.dumps(voice_metadata or {}, ensure_ascii=False) if voice_metadata else None,
+                message_id,
+            ),
+        )
 
     async def insert_turn(
         self,
@@ -201,6 +248,362 @@ class ChatRepository:
                 created_at,
             ),
         )
+
+    async def insert_message_envelope(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO chat_message_envelopes (
+              envelope_id, organization_id, turn_id, conversation_id, session_id,
+              member_id, user_message_id, dedupe_key, raw_payload_redacted_json,
+              content_parts_json, context_refs_json, model_safe_text,
+              normalized_summary_json, ingress_metadata_json, status, trace_id,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["envelope_id"],
+                data.get("organization_id") or "org_default",
+                data["turn_id"],
+                data["conversation_id"],
+                data["session_id"],
+                data["member_id"],
+                data.get("user_message_id"),
+                data["dedupe_key"],
+                json.dumps(data.get("raw_payload_redacted") or {}, ensure_ascii=False),
+                json.dumps(data.get("content_parts") or [], ensure_ascii=False),
+                json.dumps(data.get("context_refs") or [], ensure_ascii=False),
+                data.get("model_safe_text") or "",
+                json.dumps(data.get("normalized_summary") or {}, ensure_ascii=False),
+                json.dumps(data.get("ingress_metadata") or {}, ensure_ascii=False),
+                data.get("status") or "normalized",
+                data.get("trace_id"),
+                data["created_at"],
+                data.get("updated_at") or data["created_at"],
+            ),
+        )
+
+    async def get_message_envelope_by_turn(self, turn_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM chat_message_envelopes WHERE turn_id = ?",
+            (turn_id,),
+        )
+        return self._message_envelope_from_row(dict(row)) if row else None
+
+    async def find_recent_envelope_by_dedupe_key(
+        self,
+        dedupe_key: str,
+        *,
+        now: str,
+        ttl_seconds: int,
+    ) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM chat_message_envelopes
+            WHERE dedupe_key = ?
+              AND julianday(created_at) >= julianday(?) - (? / 86400.0)
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (dedupe_key, now, ttl_seconds),
+        )
+        return self._message_envelope_from_row(dict(row)) if row else None
+
+    async def find_collectable_envelope(
+        self,
+        *,
+        session_id: str,
+        member_id: str,
+        conversation_id: str,
+        now: str,
+        debounce_ms: int,
+    ) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT env.*
+            FROM chat_message_envelopes env
+            JOIN chat_turn_queue queue ON queue.turn_id = env.turn_id
+            JOIN chat_turns turn ON turn.turn_id = env.turn_id
+            WHERE env.session_id = ?
+              AND env.member_id = ?
+              AND env.conversation_id = ?
+              AND queue.queue_policy = 'collect'
+              AND queue.status = 'queued'
+              AND turn.status = 'created'
+              AND julianday(env.updated_at) >= julianday(?) - (? / 86400000.0)
+            ORDER BY env.updated_at DESC
+            LIMIT 1
+            """,
+            (session_id, member_id, conversation_id, now, debounce_ms),
+        )
+        return self._message_envelope_from_row(dict(row)) if row else None
+
+    async def merge_message_envelope(
+        self,
+        turn_id: str,
+        *,
+        raw_payload_redacted: dict[str, Any],
+        content_parts: list[dict[str, Any]],
+        context_refs: list[dict[str, Any]],
+        model_safe_text: str,
+        normalized_summary: dict[str, Any],
+        ingress_metadata: dict[str, Any],
+        status: str,
+        updated_at: str,
+    ) -> None:
+        await self._db.execute(
+            """
+            UPDATE chat_message_envelopes
+            SET raw_payload_redacted_json = ?,
+                content_parts_json = ?,
+                context_refs_json = ?,
+                model_safe_text = ?,
+                normalized_summary_json = ?,
+                ingress_metadata_json = ?,
+                status = ?,
+                updated_at = ?
+            WHERE turn_id = ?
+            """,
+            (
+                json.dumps(raw_payload_redacted, ensure_ascii=False),
+                json.dumps(content_parts, ensure_ascii=False),
+                json.dumps(context_refs, ensure_ascii=False),
+                model_safe_text,
+                json.dumps(normalized_summary, ensure_ascii=False),
+                json.dumps(ingress_metadata, ensure_ascii=False),
+                status,
+                updated_at,
+                turn_id,
+            ),
+        )
+
+    async def update_user_message_content(
+        self,
+        message_id: str,
+        *,
+        content_type: str,
+        content_text: str,
+        content: dict[str, Any],
+    ) -> None:
+        await self._db.execute(
+            """
+            UPDATE messages
+            SET content_type = ?,
+                content_text = ?,
+                content_json = ?
+            WHERE message_id = ?
+            """,
+            (
+                content_type,
+                content_text,
+                json.dumps(content, ensure_ascii=False),
+                message_id,
+            ),
+        )
+        try:
+            await self._db.execute("DELETE FROM messages_fts WHERE message_id = ?", (message_id,))
+        except Exception:
+            await self._db.execute(
+                """
+                DELETE FROM messages_fts
+                WHERE rowid IN (
+                  SELECT rowid FROM messages_fts WHERE message_id = ?
+                )
+                """,
+                (message_id,),
+            )
+        if content_text:
+            await self._db.execute(
+                "INSERT INTO messages_fts (content_text, message_id) VALUES (?, ?)",
+                (content_text, message_id),
+            )
+
+    async def insert_queue_item(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO chat_turn_queue (
+              queue_id, organization_id, turn_id, session_id, conversation_id,
+              member_id, status, queue_policy, position, locked_by, locked_until,
+              dedupe_key, created_at, updated_at, started_at, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["queue_id"],
+                data.get("organization_id") or "org_default",
+                data["turn_id"],
+                data["session_id"],
+                data["conversation_id"],
+                data["member_id"],
+                data.get("status") or "queued",
+                data.get("queue_policy") or "immediate",
+                int(data.get("position") or 0),
+                data.get("locked_by"),
+                data.get("locked_until"),
+                data.get("dedupe_key"),
+                data["created_at"],
+                data.get("updated_at") or data["created_at"],
+                data.get("started_at"),
+                data.get("completed_at"),
+            ),
+        )
+
+    async def update_queue_item(
+        self,
+        turn_id: str,
+        *,
+        status: str,
+        updated_at: str,
+        started_at: str | None = None,
+        completed_at: str | None = None,
+        locked_by: str | None = None,
+        locked_until: str | None = None,
+    ) -> None:
+        await self._db.execute(
+            """
+            UPDATE chat_turn_queue
+            SET status = ?,
+                updated_at = ?,
+                started_at = COALESCE(?, started_at),
+                completed_at = COALESCE(?, completed_at),
+                locked_by = ?,
+                locked_until = ?
+            WHERE turn_id = ?
+            """,
+            (status, updated_at, started_at, completed_at, locked_by, locked_until, turn_id),
+        )
+
+    async def update_queue_policy(
+        self,
+        turn_id: str,
+        *,
+        status: str,
+        queue_policy: str,
+        updated_at: str,
+        locked_until: str | None = None,
+    ) -> None:
+        await self._db.execute(
+            """
+            UPDATE chat_turn_queue
+            SET status = ?,
+                queue_policy = ?,
+                updated_at = ?,
+                locked_until = ?
+            WHERE turn_id = ?
+            """,
+            (status, queue_policy, updated_at, locked_until, turn_id),
+        )
+
+    async def get_queue_item_by_turn(self, turn_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM chat_turn_queue WHERE turn_id = ?",
+            (turn_id,),
+        )
+        return self._queue_item_from_row(dict(row)) if row else None
+
+    async def has_running_session_turn(self, session_id: str, exclude_turn_id: str) -> bool:
+        row = await self._db.fetch_one(
+            """
+            SELECT turn_id
+            FROM chat_turn_queue
+            WHERE session_id = ?
+              AND turn_id != ?
+              AND status = 'running'
+            LIMIT 1
+            """,
+            (session_id, exclude_turn_id),
+        )
+        return row is not None
+
+    async def claim_turn_for_session(
+        self,
+        turn_id: str,
+        *,
+        session_id: str,
+        locked_by: str,
+        locked_until: str | None,
+        updated_at: str,
+    ) -> bool:
+        rowcount = await self._db.execute(
+            """
+            UPDATE chat_turn_queue
+            SET status = 'running',
+                locked_by = ?,
+                locked_until = ?,
+                started_at = COALESCE(started_at, ?),
+                updated_at = ?
+            WHERE turn_id = ?
+              AND session_id = ?
+              AND status = 'queued'
+              AND NOT EXISTS (
+                SELECT 1
+                FROM chat_turn_queue other
+                WHERE other.session_id = chat_turn_queue.session_id
+                  AND other.turn_id != chat_turn_queue.turn_id
+                  AND other.status = 'running'
+              )
+            """,
+            (locked_by, locked_until, updated_at, updated_at, turn_id, session_id),
+        )
+        return rowcount == 1
+
+    async def next_queued_turn_for_session(
+        self,
+        session_id: str,
+        exclude_turn_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM chat_turn_queue
+            WHERE session_id = ?
+              AND status = 'queued'
+            ORDER BY created_at ASC
+            """,
+            (session_id,),
+        )
+        for row in rows:
+            item = self._queue_item_from_row(dict(row))
+            if exclude_turn_id is None or item["turn_id"] != exclude_turn_id:
+                return item
+        return None
+
+    async def insert_context_compaction(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO chat_context_compactions (
+              compaction_id, organization_id, turn_id, conversation_id, reason, status,
+              token_estimate_before, token_estimate_after, summary_redacted,
+              payload_redacted_json, trace_id, created_at, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["compaction_id"],
+                data.get("organization_id") or "org_default",
+                data["turn_id"],
+                data["conversation_id"],
+                data["reason"],
+                data.get("status") or "completed",
+                int(data.get("token_estimate_before") or 0),
+                int(data.get("token_estimate_after") or 0),
+                data.get("summary"),
+                json.dumps(data.get("payload") or {}, ensure_ascii=False),
+                data.get("trace_id"),
+                data["created_at"],
+                data.get("completed_at"),
+            ),
+        )
+
+    async def list_context_compactions(self, turn_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM chat_context_compactions
+            WHERE turn_id = ?
+            ORDER BY created_at ASC
+            """,
+            (turn_id,),
+        )
+        return [self._context_compaction_from_row(dict(row)) for row in rows]
 
     async def get_turn(self, turn_id: str) -> dict[str, Any] | None:
         row = await self._db.fetch_one("SELECT * FROM chat_turns WHERE turn_id = ?", (turn_id,))
@@ -364,8 +767,9 @@ class ChatRepository:
             INSERT INTO chat_turn_recovery_attempts (
               recovery_attempt_id, organization_id, turn_id, task_id, attempt_index,
               failure_type, root_cause, recovery_action, status, diagnostic_payload_json,
-              trace_id, started_at, completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              recovery_stage, error_signature, action_result_json, trace_id, started_at,
+              completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["recovery_attempt_id"],
@@ -378,6 +782,9 @@ class ChatRepository:
                 data["recovery_action"],
                 data["status"],
                 json.dumps(data.get("diagnostic_payload", {}), ensure_ascii=False),
+                data.get("recovery_stage") or "task",
+                data.get("error_signature"),
+                json.dumps(data.get("action_result", {}), ensure_ascii=False),
                 data.get("trace_id"),
                 data["started_at"],
                 data.get("completed_at"),
@@ -391,18 +798,21 @@ class ChatRepository:
         status: str,
         diagnostic_payload: dict[str, Any],
         completed_at: str,
+        action_result: dict[str, Any] | None = None,
     ) -> None:
         await self._db.execute(
             """
             UPDATE chat_turn_recovery_attempts
             SET status = ?,
                 diagnostic_payload_json = ?,
+                action_result_json = ?,
                 completed_at = ?
             WHERE recovery_attempt_id = ?
             """,
             (
                 status,
                 json.dumps(diagnostic_payload, ensure_ascii=False),
+                json.dumps(action_result or {}, ensure_ascii=False),
                 completed_at,
                 recovery_attempt_id,
             ),
@@ -1049,6 +1459,23 @@ class ChatRepository:
 
     def _message_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         row["content"] = json.loads(row.pop("content_json"))
+        row["voice_metadata"] = json.loads(row.pop("voice_metadata_json") or "{}")
+        return row
+
+    def _message_envelope_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        row["raw_payload_redacted"] = json.loads(row.pop("raw_payload_redacted_json") or "{}")
+        row["content_parts"] = json.loads(row.pop("content_parts_json") or "[]")
+        row["context_refs"] = json.loads(row.pop("context_refs_json") or "[]")
+        row["normalized_summary"] = json.loads(row.pop("normalized_summary_json") or "{}")
+        row["ingress_metadata"] = json.loads(row.pop("ingress_metadata_json") or "{}")
+        return row
+
+    def _queue_item_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        return row
+
+    def _context_compaction_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        row["summary"] = row.pop("summary_redacted")
+        row["payload"] = json.loads(row.pop("payload_redacted_json") or "{}")
         return row
 
     def _turn_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
@@ -1065,6 +1492,8 @@ class ChatRepository:
 
     def _recovery_attempt_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         row["diagnostic_payload"] = json.loads(row.pop("diagnostic_payload_json") or "{}")
+        row["action_result"] = json.loads(row.pop("action_result_json", "{}") or "{}")
+        row["recovery_stage"] = row.get("recovery_stage") or "task"
         return row
 
     def _working_state_from_row(self, row: dict[str, Any]) -> dict[str, Any]:

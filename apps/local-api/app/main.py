@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ExceptionHandler
 
 from app.api import (
+    routes_agent_workbench,
     routes_approvals,
     routes_artifacts,
     routes_assets,
@@ -48,6 +49,7 @@ from app.api import (
     routes_tasks,
     routes_tools,
     routes_traces,
+    routes_voice,
     routes_vector,
 )
 from app.core.config import ConfigError
@@ -117,6 +119,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_org_policies.roles_router)
     app.include_router(routes_members.router)
     app.include_router(routes_chat.router)
+    app.include_router(routes_agent_workbench.router)
     app.include_router(routes_brains.router)
     app.include_router(routes_brains.decision_router)
     app.include_router(routes_model_routing.router)
@@ -140,6 +143,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_execution_boundary.router)
     app.include_router(routes_external_platform.router)
     app.include_router(routes_media.router)
+    app.include_router(routes_voice.router)
     app.include_router(routes_skills.router)
     app.include_router(routes_plugins.router)
     app.include_router(routes_mcp.router)

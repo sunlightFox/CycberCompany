@@ -13,8 +13,9 @@ class MemberRepository:
         rows = await self._db.fetch_all(
             """
             SELECT member_id, organization_id, department_id, role_id, display_name, avatar_uri,
-                   status, default_brain_id, persona_profile_id, created_from_shell_id,
-                   created_from_template_id, created_at, updated_at
+                   status, default_brain_id, persona_profile_id, heart_profile_json,
+                   memory_policy_json, created_from_shell_id, created_from_template_id,
+                   metadata_json, created_at, updated_at
             FROM members
             ORDER BY created_at ASC
             """
@@ -25,12 +26,28 @@ class MemberRepository:
         row = await self._db.fetch_one(
             """
             SELECT member_id, organization_id, department_id, role_id, display_name, avatar_uri,
-                   status, default_brain_id, persona_profile_id, created_from_shell_id,
-                   created_from_template_id, created_at, updated_at
+                   status, default_brain_id, persona_profile_id, heart_profile_json,
+                   memory_policy_json, created_from_shell_id, created_from_template_id,
+                   metadata_json, created_at, updated_at
             FROM members
             WHERE member_id = ?
             """,
             (member_id,),
+        )
+        return dict(row) if row else None
+
+    async def get_member_by_persona_profile_id(self, persona_profile_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT member_id, organization_id, department_id, role_id, display_name, avatar_uri,
+                   status, default_brain_id, persona_profile_id, heart_profile_json,
+                   memory_policy_json, created_from_shell_id, created_from_template_id,
+                   metadata_json, created_at, updated_at
+            FROM members
+            WHERE persona_profile_id = ?
+            LIMIT 1
+            """,
+            (persona_profile_id,),
         )
         return dict(row) if row else None
 

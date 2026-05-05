@@ -7,8 +7,14 @@ from core_types import (
     EntityId,
     MediaAnalysis,
     MediaAsset,
+    MediaChatBinding,
     MediaDerivative,
     MediaEditPlan,
+    MediaIORecord,
+    MediaMultimodalSummary,
+    MediaProviderHealthRecord,
+    MediaSpeechRender,
+    MediaSpeechTranscript,
     TaskArtifact,
 )
 from pydantic import Field
@@ -41,6 +47,30 @@ class MediaExtractAudioRequest(ApiModel):
 class MediaTranscribeAudioRequest(ApiModel):
     provider: str = "local"
     language: str | None = None
+    force: bool = False
+
+
+class MediaSTTRequest(ApiModel):
+    provider: str = "local"
+    language: str | None = None
+    force: bool = False
+
+
+class MediaTTSRequest(ApiModel):
+    task_id: EntityId
+    organization_id: EntityId | None = None
+    text: str = Field(min_length=1)
+    provider: str = "local"
+    voice: str | None = None
+    output_format: str = "wav"
+    sensitivity: str = "low"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MediaSummarizeRequest(ApiModel):
+    provider: str = "local"
+    summary_type: str | None = None
+    force: bool = False
 
 
 class MediaSceneDetectRequest(ApiModel):
@@ -91,7 +121,21 @@ class MediaOperationResponse(ApiModel):
     analysis: MediaAnalysis | None = None
     edit_plan: MediaEditPlan | None = None
     artifacts: list[TaskArtifact] = Field(default_factory=list)
+    io_records: list[MediaIORecord] = Field(default_factory=list)
+    provider_health: list[MediaProviderHealthRecord] = Field(default_factory=list)
+    transcripts: list[MediaSpeechTranscript] = Field(default_factory=list)
+    renders: list[MediaSpeechRender] = Field(default_factory=list)
+    summaries: list[MediaMultimodalSummary] = Field(default_factory=list)
+    chat_bindings: list[MediaChatBinding] = Field(default_factory=list)
     status: str
     message: str
     degraded_reason: str | None = None
     evidence: dict[str, Any] = Field(default_factory=dict)
+
+
+class MediaProviderHealthResponse(ApiModel):
+    items: list[MediaProviderHealthRecord] = Field(default_factory=list)
+
+
+class MediaIORecordResponse(ApiModel):
+    items: list[MediaIORecord] = Field(default_factory=list)

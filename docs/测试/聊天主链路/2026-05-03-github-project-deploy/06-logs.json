@@ -1,0 +1,123 @@
+{
+  "body": {
+    "content_preview": "clone=completed\r\nstack=static backend=wsl\r\nprocess_pid=13348\r\nprocess_command=[REDACTED_LOCAL_PATH] -m http.server 5588 --bind 127.0.0.1\r\nprocess_endpoint=http://127.0.0.1:5588\r\ninstall_deps=skipped_static\r\nbuild=skipped\r\nrun=process_started endpoint=http://127.0.0.1:5588\r\nhealth_check=passed status=200",
+    "deployment": {
+      "backend_type": "wsl",
+      "created_at": "2026-05-03T09:38:59.317024Z",
+      "current_step_key": "health_check",
+      "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "endpoint": {
+        "managed_process_id": "mpr_81519791ad6648e8ad7002f02dafcf9f",
+        "port": 5588,
+        "url": "http://127.0.0.1:5588"
+      },
+      "failure_reason": null,
+      "health": {
+        "degraded_isolation": false,
+        "log_artifact_id": "art_8d2dfe0c4d0a45d6b58b2955116b8dc4",
+        "status": "passed"
+      },
+      "organization_id": "org_default",
+      "plan": {
+        "approval_strategy": {
+          "approval_binding_hash": "sha256:aecf9e7d30a812bebc4003a827cb563b8f888f89a1c9a6884b3c1d4eda9b5951",
+          "approval_binds": [
+            "source_uri",
+            "backend_type",
+            "workspace_root",
+            "network_policy",
+            "install_commands",
+            "port_range"
+          ],
+          "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+          "required_before_execution": true,
+          "status": "required"
+        },
+        "backend_selection": {
+          "backend_candidates": [
+            {
+              "available": false,
+              "backend_type": "container",
+              "reason": "docker"
+            },
+            {
+              "available": true,
+              "backend_type": "wsl",
+              "reason": "wsl"
+            },
+            {
+              "available": true,
+              "backend_type": "local_workspace",
+              "reason": "policy guarded fallback"
+            }
+          ],
+          "blocked_reason": null,
+          "degraded_reason": null,
+          "selected_backend": "wsl"
+        },
+        "backend_type": "wsl",
+        "degraded_isolation": false,
+        "preferred_port": 5588,
+        "risk_level": "R4",
+        "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+        "steps": [
+          {
+            "risk_level": "R3",
+            "status": "planned",
+            "step_key": "clone",
+            "tool": "project.clone"
+          },
+          {
+            "risk_level": "R1",
+            "status": "planned",
+            "step_key": "detect_stack",
+            "tool": "project.detect_stack"
+          },
+          {
+            "risk_level": "R3",
+            "status": "planned",
+            "step_key": "ensure_toolchain",
+            "tool": "runtime.ensure"
+          },
+          {
+            "risk_level": "R4",
+            "status": "planned",
+            "step_key": "install_deps",
+            "tool": "project.install_deps"
+          },
+          {
+            "risk_level": "R3",
+            "status": "planned",
+            "step_key": "build",
+            "tool": "project.build"
+          },
+          {
+            "risk_level": "R4",
+            "status": "planned",
+            "step_key": "run",
+            "tool": "project.run"
+          },
+          {
+            "risk_level": "R2",
+            "status": "planned",
+            "step_key": "health_check",
+            "tool": "project.health_check"
+          }
+        ],
+        "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+      },
+      "status": "healthy",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+      "updated_at": "2026-05-03T09:39:05.284077Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "log_artifact_id": "art_8d2dfe0c4d0a45d6b58b2955116b8dc4",
+    "next_step": null,
+    "reason_code": "deployment_log_available",
+    "recoverable": false,
+    "status": "completed"
+  },
+  "status_code": 200,
+  "trace_id": "trc_47e6eb89a21f47c58ff8804f0349bfc0"
+}

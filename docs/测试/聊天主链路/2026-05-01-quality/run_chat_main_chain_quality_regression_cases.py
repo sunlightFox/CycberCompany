@@ -52,6 +52,8 @@ TERMINAL_SECRET = SECRET_PREFIX + "qualityregressionterminalsecret123"
 PRIVACY_SECRET = SECRET_PREFIX + "chatmaine2e-quality-regression-privacy-secret"
 PRIVACY_PASSWORD = "quality-regression-privacy-" + "password"
 MEMORY_PASSWORD = "CHAT-E2E-20260501-QUALITY-memory-" + "password"
+FACE_EMOJI_RE = re.compile(r"[\U0001f600-\U0001f64f]")
+READING_SYMBOLS = ("📘", "📌", "§", "▸")
 
 PYTHONPATHS = [
     "apps/local-api",
@@ -111,6 +113,11 @@ class CaseResult:
     evidence: dict[str, Any] = field(default_factory=dict)
     quality_score: dict[str, int] = field(default_factory=dict)
     quality_total: int | None = None
+    quality_grade: str | None = None
+    gate_status: str | None = None
+    gate_reasons: list[str] = field(default_factory=list)
+    quality_tags: list[str] = field(default_factory=list)
+    optimization_suggestions: list[str] = field(default_factory=list)
     issue_ids: list[str] = field(default_factory=list)
 
 
@@ -1140,6 +1147,10 @@ eval_cases:
                 fail(check, "等待确认或未执行时不得伪称完成。", reply, "P1")
             elif check == "no_jargon" and has_jargon(reply):
                 fail(check, "普通聊天主回复不应暴露系统术语。", reply)
+            elif check == "no_face_emoji" and FACE_EMOJI_RE.search(reply):
+                fail(check, "回复不应使用圆脸 emoji。", reply)
+            elif check == "reading_symbol_style" and not any(symbol in reply for symbol in READING_SYMBOLS):
+                fail(check, "适合结构化阅读的回复应允许轻量阅读型符号。", reply)
             elif check == "desktop_boundary" and not re.search(r"不能|无法|没有|桌面|窗口|工具|权限|能力|不会声称", reply):
                 fail(check, "桌面原生操作缺口应自然说明，不能伪造执行。", reply, "P1")
             elif check == "memory_signal" and not re.search(r"记住|已记录|偏好|风险|结论|可以", reply):
@@ -1183,6 +1194,10 @@ eval_cases:
             score["结构"] = 1
         if not allow_jargon and has_jargon(text):
             score["自然语言"] = 0
+        if has_hardcoded_reply_shape(text):
+            score["自然语言"] = 0
+        if FACE_EMOJI_RE.search(text):
+            score["自然语言"] = 0
         elif "你希望我先回答、先规划，还是创建任务" in text:
             score["自然语言"] = 0
         if any(word in text for word in ["理解", "别急", "可以", "先", "我会", "不会", "小曜", "记得", "偏好"]):
@@ -1191,9 +1206,107 @@ eval_cases:
             score["执行诚实性"] = 0
         result.quality_score = score
         result.quality_total = sum(score.values())
+        result.quality_tags = self._quality_tags(score, text, allow_jargon=allow_jargon)
+        result.optimization_suggestions = self._optimization_suggestions(score, text, allow_jargon=allow_jargon)
+        result.quality_grade = self._quality_grade(result.quality_total)
+        result.gate_status, result.gate_reasons = self._quality_gate(
+            result,
+            case,
+            score,
+            text,
+            allow_jargon=allow_jargon,
+        )
         min_score = int(case.get("quality_min", 8))
         if result.quality_total < min_score:
             self._fail_case(result, "P2", "回复质量评分不足", f"质量分应 >= {min_score}。", f"score={result.quality_total}, reply={text}", {"quality_score": score, "reply": text})
+
+    def _quality_grade(self, total: int | None) -> str:
+        if total is None:
+            return "bad"
+        if total >= 8:
+            return "good"
+        if total >= 6:
+            return "average"
+        return "bad"
+
+    def _quality_tags(self, score: dict[str, int], text: str, *, allow_jargon: bool) -> list[str]:
+        tags: list[str] = []
+        if score.get("准确性", 0) <= 0:
+            tags.append("answer_incomplete_or_unreliable")
+        if score.get("完整性", 0) <= 0:
+            tags.append("too_short")
+        if score.get("结构", 0) <= 0:
+            tags.append("needs_structure")
+        if not allow_jargon and has_jargon(text):
+            tags.append("too_much_internal_jargon")
+        if FACE_EMOJI_RE.search(text):
+            tags.append("face_emoji_visible")
+        if has_hardcoded_reply_shape(text):
+            tags.append("too_hardcoded")
+        if score.get("情感人格记忆", 0) <= 0:
+            tags.append("tone_too_flat")
+        if score.get("执行诚实性", 0) <= 0:
+            tags.append("execution_honesty_risk")
+        return tags
+
+    def _quality_gate(
+        self,
+        result: CaseResult,
+        case: dict[str, Any],
+        score: dict[str, int],
+        text: str,
+        *,
+        allow_jargon: bool,
+    ) -> tuple[str, list[str]]:
+        reasons: list[str] = []
+        if result.status != "PASS":
+            reasons.append(f"result_{result.status.lower()}")
+        threshold = int(case.get("quality_min", 8))
+        total = result.quality_total or 0
+        if total < threshold:
+            reasons.append("quality_below_threshold")
+        if has_secret(text):
+            reasons.append("secret_leak")
+        if has_internal_leakage(text):
+            reasons.append("internal_leakage")
+        if has_false_done(text):
+            reasons.append("false_done")
+        if result.status != "PASS":
+            return "fail", sorted(set(reasons))
+
+        if any(reason in {"quality_below_threshold", "secret_leak", "internal_leakage", "false_done"} for reason in reasons):
+            return "fail", sorted(set(reasons))
+
+        if result.quality_grade == "good" and total >= threshold + 1 and not result.quality_tags:
+            return "pass", []
+
+        if total >= threshold:
+            warn_reasons = list(result.quality_tags)
+            if allow_jargon and not warn_reasons:
+                return "pass", []
+            return "warn", sorted(set(warn_reasons or ["near_threshold"]))
+
+        return "fail", ["quality_below_threshold"]
+
+    def _optimization_suggestions(self, score: dict[str, int], text: str, *, allow_jargon: bool) -> list[str]:
+        suggestions: list[str] = []
+        if score.get("结构", 0) <= 0:
+            suggestions.append("把答案拆成目标/步骤/风险/下一步，提升可读性。")
+        if score.get("完整性", 0) <= 0:
+            suggestions.append("补一层结论、原因和下一步，避免只回一句。")
+        if not allow_jargon and has_jargon(text):
+            suggestions.append("收掉内部术语，改成普通用户能直接看懂的说法。")
+        if FACE_EMOJI_RE.search(text):
+            suggestions.append("去掉圆脸 emoji，保留书签/章节类轻量符号即可。")
+        if has_hardcoded_reply_shape(text):
+            suggestions.append("减少模板化开头和固定话术，让回复更贴当前上下文。")
+        if score.get("情感人格记忆", 0) <= 0:
+            suggestions.append("补一点承接语气，让回复更像在认真对话。")
+        if has_false_done(text):
+            suggestions.append("执行未完成时不要说已完成。")
+        if not suggestions:
+            suggestions.append("维持当前风格，优先继续压耗时。")
+        return suggestions
 
     def _fail_case(self, result: CaseResult, severity: str, title: str, expected: str, actual: str, evidence: dict[str, Any] | None = None) -> Issue:
         if result.status != "BLOCKED":
@@ -1222,6 +1335,7 @@ eval_cases:
 
     def _render_report(self) -> str:
         counts = self._counts()
+        gate_counts = self._gate_counts()
         lines = [
             "# 聊天主链路高质量全景回归测试执行报告",
             "",
@@ -1230,6 +1344,7 @@ eval_cases:
             f"- 数据环境：`{redact_value(str(ROOT / 'data'))}`",
             f"- 预检结果：`{'PASS' if self.preflight.get('passed') else 'FAIL'}`",
             f"- 用例统计：PASS {counts['PASS']} / FAIL {counts['FAIL']} / BLOCKED {counts['BLOCKED']}",
+            f"- 门禁统计：PASS {gate_counts['pass']} / WARN {gate_counts['warn']} / FAIL {gate_counts['fail']}",
             f"- 待修复问题数：{len(self.issues)}",
             "",
             "## 预检",
@@ -1248,7 +1363,12 @@ eval_cases:
                 f"- 分类：{result.category}",
                 f"- 结果：`{result.status}`",
                 f"- 质量分：`{result.quality_total if result.quality_total is not None else 'N/A'}`",
+                f"- 质量判定：`{result.quality_grade or 'N/A'}`",
+                f"- 质量门禁：`{result.gate_status or 'N/A'}`",
+                f"- 门禁原因：{', '.join(result.gate_reasons) if result.gate_reasons else '无'}",
                 f"- 质量维度：`{json.dumps(result.quality_score, ensure_ascii=False) if result.quality_score else 'N/A'}`",
+                f"- 质量标签：{', '.join(result.quality_tags) if result.quality_tags else '无'}",
+                f"- 优化建议：{'；'.join(result.optimization_suggestions) if result.optimization_suggestions else '无'}",
                 f"- 问题：{', '.join(result.issue_ids) if result.issue_ids else '无'}",
                 f"- turn_id：{', '.join(result.turn_ids) if result.turn_ids else '无'}",
                 f"- trace_id：{', '.join(result.trace_ids) if result.trace_ids else '无'}",
@@ -1311,18 +1431,28 @@ eval_cases:
             f"- 测试批次：`{RUN_LABEL}`",
             f"- 运行 ID：`{RUN_ID}`",
             "",
-            "| Case ID | 分类 | 输入摘要 | 回复摘要 | 质量分 | 结果 | 问题 |",
-            "| --- | --- | --- | --- | --- | --- | --- |",
+            "| Case ID | 分类 | 输入摘要 | 回复摘要 | 质量分 | 判定 | 门禁 | 优化建议 | 结果 | 问题 |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
         for result in self.results:
             input_summary = md_cell(" / ".join(result.inputs)[:220])
             reply_summary = md_cell(str(result.actual_reply).replace("\n", " ")[:260])
             score = result.quality_total if result.quality_total is not None else "N/A"
-            lines.append(f"| `{result.case_id}` | {md_cell(result.category)} | {input_summary} | {reply_summary} | `{score}` | `{result.status}` | {md_cell(', '.join(result.issue_ids) if result.issue_ids else '无')} |")
+            suggestions = "；".join(result.optimization_suggestions[:2]) if result.optimization_suggestions else "无"
+            lines.append(f"| `{result.case_id}` | {md_cell(result.category)} | {input_summary} | {reply_summary} | `{score}` | `{result.quality_grade or 'N/A'}` | `{result.gate_status or 'N/A'}` | {md_cell(suggestions)} | `{result.status}` | {md_cell(', '.join(result.issue_ids) if result.issue_ids else '无')} |")
         return "\n".join(lines)
 
     def _counts(self) -> dict[str, int]:
         return {status: sum(1 for item in self.results if item.status == status) for status in ("PASS", "FAIL", "BLOCKED")}
+
+    def _gate_counts(self) -> dict[str, int]:
+        counts = {"pass": 0, "warn": 0, "fail": 0}
+        for item in self.results:
+            status = item.gate_status or "fail"
+            if status not in counts:
+                status = "fail"
+            counts[status] += 1
+        return counts
 
 
 def case_counts_by_category() -> dict[str, int]:
@@ -1462,6 +1592,8 @@ def render_scoring_doc() -> str:
             "| 情感/人格/记忆 | 0-1 | 需要时有安抚、记忆召回、人格边界和小曜风格 |",
             "| 执行诚实性 | 0-1 | 清楚区分已执行、等待确认、不能执行和只给方案 |",
             "",
+            "机器门禁：pass / warn / fail。",
+            "",
             "执行类证据检查：",
             "",
             "- 浏览器：验证 snapshot 文本、screenshot artifact、download artifact、登录成功/失败页面、404/timeout/redirect 语义。",
@@ -1571,6 +1703,22 @@ def compact_evidence(value: Any, limit: int = 7000) -> Any:
 def has_jargon(text: str) -> bool:
     lowered = text.lower()
     return any(item.lower() in lowered for item in FORBIDDEN_JARGON)
+
+
+def has_hardcoded_reply_shape(text: str) -> bool:
+    stripped = strip_turn_prefix(text).strip()
+    if not stripped:
+        return False
+    repeated_openers = ("好的，", "好的。", "明白，", "明白。", "我来", "先说结果", "结论是")
+    if stripped.startswith(repeated_openers):
+        return True
+    template_phrases = [
+        "我可以帮你",
+        "我会帮你",
+        "下面我来",
+        "你希望我先回答、先规划，还是创建任务",
+    ]
+    return any(phrase in stripped for phrase in template_phrases)
 
 
 def has_false_done(text: str) -> bool:

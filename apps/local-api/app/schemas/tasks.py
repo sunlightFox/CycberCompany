@@ -8,6 +8,9 @@ from core_types import (
     ApiModel,
     ApprovalDetail,
     CollaborationReplay,
+    CollaborationContextBoundary,
+    CollaborationHandoffRecord,
+    CollaborationRoutingDecision,
     EntityId,
     HostDecision,
     MemberAvailability,
@@ -178,6 +181,31 @@ class CollaborationReplayResponse(CollaborationReplay):
     pass
 
 
+class CollaborationRoutePreviewRequest(ApiModel):
+    host_member_id: EntityId | None = None
+    mode: str | None = None
+    resource_handle_ids: list[EntityId] = Field(default_factory=list)
+
+
+class CollaborationRoutePreviewResponse(ApiModel):
+    routing_decision: CollaborationRoutingDecision
+    selected_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    rejected_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    context_boundaries: list[CollaborationContextBoundary] = Field(default_factory=list)
+
+
+class CollaborationRoutingDecisionListResponse(ApiModel):
+    items: list[CollaborationRoutingDecision] = Field(default_factory=list)
+
+
+class CollaborationHandoffRecordListResponse(ApiModel):
+    items: list[CollaborationHandoffRecord] = Field(default_factory=list)
+
+
+class CollaborationContextBoundaryListResponse(ApiModel):
+    items: list[CollaborationContextBoundary] = Field(default_factory=list)
+
+
 class TaskParticipantListResponse(ApiModel):
     items: list[TaskParticipant] = Field(default_factory=list)
 
@@ -200,6 +228,11 @@ class HostDecisionListResponse(ApiModel):
 
 class ParticipantRemoveRequest(ApiModel):
     reason: str = "removed_by_user"
+
+
+class CollaborationHandoffRequest(ApiModel):
+    to_member_id: EntityId
+    reason: str = "task_handoff"
 
 
 class SubtaskActionRequest(ApiModel):

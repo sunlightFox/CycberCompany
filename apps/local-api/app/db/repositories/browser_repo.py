@@ -9,6 +9,9 @@ PROFILE_UPDATE_COLUMNS = {
     "display_name",
     "status",
     "sensitivity",
+    "health_status",
+    "last_probe_at",
+    "recovery_hint",
     "allowed_domains",
     "allowed_domains_json",
     "blocked_domains",
@@ -17,6 +20,8 @@ PROFILE_UPDATE_COLUMNS = {
     "policy_json",
     "metadata",
     "metadata_json",
+    "reuse_policy",
+    "reuse_policy_json",
     "updated_at",
     "revoked_at",
     "cleared_at",
@@ -27,8 +32,16 @@ SESSION_UPDATE_COLUMNS = {
     "asset_id",
     "status",
     "sensitivity",
+    "health_status",
+    "login_state",
+    "last_probe_at",
+    "invalidation_reason",
+    "recovery_hint",
     "session_metadata",
     "session_metadata_json",
+    "reuse_policy",
+    "reuse_policy_json",
+    "restore_context_ref",
     "secret_ref",
     "last_used_at",
     "updated_at",
@@ -48,8 +61,9 @@ class BrowserRepository:
               browser_profile_id, organization_id, display_name, profile_type,
               storage_backend, status, sensitivity, allowed_domains_json,
               blocked_domains_json, policy_json, metadata_json, created_by_member_id,
-              trace_id, created_at, updated_at, revoked_at, cleared_at, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              trace_id, created_at, updated_at, revoked_at, cleared_at, expires_at,
+              health_status, last_probe_at, recovery_hint, reuse_policy_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["browser_profile_id"],
@@ -70,6 +84,10 @@ class BrowserRepository:
                 data.get("revoked_at"),
                 data.get("cleared_at"),
                 data.get("expires_at"),
+                data.get("health_status", "unknown"),
+                data.get("last_probe_at"),
+                data.get("recovery_hint"),
+                _json(data.get("reuse_policy", {})),
             ),
         )
 
@@ -128,8 +146,10 @@ class BrowserRepository:
               browser_session_id, organization_id, browser_profile_id, asset_id,
               login_domain, auth_type, status, sensitivity, session_metadata_json,
               secret_ref, created_by_member_id, trace_id, created_at, updated_at,
-              last_used_at, expires_at, revoked_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              last_used_at, expires_at, revoked_at, health_status, login_state,
+              last_probe_at, invalidation_reason, recovery_hint, reuse_policy_json,
+              restore_context_ref
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["browser_session_id"],
@@ -149,6 +169,13 @@ class BrowserRepository:
                 data.get("last_used_at"),
                 data.get("expires_at"),
                 data.get("revoked_at"),
+                data.get("health_status", "unknown"),
+                data.get("login_state", "unknown"),
+                data.get("last_probe_at"),
+                data.get("invalidation_reason"),
+                data.get("recovery_hint"),
+                _json(data.get("reuse_policy", {})),
+                data.get("restore_context_ref"),
             ),
         )
 
@@ -334,17 +361,124 @@ class BrowserRepository:
             ),
         )
 
+    async def insert_health_probe(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO browser_session_health_probes (
+              probe_id, organization_id, browser_profile_id, browser_session_id,
+              probe_type, health_status, login_state, provider_status, failure_reason,
+              recovery_hint, evidence_redacted_json, redaction_summary_json, trace_id, probed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["probe_id"],
+                data["organization_id"],
+                data["browser_profile_id"],
+                data["browser_session_id"],
+                data["probe_type"],
+                data["health_status"],
+                data["login_state"],
+                data.get("provider_status"),
+                data.get("failure_reason"),
+                data.get("recovery_hint"),
+                _json(data.get("evidence_redacted", {})),
+                _json(data.get("redaction_summary", {})),
+                data.get("trace_id"),
+                data["probed_at"],
+            ),
+        )
+
+    async def list_health_probes(self, browser_session_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM browser_session_health_probes
+            WHERE browser_session_id = ?
+            ORDER BY probed_at DESC
+            """,
+            (browser_session_id,),
+        )
+        return [_health_probe_from_row(dict(row)) for row in rows]
+
+    async def insert_page_state(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO browser_page_states (
+              page_state_id, organization_id, task_id, tool_call_id, browser_profile_id,
+              browser_session_id, browser_evidence_id, page_key, action, action_status,
+              current_url, title, http_status, dom_summary_json, network_summary_json,
+              console_summary_json, task_checkpoint_json, redaction_summary_json, trace_id,
+              created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["page_state_id"],
+                data["organization_id"],
+                data.get("task_id"),
+                data.get("tool_call_id"),
+                data.get("browser_profile_id"),
+                data.get("browser_session_id"),
+                data.get("browser_evidence_id"),
+                data["page_key"],
+                data["action"],
+                data["action_status"],
+                data.get("current_url"),
+                data.get("title"),
+                data.get("http_status"),
+                _json(data.get("dom_summary", {})),
+                _json(data.get("network_summary", {})),
+                _json(data.get("console_summary", {})),
+                _json(data.get("task_checkpoint", {})),
+                _json(data.get("redaction_summary", {})),
+                data.get("trace_id"),
+                data["created_at"],
+            ),
+        )
+
+    async def list_page_states(
+        self,
+        *,
+        browser_session_id: str | None = None,
+        task_id: str | None = None,
+        page_key: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        where = ["1 = 1"]
+        params: list[Any] = []
+        if browser_session_id:
+            where.append("browser_session_id = ?")
+            params.append(browser_session_id)
+        if task_id:
+            where.append("task_id = ?")
+            params.append(task_id)
+        if page_key:
+            where.append("page_key = ?")
+            params.append(page_key)
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM browser_page_states
+            WHERE {' AND '.join(where)}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [_page_state_from_row(dict(row)) for row in rows]
+
 
 def _profile_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["allowed_domains"] = json.loads(row.pop("allowed_domains_json") or "[]")
     row["blocked_domains"] = json.loads(row.pop("blocked_domains_json") or "[]")
     row["policy"] = json.loads(row.pop("policy_json") or "{}")
     row["metadata"] = json.loads(row.pop("metadata_json") or "{}")
+    row["reuse_policy"] = json.loads(row.pop("reuse_policy_json") or "{}")
     return row
 
 
 def _session_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["session_metadata"] = json.loads(row.pop("session_metadata_json") or "{}")
+    row["reuse_policy"] = json.loads(row.pop("reuse_policy_json") or "{}")
     return row
 
 
@@ -361,6 +495,21 @@ def _evidence_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["redaction_summary"] = json.loads(row.pop("redaction_summary_json") or "{}")
     row["safety_decision"] = json.loads(row.pop("safety_decision_json") or "{}")
     row["untrusted_external_content"] = bool(row["untrusted_external_content"])
+    return row
+
+
+def _health_probe_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["evidence_redacted"] = json.loads(row.pop("evidence_redacted_json") or "{}")
+    row["redaction_summary"] = json.loads(row.pop("redaction_summary_json") or "{}")
+    return row
+
+
+def _page_state_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["dom_summary"] = json.loads(row.pop("dom_summary_json") or "{}")
+    row["network_summary"] = json.loads(row.pop("network_summary_json") or "{}")
+    row["console_summary"] = json.loads(row.pop("console_summary_json") or "{}")
+    row["task_checkpoint"] = json.loads(row.pop("task_checkpoint_json") or "{}")
+    row["redaction_summary"] = json.loads(row.pop("redaction_summary_json") or "{}")
     return row
 
 

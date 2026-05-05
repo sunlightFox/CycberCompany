@@ -40,7 +40,7 @@ TASK_TRANSITIONS: dict[str, set[str]] = {
     TaskStatus.PAUSED.value: {TaskStatus.RUNNING.value, TaskStatus.CANCELLED.value},
     TaskStatus.SYNTHESIZING.value: {TaskStatus.COMPLETED.value, TaskStatus.FAILED.value},
     TaskStatus.COMPLETED.value: {TaskStatus.ARCHIVED.value},
-    TaskStatus.FAILED.value: {TaskStatus.ARCHIVED.value},
+    TaskStatus.FAILED.value: {TaskStatus.RUNNING.value, TaskStatus.ARCHIVED.value},
     TaskStatus.CANCELLED.value: {TaskStatus.ARCHIVED.value},
     TaskStatus.PRECHECK_FAILED.value: {TaskStatus.ARCHIVED.value},
     TaskStatus.ARCHIVED.value: set(),

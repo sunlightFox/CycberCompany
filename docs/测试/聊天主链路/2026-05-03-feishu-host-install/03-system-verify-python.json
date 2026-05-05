@@ -1,0 +1,36 @@
+{
+  "uninstall_entries": [
+    {
+      "RegistryKey": "Feishu",
+      "DisplayName": "飞书",
+      "DisplayVersion": "7.67.9",
+      "Publisher": "Beijing Feishu Technology Co., Ltd.",
+      "InstallLocation": null,
+      "DisplayIcon": "\"C:\\Users\\Administrator\\AppData\\Local\\Feishu\\icon.ico\"",
+      "UninstallString": "\"C:\\Users\\Administrator\\AppData\\Local\\Feishu\\uninstall.exe\"",
+      "QuietUninstallString": null
+    }
+  ],
+  "executable_candidates": [
+    {
+      "Path": "C:\\Users\\Administrator\\AppData\\Local\\Feishu\\Feishu.exe",
+      "Exists": true
+    },
+    {
+      "Path": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Feishu\\Feishu.exe",
+      "Exists": false
+    },
+    {
+      "Path": "C:\\Users\\Administrator\\AppData\\Local\\Feishu\\Application\\Feishu.exe",
+      "Exists": false
+    },
+    {
+      "Path": "C:\\Program Files\\Feishu\\Feishu.exe",
+      "Exists": false
+    },
+    {
+      "Path": "C:\\Program Files (x86)\\Feishu\\Feishu.exe",
+      "Exists": false
+    }
+  ]
+}

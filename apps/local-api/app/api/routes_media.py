@@ -11,12 +11,17 @@ from app.schemas.media import (
     MediaExportArtifactRequest,
     MediaExtractAudioRequest,
     MediaExtractFramesRequest,
+    MediaIORecordResponse,
     MediaImportArtifactRequest,
     MediaOperationResponse,
     MediaProbeRequest,
+    MediaProviderHealthResponse,
     MediaRenderEditRequest,
     MediaSceneDetectRequest,
+    MediaSTTRequest,
+    MediaSummarizeRequest,
     MediaTimelineRequest,
+    MediaTTSRequest,
     MediaTranscribeAudioRequest,
 )
 from app.schemas.tasks import ToolExecuteRequest, ToolExecuteResponse
@@ -109,6 +114,61 @@ async def transcribe_audio(
         payload,
         trace_id=getattr(request.state, "trace_id", None),
     )
+
+
+@router.post("/{media_id}/stt", response_model=MediaOperationResponse)
+async def stt_media(
+    media_id: str,
+    payload: MediaSTTRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> MediaOperationResponse:
+    return await registry.media_service.stt(
+        media_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.post("/tts", response_model=MediaOperationResponse)
+async def tts_media(
+    payload: MediaTTSRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> MediaOperationResponse:
+    return await registry.media_service.tts(
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.post("/{media_id}/summarize", response_model=MediaOperationResponse)
+async def summarize_media(
+    media_id: str,
+    payload: MediaSummarizeRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> MediaOperationResponse:
+    return await registry.media_service.summarize(
+        media_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.get("/{media_id}/io-records", response_model=MediaIORecordResponse)
+async def list_media_io_records(
+    media_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> MediaIORecordResponse:
+    return await registry.media_service.list_io_records(media_id)
+
+
+@router.get("/providers/health", response_model=MediaProviderHealthResponse)
+async def media_provider_health(
+    registry: ServiceRegistry = Depends(get_registry),
+) -> MediaProviderHealthResponse:
+    return await registry.media_service.provider_health()
 
 
 @router.post("/{media_id}/scene-detect", response_model=MediaOperationResponse)

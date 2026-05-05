@@ -1,0 +1,889 @@
+{
+  "binding": {
+    "account": {
+      "account_ref_redacted": "sha256:15026ac87e116ffd4f66ef0c864afe07ba0558c4ce3fb591f2d4fcd636492ae8",
+      "asset_id": "ast_33c5e8f5d94545f6b24be9359ac4858a",
+      "bind_session_id": "chbind_78df8ee38e764a3098971622b0261d05",
+      "capabilities": [
+        "message_channel",
+        "notification.inbound",
+        "notification.outbound",
+        "approval.reply"
+      ],
+      "channel_account_id": "chacc_c47d1327755c4a419ca791a947c9de9e",
+      "channel_id": "nch_271776ce777f4d0bae941046ffc15aa5",
+      "created_at": "2026-05-02T18:44:10.862457Z",
+      "display_name": "Doubao Real Test WeChat",
+      "last_seen_at": "2026-05-02T18:44:10.862457Z",
+      "last_verified_at": "2026-05-02T18:44:10.862457Z",
+      "organization_id": "org_default",
+      "policy": {
+        "allow_inbound": true,
+        "allow_outbound": true,
+        "default_peer_policy": "deny_until_paired",
+        "private_chat_only": true
+      },
+      "provider": "wechat",
+      "provider_state_ref": "sec_e54a218ce2a2433d9a68b4f023d3164c",
+      "status": "active",
+      "updated_at": "2026-05-02T18:44:10.862457Z"
+    },
+    "asset": {
+      "archived_at": null,
+      "asset_id": "ast_33c5e8f5d94545f6b24be9359ac4858a",
+      "asset_type": "account",
+      "capabilities": [
+        "message_channel",
+        "notification.inbound",
+        "notification.outbound",
+        "approval.reply"
+      ],
+      "config": {
+        "auth_type": "channel_provider_state",
+        "channel_kind": "direct_message",
+        "platform": "wechat",
+        "provider": "wechat",
+        "username": "Doubao Real Test WeChat"
+      },
+      "created_at": "2026-05-02T18:44:10.866542Z",
+      "display_name": "微信：Doubao Real Test WeChat",
+      "expires_at": null,
+      "has_secret": false,
+      "last_verified_at": null,
+      "metadata": {
+        "asset_subtype": "communication_channel",
+        "bind_session_id": "chbind_78df8ee38e764a3098971622b0261d05",
+        "provider_state_ref": "sec_e54a218ce2a2433d9a68b4f023d3164c"
+      },
+      "organization_id": "org_default",
+      "owner_scope_id": "mem_xiaoyao",
+      "owner_scope_type": "member",
+      "policy": {
+        "allow_inbound": true,
+        "allow_outbound": true,
+        "channel_binding": true,
+        "default_peer_policy": "deny_until_paired",
+        "private_chat_only": true
+      },
+      "provider": "wechat",
+      "risk_level": "R3",
+      "secret_ref": null,
+      "sensitivity": "high",
+      "status": "active",
+      "summary_text": "Doubao Real Test WeChat 微信通讯渠道",
+      "updated_at": "2026-05-02T18:44:10.866542Z",
+      "visibility": "private"
+    },
+    "bind_session": {
+      "bind_session_id": "chbind_78df8ee38e764a3098971622b0261d05",
+      "bound_asset_id": "ast_33c5e8f5d94545f6b24be9359ac4858a",
+      "bound_channel_id": "nch_271776ce777f4d0bae941046ffc15aa5",
+      "confirmed_at": null,
+      "created_at": "2026-05-02T18:44:10.808846Z",
+      "display_name_hint": "Doubao Real Test WeChat",
+      "expires_at": "2030-01-01T00:00:00Z",
+      "failure_reason": null,
+      "organization_id": "org_default",
+      "policy_snapshot": {
+        "allow_inbound": true,
+        "allow_outbound": true,
+        "default_peer_policy": "deny_until_paired",
+        "private_chat_only": true
+      },
+      "provider": "wechat",
+      "provider_account_ref_redacted": "sha256:15026ac87e116ffd4f66ef0c864afe07ba0558c4ce3fb591f2d4fcd636492ae8",
+      "provider_state_ref": "sec_e54a218ce2a2433d9a68b4f023d3164c",
+      "provider_status": {
+        "finalized": true
+      },
+      "qr_artifact_id": null,
+      "qr_format": "text",
+      "qr_payload_ref": "sha256:50ac3e53a43276b4acde1eef1f14a0bfde28de68d20f91e17ec5a1083c8d838c",
+      "requested_by_member_id": "mem_xiaoyao",
+      "risk_level": "R3",
+      "status": "bound",
+      "trace_id": "trc_778bab901a294ceeb79169b8bea51ea9",
+      "updated_at": "2026-05-02T18:44:10.862457Z"
+    },
+    "channel": {
+      "asset_id": "ast_33c5e8f5d94545f6b24be9359ac4858a",
+      "channel_id": "nch_271776ce777f4d0bae941046ffc15aa5",
+      "channel_type": "direct_message",
+      "created_at": "2026-05-02T18:44:10.917447Z",
+      "created_by_member_id": "mem_xiaoyao",
+      "display_name": "微信：Doubao Real Test WeChat",
+      "last_error": null,
+      "last_health_status": "unknown",
+      "organization_id": "org_default",
+      "policy": {
+        "allow_inbound": true,
+        "allow_outbound": true,
+        "default_peer_policy": "deny_until_paired",
+        "external_provider_default": "disabled",
+        "max_message_length": 2000,
+        "private_chat_only": true,
+        "requires_approval_for_external": true
+      },
+      "provider": "wechat",
+      "provider_config": {
+        "channel_account_ref": "sha256:15026ac87e116ffd4f66ef0c864afe07ba0558c4ce3fb591f2d4fcd636492ae8",
+        "provider_state_ref": "sec_e54a218ce2a2433d9a68b4f023d3164c"
+      },
+      "sensitivity": "high",
+      "status": "active",
+      "trace_id": "trc_33ce43248d1d43609cbcb11dc0356eb6",
+      "updated_at": "2026-05-02T18:44:10.917447Z"
+    }
+  },
+  "confirm_poll": {
+    "chat_turns_created": 1,
+    "created_pairing_requests": 0,
+    "deliveries_sent": 0,
+    "details": {},
+    "duplicate_events": 0,
+    "failures": 0,
+    "media_attachments": 0,
+    "processed_accounts": 1,
+    "processed_events": 1,
+    "rejected_events": 0,
+    "status": "healthy"
+  },
+  "data_dir": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\data\\doubao-wechat-real-install-20260503-0001",
+  "final_plan": {
+    "approval_id": null,
+    "command_preview": {},
+    "created_at": "2026-05-02T18:44:18.547326Z",
+    "host_install_plan_id": "hip_844fcd8f740b4710abd2048796b44c06",
+    "impact_summary": {
+      "host_action": "install",
+      "manual_only": true,
+      "package_resolution": {
+        "candidate_attempts": [
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "package_manager_search",
+            "status": "no_match"
+          },
+          {
+            "candidate_count": 0,
+            "query": "豆包",
+            "source_type": "model_candidate_expansion",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "package_manager_search_model_candidates",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "official_winget_manifest",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "official_website_verified_source",
+            "status": "no_match",
+            "verification": null
+          }
+        ],
+        "model_assisted": false,
+        "model_candidate_count": 0,
+        "official_source_assisted": false,
+        "resolved_via": "no_high_confidence_candidate"
+      },
+      "reason_codes": [
+        "no_high_confidence_healthy_package_candidate"
+      ],
+      "safe_next_step": "请提供可信包管理器 ID、官网安装源，或修复当前包管理器环境后重试。"
+    },
+    "install_source": {
+      "candidate_attempts": [
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "package_manager_search",
+          "status": "no_match"
+        },
+        {
+          "candidate_count": 0,
+          "query": "豆包",
+          "source_type": "model_candidate_expansion",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "package_manager_search_model_candidates",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "official_winget_manifest",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "official_website_verified_source",
+          "status": "no_match",
+          "verification": null
+        }
+      ],
+      "model_assisted": false,
+      "model_candidate_count": 0,
+      "official_source_assisted": false,
+      "reason": "package_manager_candidate_unavailable",
+      "resolved_via": "no_high_confidence_candidate",
+      "source_type": "manual_only"
+    },
+    "organization_id": "org_default",
+    "requested_software": "豆包",
+    "risk_level": "R6",
+    "status": "manual_only",
+    "task_id": "tsk_2ce8fcd837484e6594c5b1acbd7ee05b",
+    "trace_id": "trc_86c5200be4aa4ad1a7203eece6a8e5e7",
+    "updated_at": "2026-05-02T18:44:18.547326Z"
+  },
+  "first_turn": {
+    "assistant_message_id": "msg_191293240f0b482485d7021ca2493eb9",
+    "brain_decision_id": "bd_d300e30d56444bb29481667202e6cb5e",
+    "cancel_requested": false,
+    "conversation_id": "conv_70dd12733a5a4c96b7606856aafaf9e9",
+    "created_at": "2026-05-02T18:44:11.088081+00:00",
+    "ended_at": "2026-05-02T18:44:18.608516+00:00",
+    "error_code": null,
+    "error_message": null,
+    "experience": {
+      "chat_route_decision": {
+        "confidence": 0.9,
+        "metadata": {},
+        "office_request": null,
+        "reason_code": "explicit_host_software_install",
+        "requires_confirmation": true,
+        "route_type": "host_software_install",
+        "safe_user_summary": "帮我安装豆包",
+        "task_goal": "帮我安装豆包"
+      },
+      "chat_style": "simple_qa",
+      "complexity_score": 0.02,
+      "context_selection_reason": [
+        "current_input",
+        "recent_messages",
+        "capability_boundary_summary"
+      ],
+      "conversation_depth": 1,
+      "needs_long_output": false,
+      "needs_strong_reasoning": false,
+      "needs_tool_or_task": false,
+      "recoverable": true,
+      "route_profile": "simple_qa"
+    },
+    "intent": "host_software_install_request",
+    "member_id": "mem_xiaoyao",
+    "mode": "workflow",
+    "privacy_level": "medium",
+    "retry_of_turn_id": null,
+    "route": {
+      "brain_id": null,
+      "fallback_used": false
+    },
+    "status": "completed",
+    "trace_id": "trc_86c5200be4aa4ad1a7203eece6a8e5e7",
+    "turn_id": "turn_051c5891d8be48ea8c1f04fb680240c8",
+    "updated_at": "2026-05-02T18:44:18.608516+00:00",
+    "usage": {},
+    "user_message_id": "msg_41d0d04a65174d9b81bfeccd13854a7d"
+  },
+  "health": {
+    "db": "ok",
+    "default_shell": "company",
+    "status": "ok",
+    "trace_id": "trc_c0b22670608440b2b8a8a1046fa9919b",
+    "version": "0.1.0"
+  },
+  "host_install_plan": {
+    "approval_id": null,
+    "command_preview": {},
+    "created_at": "2026-05-02T18:44:18.547326Z",
+    "host_install_plan_id": "hip_844fcd8f740b4710abd2048796b44c06",
+    "impact_summary": {
+      "host_action": "install",
+      "manual_only": true,
+      "package_resolution": {
+        "candidate_attempts": [
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "package_manager_search",
+            "status": "no_match"
+          },
+          {
+            "candidate_count": 0,
+            "query": "豆包",
+            "source_type": "model_candidate_expansion",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "package_manager_search_model_candidates",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "official_winget_manifest",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "official_website_verified_source",
+            "status": "no_match",
+            "verification": null
+          }
+        ],
+        "model_assisted": false,
+        "model_candidate_count": 0,
+        "official_source_assisted": false,
+        "resolved_via": "no_high_confidence_candidate"
+      },
+      "reason_codes": [
+        "no_high_confidence_healthy_package_candidate"
+      ],
+      "safe_next_step": "请提供可信包管理器 ID、官网安装源，或修复当前包管理器环境后重试。"
+    },
+    "install_source": {
+      "candidate_attempts": [
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "package_manager_search",
+          "status": "no_match"
+        },
+        {
+          "candidate_count": 0,
+          "query": "豆包",
+          "source_type": "model_candidate_expansion",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "package_manager_search_model_candidates",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "official_winget_manifest",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "official_website_verified_source",
+          "status": "no_match",
+          "verification": null
+        }
+      ],
+      "model_assisted": false,
+      "model_candidate_count": 0,
+      "official_source_assisted": false,
+      "reason": "package_manager_candidate_unavailable",
+      "resolved_via": "no_high_confidence_candidate",
+      "source_type": "manual_only"
+    },
+    "organization_id": "org_default",
+    "requested_software": "豆包",
+    "risk_level": "R6",
+    "status": "manual_only",
+    "task_id": "tsk_2ce8fcd837484e6594c5b1acbd7ee05b",
+    "trace_id": "trc_86c5200be4aa4ad1a7203eece6a8e5e7",
+    "updated_at": "2026-05-02T18:44:18.547326Z"
+  },
+  "install_request_poll": {
+    "chat_turns_created": 1,
+    "created_pairing_requests": 0,
+    "deliveries_sent": 0,
+    "details": {},
+    "duplicate_events": 0,
+    "failures": 0,
+    "media_attachments": 0,
+    "processed_accounts": 1,
+    "processed_events": 1,
+    "rejected_events": 0,
+    "status": "healthy"
+  },
+  "out_dir": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-03-doubao-wechat-real-install",
+  "pairing": {
+    "pairing_request": {
+      "channel_account_id": "chacc_c47d1327755c4a419ca791a947c9de9e",
+      "channel_peer_id": "chpeer_746b84b51910459daaf3d1da457b9378",
+      "created_at": "2026-05-02T18:44:10.948617Z",
+      "decided_at": "2026-05-02T18:44:11.039297Z",
+      "decision_by_member_id": "mem_xiaoyao",
+      "decision_reason": "real doubao install test",
+      "display_name_redacted": "真实测试微信联系人",
+      "expires_at": null,
+      "organization_id": "org_default",
+      "pairing_request_id": "chpair_ec2c1e259ca1416bb5a33fad6a2614e0",
+      "peer_ref_redacted": "sha256:67f16fc159d62e2a02f383e1ae2ec53373c2979710a218c4df9a27dd0854c341",
+      "peer_state_ref": "sec_9b594a60a4164a23a6bfa8b8af43604f",
+      "peer_type": "private",
+      "provider": "wechat",
+      "requested_member_id": "mem_xiaoyao",
+      "status": "approved",
+      "trace_id": "trc_30e22c22e31140069052798e74b7d5bd",
+      "updated_at": "2026-05-02T18:44:11.039297Z"
+    },
+    "peer_session": {
+      "allow_inbound": true,
+      "allow_outbound": true,
+      "channel_account_id": "chacc_c47d1327755c4a419ca791a947c9de9e",
+      "channel_id": "nch_271776ce777f4d0bae941046ffc15aa5",
+      "channel_peer_id": "chpeer_746b84b51910459daaf3d1da457b9378",
+      "channel_peer_session_id": "chps_ee229061d9624a598c16753d0f868116",
+      "conversation_id": null,
+      "created_at": "2026-05-02T18:44:11.039297+00:00",
+      "last_inbound_at": null,
+      "last_outbound_at": null,
+      "member_id": "mem_xiaoyao",
+      "organization_id": "org_default",
+      "pairing_status": "paired",
+      "peer_ref_redacted": "sha256:67f16fc159d62e2a02f383e1ae2ec53373c2979710a218c4df9a27dd0854c341",
+      "peer_state_ref": "sec_9b594a60a4164a23a6bfa8b8af43604f",
+      "peer_type": "private",
+      "policy_snapshot": {
+        "allow_unknown_private": false,
+        "group_messages": "disabled",
+        "pairing_required": true,
+        "private_chat_only": true
+      },
+      "provider": "wechat",
+      "session_id": "chsess_6130f5620c1f4c6dac73945558a3816f",
+      "updated_at": "2026-05-02T18:44:11.039297+00:00"
+    }
+  },
+  "run_id": "doubao-wechat-real-install-20260503-0001",
+  "second_turn": {
+    "assistant_message_id": "msg_f2084dbbac224dedbe847d3367e89beb",
+    "brain_decision_id": "bd_4f257599b371475bb64e3b60b7bf286e",
+    "cancel_requested": false,
+    "conversation_id": "conv_70dd12733a5a4c96b7606856aafaf9e9",
+    "created_at": "2026-05-02T18:44:23.919142+00:00",
+    "ended_at": "2026-05-02T18:44:24.132501+00:00",
+    "error_code": null,
+    "error_message": null,
+    "experience": {
+      "chat_style": "simple_qa",
+      "complexity_score": 0.02,
+      "context_selection_reason": [
+        "current_input",
+        "working_state",
+        "recent_messages",
+        "capability_boundary_summary"
+      ],
+      "conversation_depth": 3,
+      "needs_long_output": false,
+      "needs_strong_reasoning": false,
+      "needs_tool_or_task": false,
+      "recoverable": true,
+      "route_profile": "simple_qa"
+    },
+    "intent": "natural_interaction",
+    "member_id": "mem_xiaoyao",
+    "mode": "direct",
+    "privacy_level": "medium",
+    "retry_of_turn_id": null,
+    "route": {
+      "brain_id": null,
+      "fallback_used": false
+    },
+    "status": "completed",
+    "trace_id": "trc_0ac5a5eb17d444c2beb801f61b0ca103",
+    "turn_id": "turn_bd125858c20347ea933d3ccaa14d0c6b",
+    "updated_at": "2026-05-02T18:44:24.132501+00:00",
+    "usage": {},
+    "user_message_id": "msg_4afa443505c240dcba60b84c7e84ee04"
+  },
+  "system_verify": {
+    "uninstall_entries": null
+  },
+  "task": {
+    "artifact_count": 0,
+    "artifact_plan": {
+      "expected_outputs": [
+        "task_report"
+      ]
+    },
+    "budget": {
+      "max_artifact_bytes": 10000000,
+      "max_loop_steps": 8,
+      "max_model_calls": 20,
+      "max_runtime_seconds": 1800,
+      "max_steps": 20,
+      "max_tool_calls": 30,
+      "max_total_cost": 0.0
+    },
+    "cancellation_reason": null,
+    "collaboration_plan_id": null,
+    "conversation_id": "conv_70dd12733a5a4c96b7606856aafaf9e9",
+    "created_at": "2026-05-02T18:44:11.254946Z",
+    "current_approval_id": null,
+    "failure_reason": null,
+    "goal": "安装本机软件 豆包",
+    "host_member_id": null,
+    "mode": "agent",
+    "organization_id": "org_default",
+    "owner_member_id": "mem_xiaoyao",
+    "parent_task_id": null,
+    "plan": {
+      "approval_strategy": {
+        "high_risk_step_keys": [],
+        "phase19_candidate_id": "plancand_98af63730c96447bb728728b59bdb6d0",
+        "phase25_selected_candidate_id": "plancand_98af63730c96447bb728728b59bdb6d0",
+        "required_before_execution": false,
+        "strategy": "step_gate"
+      },
+      "artifact_plan": {
+        "expected_outputs": [
+          "task_report"
+        ]
+      },
+      "assumptions": [
+        "规则优先 planner；未启用模型辅助规划。",
+        "Agent loop 只按预算执行当前任务步骤，不做后台自主动作。",
+        "未声明资产句柄，步骤只能使用无需资产的能力。"
+      ],
+      "budget": {
+        "max_artifact_bytes": 10000000,
+        "max_loop_steps": 8,
+        "max_model_calls": 20,
+        "max_runtime_seconds": 1800,
+        "max_steps": 20,
+        "max_tool_calls": 30,
+        "max_total_cost": 0.0
+      },
+      "checkpoint_policy": {
+        "checkpoint_after_each_step": true,
+        "persist_observations": true
+      },
+      "collaboration": {},
+      "constraints": {
+        "action": "install",
+        "phase52": "host_install",
+        "requested_software": "豆包"
+      },
+      "failure_policy": {
+        "allow_alternate_path_without_approval": false,
+        "on_step_failure": "pause_and_create_retry_plan"
+      },
+      "goal": "安装本机软件 豆包",
+      "host_member_id": null,
+      "mode": "agent",
+      "owner_member_id": "mem_xiaoyao",
+      "participants": [],
+      "planner_reason_codes": [
+        "mode_agent",
+        "rule_first_planner",
+        "explicit_mode_hint"
+      ],
+      "planner_type": "agent_exploratory_planner",
+      "preflight": {
+        "blocked_actions": [],
+        "brain_decision_id": null,
+        "capability_snapshot": {
+          "active_mcp_tool_count": 0,
+          "enabled_skill_count": 0,
+          "explicit_skill_available": false,
+          "mcp_tool_refs": [],
+          "model_assist": {
+            "enabled": false,
+            "reason": "rule_first_planner"
+          },
+          "ready_mcp_server_count": 0,
+          "reason_codes": [],
+          "skill_match_refs": []
+        },
+        "mcp_tool_refs": [],
+        "phase19": {
+          "candidate_id": "plancand_98af63730c96447bb728728b59bdb6d0",
+          "capability_candidate_count": 0,
+          "fallback_used": true,
+          "model_assist_enabled": false,
+          "policy_prune_count": 0,
+          "safe_final_step_count": 1,
+          "unsafe_prune_types": [],
+          "verification_status": "passed"
+        },
+        "phase25": {
+          "candidate_count": 1,
+          "candidate_only": true,
+          "fallback_reason": "no_routable_planner_brain",
+          "fallback_used": true,
+          "generation_id": "plangen_d5c5edf27fa3453fa5c844b846c609da",
+          "model_assist_attempted": false,
+          "model_call": {
+            "adapter": "brain_openai_compatible",
+            "fallback_reason": "no_routable_planner_brain",
+            "privacy_level": "medium",
+            "status": "fallback"
+          },
+          "quality_score": {
+            "artifact_clarity": 0.9,
+            "budget_efficiency": 1.0,
+            "candidate_id": "plancand_98af63730c96447bb728728b59bdb6d0",
+            "capability_fit": 1.0,
+            "created_at": "2026-05-02T18:44:11.281364+00:00",
+            "goal_coverage": 0.5,
+            "missing_information_handling": 0.72,
+            "reason_codes": [
+              "quality_scored",
+              "source_deterministic_rule_surrogate"
+            ],
+            "recoverability": 0.85,
+            "safety_compliance": 1.0,
+            "score_id": "planscore_750bc0723aed425d817bb08ea59a978f",
+            "selected": true,
+            "step_coherence": 1.0,
+            "task_id": "tsk_2ce8fcd837484e6594c5b1acbd7ee05b",
+            "total_score": 0.8712
+          },
+          "selected_candidate_id": "plancand_98af63730c96447bb728728b59bdb6d0",
+          "selected_candidate_source": "deterministic_rule_surrogate",
+          "selected_quality_score": 0.8712
+        },
+        "planner_context": {
+          "phase52": {
+            "action": "install",
+            "workflow": "host_install"
+          }
+        },
+        "required_approvals": [],
+        "required_handles": [],
+        "skill_match_refs": []
+      },
+      "reflection_policy": {
+        "candidate_only": true,
+        "candidate_types": [
+          "memory_candidate",
+          "workflow_template_candidate",
+          "skill_candidate",
+          "failure_pattern_candidate"
+        ]
+      },
+      "required_assets": [],
+      "required_capabilities": [],
+      "risk_level": "R2",
+      "steps": [
+        {
+          "input": {},
+          "risk_level": "R1",
+          "step_key": "compose_report",
+          "step_type": "compose",
+          "title": "生成任务报告"
+        }
+      ],
+      "success_criteria": [
+        "任务产生可回放结果"
+      ],
+      "task_id": "tsk_2ce8fcd837484e6594c5b1acbd7ee05b",
+      "title": "安装本机软件 豆包"
+    },
+    "preflight": {
+      "blocked_actions": [],
+      "brain_decision_id": null,
+      "capability_snapshot": {
+        "active_mcp_tool_count": 0,
+        "enabled_skill_count": 0,
+        "explicit_skill_available": false,
+        "mcp_tool_refs": [],
+        "model_assist": {
+          "enabled": false,
+          "reason": "rule_first_planner"
+        },
+        "ready_mcp_server_count": 0,
+        "reason_codes": [],
+        "skill_match_refs": []
+      },
+      "mcp_tool_refs": [],
+      "phase19": {
+        "candidate_id": "plancand_98af63730c96447bb728728b59bdb6d0",
+        "capability_candidate_count": 0,
+        "fallback_used": true,
+        "model_assist_enabled": false,
+        "policy_prune_count": 0,
+        "safe_final_step_count": 1,
+        "unsafe_prune_types": [],
+        "verification_status": "passed"
+      },
+      "phase25": {
+        "candidate_count": 1,
+        "candidate_only": true,
+        "fallback_reason": "no_routable_planner_brain",
+        "fallback_used": true,
+        "generation_id": "plangen_d5c5edf27fa3453fa5c844b846c609da",
+        "model_assist_attempted": false,
+        "model_call": {
+          "adapter": "brain_openai_compatible",
+          "fallback_reason": "no_routable_planner_brain",
+          "privacy_level": "medium",
+          "status": "fallback"
+        },
+        "quality_score": {
+          "artifact_clarity": 0.9,
+          "budget_efficiency": 1.0,
+          "candidate_id": "plancand_98af63730c96447bb728728b59bdb6d0",
+          "capability_fit": 1.0,
+          "created_at": "2026-05-02T18:44:11.281364+00:00",
+          "goal_coverage": 0.5,
+          "missing_information_handling": 0.72,
+          "reason_codes": [
+            "quality_scored",
+            "source_deterministic_rule_surrogate"
+          ],
+          "recoverability": 0.85,
+          "safety_compliance": 1.0,
+          "score_id": "planscore_750bc0723aed425d817bb08ea59a978f",
+          "selected": true,
+          "step_coherence": 1.0,
+          "task_id": "tsk_2ce8fcd837484e6594c5b1acbd7ee05b",
+          "total_score": 0.8712
+        },
+        "selected_candidate_id": "plancand_98af63730c96447bb728728b59bdb6d0",
+        "selected_candidate_source": "deterministic_rule_surrogate",
+        "selected_quality_score": 0.8712
+      },
+      "planner_context": {
+        "phase52": {
+          "action": "install",
+          "workflow": "host_install"
+        }
+      },
+      "required_approvals": [],
+      "required_handles": [],
+      "skill_match_refs": []
+    },
+    "progress": {
+      "completed_steps": 0,
+      "current_step_key": null,
+      "total_steps": 1
+    },
+    "result": {},
+    "risk_level": "R2",
+    "status": "planned",
+    "success_criteria": [
+      "任务产生可回放结果"
+    ],
+    "supervisor_mode": null,
+    "task_id": "tsk_2ce8fcd837484e6594c5b1acbd7ee05b",
+    "title": "安装本机软件 豆包",
+    "trace_id": "trc_86c5200be4aa4ad1a7203eece6a8e5e7",
+    "updated_at": "2026-05-02T18:44:11.291152Z"
+  },
+  "timings": [
+    {
+      "duration_ms": 18,
+      "ended_perf": 25130.257664,
+      "stage": "api health/bootstrap",
+      "started_perf": 25130.239499
+    },
+    {
+      "duration_ms": 20,
+      "ended_perf": 25130.27822,
+      "stage": "wechat bind start",
+      "started_perf": 25130.257711
+    },
+    {
+      "duration_ms": 114,
+      "ended_perf": 25130.392886,
+      "stage": "wechat bind finalize",
+      "started_perf": 25130.278282
+    },
+    {
+      "duration_ms": 81,
+      "ended_perf": 25130.474614,
+      "stage": "wechat pairing poll",
+      "started_perf": 25130.393026
+    },
+    {
+      "duration_ms": 22,
+      "ended_perf": 25130.510737,
+      "stage": "wechat pairing approve",
+      "started_perf": 25130.488479
+    },
+    {
+      "duration_ms": 57,
+      "ended_perf": 25130.568752,
+      "stage": "wechat inbound install request poll",
+      "started_perf": 25130.510826
+    },
+    {
+      "duration_ms": 7521,
+      "ended_perf": 25138.112139,
+      "stage": "chat turn plan completed",
+      "started_perf": 25130.59014,
+      "turn_status": "completed"
+    },
+    {
+      "duration_ms": 5212,
+      "ended_perf": 25143.344081,
+      "expected_text_contains": "确认",
+      "send_call_count": 2,
+      "stage": "wechat outbound delivery timeout",
+      "started_perf": 25138.131236
+    },
+    {
+      "duration_ms": 52,
+      "ended_perf": 25143.396218,
+      "stage": "wechat inbound approval poll and real install",
+      "started_perf": 25143.344109
+    },
+    {
+      "duration_ms": 258,
+      "ended_perf": 25143.673086,
+      "stage": "chat turn approval/install completed",
+      "started_perf": 25143.414158,
+      "turn_status": "completed"
+    },
+    {
+      "duration_ms": 10108,
+      "ended_perf": 25153.781567,
+      "expected_text_contains": "完成",
+      "send_call_count": 4,
+      "stage": "wechat outbound delivery timeout",
+      "started_perf": 25143.673105
+    },
+    {
+      "duration_ms": 14,
+      "ended_perf": 25153.796359,
+      "stage": "host install detail fetch",
+      "started_perf": 25153.781595
+    },
+    {
+      "duration_ms": 15,
+      "ended_perf": 25153.813156,
+      "stage": "task detail fetch",
+      "started_perf": 25153.797983
+    },
+    {
+      "duration_ms": 1316,
+      "ended_perf": 25155.13317,
+      "stage": "windows installed app verification",
+      "started_perf": 25153.816526
+    },
+    {
+      "duration_ms": 27311,
+      "ended_perf": 25155.165191,
+      "stage": "total run",
+      "started_perf": 25127.85397
+    }
+  ]
+}

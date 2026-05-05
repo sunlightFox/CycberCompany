@@ -70,6 +70,38 @@ def test_phase9_safety_decisions_cover_allow_approval_and_deny(
     assert "sk-phase9ShouldRedact123456" not in audit_text
 
 
+def test_phase9_balanced_personal_auto_approves_safe_browser_download(
+    client: TestClient,
+) -> None:
+    client.patch(
+        "/api/settings",
+        json={
+            "safety": {
+                "approval_profile": "balanced_personal",
+                "chat_visible_redaction": "relaxed",
+            },
+            "updated_by_member_id": "mem_xiaoyao",
+        },
+    )
+    decision = client.post(
+        "/api/safety/evaluate",
+        json={
+            "actor_id": "mem_xiaoyao",
+            "action_type": "tool",
+            "action": "browser.download",
+            "object_type": "browser",
+            "tool_name": "browser.download",
+            "destination": "http://127.0.0.1:8080/report.csv",
+            "payload": {"url": "http://127.0.0.1:8080/report.csv"},
+        },
+    ).json()
+
+    assert decision["decision"] == "allow"
+    assert decision["approval_required"] is False
+    assert "safety.approval_profile.balanced_personal" in decision["policy_sources"]
+    assert "approval" not in decision["required_controls"]
+
+
 def test_phase9_tool_runtime_records_safety_and_blocks_danger(
     client: TestClient,
 ) -> None:

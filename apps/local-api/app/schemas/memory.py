@@ -5,9 +5,12 @@ from typing import Any
 from core_types import (
     ApiModel,
     EntityId,
+    MemoryConflictRecord,
     MemoryCandidate,
+    MemoryExperienceRecord,
     MemoryItem,
     MemoryLayer,
+    MemoryReuseFeedback,
     MemorySearchHit,
     MemorySearchResponse,
 )
@@ -41,6 +44,25 @@ class MemorySearchApiRequest(ApiModel):
 
 class MemorySearchApiResponse(MemorySearchResponse):
     items: list[MemorySearchHit] = Field(default_factory=list)
+
+
+class MemoryExperienceConsolidateRequest(ApiModel):
+    member_id: EntityId
+    task_id: EntityId | None = None
+    conversation_id: EntityId | None = None
+    outcome: str
+    summary_text: str = Field(min_length=1)
+    source: dict[str, Any] = Field(default_factory=dict)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    steps: list[dict[str, Any]] = Field(default_factory=list)
+    trace_id: EntityId | None = None
+
+
+class MemoryExperienceConsolidateResponse(ApiModel):
+    experience: MemoryExperienceRecord
+    candidates: list[MemoryCandidate] = Field(default_factory=list)
+    memories: list[MemoryItem] = Field(default_factory=list)
+    conflicts: list[MemoryConflictRecord] = Field(default_factory=list)
 
 
 class MemoryExtractRequest(ApiModel):
@@ -103,6 +125,30 @@ class MemoryRelationItem(ApiModel):
 
 class MemoryRelationsResponse(ApiModel):
     items: list[MemoryRelationItem] = Field(default_factory=list)
+
+
+class MemoryExperienceRecordListResponse(ApiModel):
+    items: list[MemoryExperienceRecord] = Field(default_factory=list)
+
+
+class MemoryConflictRecordListResponse(ApiModel):
+    items: list[MemoryConflictRecord] = Field(default_factory=list)
+
+
+class MemoryReuseFeedbackRequest(ApiModel):
+    member_id: EntityId | None = None
+    retrieval_id: EntityId | None = None
+    memory_id: EntityId
+    task_id: EntityId | None = None
+    feedback_type: str
+    rating: float = Field(default=0, ge=-1, le=1)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    source: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
+
+
+class MemoryReuseFeedbackResponse(ApiModel):
+    feedback: MemoryReuseFeedback
 
 
 class MemorySourceMessage(ApiModel):

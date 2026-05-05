@@ -75,6 +75,22 @@ def test_phase34_download_pending_confirm_edit_and_noise_filter(
     _chat(
         client,
         conversation_id,
+        "phase34-download-casecode",
+        "帮我下载 http://127.0.0.1:54069/download/casecode.csv，下载完告诉我结果。",
+    )
+    casecode_confirmed = _chat(
+        client,
+        conversation_id,
+        "phase34-download-casecode",
+        "wechat-real-010：只允许这一次。",
+    )
+    assert any(word in casecode_confirmed["reply"] for word in ["已确认", "继续", "没有完成"])
+    assert "wechat-real-010" not in casecode_confirmed["reply"]
+    assert _jargon_count(casecode_confirmed["reply"]) == 0
+
+    _chat(
+        client,
+        conversation_id,
         "phase34-download-edit",
         "帮我下载 http://127.0.0.1:54069/download/report.csv，下载完告诉我结果。",
     )

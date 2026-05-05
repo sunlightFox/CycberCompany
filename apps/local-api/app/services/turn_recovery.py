@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
@@ -71,7 +72,7 @@ class TurnRecoveryService:
         task: Any,
         root_span_id: str | None,
     ) -> TurnRecoveryResult:
-        if str(task.status.value) not in {TaskStatus.FAILED.value, TaskStatus.PAUSED.value}:
+        if _task_status_value(task) not in {TaskStatus.FAILED.value, TaskStatus.PAUSED.value}:
             return TurnRecoveryResult(
                 task=task,
                 recovery_payload=_recovery_payload(
@@ -79,103 +80,192 @@ class TurnRecoveryService:
                     attempt_count=0,
                     root_cause=None,
                     actions_taken=[],
-                    next_action=None,
+                    next_action=_next_action_for_task(task),
                     task_id=str(task.task_id),
                 ),
             )
 
+        events: list[RecoveryEvent] = []
+        actions_taken: list[str] = []
+        current_task = task
+
+        while _task_status_value(current_task) in {
+            TaskStatus.FAILED.value,
+            TaskStatus.PAUSED.value,
+        }:
+            attempts = await self._chat_repo.list_recovery_attempts(str(turn["turn_id"]))
+            root_cause = _root_cause(current_task)
+            failure_type = _failure_type(root_cause)
+
+            if not _task_recoverable_by_status(current_task):
+                stopped = await self._stop(
+                    turn=turn,
+                    task=current_task,
+                    root_cause=root_cause,
+                    failure_type=failure_type,
+                    status="waiting_approval"
+                    if _task_status_value(current_task) == TaskStatus.WAITING_APPROVAL.value
+                    else "needs_user_input",
+                    next_action=_next_action_for_failure(failure_type, current_task),
+                    actions_taken=actions_taken,
+                )
+                stopped.events = events + stopped.events
+                return stopped
+
+            if _high_risk_failed_step(current_task):
+                stopped = await self._stop(
+                    turn=turn,
+                    task=current_task,
+                    root_cause=root_cause,
+                    failure_type=failure_type,
+                    status="waiting_approval"
+                    if _has_current_approval(current_task)
+                    else "needs_user_input",
+                    next_action=(
+                        "request_approval" if _has_current_approval(current_task) else "ask_user"
+                    ),
+                    actions_taken=actions_taken,
+                )
+                stopped.events = events + stopped.events
+                return stopped
+
+            if len(attempts) >= MAX_ATTEMPTS_PER_TURN:
+                stopped = await self._stop(
+                    turn=turn,
+                    task=current_task,
+                    root_cause=root_cause,
+                    failure_type=failure_type,
+                    status="exhausted",
+                    next_action="ask_user",
+                    actions_taken=actions_taken,
+                )
+                stopped.events = events + stopped.events
+                return stopped
+            if Counter(str(item.get("root_cause") or "") for item in attempts)[root_cause] >= (
+                MAX_ATTEMPTS_PER_ERROR
+            ):
+                stopped = await self._stop(
+                    turn=turn,
+                    task=current_task,
+                    root_cause=root_cause,
+                    failure_type=failure_type,
+                    status="exhausted",
+                    next_action="ask_user",
+                    actions_taken=actions_taken,
+                )
+                stopped.events = events + stopped.events
+                return stopped
+
+            attempt_index = len(attempts) + 1
+            action = _action_for_failure(failure_type)
+            if action not in RECOVERY_ACTIONS:
+                action = "stop_unrecoverable"
+            events.extend(
+                [
+                    RecoveryEvent(
+                        ChatEventType.TURN_RECOVERY_STARTED,
+                        {
+                            "task_id": str(current_task.task_id),
+                            "recovery_stage": "task",
+                            "attempt_index": attempt_index,
+                            "max_attempts": MAX_ATTEMPTS_PER_TURN,
+                        },
+                    ),
+                    RecoveryEvent(
+                        ChatEventType.TURN_RECOVERY_DIAGNOSED,
+                        {
+                            "task_id": str(current_task.task_id),
+                            "recovery_stage": "task",
+                            "attempt_index": attempt_index,
+                            "failure_type": failure_type,
+                            "root_cause": root_cause,
+                            "recovery_action": action,
+                            "error_signature": _error_signature(
+                                "task",
+                                failure_type,
+                                root_cause,
+                            ),
+                        },
+                    ),
+                ]
+            )
+            if action == "stop_unrecoverable":
+                stopped = await self._stop(
+                    turn=turn,
+                    task=current_task,
+                    root_cause=root_cause,
+                    failure_type=failure_type,
+                    status="unrecoverable",
+                    next_action=_next_action_for_failure(failure_type, current_task),
+                    actions_taken=actions_taken,
+                )
+                stopped.events = events + stopped.events
+                return stopped
+
+            attempt = await self._run_recovery_attempt(
+                turn=turn,
+                task=current_task,
+                root_span_id=root_span_id,
+                attempt_index=attempt_index,
+                root_cause=root_cause,
+                failure_type=failure_type,
+                action=action,
+            )
+            events.extend(attempt.events)
+            if action not in actions_taken:
+                actions_taken.append(action)
+            current_task = attempt.task
+            attempt.recovery_payload["attempt_count"] = attempt_index
+            attempt.recovery_payload["actions_taken"] = list(actions_taken)
+            if attempt.recovery_payload.get("error_code") == ErrorCode.TASK_RETRY_EXHAUSTED.value:
+                attempt.events = events
+                return attempt
+            if _task_status_value(current_task) not in {
+                TaskStatus.FAILED.value,
+                TaskStatus.PAUSED.value,
+            }:
+                attempt.events = events
+                attempt.response_prefix = _response_prefix_for_recovery(attempt.recovery_payload)
+                return attempt
+
         attempts = await self._chat_repo.list_recovery_attempts(str(turn["turn_id"]))
-        root_cause = _root_cause(task)
-        failure_type = _failure_type(root_cause)
-        if not _task_recoverable_by_status(task):
-            return await self._stop(
-                turn=turn,
-                task=task,
-                root_cause=root_cause,
-                failure_type=failure_type,
-                status="waiting_approval"
-                if str(task.status.value) == TaskStatus.WAITING_APPROVAL.value
-                else "needs_user_input",
-                next_action=_next_action_for_failure(failure_type, task),
-            )
+        payload = _recovery_payload(
+            status=_status_for_task(current_task),
+            attempt_count=len(attempts),
+            root_cause=None,
+            actions_taken=actions_taken,
+            next_action=_next_action_for_task(current_task),
+            task_id=str(current_task.task_id),
+        )
+        return TurnRecoveryResult(
+            task=current_task,
+            events=events,
+            response_prefix=_response_prefix_for_recovery(payload),
+            recovery_payload=payload,
+        )
 
-        if _high_risk_failed_step(task):
-            return await self._stop(
-                turn=turn,
-                task=task,
-                root_cause=root_cause,
-                failure_type=failure_type,
-                status="waiting_approval"
-                if _has_current_approval(task)
-                else "needs_user_input",
-                next_action="request_approval" if _has_current_approval(task) else "ask_user",
-            )
-
-        if len(attempts) >= MAX_ATTEMPTS_PER_TURN:
-            return await self._stop(
-                turn=turn,
-                task=task,
-                root_cause=root_cause,
-                failure_type=failure_type,
-                status="exhausted",
-                next_action="ask_user",
-            )
-        if Counter(str(item.get("root_cause") or "") for item in attempts)[root_cause] >= (
-            MAX_ATTEMPTS_PER_ERROR
-        ):
-            return await self._stop(
-                turn=turn,
-                task=task,
-                root_cause=root_cause,
-                failure_type=failure_type,
-                status="exhausted",
-                next_action="ask_user",
-            )
-
-        attempt_index = len(attempts) + 1
-        action = _action_for_failure(failure_type)
-        if action not in RECOVERY_ACTIONS:
-            action = "stop_unrecoverable"
-        events = [
-            RecoveryEvent(
-                ChatEventType.TURN_RECOVERY_STARTED,
-                {
-                    "task_id": str(task.task_id),
-                    "attempt_index": attempt_index,
-                    "max_attempts": MAX_ATTEMPTS_PER_TURN,
-                },
-            ),
-            RecoveryEvent(
-                ChatEventType.TURN_RECOVERY_DIAGNOSED,
-                {
-                    "task_id": str(task.task_id),
-                    "attempt_index": attempt_index,
-                    "failure_type": failure_type,
-                    "root_cause": root_cause,
-                    "recovery_action": action,
-                },
-            ),
-        ]
-        if action == "stop_unrecoverable":
-            stopped = await self._stop(
-                turn=turn,
-                task=task,
-                root_cause=root_cause,
-                failure_type=failure_type,
-                status="unrecoverable",
-                next_action="ask_user",
-            )
-            stopped.events = events + stopped.events
-            return stopped
-
+    async def _run_recovery_attempt(
+        self,
+        *,
+        turn: dict[str, Any],
+        task: Any,
+        root_span_id: str | None,
+        attempt_index: int,
+        root_cause: str,
+        failure_type: str,
+        action: str,
+    ) -> TurnRecoveryResult:
+        events: list[RecoveryEvent] = []
         started_at = utc_now_iso()
         attempt_id = new_id("trec")
         diagnostic = {
             "task_id": str(task.task_id),
+            "recovery_stage": "task",
             "failure_type": failure_type,
             "root_cause": root_cause,
             "recovery_action": action,
             "attempt_index": attempt_index,
+            "error_signature": _error_signature("task", failure_type, root_cause),
             "bypass_controls": False,
         }
         await self._chat_repo.insert_recovery_attempt(
@@ -190,6 +280,8 @@ class TurnRecoveryService:
                 "recovery_action": action,
                 "status": "running",
                 "diagnostic_payload": redact(diagnostic),
+                "recovery_stage": "task",
+                "error_signature": diagnostic["error_signature"],
                 "trace_id": turn.get("trace_id"),
                 "started_at": started_at,
             }
@@ -206,6 +298,7 @@ class TurnRecoveryService:
                 ChatEventType.TURN_RECOVERY_ACTION,
                 {
                     "task_id": str(task.task_id),
+                    "recovery_stage": "task",
                     "attempt_index": attempt_index,
                     "recovery_action": action,
                     "status": "running",
@@ -218,6 +311,7 @@ class TurnRecoveryService:
                 trace_id=str(turn["trace_id"]),
             )
             status = _status_for_task(recovered_task)
+            attempt_status = _attempt_status_for_task(recovered_task)
             payload = _recovery_payload(
                 status=status,
                 attempt_count=attempt_index,
@@ -230,11 +324,19 @@ class TurnRecoveryService:
                 **payload,
                 "failure_type": failure_type,
                 "recovery_action": action,
+                "attempt_status": attempt_status,
             }
             await self._chat_repo.update_recovery_attempt(
                 attempt_id,
-                status=status,
+                status=attempt_status,
                 diagnostic_payload=redact(completed_payload),
+                action_result=redact(
+                    {
+                        "task_id": str(task.task_id),
+                        "status": _task_status_value(recovered_task),
+                        "next_action": payload.get("next_action"),
+                    }
+                ),
                 completed_at=utc_now_iso(),
             )
             await self._trace.end_span(
@@ -249,23 +351,24 @@ class TurnRecoveryService:
                     ChatEventType.TURN_RECOVERY_COMPLETED,
                     {
                         "task_id": str(task.task_id),
+                        "recovery_stage": "task",
                         "attempt_index": attempt_index,
-                        "status": status,
+                        "status": attempt_status,
                         "next_action": payload.get("next_action"),
                     },
                 )
             )
-            prefix = "我刚才检查了失败原因并自动重试了一轮；" if status == "recovered" else ""
             return TurnRecoveryResult(
                 task=recovered_task,
                 events=events,
-                response_prefix=prefix,
+                response_prefix=_response_prefix_for_recovery(payload),
                 recovery_payload=payload,
             )
         except AppError as exc:
+            error_code = str(exc.code)
             status = (
                 "waiting_approval"
-                if exc.code == ErrorCode.TOOL_APPROVAL_REQUIRED
+                if error_code == ErrorCode.TOOL_APPROVAL_REQUIRED.value
                 else "exhausted"
             )
             payload = _recovery_payload(
@@ -276,12 +379,19 @@ class TurnRecoveryService:
                 next_action=_next_action_for_failure(failure_type, task),
                 task_id=str(task.task_id),
             )
-            payload["error_code"] = exc.code.value if hasattr(exc.code, "value") else str(exc.code)
+            payload["error_code"] = error_code
             payload["error_message"] = exc.message
             await self._chat_repo.update_recovery_attempt(
                 attempt_id,
                 status=status,
                 diagnostic_payload=redact(payload),
+                action_result=redact(
+                    {
+                        "status": status,
+                        "error_code": error_code,
+                        "next_action": payload.get("next_action"),
+                    }
+                ),
                 completed_at=utc_now_iso(),
             )
             await self._trace.end_span(
@@ -295,6 +405,7 @@ class TurnRecoveryService:
                     ChatEventType.TURN_RECOVERY_COMPLETED,
                     {
                         "task_id": str(task.task_id),
+                        "recovery_stage": "task",
                         "attempt_index": attempt_index,
                         "status": status,
                         "next_action": payload.get("next_action"),
@@ -312,6 +423,7 @@ class TurnRecoveryService:
         failure_type: str,
         status: str,
         next_action: str | None,
+        actions_taken: list[str] | None = None,
     ) -> TurnRecoveryResult:
         attempts = await self._chat_repo.list_recovery_attempts(str(turn["turn_id"]))
         action = "request_approval" if status == "waiting_approval" else "stop_unrecoverable"
@@ -319,7 +431,7 @@ class TurnRecoveryService:
             status=status,
             attempt_count=len(attempts),
             root_cause=root_cause,
-            actions_taken=[],
+            actions_taken=list(actions_taken or []),
             next_action=next_action,
             task_id=str(task.task_id),
         )
@@ -331,6 +443,7 @@ class TurnRecoveryService:
                     ChatEventType.TURN_RECOVERY_COMPLETED,
                     {
                         "task_id": str(task.task_id),
+                        "recovery_stage": "task",
                         "status": status,
                         "recovery_action": action,
                         "next_action": next_action,
@@ -369,11 +482,16 @@ class TurnRecoveryService:
 
 
 def _task_recoverable_by_status(task: Any) -> bool:
-    return str(task.status.value) in {TaskStatus.FAILED.value, TaskStatus.PAUSED.value}
+    return _task_status_value(task) in {TaskStatus.FAILED.value, TaskStatus.PAUSED.value}
+
+
+def _task_status_value(task: Any) -> str:
+    status = getattr(task, "status", None)
+    return str(getattr(status, "value", status))
 
 
 def _status_for_task(task: Any) -> str:
-    status = str(task.status.value)
+    status = _task_status_value(task)
     if status == TaskStatus.COMPLETED.value:
         return "recovered"
     if status == TaskStatus.WAITING_APPROVAL.value:
@@ -382,6 +500,17 @@ def _status_for_task(task: Any) -> str:
         return "needs_user_input"
     if status == TaskStatus.FAILED.value:
         return "exhausted"
+    return "needs_user_input"
+
+
+def _attempt_status_for_task(task: Any) -> str:
+    status = _task_status_value(task)
+    if status == TaskStatus.COMPLETED.value:
+        return "recovered"
+    if status == TaskStatus.WAITING_APPROVAL.value:
+        return "waiting_approval"
+    if status in {TaskStatus.FAILED.value, TaskStatus.PAUSED.value}:
+        return "failed"
     return "needs_user_input"
 
 
@@ -442,7 +571,7 @@ def _high_risk_failed_step(task: Any) -> bool:
 
 
 def _next_action_for_task(task: Any) -> str | None:
-    status = str(task.status.value)
+    status = _task_status_value(task)
     if status == TaskStatus.COMPLETED.value:
         return None
     if status == TaskStatus.WAITING_APPROVAL.value:
@@ -490,3 +619,14 @@ def _suggested_actions_for_recovery(recovery_payload: dict[str, Any]) -> list[st
     if status == "exhausted":
         return ["缩小任务范围后重试", "查看失败原因"]
     return ["补充缺失信息后继续", "调整目标后重试"]
+
+
+def _response_prefix_for_recovery(recovery_payload: dict[str, Any]) -> str:
+    if recovery_payload.get("status") == "recovered" and recovery_payload.get("attempt_count"):
+        return "我刚才检查了失败原因并自动重试；"
+    return ""
+
+
+def _error_signature(stage: str, failure_type: str, root_cause: str) -> str:
+    value = f"{stage}:{failure_type}:{redact(root_cause)}"
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()

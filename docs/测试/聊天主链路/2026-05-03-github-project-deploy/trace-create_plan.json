@@ -1,0 +1,121 @@
+{
+  "conversation_id": null,
+  "ended_at": "2026-05-03T09:38:59.380948Z",
+  "root_span_id": "spn_e83a76d8cccb468a95d0e117715f33d0",
+  "spans": [
+    {
+      "ended_at": "2026-05-03T09:38:59.380948Z",
+      "error_code": null,
+      "input": null,
+      "latency_ms": 127,
+      "metadata": {
+        "method": "POST",
+        "path": "/api/project-deployments"
+      },
+      "name": "POST /api/project-deployments",
+      "output": {
+        "status_code": 200
+      },
+      "parent_span_id": null,
+      "span_id": "spn_e83a76d8cccb468a95d0e117715f33d0",
+      "span_type": "api.request",
+      "started_at": "2026-05-03T09:38:59.253099Z",
+      "status": "completed",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008"
+    },
+    {
+      "ended_at": "2026-05-03T09:38:59.285051Z",
+      "error_code": null,
+      "input": {
+        "goal": "部署项目 https://github.com/mdn/beginner-html-site-styled.git",
+        "owner_member_id": "mem_xiaoyao"
+      },
+      "latency_ms": 16,
+      "metadata": {},
+      "name": "create task",
+      "output": {
+        "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3"
+      },
+      "parent_span_id": null,
+      "span_id": "spn_e421a9de68b7455f8f8f75cedd833723",
+      "span_type": "task.create",
+      "started_at": "2026-05-03T09:38:59.268836Z",
+      "status": "completed",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008"
+    },
+    {
+      "ended_at": "2026-05-03T09:38:59.277668Z",
+      "error_code": null,
+      "input": {
+        "goal": "部署项目 https://github.com/mdn/beginner-html-site-styled.git",
+        "mode_hint": "agent",
+        "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3"
+      },
+      "latency_ms": 8,
+      "metadata": {},
+      "name": "select task planner",
+      "output": {
+        "mode": "agent",
+        "planner_type": "agent_exploratory_planner",
+        "reason_codes": [
+          "mode_agent",
+          "rule_first_planner",
+          "explicit_mode_hint"
+        ],
+        "step_count": 1
+      },
+      "parent_span_id": null,
+      "span_id": "spn_71c12682f7a24ebca9287e3055aa908b",
+      "span_type": "planner.select",
+      "started_at": "2026-05-03T09:38:59.268836Z",
+      "status": "completed",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008"
+    },
+    {
+      "ended_at": "2026-05-03T09:38:59.277668Z",
+      "error_code": null,
+      "input": {
+        "goal": "部署项目 https://github.com/mdn/beginner-html-site-styled.git",
+        "intent": "task_planning"
+      },
+      "latency_ms": 8,
+      "metadata": {},
+      "name": "match skills",
+      "output": {
+        "match_count": 0
+      },
+      "parent_span_id": null,
+      "span_id": "spn_f86bddc138d04dc096b80fc61ef3748d",
+      "span_type": "skill.match",
+      "started_at": "2026-05-03T09:38:59.268836Z",
+      "status": "completed",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008"
+    },
+    {
+      "ended_at": "2026-05-03T09:38:59.332757Z",
+      "error_code": null,
+      "input": null,
+      "latency_ms": 15,
+      "metadata": {
+        "action": "project.deployment.run",
+        "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+        "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3"
+      },
+      "name": "create approval request",
+      "output": {
+        "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e"
+      },
+      "parent_span_id": null,
+      "span_id": "spn_1e1aad94bf5f468698d7faef5e0b3bad",
+      "span_type": "approval.create",
+      "started_at": "2026-05-03T09:38:59.317024Z",
+      "status": "completed",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008"
+    }
+  ],
+  "started_at": "2026-05-03T09:38:59.253099Z",
+  "status": "completed",
+  "task_id": null,
+  "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+  "turn_id": null
+}

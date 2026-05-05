@@ -13,6 +13,7 @@ from app.schemas.channels import (
     ChannelBindStartResponse,
     ChannelBindStatusResponse,
     ChannelDeliveryBindingListResponse,
+    ChannelEventListResponse,
     ChannelInboundWechatRequest,
     ChannelInboundWechatResponse,
     ChannelPairingDecisionRequest,
@@ -24,6 +25,13 @@ from app.schemas.channels import (
     ChannelPeerSessionResponse,
     ChannelProviderHealthResponse,
     ChannelRevokeResponse,
+    FeishuBindCallbackResponse,
+    FeishuGatewayHealthResponse,
+    FeishuGatewayPollResponse,
+    FeishuInboundRequest,
+    FeishuInboundResponse,
+    FeishuMessageOperationRequest,
+    FeishuMessageOperationResponse,
     WechatGatewayHealthResponse,
     WechatGatewayPollResponse,
 )
@@ -209,12 +217,41 @@ async def list_channel_attachments(
 
 @router.get("/delivery-bindings", response_model=ChannelDeliveryBindingListResponse)
 async def list_delivery_bindings(
+    provider: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    turn_id: str | None = Query(default=None),
+    channel_event_id: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     registry: ServiceRegistry = Depends(get_registry),
 ) -> ChannelDeliveryBindingListResponse:
     return ChannelDeliveryBindingListResponse(
-        items=await registry.channels.list_delivery_bindings(status=status, limit=limit)
+        items=await registry.channels.list_delivery_bindings(
+            provider=provider,
+            status=status,
+            turn_id=turn_id,
+            channel_event_id=channel_event_id,
+            limit=limit,
+        )
+    )
+
+
+@router.get("/events", response_model=ChannelEventListResponse)
+async def list_channel_events(
+    provider: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    channel_event_id: str | None = Query(default=None),
+    trace_id: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> ChannelEventListResponse:
+    return ChannelEventListResponse(
+        items=await registry.channels.list_events(
+            provider=provider,
+            status=status,
+            channel_event_id=channel_event_id,
+            trace_id=trace_id,
+            limit=limit,
+        )
     )
 
 
@@ -238,10 +275,32 @@ async def receive_wechat_inbound(
     request: Request,
     registry: ServiceRegistry = Depends(get_registry),
 ) -> ChannelInboundWechatResponse:
-    return await registry.channel_binding_service.receive_wechat_inbound(
+    response = await registry.channel_binding_service.receive_wechat_inbound(
         payload,
         trace_id=getattr(request.state, "trace_id", None),
     )
+    if payload.provider == "wechat" and response.status == "received":
+        binding_status = (
+            str((response.notification_inbound or {}).get("binding_status") or "")
+            if response.notification_inbound is not None
+            else ""
+        )
+        if not binding_status or binding_status == "no_pending_action":
+            routed = await registry.wechat_gateway_service.route_received_wechat_inbound(
+                request=payload,
+                event=response.event.model_dump(mode="json"),
+                trace_id=getattr(request.state, "trace_id", None),
+            )
+            response = response.model_copy(
+                update={
+                    "turn_id": routed.get("turn_id"),
+                    "delivery_binding_id": routed.get("delivery_binding_id"),
+                    "chat_turns_created": int(routed.get("chat_turns_created") or 0),
+                    "delivery_status": routed.get("delivery_status"),
+                    "diagnostic": {"chat_route": routed},
+                }
+            )
+    return response
 
 
 @router.get("/providers/wechat/health", response_model=ChannelProviderHealthResponse)
@@ -279,4 +338,100 @@ async def wechat_deliver_due(
 async def wechat_gateway_health(
     registry: ServiceRegistry = Depends(get_registry),
 ) -> WechatGatewayHealthResponse:
-    return await registry.wechat_gateway_service.gateway_health()
+    return await registry.wechat_gateway_service.gateway_health(
+        worker_health=registry.background_worker_service.health(),
+    )
+
+
+@router.post("/inbound/feishu", response_model=FeishuInboundResponse)
+async def receive_feishu_inbound(
+    payload: FeishuInboundRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> FeishuInboundResponse:
+    result = await registry.feishu_gateway_service.receive_event(
+        event={**payload.raw_event, "received_at": payload.received_at}
+        if payload.received_at
+        else payload.raw_event,
+        channel_account_id=payload.channel_account_id,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return FeishuInboundResponse(status=result.status, diagnostic={"poll_result": result.model_dump(mode="json")})
+
+
+@router.get("/providers/feishu/health", response_model=ChannelProviderHealthResponse)
+async def feishu_health(
+    registry: ServiceRegistry = Depends(get_registry),
+) -> ChannelProviderHealthResponse:
+    return await registry.channel_binding_service.provider_health("feishu")
+
+
+@router.get("/providers/feishu/gateway-health", response_model=FeishuGatewayHealthResponse)
+async def feishu_gateway_health(
+    registry: ServiceRegistry = Depends(get_registry),
+) -> FeishuGatewayHealthResponse:
+    return await registry.feishu_gateway_service.gateway_health(
+        worker_health=registry.background_worker_service.health(),
+    )
+
+
+@router.post("/providers/feishu/poll-once", response_model=FeishuGatewayPollResponse)
+async def feishu_poll_once(
+    request: Request,
+    limit: int | None = Query(default=None, ge=1, le=500),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> FeishuGatewayPollResponse:
+    return await registry.feishu_gateway_service.poll_once(
+        trace_id=getattr(request.state, "trace_id", None),
+        limit=limit,
+    )
+
+
+@router.post("/providers/feishu/deliver-due", response_model=FeishuGatewayPollResponse)
+async def feishu_deliver_due(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=500),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> FeishuGatewayPollResponse:
+    return await registry.feishu_gateway_service.deliver_due(
+        trace_id=getattr(request.state, "trace_id", None),
+        limit=limit,
+    )
+
+
+@router.post("/providers/feishu/operation", response_model=FeishuMessageOperationResponse)
+async def feishu_message_operation(
+    payload: FeishuMessageOperationRequest,
+    request: Request,
+    operation: str = Query(..., pattern="^(recall|read|reaction|history)$"),
+    registry: ServiceRegistry = Depends(get_registry),
+    ) -> FeishuMessageOperationResponse:
+    result = await registry.feishu_gateway_service.message_operation(
+        channel_account_id=str(payload.channel_account_id),
+        operation=operation,
+        message_id=payload.message_id,
+        emoji_type=payload.emoji_type,
+        container_id=payload.container_id,
+        container_id_type=payload.container_id_type,
+        page_size=payload.page_size,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return FeishuMessageOperationResponse(**result)
+
+
+@router.get("/inbound/feishu/bind-callback", response_model=FeishuBindCallbackResponse)
+async def feishu_bind_callback(
+    request: Request,
+    code: str | None = Query(default=None),
+    state: str = Query(..., min_length=1),
+    tenant_key: str | None = Query(default=None),
+    open_id: str | None = Query(default=None),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> FeishuBindCallbackResponse:
+    return await registry.channel_binding_service.confirm_feishu_bind_callback(
+        bind_session_id=state,
+        code=code,
+        tenant_key=tenant_key,
+        open_id=open_id,
+        trace_id=getattr(request.state, "trace_id", None),
+    )

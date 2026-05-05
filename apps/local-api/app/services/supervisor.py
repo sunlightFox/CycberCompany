@@ -5,9 +5,12 @@ from typing import Any
 
 from core_types import (
     ApprovalDetail,
+    CollaborationContextBoundary,
+    CollaborationHandoffRecord,
     CollaborationOutput,
     CollaborationPlan,
     CollaborationReplay,
+    CollaborationRoutingDecision,
     CollaborationRound,
     ErrorCode,
     HostDecision,
@@ -92,14 +95,22 @@ class SupervisorService:
                 input_data={"task_id": task_id, "host_member_id": host_member_id},
             )
             try:
-                selected = await self._select_participants(task, host_member_id)
+                route = await self._build_route(
+                    task,
+                    host_member_id,
+                    mode=self._mode_for_goal(task["goal"]),
+                    resource_handle_ids=[],
+                    trace_id=trace_id,
+                    status="planned",
+                )
             except Exception:
                 await self._end_span(select_span_id, status=TraceSpanStatus.FAILED)
                 raise
             await self._end_span(
                 select_span_id,
-                output_data={"selected_member_ids": [item["member_id"] for item in selected]},
+                output_data={"selected_member_ids": route["decision"]["selected_member_ids"]},
             )
+            selected = route["selected"]
             if len(selected) < 2:
                 raise AppError(
                     ErrorCode.SUPERVISOR_PARTICIPANT_SELECTION_FAILED,
@@ -108,6 +119,7 @@ class SupervisorService:
                 )
 
             plan_id = new_id("cplan")
+            route["decision"]["collaboration_plan_id"] = plan_id
             participant_policy = {
                 "host_member_id": host_member_id,
                 "participant_member_ids": [item["member_id"] for item in selected],
@@ -138,6 +150,7 @@ class SupervisorService:
                         "updated_at": now,
                     }
                 )
+                await self._repo.insert_routing_decision(route["decision"])
                 participant_ids: list[str] = []
                 plan_participants: list[dict[str, Any]] = []
                 for index, item in enumerate(selected, start=1):
@@ -176,6 +189,17 @@ class SupervisorService:
                             "created_at": now,
                             "updated_at": now,
                         }
+                    )
+                    await self._repo.insert_context_boundary(
+                        self._boundary_record(
+                            task,
+                            item,
+                            collaboration_plan_id=plan_id,
+                            participant_id=participant_id,
+                            trace_id=trace_id,
+                            status="active",
+                            created_at=now,
+                        )
                     )
                     await self._repo.insert_subtask(
                         {
@@ -286,6 +310,7 @@ class SupervisorService:
                         "collaboration_plan_id": plan_id,
                         "host_member_id": host_member_id,
                         "participant_count": len(selected),
+                        "routing_decision_id": route["decision"]["routing_decision_id"],
                     },
                     trace_id=trace_id,
                 )
@@ -300,6 +325,7 @@ class SupervisorService:
                     "task_id": task_id,
                     "host_member_id": host_member_id,
                     "participants": [item["member_id"] for item in selected],
+                    "routing_decision_id": route["decision"]["routing_decision_id"],
                 },
                 trace_id=trace_id,
             )
@@ -473,6 +499,481 @@ class SupervisorService:
         await self._get_supervisor_task(task_id)
         return [TaskSubtask(**row) for row in await self._repo.list_subtasks(task_id)]
 
+    async def _build_route(
+        self,
+        task: dict[str, Any],
+        host_member_id: str,
+        *,
+        mode: str,
+        resource_handle_ids: list[str],
+        trace_id: str | None,
+        status: str,
+    ) -> dict[str, Any]:
+        members = {row["member_id"]: row for row in await self._members.list_members()}
+        if host_member_id not in members:
+            raise AppError(ErrorCode.PARTICIPANT_NOT_FOUND, "主持成员不存在", status_code=404)
+        host_availability = await self._repo.get_availability(host_member_id)
+        if host_availability and host_availability["status"] in {"unavailable", "offline"}:
+            raise AppError(
+                ErrorCode.PARTICIPANT_UNAVAILABLE,
+                "主持成员当前不可用",
+                status_code=409,
+                details={"member_id": host_member_id, "status": host_availability["status"]},
+            )
+        goal = str(task["goal"]).lower()
+        risk_level = str(task.get("risk_level") or RiskLevel.R1.value)
+        selected: list[dict[str, Any]] = [
+            self._selection(
+                members[host_member_id],
+                "host",
+                "主持人负责拆解、协调、评审和最终汇总。",
+                "主持协作并收束最终结论",
+            )
+        ]
+        rejected: list[dict[str, Any]] = []
+        candidates = [
+            ("mem_ningning", ["产品", "需求", "体验", "roadmap", "product"], "product_review"),
+            (
+                "mem_aheng",
+                ["技术", "架构", "代码", "实现", "engineering", "architecture"],
+                "architecture_review",
+            ),
+            ("mem_mobai", ["运营", "内容", "增长", "账号", "营销"], "operations_review"),
+            ("mem_xiaoqi", ["生活", "日程", "家居", "陪伴"], "life_service_review"),
+        ]
+        for member_id, keywords, role_in_task in candidates:
+            member = members.get(member_id)
+            if member is None or member_id == host_member_id:
+                continue
+            availability = await self._repo.get_availability(member_id)
+            policy = await self._repo.get_skill_policy("member", member_id)
+            if availability and availability["status"] in {"unavailable", "offline"}:
+                rejected.append(
+                    {
+                        "member_id": member_id,
+                        "role_in_task": role_in_task,
+                        "reason": "member_unavailable",
+                        "availability": availability["status"],
+                    }
+                )
+                continue
+            if policy and role_in_task in set(policy["denied_skills"] or []):
+                rejected.append(
+                    {
+                        "member_id": member_id,
+                        "role_in_task": role_in_task,
+                        "reason": "skill_policy_denied",
+                    }
+                )
+                continue
+            if any(keyword in goal for keyword in keywords):
+                selected.append(
+                    self._selection(
+                        member,
+                        role_in_task,
+                        f"任务目标命中 {role_in_task} 相关关键词。",
+                        self._objective_for_role(role_in_task, task["goal"]),
+                    )
+                )
+            elif len(selected) < 3 and member_id in {"mem_ningning", "mem_aheng"}:
+                selected.append(
+                    self._selection(
+                        member,
+                        "cross_function_review",
+                        "复杂任务默认需要产品和技术视角共同校验。",
+                        self._objective_for_role("cross_function_review", task["goal"]),
+                    )
+                )
+            else:
+                rejected.append(
+                    {
+                        "member_id": member_id,
+                        "role_in_task": role_in_task,
+                        "reason": "no_goal_match",
+                    }
+                )
+        boundary_summary = self._boundary_summary(
+            task,
+            resource_handle_ids=resource_handle_ids,
+            participant_count=len(selected),
+        )
+        decision = {
+            "routing_decision_id": new_id("rdec"),
+            "organization_id": task["organization_id"],
+            "task_id": task["task_id"],
+            "collaboration_plan_id": task.get("collaboration_plan_id"),
+            "host_member_id": host_member_id,
+            "mode": mode,
+            "status": status,
+            "selected_member_ids": [item["member_id"] for item in selected],
+            "rejected_candidates": rejected,
+            "routing_factors": {
+                "goal": str(redact(task["goal"])),
+                "task_risk_level": risk_level,
+                "resource_handle_count": len(resource_handle_ids),
+                "selected_count": len(selected),
+            },
+            "risk_summary": {
+                "risk_level": risk_level,
+                "approval_required": _risk_order(risk_level) >= _risk_order(RiskLevel.R3.value),
+                "mode": mode,
+            },
+            "boundary_summary": boundary_summary,
+            "trace_id": trace_id,
+            "created_at": utc_now_iso(),
+            "updated_at": utc_now_iso(),
+        }
+        return {"decision": decision, "selected": selected, "rejected": rejected}
+
+    def _boundary_record(
+        self,
+        task: dict[str, Any],
+        item: dict[str, Any],
+        *,
+        collaboration_plan_id: str | None,
+        participant_id: str | None,
+        trace_id: str | None,
+        status: str,
+        created_at: str,
+    ) -> dict[str, Any]:
+        return {
+            "boundary_id": new_id("bnd"),
+            "organization_id": task["organization_id"],
+            "task_id": task["task_id"],
+            "collaboration_plan_id": collaboration_plan_id,
+            "participant_id": participant_id,
+            "member_id": item["member_id"],
+            "context_scope": self._context_scope(task, item),
+            "allowed_context": ["task_goal", "own_member_profile", "shared_task_summary"],
+            "excluded_context": [
+                "other_members_private_memory",
+                "all_assets",
+                "secret_values",
+                "local_sensitive_paths",
+                "unrelated_conversations",
+            ],
+            "asset_scope": [{"scope": "Asset Broker", "handle_count": 0}],
+            "memory_scope": "member_private_only",
+            "redaction_summary": {
+                "task_goal_redacted": True,
+                "resource_handles_redacted": True,
+                "other_member_memory_excluded": True,
+            },
+            "status": status,
+            "trace_id": trace_id,
+            "created_at": created_at,
+            "updated_at": created_at,
+        }
+
+    def _boundary_summary(
+        self,
+        task: dict[str, Any],
+        *,
+        resource_handle_ids: list[str],
+        participant_count: int,
+    ) -> dict[str, Any]:
+        return {
+            "task_goal": str(redact(task["goal"])),
+            "participant_count": participant_count,
+            "resource_handle_count": len(resource_handle_ids),
+            "excluded_context": [
+                "other_members_private_memory",
+                "unapproved_assets",
+                "revoked_handles",
+                "local_sensitive_paths",
+            ],
+        }
+
+    async def preview_route(
+        self,
+        task_id: str,
+        *,
+        host_member_id: str | None = None,
+        mode: str | None = None,
+        resource_handle_ids: list[str] | None = None,
+        trace_id: str | None = None,
+    ) -> tuple[
+        CollaborationRoutingDecision,
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[CollaborationContextBoundary],
+    ]:
+        task = await self._get_supervisor_task(task_id)
+        span_id = await self._start_span(
+            trace_id,
+            TraceSpanType.SUPERVISOR_ROUTE_PREVIEW,
+            "preview supervisor routing",
+            input_data={"task_id": task_id},
+        )
+        route = await self._build_route(
+            task,
+            host_member_id or task.get("host_member_id") or task.get("owner_member_id")
+            or DEFAULT_HOST_MEMBER_ID,
+            mode=mode or self._mode_for_goal(task["goal"]),
+            resource_handle_ids=resource_handle_ids or [],
+            trace_id=trace_id,
+            status="previewed",
+        )
+        now = utc_now_iso()
+        await self._repo.insert_routing_decision(route["decision"])
+        boundaries: list[CollaborationContextBoundary] = []
+        for item in route["selected"]:
+            boundary = self._boundary_record(
+                task,
+                item,
+                collaboration_plan_id=None,
+                participant_id=None,
+                trace_id=trace_id,
+                status="previewed",
+                created_at=now,
+            )
+            await self._repo.insert_context_boundary(boundary)
+            boundaries.append(CollaborationContextBoundary(**boundary))
+        await self._event(
+            task_id,
+            "supervisor.route_previewed",
+            {
+                "routing_decision_id": route["decision"]["routing_decision_id"],
+                "selected_member_ids": route["decision"]["selected_member_ids"],
+                "rejected_count": len(route["rejected"]),
+            },
+            trace_id=trace_id,
+        )
+        await self._audit.write_event(
+            actor_type="system",
+            action="supervisor.route_previewed",
+            object_type="task",
+            object_id=task_id,
+            summary="Supervisor 路由预览已生成",
+            risk_level=RiskLevel.R1,
+            payload={
+                "routing_decision_id": route["decision"]["routing_decision_id"],
+                "selected_member_ids": route["decision"]["selected_member_ids"],
+                "rejected_count": len(route["rejected"]),
+            },
+            trace_id=trace_id,
+        )
+        await self._end_span(
+            span_id,
+            output_data={
+                "routing_decision_id": route["decision"]["routing_decision_id"],
+                "selected_member_ids": route["decision"]["selected_member_ids"],
+            },
+        )
+        return (
+            CollaborationRoutingDecision(**route["decision"]),
+            route["selected"],
+            route["rejected"],
+            boundaries,
+        )
+
+    async def routing_decisions(self, task_id: str) -> list[CollaborationRoutingDecision]:
+        await self._get_supervisor_task(task_id)
+        return [
+            CollaborationRoutingDecision(**row)
+            for row in await self._repo.list_routing_decisions(task_id)
+        ]
+
+    async def handoff_records(self, task_id: str) -> list[CollaborationHandoffRecord]:
+        await self._get_supervisor_task(task_id)
+        return [
+            CollaborationHandoffRecord(**row)
+            for row in await self._repo.list_handoff_records(task_id)
+        ]
+
+    async def context_boundaries(self, task_id: str) -> list[CollaborationContextBoundary]:
+        await self._get_supervisor_task(task_id)
+        return [
+            CollaborationContextBoundary(**row)
+            for row in await self._repo.list_context_boundaries(task_id)
+        ]
+
+    async def handoff_subtask(
+        self,
+        task_id: str,
+        subtask_id: str,
+        *,
+        to_member_id: str,
+        reason: str,
+        trace_id: str | None = None,
+    ) -> TaskSubtask:
+        task = await self._get_supervisor_task(task_id)
+        _ensure_mutable_task(task)
+        span_id = await self._start_span(
+            trace_id,
+            TraceSpanType.SUPERVISOR_HANDOFF,
+            "handoff supervisor subtask",
+            input_data={"task_id": task_id, "subtask_id": subtask_id, "to_member_id": to_member_id},
+        )
+        subtask = await self._repo.get_subtask(subtask_id)
+        if subtask is None or subtask["parent_task_id"] != task_id:
+            raise AppError(ErrorCode.NOT_FOUND, "子任务不存在", status_code=404)
+        if subtask["status"] in {"completed", "merged"}:
+            raise AppError(
+                ErrorCode.TASK_STATE_INVALID,
+                "已完成子任务不能接力",
+                status_code=409,
+            )
+        if subtask["assigned_member_id"] == to_member_id:
+            raise AppError(
+                ErrorCode.TASK_STATE_INVALID,
+                "接力目标成员不能与当前成员相同",
+                status_code=409,
+            )
+        member = await self._members.get_member(to_member_id)
+        if member is None:
+            raise AppError(ErrorCode.NOT_FOUND, "成员不存在", status_code=404)
+        availability = await self._repo.get_availability(to_member_id)
+        if availability and availability["status"] in {"unavailable", "offline"}:
+            raise AppError(
+                ErrorCode.PARTICIPANT_UNAVAILABLE,
+                "目标成员当前不可接力",
+                status_code=409,
+                details={"member_id": to_member_id, "status": availability["status"]},
+            )
+        plan = await self._repo.get_collaboration_plan(task_id)
+        now = utc_now_iso()
+        participants = await self._repo.list_participants(task_id)
+        target_participant = next(
+            (
+                item
+                for item in participants
+                if item["member_id"] == to_member_id and item.get("removed_at") is None
+            ),
+            None,
+        )
+        target_selection = self._selection(
+            member,
+            "handoff_receiver",
+            "主持人根据可用性、技能策略和任务上下文发起接力。",
+            subtask["objective"],
+        )
+        context_scope = self._context_scope(task, target_selection)
+        allowed_skills = await self._allowed_skills_for_member(to_member_id)
+        async with self._repo.transaction():
+            if target_participant is None:
+                participant_id = new_id("pt")
+                await self._repo.insert_participant(
+                    {
+                        "participant_id": participant_id,
+                        "organization_id": task["organization_id"],
+                        "task_id": task_id,
+                        "member_id": to_member_id,
+                        "role_in_task": target_selection["role_in_task"],
+                        "participant_type": "member",
+                        "status": "context_prepared",
+                        "selection_reason": target_selection["selection_reason"],
+                        "context_scope": context_scope,
+                        "allowed_skills": allowed_skills,
+                        "allowed_mcp_tools": [],
+                        "trace_id": trace_id,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+                target_participant = await self._repo.get_participant(participant_id)
+            participant_id = (
+                target_participant["participant_id"]
+                if target_participant is not None
+                else participant_id
+            )
+            await self._repo.update_subtask(
+                subtask_id,
+                {
+                    "participant_id": participant_id,
+                    "assigned_member_id": to_member_id,
+                    "status": "ready",
+                    "context_scope": context_scope,
+                    "allowed_skills": allowed_skills,
+                    "allowed_mcp_tools": [],
+                    "error_code": None,
+                    "error_summary": None,
+                    "trace_id": trace_id,
+                    "updated_at": now,
+                    "completed_at": None,
+                },
+            )
+            handoff = {
+                "handoff_id": new_id("handoff"),
+                "organization_id": task["organization_id"],
+                "task_id": task_id,
+                "collaboration_plan_id": plan["collaboration_plan_id"] if plan else None,
+                "subtask_id": subtask_id,
+                "from_participant_id": subtask.get("participant_id"),
+                "from_member_id": subtask.get("assigned_member_id"),
+                "to_participant_id": participant_id,
+                "to_member_id": to_member_id,
+                "reason": str(redact(reason)),
+                "status": "completed",
+                "context_summary": {
+                    "context_scope": "least_visible_summary",
+                    "objective": str(redact(subtask["objective"])),
+                },
+                "boundary_summary": self._boundary_summary(
+                    task,
+                    resource_handle_ids=[],
+                    participant_count=1,
+                ),
+                "source_refs": [
+                    {
+                        "subtask_id": subtask_id,
+                        "from_member_id": subtask.get("assigned_member_id"),
+                        "to_member_id": to_member_id,
+                    }
+                ],
+                "trace_id": trace_id,
+                "created_at": now,
+                "updated_at": now,
+            }
+            await self._repo.insert_handoff_record(handoff)
+            await self._repo.insert_context_boundary(
+                self._boundary_record(
+                    task,
+                    target_selection,
+                    collaboration_plan_id=plan["collaboration_plan_id"] if plan else None,
+                    participant_id=participant_id,
+                    trace_id=trace_id,
+                    status="active",
+                    created_at=now,
+                )
+            )
+        await self._event(
+            task_id,
+            "subtask.handoff",
+            {
+                "subtask_id": subtask_id,
+                "from_member_id": subtask.get("assigned_member_id"),
+                "to_member_id": to_member_id,
+                "reason": str(redact(reason)),
+            },
+            trace_id=trace_id,
+        )
+        await self._audit.write_event(
+            actor_type="system",
+            action="subtask.handoff",
+            object_type="task_subtask",
+            object_id=subtask_id,
+            summary="协作子任务已接力",
+            risk_level=RiskLevel.R1,
+            payload={
+                "task_id": task_id,
+                "from_member_id": subtask.get("assigned_member_id"),
+                "to_member_id": to_member_id,
+                "reason": str(redact(reason)),
+            },
+            trace_id=trace_id,
+        )
+        updated = await self._repo.get_subtask(subtask_id)
+        await self._end_span(
+            span_id,
+            output_data={
+                "subtask_id": subtask_id,
+                "to_member_id": to_member_id,
+                "handoff_id": handoff["handoff_id"],
+            },
+        )
+        return TaskSubtask(**updated) if updated else TaskSubtask(**subtask)
+
     async def remove_participant(
         self,
         task_id: str,
@@ -618,10 +1119,22 @@ class SupervisorService:
         replay = CollaborationReplay(
             task=task,
             collaboration_plan=CollaborationPlan(**plan_row) if plan_row else None,
+            routing_decisions=[
+                CollaborationRoutingDecision(**row)
+                for row in await self._repo.list_routing_decisions(task_id)
+            ],
             participants=[
                 TaskParticipant(**row) for row in await self._repo.list_participants(task_id)
             ],
             subtasks=[TaskSubtask(**row) for row in await self._repo.list_subtasks(task_id)],
+            handoff_records=[
+                CollaborationHandoffRecord(**row)
+                for row in await self._repo.list_handoff_records(task_id)
+            ],
+            context_boundaries=[
+                CollaborationContextBoundary(**row)
+                for row in await self._repo.list_context_boundaries(task_id)
+            ],
             rounds=[CollaborationRound(**row) for row in await self._repo.list_rounds(task_id)],
             outputs=[
                 CollaborationOutput(**row)
@@ -744,61 +1257,15 @@ class SupervisorService:
         task: dict[str, Any],
         host_member_id: str,
     ) -> list[dict[str, Any]]:
-        members = {row["member_id"]: row for row in await self._members.list_members()}
-        if host_member_id not in members:
-            raise AppError(ErrorCode.PARTICIPANT_NOT_FOUND, "主持成员不存在", status_code=404)
-        selected: list[dict[str, Any]] = [
-            self._selection(
-                members[host_member_id],
-                "host",
-                "主持人负责拆解、协调、评审和最终汇总。",
-                "主持协作并收束最终结论",
-            )
-        ]
-        goal = str(task["goal"]).lower()
-        candidates = [
-            ("mem_ningning", ["产品", "需求", "体验", "roadmap", "product"], "product_review"),
-            (
-                "mem_aheng",
-                ["技术", "架构", "代码", "实现", "engineering", "architecture"],
-                "architecture_review",
-            ),
-            ("mem_mobai", ["运营", "内容", "增长", "账号", "营销"], "operations_review"),
-            ("mem_xiaoqi", ["生活", "日程", "家居", "陪伴"], "life_service_review"),
-        ]
-        for member_id, keywords, role_in_task in candidates:
-            if member_id == host_member_id or member_id not in members:
-                continue
-            if any(keyword in goal for keyword in keywords):
-                selected.append(
-                    self._selection(
-                        members[member_id],
-                        role_in_task,
-                        f"任务目标命中 {role_in_task} 相关关键词。",
-                        self._objective_for_role(role_in_task, task["goal"]),
-                    )
-                )
-        if len(selected) < 3:
-            for member_id in ("mem_ningning", "mem_aheng"):
-                if member_id != host_member_id and member_id in members:
-                    if not any(item["member_id"] == member_id for item in selected):
-                        selected.append(
-                            self._selection(
-                                members[member_id],
-                                "cross_function_review",
-                                "复杂任务默认需要产品和技术视角共同校验。",
-                                self._objective_for_role("cross_function_review", task["goal"]),
-                            )
-                        )
-                if len(selected) >= 3:
-                    break
-        available: list[dict[str, Any]] = []
-        for item in selected:
-            availability = await self._repo.get_availability(item["member_id"])
-            if availability and availability["status"] in {"unavailable", "offline"}:
-                continue
-            available.append(item)
-        return available
+        route = await self._build_route(
+            task,
+            host_member_id,
+            mode=self._mode_for_goal(task["goal"]),
+            resource_handle_ids=[],
+            trace_id=None,
+            status="planned",
+        )
+        return route["selected"]
 
     def _selection(
         self,
@@ -1185,6 +1652,10 @@ def _ensure_mutable_task(task: dict[str, Any]) -> None:
             "终态任务不能修改协作参与者或子任务",
             status_code=409,
         )
+
+
+def _risk_order(value: str) -> int:
+    return int(str(value).removeprefix("R"))
 
 
 TaskDetailProvider = Callable[[str], Awaitable[TaskDetail]]

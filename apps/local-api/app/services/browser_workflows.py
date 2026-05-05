@@ -37,6 +37,7 @@ from app.schemas.browser_workflows import (
 from app.schemas.tasks import TaskCreateRequest, ToolExecuteRequest
 from app.services.approvals import ApprovalService
 from app.services.audit import AuditEventService
+from app.services.safety_policy import RuntimeSafetyPolicyService
 from app.services.tasks import TaskEngine
 from app.services.tools import ToolRuntime
 
@@ -117,6 +118,7 @@ class AutonomousBrowserWorkflowService:
         tool_runtime: ToolRuntime,
         approval_service: ApprovalService,
         audit_service: AuditEventService,
+        safety_policy_service: RuntimeSafetyPolicyService | None = None,
     ) -> None:
         self._repo = repo
         self._task_repo = task_repo
@@ -124,6 +126,7 @@ class AutonomousBrowserWorkflowService:
         self._tools = tool_runtime
         self._approvals = approval_service
         self._audit = audit_service
+        self._safety_policy = safety_policy_service
 
     async def resolve_intent(
         self,

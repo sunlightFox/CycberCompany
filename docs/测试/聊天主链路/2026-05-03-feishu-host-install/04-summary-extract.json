@@ -1,0 +1,91 @@
+{
+  "plan_id": "hip_750a57a127f84dc6bebe30069a55014b",
+  "approval_id": "apr_416de391be7141159b2a356d6bab3947",
+  "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+  "source": {
+    "candidate_attempts": [
+      {
+        "match_confidence": 0.0,
+        "query": "飞书",
+        "source_type": "package_manager_search",
+        "status": "no_match"
+      },
+      {
+        "candidate_count": 1,
+        "query": "飞书",
+        "source_type": "model_candidate_expansion",
+        "status": "matched"
+      },
+      {
+        "match_confidence": 0.0,
+        "query": "飞书",
+        "source_type": "package_manager_search_model_candidates",
+        "status": "no_match"
+      },
+      {
+        "match_confidence": 0.96,
+        "query": "飞书",
+        "source_type": "official_winget_manifest",
+        "status": "matched"
+      }
+    ],
+    "final_match_confidence": 0.96,
+    "installer_sha256": "31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F",
+    "installer_url": "https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe",
+    "match_confidence": 0.96,
+    "match_reason": "official_winget_manifest_dynamic",
+    "model_assisted": true,
+    "model_candidate_count": 1,
+    "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+    "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Feishu/7.67.9/ByteDance.Feishu.installer.yaml",
+    "official_source_assisted": true,
+    "package_id": "ByteDance.Feishu",
+    "package_manager": "winget_manifest",
+    "publisher": "ByteDance",
+    "resolved_via": "official_winget_manifest",
+    "source_type": "official_manifest_installer_fallback",
+    "target_source_type": "official_installer_from_winget_manifest",
+    "trust": "official_manifest_with_sha256",
+    "version": "7.67.9"
+  },
+  "plan_ms": 64251,
+  "result": {
+    "workflow": "host_install",
+    "host_action": "install",
+    "host_install_plan_id": "hip_750a57a127f84dc6bebe30069a55014b",
+    "host_install_execution_id": "hie_735a80c983fd451da6d1874b30feaf35",
+    "status": "installed",
+    "exit_code": 0,
+    "log_artifact_id": "art_84679994fdc64fdf9571899d4db0622c",
+    "version_detected": "7.67.9",
+    "install_path_summary": "installed_by_package_manager",
+    "dry_run": false
+  },
+  "timings": [
+    {
+      "stage": "approval approve and real install",
+      "duration_ms": 138650
+    },
+    {
+      "stage": "host install detail fetch",
+      "duration_ms": 18
+    },
+    {
+      "stage": "task detail fetch",
+      "duration_ms": 17
+    },
+    {
+      "stage": "host install log artifact fetch",
+      "duration_ms": 23
+    },
+    {
+      "stage": "windows installed app verification",
+      "duration_ms": 1341
+    },
+    {
+      "stage": "total approval/install/verify run",
+      "duration_ms": 140051
+    }
+  ],
+  "primary_duration_ms": "130500"
+}

@@ -27,3 +27,52 @@ channels:
       test_only: true
       private_chat_only: true
       group_messages: disabled
+    feishu:
+      enabled: true
+      state_dir: data/channel-providers/feishu
+      timeout_seconds: 10
+      min_version: "openapi-v1"
+      private_chat_only: false
+      group_messages: enabled
+      allow_mock_fallback: false
+      poll_enabled: true
+      poll_interval_seconds: 5
+      poll_batch_size: 20
+      pairing_required: true
+      allow_unknown_private: false
+      media:
+        domain: open.feishu.cn
+        transport_mode: websocket
+        app_id_env: FEISHU_APP_ID
+        app_secret_env: FEISHU_APP_SECRET
+        verification_token_env: FEISHU_VERIFICATION_TOKEN
+        encrypt_key_env: FEISHU_ENCRYPT_KEY
+        redirect_uri_env: FEISHU_REDIRECT_URI
+        redirect_uri: http://127.0.0.1:8765/api/channels/inbound/feishu/bind-callback
+        receive_id_type: chat_id
+        capabilities:
+          - text
+          - image
+          - file
+          - audio
+          - card
+          - recall
+          - reaction
+          - read
+          - history
+          - media_upload
+          - media_download
+        allowed_types:
+          - image
+          - audio
+          - file
+        max_bytes: 10485760
+    feishu_mock:
+      enabled: true
+      test_only: true
+      private_chat_only: false
+      group_messages: enabled
+      poll_enabled: true
+      poll_batch_size: 20
+      media:
+        transport_mode: websocket

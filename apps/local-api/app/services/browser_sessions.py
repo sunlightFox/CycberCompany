@@ -7,6 +7,7 @@ from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 from core_types import (
     BrowserEvidence,
+    BrowserPageState,
     BrowserProfile,
     BrowserProfileEvent,
     BrowserSession,
@@ -22,6 +23,11 @@ from app.db.repositories.browser_repo import BrowserRepository
 from app.schemas.browser import (
     BrowserProfileCreateRequest,
     BrowserProfileUpdateRequest,
+    BrowserSessionHealthCheckRequest,
+    BrowserSessionHealthCheckResponse,
+    BrowserSessionHealthProbeResponse,
+    BrowserSessionRestoreContextRequest,
+    BrowserSessionRestoreContextResponse,
     BrowserSessionCreateRequest,
 )
 from app.services.audit import AuditEventService
@@ -204,6 +210,8 @@ class BrowserSessionService:
             "created_at": now,
             "updated_at": now,
             "expires_at": request.expires_at,
+            "health_status": "unknown",
+            "reuse_policy": request.metadata.get("reuse_policy", {}),
         }
         await self._repo.insert_profile(data)
         await self._event(
@@ -395,6 +403,9 @@ class BrowserSessionService:
             "created_at": now,
             "updated_at": now,
             "expires_at": request.expires_at,
+            "health_status": "unknown",
+            "login_state": "unknown",
+            "reuse_policy": request.reuse_policy,
         }
         await self._repo.insert_session(data)
         await self._event(
@@ -442,11 +453,150 @@ class BrowserSessionService:
             raise AppError(ErrorCode.NOT_FOUND, "浏览器 session 不存在", status_code=404)
         return BrowserSession(**row)
 
+    async def health_check_session(
+        self,
+        browser_session_id: str,
+        request: BrowserSessionHealthCheckRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> BrowserSessionHealthCheckResponse:
+        session = await self.get_session(browser_session_id)
+        profile = await self.get_profile(session.browser_profile_id)
+        decision = self._infer_health_decision(
+            session=session,
+            profile=profile,
+            probe_type=request.probe_type,
+            provider_status=request.provider_status,
+            observed_status=request.observed_status,
+            failure_reason=request.failure_reason,
+            recovery_hint=request.recovery_hint,
+            evidence=request.evidence,
+        )
+        now = utc_now_iso()
+        probe_id = new_id("bsp")
+        await self._repo.insert_health_probe(
+            {
+                "probe_id": probe_id,
+                "organization_id": session.organization_id,
+                "browser_profile_id": session.browser_profile_id,
+                "browser_session_id": session.browser_session_id,
+                "probe_type": request.probe_type,
+                "health_status": decision["health_status"],
+                "login_state": decision["login_state"],
+                "provider_status": request.provider_status,
+                "failure_reason": decision.get("failure_reason"),
+                "recovery_hint": decision.get("recovery_hint"),
+                "evidence_redacted": redact(request.evidence),
+                "redaction_summary": {
+                    "policy": "trace_service.redact",
+                    "cookie_redacted": True,
+                    "token_redacted": True,
+                },
+                "trace_id": trace_id,
+                "probed_at": now,
+            }
+        )
+        await self._repo.update_session(
+            browser_session_id,
+            {
+                "health_status": decision["health_status"],
+                "login_state": decision["login_state"],
+                "last_probe_at": now,
+                "invalidation_reason": decision.get("failure_reason"),
+                "recovery_hint": decision.get("recovery_hint"),
+                "status": decision["session_status"],
+                "updated_at": now,
+            },
+        )
+        await self._repo.update_profile(
+            session.browser_profile_id,
+            {
+                "health_status": decision["health_status"],
+                "last_probe_at": now,
+                "recovery_hint": decision.get("recovery_hint"),
+                "updated_at": now,
+            },
+        )
+        await self._event(
+            session.browser_profile_id,
+            "browser_session.health_checked",
+            {
+                "browser_session_id": session.browser_session_id,
+                "health_status": decision["health_status"],
+                "login_state": decision["login_state"],
+                "provider_status": request.provider_status,
+            },
+            browser_session_id=session.browser_session_id,
+            trace_id=trace_id,
+        )
+        updated_session = await self.get_session(browser_session_id)
+        updated_profile = await self.get_profile(session.browser_profile_id)
+        probe = await self.get_health_probe(browser_session_id, probe_id)
+        return BrowserSessionHealthCheckResponse(
+            browser_session=updated_session,
+            browser_profile=updated_profile,
+            probe=probe,
+        )
+
+    async def restore_context(
+        self,
+        browser_session_id: str,
+        request: BrowserSessionRestoreContextRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> BrowserSessionRestoreContextResponse:
+        session = await self.get_session(browser_session_id)
+        profile = await self.get_profile(session.browser_profile_id)
+        decision = self._infer_health_decision(
+            session=session,
+            profile=profile,
+            probe_type="restore_context",
+            provider_status=None,
+            observed_status=None,
+            failure_reason=None,
+            recovery_hint=None,
+            evidence={},
+        )
+        context = {
+            "browser_profile_id": session.browser_profile_id,
+            "browser_session_id": session.browser_session_id,
+            "login_domain": session.login_domain,
+            "health_status": decision["health_status"],
+            "login_state": decision["login_state"],
+            "restore_context_ref": session.restore_context_ref,
+            "recoverable": decision["health_status"] != "healthy",
+            "page_key": request.page_key,
+            "current_url": str(redact(request.current_url)) if request.current_url else None,
+            "requested_action": request.requested_action,
+            "redaction_summary": {
+                "policy": "trace_service.redact",
+                "cookie_redacted": True,
+                "token_redacted": True,
+                "profile_path_visible": False,
+            },
+        }
+        await self._repo.update_session(
+            browser_session_id,
+            {
+                "restore_context_ref": new_id("bctx"),
+                "updated_at": utc_now_iso(),
+            },
+        )
+        session = await self.get_session(browser_session_id)
+        return BrowserSessionRestoreContextResponse(
+            browser_session=session,
+            browser_profile=profile,
+            context=context,
+        )
+
     async def validate_session_context(
         self,
         *,
         browser_profile_id: str | None,
         browser_session_id: str | None,
+        member_id: str | None = None,
+        task_id: str | None = None,
+        url: str | None = None,
     ) -> dict[str, Any]:
         if not browser_profile_id and not browser_session_id:
             return {}
@@ -455,20 +605,13 @@ class BrowserSessionService:
         if profile_id is None:
             return {}
         profile = await self.get_profile(profile_id)
-        if profile.status != "active":
-            raise AppError(
-                ErrorCode.ASSET_HANDLE_INVALID,
-                "浏览器 profile 已不可用",
-                status_code=403,
-                details={"profile_status": profile.status},
-            )
-        if session is not None and session.status != "active":
-            raise AppError(
-                ErrorCode.ASSET_HANDLE_INVALID,
-                "浏览器 session 已不可用",
-                status_code=403,
-                details={"session_status": session.status},
-            )
+        self._ensure_session_usable(
+            session=session,
+            profile=profile,
+            member_id=member_id,
+            task_id=task_id,
+            url=url,
+        )
         return {
             "browser_profile_id": profile.browser_profile_id,
             "browser_session_id": session.browser_session_id if session else None,
@@ -476,6 +619,8 @@ class BrowserSessionService:
             "allowed_domains": profile.allowed_domains,
             "blocked_domains": profile.blocked_domains,
             "sensitivity": session.sensitivity if session else profile.sensitivity,
+            "reuse_policy": session.reuse_policy if session else profile.reuse_policy,
+            "login_domain": session.login_domain if session else None,
         }
 
     def classify_url(
@@ -567,9 +712,12 @@ class BrowserSessionService:
                 }
             )
         if context.get("browser_session_id"):
-            await self._repo.update_session(
+            await self._touch_session_usage(
                 str(context["browser_session_id"]),
-                {"last_used_at": created_at, "updated_at": created_at},
+                created_at=created_at,
+                task_id=task_id,
+                browser_evidence_id=evidence_id,
+                page_key=None,
             )
         return BrowserEvidence(**data)
 
@@ -582,12 +730,308 @@ class BrowserSessionService:
     async def list_task_evidence(self, task_id: str) -> list[BrowserEvidence]:
         return [BrowserEvidence(**row) for row in await self._repo.list_evidence_for_task(task_id)]
 
+    async def get_health_probe(
+        self,
+        browser_session_id: str,
+        probe_id: str,
+    ) -> BrowserSessionHealthProbeResponse:
+        rows = await self._repo.list_health_probes(browser_session_id)
+        for row in rows:
+            if row["probe_id"] == probe_id:
+                return BrowserSessionHealthProbeResponse(**row)
+        raise AppError(ErrorCode.NOT_FOUND, "浏览器健康探测不存在", status_code=404)
+
+    async def list_page_states(
+        self,
+        *,
+        browser_session_id: str | None = None,
+        task_id: str | None = None,
+        page_key: str | None = None,
+    ) -> list[BrowserPageState]:
+        return [
+            BrowserPageState(**row)
+            for row in await self._repo.list_page_states(
+                browser_session_id=browser_session_id,
+                task_id=task_id,
+                page_key=page_key,
+            )
+        ]
+
+    async def record_page_state(
+        self,
+        *,
+        task_id: str | None,
+        tool_call_id: str | None,
+        organization_id: str,
+        action: str,
+        action_status: str,
+        page_key: str,
+        current_url: str | None,
+        title: str | None,
+        http_status: int | None,
+        dom_summary: dict[str, Any],
+        network_summary: dict[str, Any],
+        console_summary: dict[str, Any],
+        task_checkpoint: dict[str, Any],
+        redaction_summary: dict[str, Any],
+        session_context: dict[str, Any],
+        trace_id: str | None = None,
+        browser_evidence_id: str | None = None,
+    ) -> BrowserPageState:
+        page_state_id = new_id("bps")
+        created_at = utc_now_iso()
+        data = {
+            "page_state_id": page_state_id,
+            "organization_id": organization_id,
+            "task_id": task_id,
+            "tool_call_id": tool_call_id,
+            "browser_profile_id": session_context.get("browser_profile_id"),
+            "browser_session_id": session_context.get("browser_session_id"),
+            "browser_evidence_id": browser_evidence_id,
+            "page_key": page_key,
+            "action": action,
+            "action_status": action_status,
+            "current_url": str(redact(current_url)) if current_url else None,
+            "title": str(redact(title)) if title else None,
+            "http_status": http_status,
+            "dom_summary": redact(dom_summary),
+            "network_summary": redact(network_summary),
+            "console_summary": redact(console_summary),
+            "task_checkpoint": redact(task_checkpoint),
+            "redaction_summary": {
+                "policy": "trace_service.redact",
+                "cookie_redacted": True,
+                "token_redacted": True,
+                **redaction_summary,
+            },
+            "trace_id": trace_id,
+            "created_at": created_at,
+        }
+        await self._repo.insert_page_state(data)
+        if session_context.get("browser_session_id"):
+            await self._touch_session_usage(
+                str(session_context["browser_session_id"]),
+                created_at=created_at,
+                task_id=task_id,
+                browser_evidence_id=browser_evidence_id,
+                page_key=page_key,
+            )
+        return BrowserPageState(**data)
+
     async def list_profile_events(self, browser_profile_id: str) -> list[BrowserProfileEvent]:
         await self.get_profile(browser_profile_id)
         return [
             BrowserProfileEvent(**row)
             for row in await self._repo.list_profile_events(browser_profile_id)
         ]
+
+    def _infer_health_decision(
+        self,
+        *,
+        session: BrowserSession,
+        profile: BrowserProfile,
+        probe_type: str,
+        provider_status: str | None,
+        observed_status: str | None,
+        failure_reason: str | None,
+        recovery_hint: str | None,
+        evidence: dict[str, Any],
+    ) -> dict[str, Any]:
+        probed_at = utc_now_iso()
+        if session.status in {"revoked", "cleared"} or profile.status == "revoked":
+            return {
+                "health_status": "session_expired",
+                "login_state": "expired",
+                "session_status": "expired",
+                "failure_reason": failure_reason or "session_revoked",
+                "recovery_hint": recovery_hint or "rebind_session_asset",
+            }
+        if _is_expired(session.expires_at):
+            return {
+                "health_status": "session_expired",
+                "login_state": "expired",
+                "session_status": "expired",
+                "failure_reason": failure_reason or "session_expired",
+                "recovery_hint": recovery_hint or "create_new_session_asset",
+            }
+        if provider_status in {"unreachable", "down", "offline"}:
+            return {
+                "health_status": "provider_unreachable",
+                "login_state": "unknown",
+                "session_status": "degraded",
+                "failure_reason": failure_reason or "provider_unreachable",
+                "recovery_hint": recovery_hint or "retry_when_provider_available",
+            }
+        if observed_status in {
+            "healthy",
+            "login_required",
+            "session_expired",
+            "provider_unreachable",
+            "recovery_required",
+            "degraded",
+        }:
+            health_status = observed_status
+        elif evidence.get("login_required") or evidence.get("challenge_detected"):
+            health_status = "login_required"
+        elif evidence.get("session_expired"):
+            health_status = "session_expired"
+        elif evidence.get("recovery_required"):
+            health_status = "recovery_required"
+        elif evidence.get("degraded"):
+            health_status = "degraded"
+        else:
+            health_status = "healthy"
+        if health_status == "healthy":
+            login_state = "authenticated"
+            session_status = "active"
+        elif health_status == "login_required":
+            login_state = "login_required"
+            session_status = "degraded"
+        elif health_status == "session_expired":
+            login_state = "expired"
+            session_status = "expired"
+        elif health_status == "provider_unreachable":
+            login_state = "unknown"
+            session_status = "degraded"
+        elif health_status == "recovery_required":
+            login_state = "recovery_required"
+            session_status = "recovery_required"
+        else:
+            login_state = "degraded"
+            session_status = "degraded"
+        return {
+            "health_status": health_status,
+            "login_state": login_state,
+            "session_status": session_status,
+            "failure_reason": failure_reason or evidence.get("failure_reason"),
+            "recovery_hint": recovery_hint or evidence.get("recovery_hint"),
+            "probed_at": probed_at,
+            "probe_type": probe_type,
+        }
+
+    def _ensure_session_usable(
+        self,
+        *,
+        session: BrowserSession | None,
+        profile: BrowserProfile,
+        member_id: str | None,
+        task_id: str | None,
+        url: str | None,
+    ) -> None:
+        if profile.status != "active":
+            raise AppError(
+                "SESSION_PROFILE_INACTIVE",
+                "浏览器 profile 已不可用",
+                status_code=403,
+                details={"profile_status": profile.status},
+            )
+        if session is None:
+            return
+        if session.status in {"revoked", "cleared"}:
+            raise AppError(
+                "SESSION_EXPIRED",
+                "浏览器 session 已失效",
+                status_code=409,
+                details={
+                    "session_status": session.status,
+                    "health_status": session.health_status,
+                    "login_state": session.login_state,
+                    "recovery_hint": session.recovery_hint,
+                },
+            )
+        if session.health_status == "login_required" or session.login_state == "login_required":
+            raise AppError(
+                "LOGIN_REQUIRED",
+                "浏览器 session 登录态已失效，需要用户重新登录",
+                status_code=409,
+                details={
+                    "session_status": session.status,
+                    "health_status": session.health_status,
+                    "login_state": session.login_state,
+                    "recovery_hint": session.recovery_hint,
+                },
+            )
+        if session.health_status == "session_expired" or session.status == "expired":
+            raise AppError(
+                "SESSION_EXPIRED",
+                "浏览器 session 已过期，需要重新授权",
+                status_code=409,
+                details={
+                    "session_status": session.status,
+                    "health_status": session.health_status,
+                    "login_state": session.login_state,
+                    "recovery_hint": session.recovery_hint,
+                },
+            )
+        if session.health_status in {
+            "recovery_required",
+            "provider_unreachable",
+            "degraded",
+        } or session.status in {"recovery_required", "degraded"}:
+            raise AppError(
+                "RECOVERY_REQUIRED",
+                "浏览器 session 需要恢复后才能复用",
+                status_code=409,
+                details={
+                    "session_status": session.status,
+                    "health_status": session.health_status,
+                    "login_state": session.login_state,
+                    "recovery_hint": session.recovery_hint,
+                },
+            )
+        if member_id and session.created_by_member_id and session.created_by_member_id != member_id:
+            raise AppError(
+                "SESSION_REUSE_DENIED",
+                "浏览器 session 不允许跨成员复用",
+                status_code=403,
+                details={"reason": "member_mismatch"},
+            )
+        if task_id and session.reuse_policy.get("cross_task_reuse") is False:
+            last_task_id = str(session.session_metadata.get("last_task_id") or "")
+            if last_task_id and last_task_id != task_id:
+                raise AppError(
+                    "SESSION_REUSE_DENIED",
+                    "浏览器 session 不允许跨任务复用",
+                    status_code=403,
+                    details={"reason": "task_mismatch"},
+                )
+        if url and profile.allowed_domains:
+            parsed = urlsplit(url)
+            host = parsed.hostname.lower() if parsed.hostname else None
+            if host and host not in {item.lower() for item in profile.allowed_domains}:
+                if not _domain_allowed(host, profile.allowed_domains):
+                    raise AppError(
+                        "SESSION_REUSE_DENIED",
+                        "浏览器 session 不允许跨域名复用",
+                        status_code=403,
+                        details={"reason": "domain_mismatch"},
+                    )
+
+    async def _touch_session_usage(
+        self,
+        browser_session_id: str,
+        *,
+        created_at: str,
+        task_id: str | None,
+        browser_evidence_id: str | None,
+        page_key: str | None,
+    ) -> None:
+        session = await self.get_session(browser_session_id)
+        metadata = dict(session.session_metadata)
+        if task_id:
+            metadata["last_task_id"] = task_id
+        if browser_evidence_id:
+            metadata["last_browser_evidence_id"] = browser_evidence_id
+        if page_key:
+            metadata["last_page_key"] = page_key
+        await self._repo.update_session(
+            browser_session_id,
+            {
+                "session_metadata": metadata,
+                "last_used_at": created_at,
+                "updated_at": created_at,
+            },
+        )
 
     async def _event(
         self,
@@ -611,6 +1055,22 @@ class BrowserSessionService:
                 "created_at": utc_now_iso(),
             }
         )
+
+
+def _is_expired(value: Any) -> bool:
+    if value is None:
+        return False
+    try:
+        from datetime import UTC, datetime
+
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if isinstance(value, datetime):
+            now = datetime.now(UTC) if value.tzinfo else datetime.now()
+            return value <= now
+    except Exception:
+        return False
+    return False
 
 
 def _default_profile_policy(policy: dict[str, Any]) -> dict[str, Any]:

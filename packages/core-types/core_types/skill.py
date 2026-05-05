@@ -194,6 +194,15 @@ class SkillRepositoryEntry(ApiModel):
     checksum: str | None = None
     trust_level: str = "restricted"
     status: str
+    health_status: str = "unknown"
+    quality_score: float = 0.5
+    install_count: int = 0
+    compatibility: dict[str, Any] = Field(default_factory=dict)
+    dependency_summary: dict[str, Any] = Field(default_factory=dict)
+    latest_eval_status: str | None = None
+    last_health_check_at: datetime | None = None
+    health_reason: str | None = None
+    package_metadata: dict[str, Any] = Field(default_factory=dict)
     indexed_at: datetime
     updated_at: datetime
 
@@ -210,6 +219,84 @@ class SkillRepositorySyncRun(ApiModel):
     started_at: datetime
     completed_at: datetime | None = None
     created_at: datetime
+
+
+class SkillMarketplaceHealthRecord(ApiModel):
+    health_record_id: EntityId
+    organization_id: EntityId
+    repository_id: EntityId
+    package_ref: str | None = None
+    bundle_id: EntityId | None = None
+    health_status: str
+    provider_status: str = "unknown"
+    quality_score: float = 0.5
+    reason_codes: list[str] = Field(default_factory=list)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
+    checked_at: datetime
+    created_at: datetime
+
+
+class SkillMarketplaceInstallRecord(ApiModel):
+    install_record_id: EntityId
+    organization_id: EntityId
+    repository_id: EntityId | None = None
+    package_ref: str | None = None
+    bundle_id: EntityId | None = None
+    installed_bundle_id: EntityId | None = None
+    skill_id: EntityId | None = None
+    version: str | None = None
+    status: str
+    gate_status: str
+    eval_status: str | None = None
+    blocked_reason: str | None = None
+    source_uri_hash: str | None = None
+    requested_by_member_id: EntityId | None = None
+    trace_id: EntityId | None = None
+    created_at: datetime
+
+
+class SkillDependencyEdge(ApiModel):
+    edge_id: EntityId
+    organization_id: EntityId
+    source_type: str
+    source_id: EntityId
+    target_type: str
+    target_id: EntityId
+    dependency_kind: str
+    required_action: str | None = None
+    risk_level: str = "R1"
+    status: str
+    fail_closed_reason: str | None = None
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SkillGrowthCandidate(ApiModel):
+    evidence_id: EntityId
+    organization_id: EntityId
+    candidate_id: EntityId | None = None
+    source_type: str
+    source_id: EntityId
+    experience_id: EntityId | None = None
+    task_id: EntityId | None = None
+    memory_id: EntityId | None = None
+    outcome: str | None = None
+    reuse_score: float = 0
+    decision: str
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
+    created_at: datetime
+
+
+class SkillMarketplacePackageDetail(ApiModel):
+    entry: SkillRepositoryEntry
+    versions: list[dict[str, Any]] = Field(default_factory=list)
+    latest_health: SkillMarketplaceHealthRecord | None = None
+    install_records: list[SkillMarketplaceInstallRecord] = Field(default_factory=list)
+    dependency_edges: list[SkillDependencyEdge] = Field(default_factory=list)
 
 
 class MCPServerRecord(ApiModel):

@@ -1,0 +1,53 @@
+{
+  "conversation_id": null,
+  "ended_at": "2026-05-03T09:39:05.299311Z",
+  "root_span_id": "spn_0599b45dec1b48e192bebd6967097309",
+  "spans": [
+    {
+      "ended_at": "2026-05-03T09:39:05.284077Z",
+      "error_code": null,
+      "input": null,
+      "latency_ms": 5611,
+      "metadata": {
+        "method": "POST",
+        "path": "/api/project-deployments/dep_3a86c349050041a9b12694c4e5cc7bc6/run"
+      },
+      "name": "POST /api/project-deployments/dep_3a86c349050041a9b12694c4e5cc7bc6/run",
+      "output": {
+        "status_code": 200
+      },
+      "parent_span_id": null,
+      "span_id": "spn_0599b45dec1b48e192bebd6967097309",
+      "span_type": "api.request",
+      "started_at": "2026-05-03T09:38:59.672564Z",
+      "status": "completed",
+      "trace_id": "trc_b82762978e6146b4bebd3a22165290b9"
+    },
+    {
+      "ended_at": "2026-05-03T09:39:05.284077Z",
+      "error_code": null,
+      "input": null,
+      "latency_ms": 32,
+      "metadata": {
+        "display_name": "deployment.log",
+        "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3"
+      },
+      "name": "write task artifact",
+      "output": {
+        "artifact_id": "art_8d2dfe0c4d0a45d6b58b2955116b8dc4",
+        "checksum": "sha256:f2e4bd8e78bd4807fdf0a1d4e2b8e5c58a560b5562c1ae2f426d886d50703ca4"
+      },
+      "parent_span_id": null,
+      "span_id": "spn_f27e51ebc32d4b7299cce76f1c7dd489",
+      "span_type": "artifact.write",
+      "started_at": "2026-05-03T09:39:05.252025Z",
+      "status": "completed",
+      "trace_id": "trc_b82762978e6146b4bebd3a22165290b9"
+    }
+  ],
+  "started_at": "2026-05-03T09:38:59.656837Z",
+  "status": "completed",
+  "task_id": null,
+  "trace_id": "trc_b82762978e6146b4bebd3a22165290b9",
+  "turn_id": null
+}

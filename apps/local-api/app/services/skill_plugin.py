@@ -32,6 +32,7 @@ from app.schemas.tasks import ToolExecuteRequest
 from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
 from app.services.skill_governance import SkillGovernanceService
+from app.services.skill_repositories import SkillRepositoryService
 from app.services.skill_source_resolver import SkillSourceResolver
 from app.services.tools import ToolRuntime
 
@@ -49,6 +50,7 @@ class SkillPluginService:
         trace_service: TraceService,
         audit_service: AuditEventService,
         governance_service: SkillGovernanceService | None = None,
+        repository_service: SkillRepositoryService | None = None,
         source_resolver: SkillSourceResolver | None = None,
     ) -> None:
         self._repo = repo
@@ -59,6 +61,7 @@ class SkillPluginService:
         self._trace = trace_service
         self._audit = audit_service
         self._governance = governance_service
+        self._repository_service = repository_service
         self._safety = SafetyService()
 
     def set_governance_service(self, governance_service: SkillGovernanceService) -> None:
@@ -66,6 +69,9 @@ class SkillPluginService:
 
     def set_source_resolver(self, source_resolver: SkillSourceResolver) -> None:
         self._source_resolver = source_resolver
+
+    def set_repository_service(self, repository_service: SkillRepositoryService) -> None:
+        self._repository_service = repository_service
 
     async def install_bundle(
         self,
@@ -81,6 +87,7 @@ class SkillPluginService:
         )
         now = utc_now_iso()
         job_key = request.idempotency_key or f"plugin.install:{request.source_uri}"
+        resolved = None
         await self._repo.insert_install_job(
             {
                 "job_id": new_id("pjob"),
@@ -239,6 +246,24 @@ class SkillPluginService:
                     analysis=analysis,
                     trace_id=trace_id,
                 )
+            if self._repository_service is not None:
+                await self._repository_service.record_install(
+                    repository_id=resolved.repository_id,
+                    package_ref=resolved.package_ref,
+                    installed_bundle_id=bundle_id,
+                    skill_ids=[skill.skill_id for skill in skills],
+                    status="installed_disabled",
+                    gate_status="preview_passed",
+                    eval_status=analysis.status if analysis is not None else None,
+                    blocked_reason=None if analysis is None or analysis.status != "blocked" else "analysis_blocked",
+                    requested_by_member_id=request.requested_by_member_id,
+                    trace_id=trace_id,
+                )
+                for skill in skills:
+                    await self._repository_service.refresh_dependency_edges_for_skill(
+                        skill.model_dump(mode="json"),
+                        trace_id=trace_id,
+                    )
             return (
                 PluginBundle(**bundle_row),
                 skills,
@@ -260,6 +285,22 @@ class SkillPluginService:
                     "updated_at": utc_now_iso(),
                 }
             )
+            if self._repository_service is not None:
+                try:
+                    await self._repository_service.record_install(
+                        repository_id=getattr(resolved, "repository_id", None),
+                        package_ref=getattr(resolved, "package_ref", None),
+                        installed_bundle_id=None,
+                        skill_ids=[],
+                        status="failed",
+                        gate_status="blocked",
+                        eval_status=None,
+                        blocked_reason=str(getattr(exc, "code", ErrorCode.PLUGIN_INSTALL_FAILED.value)),
+                        requested_by_member_id=request.requested_by_member_id,
+                        trace_id=trace_id,
+                    )
+                except Exception:
+                    pass
             await self._end_span(span_id, status=TraceSpanStatus.FAILED)
             if isinstance(exc, AppError):
                 raise

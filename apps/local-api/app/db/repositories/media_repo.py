@@ -14,6 +14,11 @@ ASSET_UPDATE_COLUMNS = {
     "video_streams",
     "sensitivity",
     "status",
+    "io_role",
+    "source_kind",
+    "privacy_level",
+    "provider_status",
+    "replay_summary_json",
     "metadata_json",
     "trace_id",
     "updated_at",
@@ -31,6 +36,17 @@ EDIT_PLAN_UPDATE_COLUMNS = {
     "updated_at",
 }
 
+IO_REQUEST_UPDATE_COLUMNS = {
+    "status",
+    "degraded_reason",
+    "output_artifact_id",
+    "summary_json",
+    "evidence_json",
+    "redaction_summary_json",
+    "trace_id",
+    "updated_at",
+}
+
 
 class MediaRepository:
     def __init__(self, db: Database) -> None:
@@ -43,8 +59,9 @@ class MediaRepository:
               media_id, organization_id, task_id, source_artifact_id, media_type,
               display_name, uri, content_type, size_bytes, checksum, duration_ms,
               width, height, frame_rate, audio_streams, video_streams, sensitivity,
-              status, metadata_json, trace_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              status, io_role, source_kind, privacy_level, provider_status,
+              replay_summary_json, metadata_json, trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["media_id"],
@@ -65,6 +82,11 @@ class MediaRepository:
                 data.get("video_streams", 0),
                 data.get("sensitivity", "low"),
                 data.get("status", "ready"),
+                data.get("io_role", "input"),
+                data.get("source_kind", "task_artifact"),
+                data.get("privacy_level", "standard"),
+                data.get("provider_status", "local"),
+                _json(data.get("replay_summary", {})),
                 _json(data.get("metadata", {})),
                 data.get("trace_id"),
                 data["created_at"],
@@ -273,6 +295,330 @@ class MediaRepository:
             EDIT_PLAN_UPDATE_COLUMNS,
         )
 
+    async def insert_provider_health(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO media_provider_health_records (
+              health_record_id, organization_id, provider_name, capability, provider_type,
+              status, degraded_reason, evidence_json, redaction_summary_json, trace_id,
+              checked_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["health_record_id"],
+                data.get("organization_id", "org_default"),
+                data["provider_name"],
+                data["capability"],
+                data.get("provider_type", "local"),
+                data["status"],
+                data.get("degraded_reason"),
+                _json(data.get("evidence", {})),
+                _json(data.get("redaction_summary", {})),
+                data.get("trace_id"),
+                data["checked_at"],
+                data["created_at"],
+            ),
+        )
+
+    async def list_provider_health(self) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_provider_health_records
+            ORDER BY checked_at DESC
+            LIMIT 50
+            """
+        )
+        return [_provider_health_from_row(dict(row)) for row in rows]
+
+    async def insert_io_request(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO media_io_requests (
+              io_request_id, organization_id, task_id, media_id, operation, direction,
+              provider_name, status, degraded_reason, input_artifact_id, output_artifact_id,
+              summary_json, evidence_json, redaction_summary_json, idempotency_key,
+              trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["io_request_id"],
+                data.get("organization_id", "org_default"),
+                data.get("task_id"),
+                data.get("media_id"),
+                data["operation"],
+                data["direction"],
+                data["provider_name"],
+                data["status"],
+                data.get("degraded_reason"),
+                data.get("input_artifact_id"),
+                data.get("output_artifact_id"),
+                _json(data.get("summary", {})),
+                _json(data.get("evidence", {})),
+                _json(data.get("redaction_summary", {})),
+                data.get("idempotency_key"),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def update_io_request(self, io_request_id: str, fields: dict[str, Any]) -> None:
+        await self._update(
+            "media_io_requests",
+            "io_request_id",
+            io_request_id,
+            _json_update_fields(
+                fields,
+                {
+                    "summary": "summary_json",
+                    "evidence": "evidence_json",
+                    "redaction_summary": "redaction_summary_json",
+                },
+            ),
+            IO_REQUEST_UPDATE_COLUMNS,
+        )
+
+    async def get_io_request_by_idempotency(
+        self,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM media_io_requests WHERE idempotency_key = ?",
+            (idempotency_key,),
+        )
+        return _io_request_from_row(dict(row)) if row else None
+
+    async def list_io_records(self, media_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_io_requests
+            WHERE media_id = ?
+            ORDER BY created_at ASC
+            """,
+            (media_id,),
+        )
+        return [_io_request_from_row(dict(row)) for row in rows]
+
+    async def list_io_records_by_task(self, task_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_io_requests
+            WHERE task_id = ?
+            ORDER BY created_at ASC
+            """,
+            (task_id,),
+        )
+        return [_io_request_from_row(dict(row)) for row in rows]
+
+    async def insert_speech_transcript(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO media_speech_transcripts (
+              transcript_id, io_request_id, organization_id, task_id, media_id, artifact_id,
+              provider_name, language, status, transcript_preview, summary_text,
+              confidence, evidence_json, trace_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["transcript_id"],
+                data["io_request_id"],
+                data.get("organization_id", "org_default"),
+                data["task_id"],
+                data["media_id"],
+                data.get("artifact_id"),
+                data["provider_name"],
+                data.get("language"),
+                data["status"],
+                data.get("transcript_preview", ""),
+                data.get("summary_text", ""),
+                data.get("confidence", 0),
+                _json(data.get("evidence", {})),
+                data.get("trace_id"),
+                data["created_at"],
+            ),
+        )
+
+    async def get_speech_transcripts_for_io_request(
+        self,
+        io_request_id: str,
+    ) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_speech_transcripts
+            WHERE io_request_id = ?
+            ORDER BY created_at ASC
+            """,
+            (io_request_id,),
+        )
+        return [_speech_transcript_from_row(dict(row)) for row in rows]
+
+    async def list_speech_transcripts_by_task(self, task_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_speech_transcripts
+            WHERE task_id = ?
+            ORDER BY created_at ASC
+            """,
+            (task_id,),
+        )
+        return [_speech_transcript_from_row(dict(row)) for row in rows]
+
+    async def insert_speech_render(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO media_speech_renders (
+              render_id, io_request_id, organization_id, task_id, media_id, artifact_id,
+              provider_name, voice, output_format, status, source_text_hash, duration_ms,
+              evidence_json, trace_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["render_id"],
+                data["io_request_id"],
+                data.get("organization_id", "org_default"),
+                data["task_id"],
+                data.get("media_id"),
+                data.get("artifact_id"),
+                data["provider_name"],
+                data.get("voice"),
+                data.get("output_format", "wav"),
+                data["status"],
+                data["source_text_hash"],
+                data.get("duration_ms"),
+                _json(data.get("evidence", {})),
+                data.get("trace_id"),
+                data["created_at"],
+            ),
+        )
+
+    async def get_speech_renders_for_io_request(
+        self,
+        io_request_id: str,
+    ) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_speech_renders
+            WHERE io_request_id = ?
+            ORDER BY created_at ASC
+            """,
+            (io_request_id,),
+        )
+        return [_speech_render_from_row(dict(row)) for row in rows]
+
+    async def list_speech_renders_by_task(self, task_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_speech_renders
+            WHERE task_id = ?
+            ORDER BY created_at ASC
+            """,
+            (task_id,),
+        )
+        return [_speech_render_from_row(dict(row)) for row in rows]
+
+    async def insert_multimodal_summary(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO media_multimodal_summaries (
+              summary_id, io_request_id, organization_id, task_id, media_id, provider_name,
+              summary_type, status, summary_text, summary_json, evidence_artifact_ids_json,
+              evidence_json, trace_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["summary_id"],
+                data["io_request_id"],
+                data.get("organization_id", "org_default"),
+                data["task_id"],
+                data["media_id"],
+                data["provider_name"],
+                data["summary_type"],
+                data["status"],
+                data["summary_text"],
+                _json(data.get("summary", {})),
+                _json(data.get("evidence_artifact_ids", [])),
+                _json(data.get("evidence", {})),
+                data.get("trace_id"),
+                data["created_at"],
+            ),
+        )
+
+    async def get_multimodal_summaries_for_io_request(
+        self,
+        io_request_id: str,
+    ) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_multimodal_summaries
+            WHERE io_request_id = ?
+            ORDER BY created_at ASC
+            """,
+            (io_request_id,),
+        )
+        return [_multimodal_summary_from_row(dict(row)) for row in rows]
+
+    async def list_multimodal_summaries_by_task(self, task_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_multimodal_summaries
+            WHERE task_id = ?
+            ORDER BY created_at ASC
+            """,
+            (task_id,),
+        )
+        return [_multimodal_summary_from_row(dict(row)) for row in rows]
+
+    async def insert_chat_binding(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO media_chat_bindings (
+              binding_id, organization_id, media_id, io_request_id, channel, conversation_id,
+              turn_id, message_id, channel_event_id, channel_attachment_id, binding_type,
+              status, evidence_json, trace_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["binding_id"],
+                data.get("organization_id", "org_default"),
+                data.get("media_id"),
+                data.get("io_request_id"),
+                data.get("channel"),
+                data.get("conversation_id"),
+                data.get("turn_id"),
+                data.get("message_id"),
+                data.get("channel_event_id"),
+                data.get("channel_attachment_id"),
+                data["binding_type"],
+                data["status"],
+                _json(data.get("evidence", {})),
+                data.get("trace_id"),
+                data["created_at"],
+            ),
+        )
+
+    async def list_chat_bindings_by_task(self, task_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT b.*
+            FROM media_chat_bindings b
+            LEFT JOIN media_assets a ON a.media_id = b.media_id
+            LEFT JOIN media_io_requests r ON r.io_request_id = b.io_request_id
+            WHERE a.task_id = ? OR r.task_id = ?
+            ORDER BY b.created_at ASC
+            """,
+            (task_id, task_id),
+        )
+        return [_chat_binding_from_row(dict(row)) for row in rows]
+
     async def _update(
         self,
         table: str,
@@ -293,6 +639,7 @@ class MediaRepository:
 
 def _asset_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["metadata"] = json.loads(row.pop("metadata_json") or "{}")
+    row["replay_summary"] = json.loads(row.pop("replay_summary_json") or "{}")
     return row
 
 
@@ -314,6 +661,41 @@ def _edit_plan_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["requires_approval"] = bool(row.get("requires_approval"))
     row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
     row["metadata"] = json.loads(row.pop("metadata_json") or "{}")
+    return row
+
+
+def _provider_health_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    row["redaction_summary"] = json.loads(row.pop("redaction_summary_json") or "{}")
+    return row
+
+
+def _io_request_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["summary"] = json.loads(row.pop("summary_json") or "{}")
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    row["redaction_summary"] = json.loads(row.pop("redaction_summary_json") or "{}")
+    return row
+
+
+def _speech_transcript_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    return row
+
+
+def _speech_render_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    return row
+
+
+def _multimodal_summary_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["summary"] = json.loads(row.pop("summary_json") or "{}")
+    row["evidence_artifact_ids"] = json.loads(row.pop("evidence_artifact_ids_json") or "[]")
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    return row
+
+
+def _chat_binding_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
     return row
 
 

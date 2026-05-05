@@ -1,17 +1,98 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any
 
 from core_types import ApiModel, ErrorCode, ResponsePlan
+from core_types.voice_copy import pick_variant
 from pydantic import Field
+from response_composer.chat_voice import voice_metadata_for_scenario
+from response_composer.opening_copy import (
+    apply_conversation_voice,
+    conversation_voice_strategy,
+    opening_copy,
+    strip_mechanical_openers,
+)
 
 _REASONING_BLOCK_RE = re.compile(r"<think\b[^>]*>.*?</think>", re.IGNORECASE | re.DOTALL)
 _REASONING_OPEN_RE = re.compile(r"<think\b[^>]*>.*", re.IGNORECASE | re.DOTALL)
 _REASONING_START = "<think"
 _REASONING_END = "</think>"
-
-
+_FACE_EMOJI_RE = re.compile(r"[\U0001f600-\U0001f64f]")
+_READING_MARKERS = ("📘", "📌", "§", "▸", "🧠", "✨", "⚡", "🎯", "🧩", "📝", "🔍", "📎", "💡", "🛠️", "✍️")
+_MAX_WECHAT_READING_MARKERS = 4
+RESPONSE_QUALITY_GUARD_VERSION = "response_quality_guard.openclaw_hermes.v4"
+_VISIBLE_INTERNAL_TERMS = (
+    "trace_id",
+    "approval_id",
+    "tool_call_id",
+    "task_id",
+    "turn_id",
+    "message_id",
+    "model_safe_text",
+    "prompt_snapshot_id",
+)
+_VISIBLE_FALSE_DONE_TERMS = (
+    "已经执行",
+    "已执行",
+    "执行完成",
+    "已经完成操作",
+    "已经删除",
+    "已删除",
+    "已经安装",
+    "已安装",
+    "已经下载",
+    "已下载",
+    "已经提交",
+    "已提交",
+)
+_VISIBLE_INTERNAL_LABELS = {
+    "trace_id": "过程记录",
+    "approval_id": "确认记录",
+    "tool_call_id": "工具记录",
+    "task_id": "任务记录",
+    "turn_id": "对话记录",
+    "message_id": "消息记录",
+    "model_safe_text": "脱敏文本",
+    "prompt_snapshot_id": "提示词快照",
+}
+_VISIBLE_INTERNAL_FIELD_RE = re.compile(
+    r"\b("
+    + "|".join(re.escape(term) for term in _VISIBLE_INTERNAL_TERMS)
+    + r")\b\s*[:=]\s*[^\s，。；;,]+",
+    re.IGNORECASE,
+)
+_VISIBLE_INTERNAL_BARE_RE = re.compile(
+    r"\b(" + "|".join(re.escape(term) for term in _VISIBLE_INTERNAL_TERMS) + r")\b",
+    re.IGNORECASE,
+)
+_READING_MARKER_HINTS = {
+    "目标": "📘",
+    "结论": "📘",
+    "摘要": "📝",
+    "总结": "📝",
+    "步骤": "📌",
+    "行动项": "📌",
+    "计划": "📌",
+    "风险": "§",
+    "边界": "§",
+    "审批": "§",
+    "下一步": "▸",
+    "建议": "▸",
+    "取舍": "▸",
+    "分析": "🧠",
+    "原因": "🧠",
+    "复盘": "🧠",
+    "优化": "⚡",
+    "提速": "⚡",
+    "耗时": "⚡",
+    "验证": "🔍",
+    "检查": "🔍",
+    "验收": "🔍",
+    "工具": "🛠️",
+    "落地": "🛠️",
+}
 class ComposeRequest(ApiModel):
     user_text: str = ""
     result_summary: str
@@ -21,6 +102,19 @@ class ComposeRequest(ApiModel):
     heart: dict[str, Any] = Field(default_factory=dict)
     risk_level: str | None = None
     route_profile: str | None = None
+    channel_profile: str | None = None
+    delivery_mode: str = "final"
+    prompt_mode: str | None = None
+    prompt_snapshot_id: str | None = None
+    prompt_assembly_version: str | None = None
+    stable_prompt_hash: str | None = None
+    dynamic_context_hash: str | None = None
+    trusted_context_hash: str | None = None
+    untrusted_context_hash: str | None = None
+    history_context_hash: str | None = None
+    current_message_hash: str | None = None
+    prompt_section_ids: list[str] = Field(default_factory=list)
+    prompt_sections: list[dict[str, Any]] = Field(default_factory=list)
     notices: dict[str, Any] = Field(default_factory=dict)
     trace_refs: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -102,6 +196,14 @@ class ResponseComposer:
         raw_summary = strip_reasoning_tags(request.result_summary).strip()
         result_summary, redaction_summary = redact_visible_text(raw_summary)
         scenario = request.scenario or "direct"
+        copy_seed = "|".join(
+            [
+                scenario,
+                request.style or "",
+                request.user_text or "",
+                request.result_summary or "",
+            ]
+        )
         tone_metadata = _tone_metadata(request)
         safety_notice, safety_redactions = _redact_optional_string(
             request.notices.get("safety_notice")
@@ -114,16 +216,39 @@ class ResponseComposer:
         approval_prompt = _redact_payload(raw_approval_prompt)
         follow_ups = _redact_payload(raw_follow_ups)
         if _is_high_risk(request) and not safety_notice:
-            safety_notice = (
-                "这属于高影响或高风险场景；在受控任务、Safety 和 Approval 链路确认前，"
-                "我不会声称已经执行。"
-            )
+            safety_notice = opening_copy("notice.high_risk_default", copy_seed)
+        if scenario == "tool_boundary" and not tool_notice:
+            tool_notice = opening_copy("notice.tool_boundary", copy_seed)
         redaction_summary = _merge_redaction_summaries(
             redaction_summary,
             safety_redactions,
             tool_redactions,
             approval_redactions,
             follow_up_redactions,
+        )
+        result_summary, conversation_voice = apply_conversation_voice(
+            result_summary,
+            seed=copy_seed,
+            scenario=scenario,
+            persona=request.persona,
+            heart=request.heart,
+            high_risk=bool(_is_high_risk(request)),
+        )
+        result_summary = _apply_channel_readability(
+            result_summary,
+            channel_profile=request.channel_profile or request.notices.get("channel_profile"),
+            scenario=scenario,
+            section_count=1,
+        )
+        response_quality_guard = _response_quality_guard(
+            text=result_summary,
+            original_text=raw_summary,
+            scenario=scenario,
+            user_text=request.user_text,
+            redaction_summary=redaction_summary,
+            high_risk=bool(_is_high_risk(request)),
+            channel_profile=request.channel_profile or request.notices.get("channel_profile"),
+            conversation_voice=conversation_voice,
         )
         plan = ResponsePlan(
             style=request.style,
@@ -148,6 +273,16 @@ class ResponseComposer:
                 "scenario": scenario,
                 "route_profile": request.route_profile,
                 "risk_level": request.risk_level,
+                "conversation_voice": conversation_voice,
+                **_voice_metadata_payload(
+                    scenario=scenario,
+                    channel_profile=request.channel_profile or request.notices.get("channel_profile"),
+                    delivery_mode=request.delivery_mode,
+                    prompt_mode=request.prompt_mode,
+                    prompt_snapshot_id=request.prompt_snapshot_id,
+                ),
+                **_prompt_payload(request),
+                "response_quality_guard": response_quality_guard,
                 "notices": _structured_notices(
                     {
                         **request.notices,
@@ -173,6 +308,22 @@ class ResponseComposer:
             metadata={
                 "source": "response_composer",
                 "scenario": scenario,
+                "voice_policy_version": plan.structured_payload.get("voice_policy_version"),
+                "scenario_id": plan.structured_payload.get("scenario_id"),
+                "channel_profile": plan.structured_payload.get("channel_profile"),
+                "delivery_mode": plan.structured_payload.get("delivery_mode"),
+                "prompt_snapshot_id": plan.structured_payload.get("prompt_snapshot_id"),
+                "prompt_assembly_version": plan.structured_payload.get(
+                    "prompt_assembly_version"
+                ),
+                "stable_prompt_hash": plan.structured_payload.get("stable_prompt_hash"),
+                "dynamic_context_hash": plan.structured_payload.get("dynamic_context_hash"),
+                "trusted_context_hash": plan.structured_payload.get("trusted_context_hash"),
+                "untrusted_context_hash": plan.structured_payload.get("untrusted_context_hash"),
+                "history_context_hash": plan.structured_payload.get("history_context_hash"),
+                "current_message_hash": plan.structured_payload.get("current_message_hash"),
+                "prompt_section_ids": plan.structured_payload.get("prompt_section_ids"),
+                "prompt_sections": plan.structured_payload.get("prompt_sections"),
                 "redacted": redaction_summary["applied"],
             },
         )
@@ -183,17 +334,50 @@ class ResponseComposer:
     def compose_delta(self, text: str) -> str:
         return strip_reasoning_tags(text)
 
+    def style_text(
+        self,
+        text: str,
+        *,
+        ui_mode: str | None = None,
+        response_plan: ResponsePlan | None = None,
+    ) -> str:
+        visible, _ = redact_visible_text(strip_reasoning_tags(str(text or "")))
+        strategy = {}
+        if response_plan is not None:
+            strategy = dict(response_plan.structured_payload.get("conversation_voice") or {})
+        scenario = str(strategy.get("scene") or "")
+        if scenario and not _looks_like_json_only(visible) and not _looks_like_markdown_table(visible):
+            visible, _ = apply_conversation_voice(
+                visible,
+                seed=f"{scenario}|{visible}",
+                scenario=str(response_plan.structured_payload.get("scenario") or "direct")
+                if response_plan is not None
+                else "direct",
+                persona=response_plan.tone_metadata if response_plan is not None else {},
+                heart={},
+                high_risk=bool(response_plan and response_plan.tone_mode == "safety_boundary"),
+            )
+        if ui_mode == "wechat_chat":
+            scenario = None
+            section_count = 0
+            if response_plan is not None:
+                scenario = str(response_plan.structured_payload.get("scenario") or "")
+                section_count = len(response_plan.sections or [])
+            return _wechat_short_reply(
+                visible,
+                scenario=scenario,
+                section_count=section_count,
+            )
+        return visible
+
     def compose_tool_unavailable(self) -> str:
-        return (
-            "我识别到这需要受控工具或真实执行能力。当前请求没有匹配到可执行路径；"
-            "我可以先给出计划、风险点和下一步检查清单。"
-        )
+        return opening_copy("notice.tool_boundary", "tool_unavailable")
 
     def compose_clarification(self, questions: list[str]) -> str:
         visible_questions = [item for item in questions[:3] if item]
         if not visible_questions:
-            return "我需要先确认几个关键信息，再继续。"
-        return "我需要先确认：\n" + "\n".join(
+            return "可以，我先按只读方式帮你看，不过我还差一点关键信息。"
+        return "可以，我先按只读方式看重点，不过我还缺这几项信息：\n" + "\n".join(
             f"{index}. {question}"
             for index, question in enumerate(visible_questions, start=1)
         )
@@ -239,9 +423,32 @@ class ResponseComposer:
             memory_notice=memory_notice,
             tool_notice=tool_notice,
         )
+        visible_summary, conversation_voice = apply_conversation_voice(
+            visible_summary,
+            seed=f"{scenario}|{visible_summary}",
+            scenario=scenario,
+            high_risk=bool(safety_notice or approval_prompt),
+        )
+        visible_summary = _apply_channel_readability(
+            visible_summary,
+            channel_profile=None,
+            scenario=scenario,
+            section_count=1,
+        )
         tone_metadata = _default_tone_metadata(
             scenario=scenario,
             high_risk=bool(safety_notice or approval_prompt),
+        )
+        response_quality_guard = _response_quality_guard(
+            text=visible_summary,
+            original_text=summary,
+            scenario=scenario,
+            user_text="",
+            redaction_summary=redaction_summary,
+            high_risk=bool(safety_notice or approval_prompt),
+            channel_profile=None,
+            conversation_voice=conversation_voice,
+            completion_evidence=task_status,
         )
         return ResponsePlan(
             title=title,
@@ -265,12 +472,15 @@ class ResponseComposer:
             plain_text=visible_summary,
             structured_payload={
                 "scenario": scenario,
+                "conversation_voice": conversation_voice,
                 "task_status": task_status or {},
                 "approval_prompt": approval_prompt or {},
                 "artifact_refs": artifact_refs if isinstance(artifact_refs, list) else [],
                 "safety_notice": safety_notice,
                 "memory_notice": memory_notice,
                 "tool_notice": tool_notice,
+                **_voice_metadata_payload(scenario=scenario),
+                "response_quality_guard": response_quality_guard,
             },
             tone_mode=_tone_mode_from_metadata(tone_metadata),
             quality_markers=_baseline_quality_markers(
@@ -305,9 +515,32 @@ class ResponseComposer:
         high_risk = bool(
             facts.get("approval_required") or facts.get("risk_level") in {"R5", "R6", "R7"}
         )
+        visible_summary, conversation_voice = apply_conversation_voice(
+            visible_summary,
+            seed=f"action_status|{status}|{visible_summary}",
+            scenario="action_status",
+            high_risk=high_risk,
+        )
+        visible_summary = _apply_channel_readability(
+            visible_summary,
+            channel_profile=None,
+            scenario="action_status",
+            section_count=1,
+        )
         tone_metadata = _default_tone_metadata(
             scenario="action_status",
             high_risk=high_risk,
+        )
+        response_quality_guard = _response_quality_guard(
+            text=visible_summary,
+            original_text=text,
+            scenario="action_status",
+            user_text="",
+            redaction_summary=redaction_summary,
+            high_risk=high_risk,
+            channel_profile=None,
+            conversation_voice=conversation_voice,
+            completion_evidence=task_status or facts,
         )
         action_buttons = _action_buttons(
             scenario="approval_required" if facts.get("approval_required") else "direct",
@@ -329,9 +562,12 @@ class ResponseComposer:
             structured_payload={
                 "source": "response_composer",
                 "scenario": "action_status",
+                "conversation_voice": conversation_voice,
+                **_voice_metadata_payload(scenario="action_status"),
                 "action_status": _redact_payload(facts),
                 "reply_option_items": _redact_payload(reply_option_items),
                 "task_status": task_status or {},
+                "response_quality_guard": response_quality_guard,
             },
             tone_mode=_tone_mode_from_metadata(tone_metadata),
             quality_markers={
@@ -371,8 +607,22 @@ class ResponseComposer:
                     high_risk=bool(decision.get("blocker_level") == "high"),
                 ),
                 "structured_payload": {
+                    **base_plan.structured_payload,
                     "scenario": "clarification",
+                    **_voice_metadata_payload(scenario="clarification"),
                     "clarification_decision": decision,
+                    "response_quality_guard": _response_quality_guard(
+                        text=visible_summary,
+                        original_text=summary,
+                        scenario="clarification",
+                        user_text="",
+                        redaction_summary=base_plan.redaction_summary,
+                        high_risk=bool(decision.get("blocker_level") == "high"),
+                        channel_profile=None,
+                        conversation_voice=base_plan.structured_payload.get(
+                            "conversation_voice"
+                        ),
+                    ),
                 },
             }
         )
@@ -385,11 +635,13 @@ class ResponseComposer:
         next_actions: list[str],
         safety_notice: str | None = None,
     ) -> ResponsePlan:
-        return self.response_plan_for_status(
+        seed = f"{summary}|{required_capability}|{','.join(next_actions)}"
+        base_plan = self.response_plan_for_status(
             summary=summary,
             safety_notice=safety_notice,
-            tool_notice="需要受控工具、Skill、MCP 或任务链路后才能执行。",
-        ).model_copy(
+            tool_notice=opening_copy("notice.tool_boundary", seed),
+        )
+        return base_plan.model_copy(
             update={
                 "title": "能力边界",
                 "style": "tool_boundary",
@@ -404,11 +656,25 @@ class ResponseComposer:
                     high_risk=bool(safety_notice),
                 ),
                 "structured_payload": {
+                    **base_plan.structured_payload,
                     "scenario": "tool_boundary",
+                    **_voice_metadata_payload(scenario="tool_boundary"),
                     "required_capability": required_capability,
                     "next_actions": next_actions,
                     "safety_notice": safety_notice,
-                    "tool_notice": "需要受控工具、Skill、MCP 或任务链路后才能执行。",
+                    "tool_notice": opening_copy("notice.tool_boundary", seed),
+                    "response_quality_guard": _response_quality_guard(
+                        text=base_plan.plain_text or base_plan.summary or summary,
+                        original_text=summary,
+                        scenario="tool_boundary",
+                        user_text="",
+                        redaction_summary=base_plan.redaction_summary,
+                        high_risk=bool(safety_notice),
+                        channel_profile=None,
+                        conversation_voice=base_plan.structured_payload.get(
+                            "conversation_voice"
+                        ),
+                    ),
                 },
             }
         )
@@ -435,10 +701,21 @@ class ResponseComposer:
         structured = {
             **plan.structured_payload,
             "scenario": "failure_recovery",
+            **_voice_metadata_payload(scenario="failure_recovery"),
             "error_code": error_code,
             "recoverable": recoverable,
             "suggested_next_actions": suggested_next_actions,
             "recovery": _redact_payload(recovery_payload),
+            "response_quality_guard": _response_quality_guard(
+                text=plan.plain_text or plan.summary or summary,
+                original_text=summary,
+                scenario="failure_recovery",
+                user_text="",
+                redaction_summary=plan.redaction_summary,
+                high_risk=False,
+                channel_profile=None,
+                conversation_voice=plan.structured_payload.get("conversation_voice"),
+            ),
         }
         return plan.model_copy(
             update={
@@ -459,11 +736,7 @@ class ResponseComposer:
         )
 
     def compose_privacy_block(self) -> str:
-        return (
-            "我看到了疑似敏感信息，所以不会复述或继续处理这些值，也不会把它发送到云端模型。"
-            "建议你立即轮换真实 token/password/private key；如果只是测试，"
-            "请用 [REDACTED_SECRET] 或示例占位符继续描述你想验证的流程。"
-        )
+        return opening_copy("notice.privacy_block", "privacy_block")
 
     def compose_model_not_configured(self) -> str:
         return (
@@ -510,9 +783,21 @@ class ResponseComposer:
                 ),
                 "structured_payload": {
                     "scenario": "failure",
+                    **_voice_metadata_payload(scenario="failure"),
+                    "conversation_voice": {},
                     "status": "failed",
                     "error_code": code_value,
                     "safety_notice": safety_notice,
+                    "response_quality_guard": _response_quality_guard(
+                        text=message,
+                        original_text=message,
+                        scenario="failure",
+                        user_text="",
+                        redaction_summary={"applied": False, "categories": []},
+                        high_risk=safety_notice is not None,
+                        channel_profile=None,
+                        conversation_voice={},
+                    ),
                 }
             }
         )
@@ -545,6 +830,17 @@ def redact_visible_text(text: str) -> tuple[str, dict[str, Any]]:
                 redacted = pattern.sub(lambda match: f"{match.group(1)}=[REDACTED]", redacted)
             else:
                 redacted = pattern.sub("[REDACTED]", redacted)
+    internal_redacted = _VISIBLE_INTERNAL_FIELD_RE.sub(
+        lambda match: _VISIBLE_INTERNAL_LABELS.get(match.group(1).lower(), "内部记录"),
+        redacted,
+    )
+    internal_redacted = _VISIBLE_INTERNAL_BARE_RE.sub(
+        lambda match: _VISIBLE_INTERNAL_LABELS.get(match.group(1).lower(), "内部记录"),
+        internal_redacted,
+    )
+    if internal_redacted != redacted:
+        categories.append("internal_field")
+        redacted = internal_redacted
     return redacted, {"applied": bool(categories), "categories": sorted(set(categories))}
 
 
@@ -588,6 +884,349 @@ def _merge_redaction_summaries(*summaries: dict[str, Any]) -> dict[str, Any]:
     for summary in summaries:
         categories.update(str(item) for item in summary.get("categories", []))
     return {"applied": bool(categories), "categories": sorted(categories)}
+
+
+def _apply_channel_readability(
+    text: str,
+    *,
+    channel_profile: str | None,
+    scenario: str | None,
+    section_count: int,
+) -> str:
+    if str(channel_profile or "").lower() != "wechat_chat":
+        return text
+    return _wechat_short_reply(text, scenario=scenario, section_count=section_count)
+
+
+def _response_quality_guard(
+    *,
+    text: str,
+    original_text: str,
+    scenario: str,
+    user_text: str,
+    redaction_summary: dict[str, Any],
+    high_risk: bool,
+    channel_profile: str | None,
+    conversation_voice: dict[str, Any] | None,
+    completion_evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    visible = str(text or "")
+    lowered = visible.lower()
+    internal_terms = [
+        term for term in _VISIBLE_INTERNAL_TERMS if term.lower() in lowered
+    ]
+    false_done_terms = [
+        term for term in _VISIBLE_FALSE_DONE_TERMS if term in visible
+    ]
+    if _has_completion_evidence(completion_evidence):
+        false_done_terms = []
+    strict_format_preserved = _strict_format_preserved(original_text, visible)
+    boundary_required = high_risk or scenario in {
+        "approval_required",
+        "safety_deny",
+        "tool_boundary",
+        "privacy",
+        "professional_advice",
+    }
+    boundary_honesty = (
+        not boundary_required
+        or any(marker in visible for marker in ["不会", "不能", "确认", "授权", "边界", "还没", "不"])
+    )
+    current_message_priority = _current_message_priority_ok(user_text, visible)
+    mechanical_clean = visible_opening_is_clean(visible)
+    wechat_readability = (
+        str(channel_profile or "").lower() != "wechat_chat"
+        or (
+            _FACE_EMOJI_RE.search(visible) is None
+            and (strict_format_preserved or not _strict_format_text_contract(visible))
+        )
+    )
+    multimodal_grounded = _multimodal_grounded(user_text, visible, scenario=scenario)
+    checks = {
+        "no_internal_terms": not internal_terms,
+        "no_false_done": not false_done_terms,
+        "boundary_honesty": boundary_honesty,
+        "privacy_redacted": bool(redaction_summary.get("applied"))
+        or not _payload_redaction_summary(visible).get("applied"),
+        "current_message_priority": current_message_priority,
+        "evidence_required_before_done": not false_done_terms,
+        "strict_format_preserved": strict_format_preserved,
+        "no_mechanical_opening": mechanical_clean,
+        "wechat_readability": wechat_readability,
+        "multimodal_grounded": multimodal_grounded,
+    }
+    violations: list[dict[str, Any]] = []
+    if internal_terms:
+        violations.append({"check": "no_internal_terms", "terms": internal_terms})
+    if false_done_terms:
+        violations.append({"check": "no_false_done", "terms": false_done_terms})
+    for check, passed in checks.items():
+        if not passed and not any(item["check"] == check for item in violations):
+            violations.append({"check": check})
+    return {
+        "version": RESPONSE_QUALITY_GUARD_VERSION,
+        "status": "passed" if all(checks.values()) else "warning",
+        "checks": checks,
+        "violations": violations,
+        "redaction_applied": bool(redaction_summary.get("applied")),
+        "strict_format_preserved": strict_format_preserved,
+        "visible_text_hash": _visible_text_hash(visible),
+        "conversation_voice": {
+            key: value
+            for key, value in dict(conversation_voice or {}).items()
+            if key
+            in {
+                "strategy_version",
+                "scene",
+                "warmth_level",
+                "humor_level",
+                "directness_level",
+                "deescalated",
+                "strict_format",
+                "opener_policy",
+            }
+        },
+    }
+
+
+def visible_opening_is_clean(text: str) -> bool:
+    return strip_mechanical_openers(text) == str(text or "").strip()
+
+
+def _visible_text_hash(text: str) -> str:
+    return "sha256:" + hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
+
+
+def _has_completion_evidence(evidence: dict[str, Any] | None) -> bool:
+    if not isinstance(evidence, dict):
+        return False
+    status = str(evidence.get("status") or evidence.get("detail_status") or "")
+    return bool(evidence.get("completed")) or status == "completed"
+
+
+def _current_message_priority_ok(user_text: str, visible: str) -> bool:
+    user = str(user_text or "")
+    if not user:
+        return True
+    if not any(marker in user for marker in ["停", "停止", "改成", "换成", "只做", "不要执行"]):
+        return True
+    return any(marker in visible for marker in ["当前", "新的", "改成", "先停", "前一个", "只做", "为准"])
+
+
+def _multimodal_grounded(user_text: str, visible: str, *, scenario: str) -> bool:
+    source = f"{user_text}\n{visible}"
+    if scenario != "multimodal" and not any(marker in source for marker in ["图片", "图", "语音", "文件"]):
+        return True
+    generic_bad = [
+        "收到图片",
+        "收到语音",
+        "收到文件",
+        "我来处理",
+        "继续处理",
+    ]
+    if any(marker in visible for marker in generic_bad) and not any(
+        marker in visible
+        for marker in ["看到", "听到", "读到", "识别", "转写", "摘录", "看不清", "听不全", "读不全"]
+    ):
+        return False
+    return True
+
+
+def _strict_format_preserved(original_text: str, visible: str) -> bool:
+    if not _strict_format_text_contract(original_text):
+        return True
+    if any(marker in visible for marker in _READING_MARKERS):
+        return False
+    if _looks_like_json_only(original_text):
+        return _looks_like_json_only(visible)
+    if _looks_like_markdown_table(original_text):
+        return _looks_like_markdown_table(visible)
+    return _strict_format_text_contract(visible)
+
+
+def _strict_format_text_contract(text: str) -> bool:
+    stripped = str(text or "").strip()
+    if not stripped:
+        return False
+    if "```" in stripped:
+        return True
+    if (stripped.startswith("{") and stripped.endswith("}")) or (
+        stripped.startswith("[") and stripped.endswith("]")
+    ):
+        return True
+    lines = [line.strip() for line in stripped.splitlines() if line.strip()]
+    return len(lines) >= 2 and any("|---" in line or "---|" in line for line in lines[:4])
+
+
+def _wechat_short_reply(
+    text: str,
+    *,
+    scenario: str | None = None,
+    section_count: int = 0,
+) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return raw
+    candidate = _strip_face_emoji(raw)
+    candidate = strip_mechanical_openers(candidate)
+    return _enrich_wechat_reading_markers(
+        candidate or raw,
+        scenario=scenario,
+        section_count=section_count,
+    )
+
+
+def _wechat_marker_for_text(text: str, *, fallback_index: int = 0) -> str:
+    stripped = text.strip()
+    for keyword, marker in _READING_MARKER_HINTS.items():
+        if keyword in stripped:
+            return marker
+    return _READING_MARKERS[fallback_index % len(_READING_MARKERS)]
+
+
+def _strip_face_emoji(text: str) -> str:
+    stripped = _FACE_EMOJI_RE.sub("", text)
+    return re.sub(r"[ \t]{2,}", " ", stripped).strip()
+
+
+def _enrich_wechat_reading_markers(
+    text: str,
+    *,
+    scenario: str | None = None,
+    section_count: int = 0,
+) -> str:
+    if not _should_enrich_wechat_reading_markers(
+        text,
+        scenario=scenario,
+        section_count=section_count,
+    ):
+        return text
+
+    lines = text.splitlines()
+    changed = False
+    marker_index = 0
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        section = re.match(
+            r"^(目标|步骤|风险|建议|结论|下一步|验收|问题|行动项|完成|计划|取舍|边界|"
+            r"分析|原因|复盘|优化|提速|耗时|验证|检查|总结|工具|落地)"
+            r"([：:])(?:\s*(.+))?$",
+            stripped,
+        )
+        if section and marker_index < _MAX_WECHAT_READING_MARKERS:
+            marker = _wechat_marker_for_text(section.group(1), fallback_index=marker_index)
+            body = section.group(3)
+            if body:
+                lines[index] = f"{marker} {section.group(1)}{section.group(2)}{body}"
+            else:
+                lines[index] = f"{marker} {section.group(1)}{section.group(2)}"
+            marker_index += 1
+            changed = True
+            continue
+        heading = re.match(r"^(#{1,3})\s+(.+)$", stripped)
+        if heading and marker_index < _MAX_WECHAT_READING_MARKERS:
+            marker = _wechat_marker_for_text(heading.group(2), fallback_index=marker_index)
+            lines[index] = f"{marker} {heading.group(2).strip()}"
+            marker_index += 1
+            changed = True
+            continue
+        if re.match(r"^[-*]\s+\S+", stripped) and marker_index < _MAX_WECHAT_READING_MARKERS:
+            marker = _wechat_marker_for_text(stripped, fallback_index=marker_index)
+            lines[index] = re.sub(r"^(\s*)[-*]\s+", rf"\1{marker} ", line, count=1)
+            marker_index += 1
+            changed = True
+
+    if changed:
+        return "\n".join(lines)
+
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if re.match(r"^(\d+[\.、]|[一二三四五六七八九十]+[、.])\s*\S+", stripped):
+            lines[index] = f"{_wechat_marker_for_text(stripped, fallback_index=index)} {stripped}"
+            return "\n".join(lines)
+        if len(stripped) <= 36 and re.search(r"(目标|步骤|风险|建议|结论|下一步|验收|说明)[:：]?$", stripped):
+            lines[index] = f"{_wechat_marker_for_text(stripped, fallback_index=index)} {stripped}"
+            return "\n".join(lines)
+    return text
+
+
+def _should_enrich_wechat_reading_markers(
+    text: str,
+    *,
+    scenario: str | None = None,
+    section_count: int = 0,
+) -> bool:
+    stripped = text.strip()
+    section_heading_count = len(
+        re.findall(
+            r"(^|\n)\s*(目标|步骤|风险|建议|结论|下一步|验收|问题|行动项|完成|计划|取舍|边界|"
+            r"分析|原因|复盘|优化|提速|耗时|验证|检查|总结|工具|落地)[：:]",
+            stripped,
+        )
+    )
+    if len(stripped) < 120 and not (len(stripped) >= 80 and section_heading_count >= 2):
+        return False
+    if section_count < 2 and not any(
+        symbol in stripped for symbol in ("目标", "步骤", "风险", "建议", "验收", "下一步")
+    ):
+        return False
+    if scenario in {"approval_required", "safety_deny", "tool_boundary", "failure", "failure_recovery"}:
+        return False
+    if any(marker in stripped for marker in _READING_MARKERS):
+        return False
+    if "```" in stripped or _looks_like_json_only(stripped) or _looks_like_markdown_table(stripped):
+        return False
+    if re.search(r"(只输出\s*JSON|不要\s*Markdown|纯文本|不要解释)", stripped, flags=re.I):
+        return False
+    return bool(
+        re.search(r"(^|\n)#{1,3}\s+\S+", stripped)
+        or re.search(r"(^|\n)\s*[-*]\s+\S+", stripped)
+        or re.search(r"(^|\n)\s*\d+[\.、]\s+\S+", stripped)
+        or any(
+            word in stripped
+            for word in [
+                "目标",
+                "步骤",
+                "风险",
+                "建议",
+                "验收",
+                "下一步",
+                "结论",
+                "总结",
+                "分析",
+                "复盘",
+                "优化",
+                "耗时",
+                "检查",
+                "验证",
+                "落地",
+            ]
+        )
+    )
+
+
+def _looks_like_json_only(text: str) -> bool:
+    stripped = text.strip()
+    if not (
+        (stripped.startswith("{") and stripped.endswith("}"))
+        or (stripped.startswith("[") and stripped.endswith("]"))
+    ):
+        return False
+    return "\n#" not in stripped
+
+
+def _looks_like_markdown_table(text: str) -> bool:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) < 2:
+        return False
+    return any("|" in line for line in lines) and any(
+        re.fullmatch(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?", line)
+        for line in lines[:4]
+    )
 
 
 def _action_buttons(
@@ -692,8 +1331,30 @@ def _tone_metadata(request: ComposeRequest) -> dict[str, Any]:
     heart = request.heart or {}
     persona = request.persona or {}
     high_risk = _is_high_risk(request)
+    voice_metadata = _voice_metadata_payload(
+        scenario=request.scenario,
+        channel_profile=request.channel_profile or request.notices.get("channel_profile"),
+        delivery_mode=request.delivery_mode,
+        prompt_mode=request.prompt_mode,
+        prompt_snapshot_id=request.prompt_snapshot_id,
+    )
     return {
         "scenario": request.scenario,
+        "voice_policy_version": voice_metadata["voice_policy_version"],
+        "scenario_id": voice_metadata["scenario_id"],
+        "channel_profile": voice_metadata["channel_profile"],
+        "delivery_mode": voice_metadata["delivery_mode"],
+        "prompt_mode": request.prompt_mode,
+        "prompt_snapshot_id": request.prompt_snapshot_id,
+        "prompt_assembly_version": request.prompt_assembly_version,
+        "stable_prompt_hash": request.stable_prompt_hash,
+        "dynamic_context_hash": request.dynamic_context_hash,
+        "trusted_context_hash": request.trusted_context_hash,
+        "untrusted_context_hash": request.untrusted_context_hash,
+        "history_context_hash": request.history_context_hash,
+        "current_message_hash": request.current_message_hash,
+        "prompt_section_ids": request.prompt_section_ids,
+        "prompt_sections": request.prompt_sections,
         "route_profile": request.route_profile,
         "persona_mode": persona.get("mode") or persona.get("default_mode") or "default",
         "tone_hints": persona.get("tone_hints", []),
@@ -710,9 +1371,54 @@ def _tone_metadata(request: ComposeRequest) -> dict[str, Any]:
     }
 
 
+def _voice_metadata_payload(
+    *,
+    scenario: str | None,
+    channel_profile: str | None = None,
+    delivery_mode: str | None = None,
+    prompt_mode: str | None = None,
+    prompt_snapshot_id: str | None = None,
+) -> dict[str, Any]:
+    return voice_metadata_for_scenario(
+        scenario,
+        channel_profile=channel_profile,
+        delivery_mode=delivery_mode,
+        prompt_mode=prompt_mode,
+        prompt_snapshot_id=prompt_snapshot_id,
+    )
+
+
+def _prompt_payload(request: ComposeRequest) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    if request.prompt_assembly_version:
+        payload["prompt_assembly_version"] = request.prompt_assembly_version
+    if request.stable_prompt_hash:
+        payload["stable_prompt_hash"] = request.stable_prompt_hash
+    if request.dynamic_context_hash:
+        payload["dynamic_context_hash"] = request.dynamic_context_hash
+    if request.trusted_context_hash:
+        payload["trusted_context_hash"] = request.trusted_context_hash
+    if request.untrusted_context_hash:
+        payload["untrusted_context_hash"] = request.untrusted_context_hash
+    if request.history_context_hash:
+        payload["history_context_hash"] = request.history_context_hash
+    if request.current_message_hash:
+        payload["current_message_hash"] = request.current_message_hash
+    if request.prompt_section_ids:
+        payload["prompt_section_ids"] = list(request.prompt_section_ids)
+    if request.prompt_sections:
+        payload["prompt_sections"] = [dict(item) for item in request.prompt_sections]
+    return payload
+
+
 def _default_tone_metadata(*, scenario: str, high_risk: bool) -> dict[str, Any]:
+    voice_metadata = _voice_metadata_payload(scenario=scenario)
     return {
         "scenario": scenario,
+        "voice_policy_version": voice_metadata["voice_policy_version"],
+        "scenario_id": voice_metadata["scenario_id"],
+        "channel_profile": voice_metadata["channel_profile"],
+        "delivery_mode": voice_metadata["delivery_mode"],
         "deescalation_required": high_risk,
         "risk_tone": "clear_and_calm" if high_risk else None,
         "safety_overrides_tone": True,
@@ -747,7 +1453,7 @@ def _baseline_quality_markers(*, scenario: str, high_risk: bool) -> dict[str, An
 def _deescalation_notice(tone_metadata: dict[str, Any]) -> str | None:
     if not tone_metadata.get("deescalation_required"):
         return None
-    return "我会保持克制和清楚，先确认边界再继续。"
+    return "我会先把话说清楚，等该确认的点确认完再往下走。"
 
 
 def _first_next_step(options: list[str]) -> str | None:
@@ -798,6 +1504,37 @@ def _structured_notices(notices: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_PENDING_REASON_ACTION_TYPES = frozenset(
+    {
+        "host.uninstall_software",
+        "host.install_software",
+        "browser.download",
+        "file.delete",
+    }
+)
+_PENDING_OPENER_ACTION_TYPES = frozenset(
+    {
+        "host.install_software",
+        "host.uninstall_software",
+        "file.delete",
+        "browser.download",
+    }
+)
+
+
+def _action_seed(facts: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            str(facts.get("status") or ""),
+            str(facts.get("action_type") or ""),
+            str(facts.get("action_label") or ""),
+            str(facts.get("target") or ""),
+            str(facts.get("failure_reason") or ""),
+            str(facts.get("detail_status") or ""),
+        ]
+    )
+
+
 def _compose_action_status_text(facts: dict[str, Any]) -> str:
     status = str(facts.get("status") or "pending_action")
     action_label = str(facts.get("action_label") or "这一步操作").strip()
@@ -807,65 +1544,96 @@ def _compose_action_status_text(facts: dict[str, Any]) -> str:
         if target and target in action_label
         else f"{action_label} {target}".strip()
     )
+    seed = _action_seed(facts)
     if status == "already_absent" or facts.get("already_absent"):
-        return (
-            f"我查了一圈，{target or label}现在没在本机安装清单里。"
-            "所以这次不用卸载，也没有动你的电脑。🙂"
+        return pick_variant(
+            seed,
+            (
+                f"我查了一圈，{target or label}不在本机安装清单里，这次不用处理卸载。",
+                f"{target or label}现在不在这台机器上，所以没有卸载动作发生。",
+                f"{target or label}本来就不在本机里，这次不用动它。",
+            ),
         )
     if status in {"pending_action", "waiting_approval"}:
-        lines = [
-            f"{_pending_opener(facts)}{label}，我这边已经摆好工具了，不过还没动手。",
-            _pending_reason_text(facts),
-        ]
+        opener = _pending_opener(facts)
+        reason = _pending_reason_text(facts)
         options = [str(item) for item in facts.get("reply_options") or [] if str(item).strip()]
+        prompt = opening_copy("action.pending", seed, label=label)
+        lines = [prompt, reason]
         if options:
             lines.append("你直接回我：" + "、".join(options[:4]) + "。")
-        lines.append("你确认前，我会乖乖把手收住，不会把没做的事说成做完 🙂")
+        lines.append(
+            pick_variant(
+                seed,
+                (
+                    "你确认前，我先不往前推，免得替你越线。",
+                    "你没点头前，这一步我先收着，不提前往下走。",
+                    "先等你一句准话，我再继续，不替你擅自做决定。",
+                ),
+            )
+        )
         return "\n".join(line for line in lines if line)
     if status == "manual_only":
         reason = str(facts.get("failure_reason") or facts.get("safe_next_step") or "").strip()
-        return (
-            f"{label}这步我没硬上。"
-            f"{reason or '现在还缺一个能让我放心执行的可信来源，我不想拿你的电脑冒险。'}"
+        return opening_copy(
+            "action.manual_only",
+            seed,
+            label=label,
+            reason=reason or "现在还缺一个更稳的可信来源。",
+        )
+    if status == "blocked":
+        reason = str(facts.get("failure_reason") or facts.get("safe_next_step") or "").strip()
+        return opening_copy(
+            "action.blocked",
+            seed,
+            label=label,
+            reason=reason or "这一步先停住，我不能把它说成已经完成。",
         )
     if status == "approved":
         detail_status = str(facts.get("detail_status") or "")
         evidence = str(facts.get("evidence_summary") or "").strip()
         if detail_status == "completed" or facts.get("completed"):
-            return (
-                f"已确认，{label}已经完成，跑完啦。"
-                f"{_friendly_evidence_text(evidence)}"
+            return opening_copy("action.approved_completed", seed, label=label) + _friendly_evidence_text(
+                evidence,
+                seed=seed,
             )
         if detail_status in {"paused", "waiting_approval"}:
-            return f"收到，{label}我已经接着往前推了；后面还有一步要你点头，我会停在那儿等你。"
+            return opening_copy("action.approved_waiting", seed, label=label)
         if detail_status == "failed" or facts.get("failed"):
             reason = str(facts.get("failure_reason") or "").strip()
-            return f"收到，但{label}没有顺利完成。{reason or '你可以换个目标或来源，我再试一轮。'}"
-        return f"收到，{label}我继续处理；有结果我会按真实状态说，不给你画饼。"
+            return opening_copy(
+                "action.approved_failed",
+                seed,
+                label=label,
+                reason=reason or "你可以换个目标或来源，我再试一轮。",
+            )
+        return opening_copy("action.approved_progress", seed, label=label)
     if status == "denied":
-        return f"好，{label}我已经刹住了，这一步没有执行。你换个目标或让我只出方案都行。"
+        return opening_copy("action.denied", seed, label=label)
     if status == "edited":
-        return f"收到，{label}已经按新的目标修改好；我会重新检查一遍，该确认的地方还会等你点头。"
+        return opening_copy("action.edited", seed, label=label)
     if status == "edit_missing_target":
         reason = str(facts.get("failure_reason") or "").strip()
-        return f"我懂，你想改{label}，但新目标还没说清楚。{reason}"
+        return opening_copy("action.edit_missing_target", seed, label=label, reason=reason)
     if status == "resolution_failed":
         reason = str(facts.get("failure_reason") or "").strip()
         fallback = "你可以修改目标后重试，或取消这次操作。"
-        return f"{label}这步卡住了，没有完成。{reason or fallback}"
-    return f"{label}现在是 {status} 状态；我会继续按真实进展告诉你。"
+        return opening_copy("action.resolution_failed", seed, label=label, reason=reason or fallback)
+    if status == "no_pending_action":
+        return opening_copy("action.no_pending", seed, label=label)
+    if status == "multiple_pending_actions":
+        labels = str(facts.get("labels") or label)
+        return opening_copy("action.multiple_pending", seed, labels=labels)
+    if status == "ambiguous_confirmation_blocked":
+        return opening_copy("action.ambiguous_blocked", seed, label=label)
+    return opening_copy("action.default", seed, label=label, status=status)
 
 
 def _pending_reason_text(facts: dict[str, Any]) -> str:
     action_type = str(facts.get("action_type") or "")
-    if action_type == "host.uninstall_software":
-        return "这会从电脑里移除软件，我得先听到你明确点头再开工。"
-    if action_type == "host.install_software":
-        return "这会往电脑里装东西，可能动到系统环境，所以我先踩住刹车等你确认。"
-    if action_type == "browser.download":
-        return "这会在本机生成文件，我先等你一句准话。"
-    if action_type == "file.delete":
-        return "这可能删文件，我不会手滑，先等你确认。"
+    seed = _action_seed(facts)
+    if action_type in _PENDING_REASON_ACTION_TYPES:
+        return opening_copy(f"action.pending_reason.{action_type}", seed)
     return _soften_action_text(
         str(facts.get("impact_summary") or "这一步有实际影响，需要你明确确认后才会继续。")
     )
@@ -873,21 +1641,30 @@ def _pending_reason_text(facts: dict[str, Any]) -> str:
 
 def _pending_opener(facts: dict[str, Any]) -> str:
     action_type = str(facts.get("action_type") or "")
-    if action_type == "host.install_software":
-        return "我先把安装路线铺好："
-    if action_type == "host.uninstall_software":
-        return "我先把卸载路线看清楚："
-    if action_type == "file.delete":
-        return "我先把手放在删除按钮旁边："
-    if action_type == "browser.download":
-        return "下载这边我已经瞄准了："
-    return "我先把这步准备好："
+    seed = _action_seed(facts)
+    if action_type in _PENDING_OPENER_ACTION_TYPES:
+        return opening_copy(f"action.pending_opener.{action_type}", seed)
+    return pick_variant(
+        seed,
+        (
+            "我先把这步摆好：",
+            "我先把这步收住：",
+            "我先看住这一步：",
+        ),
+    )
 
 
-def _friendly_evidence_text(evidence: str) -> str:
+def _friendly_evidence_text(evidence: str, *, seed: str = "") -> str:
     text = _soften_action_text(evidence).strip()
     if not text:
-        return "我也把过程记录好了，后面要查结果能翻得到。"
+        return pick_variant(
+            seed or "evidence",
+            (
+                "我也把过程记下来了，后面要查还能翻得到。",
+                "过程记录我也留好了，回头能复核。",
+                "我把记录也收好了，后面想查随时能翻。",
+            ),
+        )
     return text
 
 
@@ -895,10 +1672,16 @@ def _soften_action_text(text: str) -> str:
     replacements = {
         "受控链路": "处理流程",
         "受控任务链路": "处理流程",
+        "受控任务": "处理流程",
         "任务链路": "处理流程",
+        "工具边界": "处理限制",
+        "任务回放": "结果记录",
         "工件": "结果记录",
         "回放证据": "过程记录",
-        "Safety": "安全检查",
+        "内部 trace": "过程记录",
+        "Capability Graph": "权限范围",
+        "Asset Broker": "授权资源通道",
+        "Safety": "风险检查",
         "Approval": "确认",
         "本机软件状态": "电脑里的软件",
         "需要你明确确认后才会继续": "需要你点头后我才会继续",
@@ -907,8 +1690,10 @@ def _soften_action_text(text: str) -> str:
         "确认前尚未下载": "确认前还没下载",
         "确认前尚未提交": "确认前还没提交",
         "确认前尚未保存": "确认前还没保存",
+        "系统安全提示": "安全提示",
+        "来源校验": "来源检查",
     }
-    friendly_evidence = "我也把过程记录好了，后面要查结果能翻得到。"
+    friendly_evidence = "我也把过程记下来了，后面要查还能翻得到。"
     replacements["结果可以通过任务记录、结果记录或过程记录复核。"] = friendly_evidence
     replacements["结果可以通过任务记录、工件或回放证据复核。"] = friendly_evidence
     result = text
@@ -939,10 +1724,11 @@ def _action_status_title(status: str) -> str | None:
 
 def _action_boundary_notice(facts: dict[str, Any]) -> str | None:
     action_type = str(facts.get("action_type") or "")
+    seed = _action_seed(facts)
     if action_type.startswith("host."):
-        return "本机软件变更必须经过确认；不会绕过系统安全提示或未知来源校验。"
+        return opening_copy("action.boundary.host", seed)
     if facts.get("approval_required"):
-        return "这一步需要确认后才会执行。"
+        return opening_copy("action.boundary.approval", seed)
     return None
 
 

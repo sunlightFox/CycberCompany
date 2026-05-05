@@ -249,6 +249,24 @@ def test_phase35_visible_filter_strips_split_internal_terms() -> None:
     assert filter_.summary()["changed_count"] >= 1
 
 
+def test_phase35_relaxed_visible_profile_keeps_regular_paths_and_redacts_secrets() -> None:
+    token = chat_module.set_visible_redaction_profile("relaxed")
+    try:
+        visible, summary = ChatVisibleOutputFilter.filter_text(
+            "保存到 C:\\Users\\Administrator\\Desktop\\note.txt；"
+            "api_key=sk-phase35-visible-secret-value；"
+            "敏感路径 C:\\Users\\Administrator\\.ssh\\id_rsa"
+        )
+    finally:
+        chat_module.reset_visible_redaction_profile(token)
+
+    assert "C:\\Users\\Administrator\\Desktop\\note.txt" in visible
+    assert "sk-phase35-visible-secret-value" not in visible
+    assert "C:\\Users\\Administrator\\.ssh\\id_rsa" not in visible
+    assert ".ssh" not in visible
+    assert summary["changed_count"] >= 1
+
+
 def test_phase35_visible_filter_normalizes_negated_stealth_boundary() -> None:
     visible, summary = ChatVisibleOutputFilter.filter_text(
         "我没有真实主观意识；也不会在后台偷偷替你执行工具或登录账号。"

@@ -30,6 +30,7 @@ from app.services.asset_broker import AssetBrokerService
 from app.services.memory import MemoryService
 
 if TYPE_CHECKING:
+    from app.services.agent_workbench import AgentWorkbenchService
     from app.services.chat_experience import ChatExperienceService
     from app.services.design_alignment import PersonaHeartService
 
@@ -46,6 +47,7 @@ class RuntimeContextGateway:
         asset_broker_service: AssetBrokerService | None = None,
         persona_heart_service: PersonaHeartService | None = None,
         chat_experience_service: ChatExperienceService | None = None,
+        agent_workbench_service: AgentWorkbenchService | None = None,
         recent_message_limit: int = 12,
         token_budget: int = 6000,
     ) -> None:
@@ -57,6 +59,7 @@ class RuntimeContextGateway:
         self._assets = asset_broker_service
         self._persona_heart = persona_heart_service
         self._chat_experience = chat_experience_service
+        self._agent_workbench = agent_workbench_service
         self._recent_message_limit = recent_message_limit
         self._token_budget = token_budget
 
@@ -161,11 +164,16 @@ class RuntimeContextGateway:
             await self._persona_heart.heart_summary(
                 turn["member_id"],
                 text=query_text,
+                source_turn_id=turn["turn_id"],
                 trace_id=turn["trace_id"],
                 parent_span_id=root_span_id,
             )
             if self._persona_heart is not None and include_heart
             else None
+        )
+        workbench = await self._workbench_context(
+            member_id=turn["member_id"],
+            conversation_id=turn["conversation_id"],
         )
         return ContextPacket(
             context_packet_id=new_id("ctx"),
@@ -192,7 +200,24 @@ class RuntimeContextGateway:
             resource_handles=resource_handles,
             safety_notes=[SafetyNote(risk_level=RiskLevel.R1, summary="local safety active")],
             untrusted_context=[],
+            workbench=workbench,
         )
+
+    async def _workbench_context(
+        self,
+        *,
+        member_id: str,
+        conversation_id: str | None,
+    ):
+        if self._agent_workbench is None:
+            return None
+        try:
+            return await self._agent_workbench.latest_workbench_context(
+                member_id=member_id,
+                conversation_id=conversation_id,
+            )
+        except Exception:
+            return None
 
     async def _persona_summary(
         self,
@@ -212,6 +237,7 @@ class RuntimeContextGateway:
             )
         return await self._persona_heart.persona_summary(
             profile_id,
+            member_id=member["member_id"],
             trace_id=trace_id,
             parent_span_id=parent_span_id,
         )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from core_types import MemberStatus
 from shell_runtime import ShellRuntime
@@ -13,16 +13,36 @@ from app.db.session import Database
 DEFAULT_ORGANIZATION_ID = "org_default"
 DEFAULT_USER_ID = "user_local_owner"
 DEFAULT_BRAIN_ID = "brain_not_configured"
+DEFAULT_VOICE_PROFILE_ID = "vpr_default_edge"
+DEFAULT_MEMBER_VOICE_IDS = {
+    "xiaoyao": "zh-CN-XiaoxiaoNeural",
+    "ningning": "zh-CN-XiaoyiNeural",
+    "aheng": "zh-CN-YunxiNeural",
+    "mobai": "zh-CN-YunjianNeural",
+    "xiaoqi": "zh-CN-XiaohanNeural",
+    "xiaowu": "zh-CN-YunyangNeural",
+}
 DEFAULT_MEMBER_ID = "mem_xiaoyao"
+XIAOWU_MEMBER_ID = "mem_xiaowu"
 DEFAULT_CONVERSATION_ID = "conv_default_xiaoyao"
 WELCOME_MESSAGE_ID = "msg_welcome_xiaoyao"
 
+if TYPE_CHECKING:
+    from app.services.design_alignment import PersonaHeartService
+
 
 class BootstrapService:
-    def __init__(self, db: Database, shell_runtime: ShellRuntime, default_shell_id: str) -> None:
+    def __init__(
+        self,
+        db: Database,
+        shell_runtime: ShellRuntime,
+        default_shell_id: str,
+        persona_heart_service: PersonaHeartService | None = None,
+    ) -> None:
         self._db = db
         self._shell_runtime = shell_runtime
         self._default_shell_id = default_shell_id
+        self._persona_heart = persona_heart_service
         self._shells = ShellRepository(db)
 
     async def ensure_defaults(self) -> None:
@@ -44,7 +64,10 @@ class BootstrapService:
             department_ids = await self._ensure_departments()
             role_ids = await self._ensure_roles(department_ids)
             await self._ensure_default_brain()
+            await self._ensure_default_voice_profile()
             await self._ensure_members(department_ids, role_ids)
+            await self._ensure_user_requested_members(department_ids, role_ids)
+            await self._ensure_member_voice_bindings()
             await self._ensure_default_skill_policies()
             await self._ensure_default_conversation(bootstrap_config)
             await self._ensure_welcome_message(bootstrap_config)
@@ -167,6 +190,129 @@ class BootstrapService:
             ),
         )
 
+    async def _ensure_default_voice_profile(self) -> None:
+        exists = await self._db.fetch_one(
+            "SELECT voice_profile_id FROM voice_profiles WHERE voice_profile_id = ?",
+            (DEFAULT_VOICE_PROFILE_ID,),
+        )
+        if exists:
+            return
+        now = utc_now_iso()
+        await self._db.execute(
+            """
+            INSERT INTO voice_profiles (
+              voice_profile_id, organization_id, display_name, provider, provider_voice_id,
+              output_format, sample_text, sample_audio_uri, config_json, secret_ref, status,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, 'active', ?, ?)
+            """,
+            (
+                DEFAULT_VOICE_PROFILE_ID,
+                DEFAULT_ORGANIZATION_ID,
+                "默认 Edge 中文声音",
+                "edge",
+                "zh-CN-XiaoxiaoNeural",
+                "wav",
+                "你好，我是本地智能体成员。",
+                json.dumps({"default": True, "reply_mode": "explicit_request_only"}, ensure_ascii=False),
+                now,
+                now,
+            ),
+        )
+
+    async def _ensure_member_voice_bindings(self) -> None:
+        now = utc_now_iso()
+        for template in self._member_templates():
+            key = str(template["key"])
+            await self._ensure_member_voice_binding(
+                member_id=f"mem_{key}",
+                member_name=str(template["name"]),
+                member_key=key,
+                provider_voice_id=DEFAULT_MEMBER_VOICE_IDS.get(
+                    key,
+                    "zh-CN-XiaoxiaoNeural",
+                ),
+                source="shell_template",
+                now=now,
+            )
+        await self._ensure_member_voice_binding(
+            member_id=XIAOWU_MEMBER_ID,
+            member_name="小吴",
+            member_key="xiaowu",
+            provider_voice_id=DEFAULT_MEMBER_VOICE_IDS["xiaowu"],
+            source="user_requested_member_seed",
+            now=now,
+        )
+
+    async def _ensure_member_voice_binding(
+        self,
+        *,
+        member_id: str,
+        member_name: str,
+        member_key: str,
+        provider_voice_id: str,
+        source: str,
+        now: str,
+    ) -> None:
+        profile_id = f"vpr_member_{member_key}_edge"
+        await self._db.execute(
+            """
+            INSERT INTO voice_profiles (
+              voice_profile_id, organization_id, display_name, provider, provider_voice_id,
+              output_format, sample_text, sample_audio_uri, config_json, secret_ref, status,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, 'edge', ?, 'wav', ?, NULL, ?, NULL, 'active', ?, ?)
+            ON CONFLICT(voice_profile_id) DO NOTHING
+            """,
+            (
+                profile_id,
+                DEFAULT_ORGANIZATION_ID,
+                f"{member_name}专属声音",
+                provider_voice_id,
+                f"你好，我是{member_name}。",
+                json.dumps(
+                    {
+                        "default": True,
+                        "member_id": member_id,
+                        "source": source,
+                        "reply_mode": "explicit_request_only",
+                    },
+                    ensure_ascii=False,
+                ),
+                now,
+                now,
+            ),
+        )
+        existing = await self._db.fetch_one(
+            """
+            SELECT binding_id
+            FROM member_voice_bindings
+            WHERE member_id = ?
+              AND binding_scope = 'default'
+              AND status = 'active'
+            LIMIT 1
+            """,
+            (member_id,),
+        )
+        if existing:
+            return
+        await self._db.execute(
+            """
+            INSERT INTO member_voice_bindings (
+              binding_id, organization_id, member_id, voice_profile_id, binding_scope,
+              reply_mode, priority, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 'default', 'explicit_request_only', 100, 'active', ?, ?)
+            """,
+            (
+                f"vbind_{member_key}_default",
+                DEFAULT_ORGANIZATION_ID,
+                member_id,
+                profile_id,
+                now,
+                now,
+            ),
+        )
+
     async def _ensure_members(
         self,
         department_ids: dict[str, str],
@@ -217,6 +363,77 @@ class BootstrapService:
                 (member_id, DEFAULT_ORGANIZATION_ID, now),
             )
 
+    async def _ensure_user_requested_members(
+        self,
+        department_ids: dict[str, str],
+        role_ids: dict[str, str],
+    ) -> None:
+        now = utc_now_iso()
+        await self._db.execute(
+            """
+            INSERT INTO members (
+              member_id, organization_id, department_id, role_id, display_name, avatar_uri,
+              status, default_brain_id, persona_profile_id, heart_profile_json,
+              memory_policy_json, created_from_shell_id, created_from_template_id,
+              metadata_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+            ON CONFLICT(member_id) DO NOTHING
+            """,
+            (
+                XIAOWU_MEMBER_ID,
+                DEFAULT_ORGANIZATION_ID,
+                department_ids.get("ceo_office"),
+                role_ids.get("chief_of_staff"),
+                "小吴",
+                MemberStatus.NEEDS_CONFIGURATION.value,
+                DEFAULT_BRAIN_ID,
+                f"persona_{XIAOWU_MEMBER_ID}",
+                json.dumps(
+                    {
+                        "tone": "playful_witty",
+                        "preferences": [
+                            "先给结论",
+                            "少空话",
+                            "别太慢",
+                            "语气自然",
+                            "可以轻松一点",
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps({"write_requires_source": True}, ensure_ascii=False),
+                self._default_shell_id,
+                json.dumps(
+                    {
+                        "source": "user_requested_member_seed",
+                        "default_skills": [
+                            "task_planning",
+                            "review_summary",
+                            "coordination",
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                now,
+                now,
+            ),
+        )
+        await self._db.execute(
+            """
+            INSERT INTO member_availability (
+              member_id, organization_id, status, capacity, current_load,
+              unavailable_reason, schedule_json, source, updated_at
+            ) VALUES (?, ?, 'available', 1, 0, NULL, '{}', 'user_requested_member_seed', ?)
+            ON CONFLICT(member_id) DO NOTHING
+            """,
+            (XIAOWU_MEMBER_ID, DEFAULT_ORGANIZATION_ID, now),
+        )
+        if self._persona_heart is not None:
+            await self._persona_heart.ensure_default_profile(
+                member_id=XIAOWU_MEMBER_ID,
+                profile_id=f"persona_{XIAOWU_MEMBER_ID}",
+            )
+
     async def _ensure_default_skill_policies(self) -> None:
         now = utc_now_iso()
         for template in self._member_templates():
@@ -248,6 +465,13 @@ class BootstrapService:
                 allowed_skills=department.get("default_skills", []),
                 now=now,
             )
+
+        await self._upsert_skill_policy(
+            subject_type="member",
+            subject_id=XIAOWU_MEMBER_ID,
+            allowed_skills=["task_planning", "review_summary", "coordination"],
+            now=now,
+        )
 
     async def _upsert_skill_policy(
         self,

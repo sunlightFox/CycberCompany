@@ -83,6 +83,9 @@ function Write-CheckReport {
       release_power_chat_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-04-30\run_chat_main_chain_power_cases.py'
       release_natural_chat_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-04-30\run_chat_natural_interaction_benchmark.py'
       release_quality_chat_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-04-30-quality\run_chat_main_chain_quality_cases.py'
+      release_quality_chat_e2e_v2 = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-05-01-quality\run_chat_main_chain_quality_regression_cases.py'
+      release_wechat_50_quality_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-05-03-wechat-50-scenarios\run_wechat_50_quality_latency.py --api http://127.0.0.1:8765 --output data\check-reports\wechat-50-quality'
+      release_wechat_real_quality_e2e = '.\scripts\check.ps1 -Profile release runs docs\测试\聊天主链路\2026-05-03-wechat-real-scenarios\run_wechat_real_scenarios.py --api http://127.0.0.1:8765 --output data\check-reports\wechat-real-quality'
       release_full = '.\scripts\check.ps1 -Profile full'
     }
   }
@@ -131,18 +134,19 @@ function Invoke-PythonScript {
     [Parameter(Mandatory = $true)]
     [string] $Name,
     [Parameter(Mandatory = $true)]
-    [string] $ScriptPath
+    [string] $ScriptPath,
+    [string[]] $Arguments = @()
   )
 
   $logPath = Join-Path $reportRoot "$runId-$Name.log"
   $started = (Get-Date).ToUniversalTime()
-  & $pythonPath $ScriptPath 2>&1 | Tee-Object -FilePath $logPath
+  & $pythonPath $ScriptPath @Arguments 2>&1 | Tee-Object -FilePath $logPath
   $exitCode = $LASTEXITCODE
   $completed = (Get-Date).ToUniversalTime()
   $status = if ($exitCode -eq 0) { "passed" } else { "failed" }
   $script:checkResults += [ordered]@{
     name = $Name
-    args = @($ScriptPath)
+    args = @($ScriptPath) + $Arguments
     status = $status
     exit_code = $exitCode
     started_at = $started.ToString("o")
@@ -419,6 +423,12 @@ switch ($Profile) {
     $qualityRunnerRoot = Join-Path $root "docs\测试\聊天主链路\2026-04-30-quality"
     Invoke-PythonScript -Name "chat_e2e_quality" -ScriptPath (Join-Path $qualityRunnerRoot "run_chat_main_chain_quality_cases.py")
     Invoke-QualityChatIssueGate
+    $qualityRunnerRootV2 = Join-Path $root "docs\测试\聊天主链路\2026-05-01-quality"
+    Invoke-PythonScript -Name "chat_e2e_quality_v2" -ScriptPath (Join-Path $qualityRunnerRootV2 "run_chat_main_chain_quality_regression_cases.py")
+    $wechat50Root = Join-Path $root "docs\测试\聊天主链路\2026-05-03-wechat-50-scenarios"
+    Invoke-PythonScript -Name "chat_e2e_wechat_50_quality" -ScriptPath (Join-Path $wechat50Root "run_wechat_50_quality_latency.py") -Arguments @("--api", "http://127.0.0.1:8765", "--output", (Join-Path $reportRoot "wechat-50-quality-$runId"))
+    $wechatRealRoot = Join-Path $root "docs\测试\聊天主链路\2026-05-03-wechat-real-scenarios"
+    Invoke-PythonScript -Name "chat_e2e_wechat_real_quality" -ScriptPath (Join-Path $wechatRealRoot "run_wechat_real_scenarios.py") -Arguments @("--api", "http://127.0.0.1:8765", "--output", (Join-Path $reportRoot "wechat-real-quality-$runId"))
   }
   default {
     Invoke-PythonModule -Name "pytest" -ModuleArgs @("pytest", "--durations=20")

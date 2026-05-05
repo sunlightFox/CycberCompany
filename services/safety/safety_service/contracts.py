@@ -184,7 +184,18 @@ def _risk_from_request(request: ActionRequest) -> RiskLevel:
         delete_like = "delete" in action or "delete" in tool_name
         candidates.append(RiskLevel.R5 if delete_like else RiskLevel.R3)
     if tool_name == "terminal.run" or action in {"terminal.run", "shell", "command"}:
-        candidates.append(RiskLevel.R5)
+        command = str(
+            request.payload.get("command") or request.payload_summary.get("command") or ""
+        )
+        readonly_chat_terminal = bool(
+            request.payload.get("chat_readonly_command")
+            or request.payload_summary.get("chat_readonly_command")
+        )
+        candidates.append(
+            RiskLevel.R2
+            if readonly_chat_terminal and _terminal_readonly_command(command)
+            else RiskLevel.R5
+        )
     if (
         tool_name.startswith("browser.")
         and any(word in action or word in tool_name for word in ("download", "screenshot"))
@@ -310,6 +321,55 @@ def _terminal_danger(request: ActionRequest) -> bool:
     return any(item in lowered for item in blocked) or any(
         re.search(pattern, lowered) for pattern in sensitive_paths
     )
+
+
+def _terminal_readonly_command(command: str) -> bool:
+    lowered = command.lower().strip()
+    if not lowered:
+        return False
+    blocked = [
+        "rm ",
+        "del ",
+        "remove-item",
+        "move-item",
+        "copy-item",
+        "set-item",
+        "new-item",
+        "mkdir",
+        "rmdir",
+        "curl",
+        "wget",
+        "invoke-webrequest",
+        "invoke-restmethod",
+        "pip install",
+        "npm install",
+        ">",
+        ">>",
+        "|",
+        "&&",
+        ";",
+    ]
+    if any(marker in f" {lowered} " for marker in blocked):
+        return False
+    executable = lowered.split()[0].strip("\"'")
+    executable = executable.removesuffix(".exe")
+    return executable in {
+        "echo",
+        "date",
+        "time",
+        "whoami",
+        "hostname",
+        "pwd",
+        "ls",
+        "dir",
+        "ver",
+        "get-date",
+        "get-location",
+        "python",
+        "python3",
+        "py",
+        "node",
+    }
 
 
 def _risk_order(risk: RiskLevel) -> int:

@@ -4,18 +4,25 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from core_types import (
     Attachment,
     ChannelPairingRequest,
+    ChatContentPart,
+    ChatContextRef,
+    ChatIngressMetadata,
     ChatInput,
     ChatTurnRequest,
+    ChatTurnResponse,
     ClientContext,
     ErrorCode,
     RiskLevel,
+    TraceSpanStatus,
+    TraceSpanType,
 )
 from trace_service import TraceService, redact
 
@@ -26,6 +33,7 @@ from app.db.repositories.channel_repo import ChannelRepository
 from app.db.repositories.chat_repo import ChatRepository
 from app.db.repositories.media_repo import MediaRepository
 from app.schemas.channels import (
+    ChannelInboundWechatRequest,
     ChannelPairingDecisionResponse,
     ChannelPeerRevokeResponse,
     ChannelPeerSessionResponse,
@@ -38,6 +46,10 @@ from app.services.channel_connectors import (
     ChannelConnectorRegistry,
 )
 from app.services.chat import ChatService
+from app.services.multimodal_understanding import (
+    MultimodalUnderstandingResult,
+    MultimodalUnderstandingService,
+)
 from app.services.notifications import NotificationGatewayService
 from app.services.secrets import SecretStore
 
@@ -93,6 +105,7 @@ class WechatChannelGatewayService:
         trace_service: TraceService,
         audit_service: AuditEventService,
         config: ChannelProviderSection,
+        multimodal_understanding: MultimodalUnderstandingService | None = None,
     ) -> None:
         self._repo = repo
         self._chat_repo = chat_repo
@@ -105,6 +118,7 @@ class WechatChannelGatewayService:
         self._trace = trace_service
         self._audit = audit_service
         self._config = config
+        self._multimodal_understanding = multimodal_understanding
         self._last_poll_result: dict[str, Any] = {}
         self._immediate_delivery = WechatImmediateDeliveryStats()
         self._delivery_watch_tasks: set[asyncio.Task[None]] = set()
@@ -327,14 +341,42 @@ class WechatChannelGatewayService:
             status="revoked",
         )
 
-    async def gateway_health(self) -> WechatGatewayHealthResponse:
+    async def gateway_health(
+        self,
+        *,
+        worker_health: dict[str, Any] | None = None,
+    ) -> WechatGatewayHealthResponse:
         accounts = await self._repo.list_accounts(provider="wechat", status="active", limit=100)
         provider_health = await self._connectors.get("wechat").health()
         from app.schemas.channels import ChannelProviderHealthResponse
 
+        provider_details = dict(provider_health.details or {})
+        login_state = str(provider_health.login_state or "unknown")
+        connected = (
+            self._config.enabled
+            and bool(accounts)
+            and provider_health.reachable
+            and login_state in {"logged_in", "connected", "authenticated", "mock_ready"}
+        )
+        worker_payload = _wechat_worker_health_payload(worker_health)
+        service_available = connected and (
+            not self._config.poll_enabled
+            or worker_payload.get("running") is True
+            or worker_payload.get("last_status") == "healthy"
+        )
+        automation_state = str(worker_payload.get("automation_state") or "unknown")
+        connection_state = "connected" if connected else str(
+            provider_details.get("connection_state") or login_state
+        )
         return WechatGatewayHealthResponse(
             enabled=self._config.enabled,
             poll_enabled=self._config.poll_enabled,
+            service_available=service_available,
+            connected=connected,
+            status="connected" if connected else "disconnected",
+            login_state=login_state,
+            connection_state=connection_state,
+            automation_state=automation_state,
             active_accounts=len(accounts),
             pending_pairing_requests=await self._repo.count_pending_pairing_requests(),
             pending_deliveries=await self._repo.count_delivery_bindings(
@@ -343,8 +385,97 @@ class WechatChannelGatewayService:
             ),
             last_poll_result=redact(self._last_poll_result),
             immediate_delivery=self._immediate_delivery.response(),
+            worker_health=worker_payload,
             provider_health=ChannelProviderHealthResponse(**provider_health.__dict__),
         )
+
+    async def route_received_wechat_inbound(
+        self,
+        *,
+        request: ChannelInboundWechatRequest,
+        event: dict[str, Any],
+        trace_id: str | None = None,
+    ) -> dict[str, Any]:
+        account = await self._resolve_account_from_request(request, event)
+        if account is None:
+            return {"status": "skipped", "reason": "wechat_account_missing"}
+        if str(event.get("status") or "") != "received":
+            return {
+                "status": "skipped",
+                "reason": f"event_{str(event.get('status') or 'missing')}",
+            }
+        notification_inbound = event.get("notification_inbound")
+        if isinstance(notification_inbound, dict):
+            binding_status = str(notification_inbound.get("binding_status") or "")
+            if binding_status and binding_status != "no_pending_action":
+                return {
+                    "status": "skipped",
+                    "reason": f"notification_{binding_status}",
+                    "binding_status": binding_status,
+                }
+        normalized = _normalize_wechat_event(
+            {
+                "event_id": request.provider_event_id or event.get("provider_event_id_redacted"),
+                "source": request.source,
+                "message": request.message,
+                "received_at": request.received_at or event.get("received_at"),
+                "raw_event": request.raw_event,
+            }
+        )
+        session = await self._ensure_direct_peer_session(
+            account,
+            normalized=normalized,
+            trace_id=trace_id,
+        )
+        if session is None:
+            return {
+                "status": "skipped",
+                "reason": "direct_inbound_not_routeable",
+            }
+        provider_state = self._load_provider_state(account.get("provider_state_ref"))
+        channel_event_id = str(event.get("channel_event_id") or "")
+        attachments = await self._process_attachments(
+            account,
+            session=session,
+            provider_state=provider_state,
+            channel_event_id=channel_event_id,
+            normalized=normalized,
+            provider_event_ref=str(event.get("provider_event_id_redacted") or ""),
+            trace_id=trace_id,
+        )
+        stats = WechatGatewayStats()
+        response = await self._route_to_chat(
+            account,
+            session=session,
+            channel_event_id=channel_event_id,
+            normalized=normalized,
+            attachments=attachments,
+            stats=stats,
+            trace_id=trace_id,
+        )
+        binding = await self._repo.get_delivery_binding_by_turn(
+            turn_id=response.turn_id,
+            channel_peer_session_id=session["channel_peer_session_id"],
+        )
+        if (
+            binding is not None
+            and response.status in {"completed", "failed", "cancelled"}
+            and binding.get("status") == "pending"
+        ):
+            await self._deliver_binding(binding, trace_id=trace_id)
+            binding = await self._repo.get_delivery_binding(
+                binding["channel_delivery_binding_id"]
+            )
+        return {
+            "status": "routed",
+            "turn_id": response.turn_id,
+            "conversation_id": response.conversation_id,
+            "delivery_binding_id": (
+                binding["channel_delivery_binding_id"] if binding else None
+            ),
+            "delivery_status": binding.get("status") if binding else None,
+            "chat_turns_created": 1,
+        }
 
     async def deliver_binding(
         self,
@@ -468,6 +599,12 @@ class WechatChannelGatewayService:
                 "content_length": len(normalized["text"]),
                 "trusted_channel": trusted_private_peer,
                 "untrusted_external_content": not trusted_private_peer,
+                "provider_received_at": normalized["received_at"],
+                "gateway_created_at": normalized.get("gateway_created_at"),
+                "latency_markers": {
+                    "t1_provider_received_at": normalized["received_at"],
+                    "t2_channel_event_created_at": now,
+                },
             },
             "status": status,
             "trace_id": trace_id,
@@ -609,6 +746,7 @@ class WechatChannelGatewayService:
             content_type = str(attachment.get("content_type") or "application/octet-stream")
             display_name = str(attachment.get("name") or attachment.get("filename") or "wechat.bin")
             size_hint = attachment.get("size_bytes")
+            transcript_text = _safe_attachment_transcript(attachment)
             if attachment_type not in media_config["allowed_types"]:
                 await self._repo.insert_attachment(
                     {
@@ -651,6 +789,15 @@ class WechatChannelGatewayService:
                     content=content,
                     display_name=display_name,
                 )
+                artifact_id = await self._ensure_channel_media_artifact(
+                    account,
+                    session,
+                    display_name=display_name,
+                    content_type=content_type,
+                    size_bytes=len(content),
+                    blob_ref=blob_ref,
+                    trace_id=trace_id,
+                )
                 media_id = None
                 if attachment_type in {"image", "audio"}:
                     media_id = await self._insert_channel_media_asset(
@@ -676,19 +823,26 @@ class WechatChannelGatewayService:
                         "display_name_redacted": str(redact(display_name)),
                         "content_type": content_type,
                         "size_bytes": len(content),
-                        "artifact_id": None,
+                        "artifact_id": artifact_id,
                         "blob_ref": blob_ref,
                         "media_id": media_id,
-                        "status": "ready" if attachment_type != "audio" else "degraded",
+                        "status": "ready"
+                        if attachment_type != "audio" or transcript_text
+                        else "degraded",
                         "metadata": {
                             "untrusted_external_content": True,
                             "storage": "channel_attachment_blob",
-                            "transcription_status": "degraded"
+                            "transcription_status": "completed"
+                            if attachment_type == "audio" and transcript_text
+                            else "degraded"
                             if attachment_type == "audio"
                             else None,
-                            "transcription_reason": "transcription_provider_unavailable"
+                            "transcription_reason": None
+                            if transcript_text
+                            else "transcription_provider_unavailable"
                             if attachment_type == "audio"
                             else None,
+                            "transcript_text": transcript_text,
                         },
                         "trace_id": trace_id,
                         "created_at": now,
@@ -704,11 +858,24 @@ class WechatChannelGatewayService:
                         metadata={
                             "channel_attachment_id": attachment_id,
                             "media_id": media_id,
+                            "artifact_id": artifact_id,
                             "attachment_type": attachment_type,
                             "provider_event_id_redacted": provider_event_ref,
                             "storage": "channel_attachment_blob",
                             "untrusted_external_content": True,
-                            "degraded": attachment_type == "audio",
+                            "size_bytes": len(content),
+                            "transcription_status": "completed"
+                            if attachment_type == "audio" and transcript_text
+                            else "degraded"
+                            if attachment_type == "audio"
+                            else None,
+                            "transcription_reason": None
+                            if transcript_text
+                            else "transcription_provider_unavailable"
+                            if attachment_type == "audio"
+                            else None,
+                            "transcript_text": transcript_text,
+                            "degraded": attachment_type == "audio" and not transcript_text,
                         },
                     )
                 )
@@ -727,6 +894,7 @@ class WechatChannelGatewayService:
                             metadata={
                                 "channel_attachment_id": existing["channel_attachment_id"],
                                 "media_id": existing.get("media_id"),
+                                "artifact_id": existing.get("artifact_id"),
                                 "attachment_type": existing["attachment_type"],
                                 "provider_event_id_redacted": provider_event_ref,
                                 "storage": "channel_attachment_blob",
@@ -769,26 +937,140 @@ class WechatChannelGatewayService:
         attachments: list[Attachment],
         stats: WechatGatewayStats,
         trace_id: str | None,
-    ) -> None:
+    ) -> ChatTurnResponse:
         text = normalized["text"].strip()
         if not text and attachments:
             text = _attachment_prompt(attachments)
         if not text:
             text = "收到一条微信消息，但没有可处理的文字内容。"
-        response = await self._chat.create_turn(
-            ChatTurnRequest(
-                session_id=session["session_id"],
-                conversation_id=session.get("conversation_id"),
-                member_id=session["member_id"],
-                input=ChatInput(type="text", text=text),
-                attachments=attachments,
-                client_context=ClientContext(
-                    timezone="Asia/Shanghai",
-                    locale="zh-CN",
-                    ui_mode="wechat_chat",
-                ),
-            )
+        understanding_result: MultimodalUnderstandingResult | None = None
+        if attachments and self._multimodal_understanding is not None:
+            try:
+                understanding_result = (
+                    await self._multimodal_understanding.understand_wechat_attachments(
+                        account=account,
+                        session=session,
+                        channel_event_id=channel_event_id,
+                        normalized=normalized,
+                        attachments=attachments,
+                        trace_id=trace_id,
+                    )
+                )
+            except Exception:
+                understanding_result = None
+        content_parts = [
+            part
+            for part in _wechat_content_parts(text, attachments, normalized)
+            if part.type != "text"
+        ]
+        if understanding_result is not None:
+            content_parts.extend(understanding_result.content_parts)
+        fallback_transcript_parts = _wechat_audio_transcript_parts(attachments)
+        if fallback_transcript_parts and not any(
+            part.type == "audio_transcript" for part in content_parts
+        ):
+            content_parts.extend(fallback_transcript_parts)
+        context_refs = _wechat_context_refs(normalized)
+        raw_payload = {
+            "provider": account["provider"],
+            "channel_event_id": channel_event_id,
+            "channel_account_id": account["channel_account_id"],
+            "channel_peer_session_id": session["channel_peer_session_id"],
+            "provider_event_id_redacted": _hash_value(normalized["provider_event_id"]),
+            "peer_ref_redacted": _hash_value(normalized["peer_ref"]),
+            "received_at": normalized["received_at"],
+            "gateway_created_at": normalized.get("gateway_created_at"),
+            "attachment_count": len(attachments),
+            "message_type": normalized["message_type"],
+            "latency_markers": {
+                "t1_provider_received_at": normalized["received_at"],
+                "t2_channel_event_created_at": normalized.get("gateway_created_at"),
+            },
+        }
+        if understanding_result is not None:
+            raw_payload["multimodal_understanding"] = understanding_result.ingress_payload
+        ingress_metadata = ChatIngressMetadata(
+            channel="wechat",
+            channel_message_id=normalized["provider_event_id"],
+            queue_policy="immediate",
+            raw_payload=raw_payload,
         )
+        gateway_span_id = None
+        if trace_id is not None:
+            gateway_span_id = await self._trace.start_span(
+                trace_id,
+                span_type=TraceSpanType.CHAT_INGRESS,
+                name="wechat route to chat",
+                input_data={
+                    "provider": account["provider"],
+                    "channel_event_id": channel_event_id,
+                    "provider_event_id_redacted": _hash_value(
+                        normalized["provider_event_id"]
+                    ),
+                    "peer_ref_redacted": _hash_value(normalized["peer_ref"]),
+                    "message_type": normalized["message_type"],
+                    "text_length": len(text),
+                    "attachment_count": len(attachments),
+                    "latency_markers": ingress_metadata.raw_payload["latency_markers"],
+                },
+            )
+        try:
+            response = await self._chat.create_turn(
+                ChatTurnRequest(
+                    session_id=session["session_id"],
+                    conversation_id=session.get("conversation_id"),
+                    member_id=session["member_id"],
+                    input=ChatInput(
+                        type="multi_part" if content_parts else "text",
+                        text=text,
+                        content_parts=content_parts,
+                    ),
+                    attachments=attachments,
+                    context_refs=context_refs,
+                    ingress_metadata=ingress_metadata,
+                    client_context=ClientContext(
+                        timezone="Asia/Shanghai",
+                        locale="zh-CN",
+                        ui_mode="wechat_chat",
+                    ),
+                )
+            )
+        except Exception as exc:
+            if gateway_span_id is not None:
+                await self._trace.end_span(
+                    gateway_span_id,
+                    status=TraceSpanStatus.FAILED,
+                    output_data={"error": str(redact(str(exc)))},
+            )
+            raise
+        if understanding_result is not None and self._multimodal_understanding is not None:
+            try:
+                await self._multimodal_understanding.commit_after_turn(
+                    understanding_result,
+                    account=account,
+                    session=session,
+                    channel_event_id=channel_event_id,
+                    conversation_id=response.conversation_id,
+                    turn_id=response.turn_id,
+                    message_id=response.message_id,
+                    trace_id=response.trace_id,
+                )
+            except Exception:
+                pass
+        if gateway_span_id is not None:
+            await self._trace.end_span(
+                gateway_span_id,
+                output_data={
+                    "turn_id": response.turn_id,
+                    "conversation_id": response.conversation_id,
+                    "queue_status": response.queue_status,
+                    "envelope_id": response.envelope_id,
+                    "latency_markers": {
+                        **ingress_metadata.raw_payload["latency_markers"],
+                        "t3_turn_created_at": utc_now_iso(),
+                    },
+                },
+            )
         if not session.get("conversation_id"):
             await self._repo.update_peer_session(
                 session["channel_peer_session_id"],
@@ -804,6 +1086,7 @@ class WechatChannelGatewayService:
                 {"last_inbound_at": utc_now_iso(), "updated_at": utc_now_iso()},
             )
         channel_delivery_binding_id = new_id("chdel")
+        delivery_created_at = utc_now_iso()
         await self._repo.insert_delivery_binding(
             {
                 "channel_delivery_binding_id": channel_delivery_binding_id,
@@ -815,8 +1098,8 @@ class WechatChannelGatewayService:
                 "provider": account["provider"],
                 "status": "pending",
                 "trace_id": trace_id,
-                "created_at": utc_now_iso(),
-                "updated_at": utc_now_iso(),
+                "created_at": delivery_created_at,
+                "updated_at": delivery_created_at,
             }
         )
         self._schedule_immediate_delivery(
@@ -826,6 +1109,7 @@ class WechatChannelGatewayService:
         )
         stats.chat_turns_created += 1
         await asyncio.sleep(0)
+        return response
 
     async def _deliver_binding(
         self,
@@ -865,6 +1149,24 @@ class WechatChannelGatewayService:
         latest = await self._repo.get_delivery_binding(binding["channel_delivery_binding_id"])
         if latest is None or latest.get("status") != "pending":
             return None
+        outbound_span_id = None
+        if trace_id is not None:
+            outbound_span_id = await self._trace.start_span(
+                trace_id,
+                span_type=TraceSpanType.CHAT_INGRESS,
+                name="wechat deliver chat reply",
+                input_data={
+                    "channel_delivery_binding_id": binding["channel_delivery_binding_id"],
+                    "turn_id": turn_id,
+                    "channel_event_id": binding.get("channel_event_id"),
+                    "message_id": message_id,
+                    "recipient_redacted": _hash_value(recipient),
+                    "reply_length": len(str(message["content_text"])),
+                    "latency_markers": {
+                        "t8_delivery_binding_created_at": binding.get("created_at"),
+                    },
+                },
+            )
         notification = await self._notifications.create_message(
             NotificationMessageCreateRequest(
                 channel_id=session["channel_id"],
@@ -876,11 +1178,13 @@ class WechatChannelGatewayService:
                     "channel_delivery_binding_id": binding["channel_delivery_binding_id"],
                     "turn_id": turn_id,
                     "message_id": message_id,
+                    "voice_reply": dict(message.get("voice_metadata") or {}),
                 },
             ),
             trace_id=trace_id,
         )
-        status = "sent" if notification.status == "sent" else "failed"
+        delivered_at = utc_now_iso()
+        status = _delivery_binding_status(notification)
         provider_message_id = (
             _hash_value(notification.provider_message_id)
             if notification.provider_message_id
@@ -895,14 +1199,33 @@ class WechatChannelGatewayService:
                 "status": status,
                 "attempts": int(latest.get("attempts") or 0) + 1,
                 "failure_reason": notification.failure_reason if status == "failed" else None,
-                "updated_at": utc_now_iso(),
-                "sent_at": utc_now_iso() if status == "sent" else None,
+                "updated_at": delivered_at,
+                "sent_at": delivered_at if status == "sent" else None,
             },
         )
+        if outbound_span_id is not None:
+            await self._trace.end_span(
+                outbound_span_id,
+                status=(
+                    TraceSpanStatus.COMPLETED
+                    if status == "sent"
+                    else TraceSpanStatus.FAILED
+                ),
+                output_data={
+                    "status": status,
+                    "notification_id": notification.notification_id,
+                    "provider_message_id_redacted": provider_message_id,
+                    "failure_reason": notification.failure_reason,
+                    "latency_markers": {
+                        "t8_delivery_binding_created_at": binding.get("created_at"),
+                        "t9_provider_send_completed_at": delivered_at,
+                    },
+                },
+            )
         if status == "sent":
             await self._repo.update_peer_session(
                 session["channel_peer_session_id"],
-                {"last_outbound_at": utc_now_iso(), "updated_at": utc_now_iso()},
+                {"last_outbound_at": delivered_at, "updated_at": delivered_at},
             )
             return True
         return False
@@ -1158,6 +1481,131 @@ class WechatChannelGatewayService:
         peer_ref = decoded.get("peer_ref") if isinstance(decoded, dict) else None
         return str(peer_ref) if peer_ref else None
 
+    async def _resolve_account_from_request(
+        self,
+        request: ChannelInboundWechatRequest,
+        event: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        account: dict[str, Any] | None
+        if request.channel_account_id:
+            account = await self._repo.get_account(request.channel_account_id)
+        elif request.channel_id:
+            account = await self._repo.get_account_by_channel(request.channel_id)
+        else:
+            account = None
+        if account is not None:
+            return account
+        account_id = event.get("channel_account_id")
+        if isinstance(account_id, str) and account_id:
+            return await self._repo.get_account(account_id)
+        channel_id = event.get("channel_id")
+        if isinstance(channel_id, str) and channel_id:
+            return await self._repo.get_account_by_channel(channel_id)
+        accounts = await self._repo.list_accounts(provider="wechat", status="active", limit=1)
+        return accounts[0] if accounts else None
+
+    async def _ensure_direct_peer_session(
+        self,
+        account: dict[str, Any],
+        *,
+        normalized: dict[str, Any],
+        trace_id: str | None,
+    ) -> dict[str, Any] | None:
+        if normalized["chat_type"] != "private":
+            return None
+        requested_pairing = str(
+            normalized.get("raw_event", {}).get("source", {}).get("pairing_status")
+            or normalized.get("raw_event", {}).get("pairing_status")
+            or ""
+        ).lower()
+        if requested_pairing in {"denied", "blocked", "revoked"}:
+            return None
+        allow_inbound = bool(
+            normalized.get("raw_event", {}).get("source", {}).get("allow_inbound", True)
+        )
+        if not allow_inbound:
+            return None
+        if requested_pairing == "unpaired":
+            return None
+        peer_hash = _hash_value(normalized["peer_ref"])
+        existing = await self._repo.get_peer_session_by_peer_ref(
+            channel_account_id=account["channel_account_id"],
+            peer_ref_redacted=peer_hash,
+        )
+        if existing is not None:
+            if existing.get("pairing_status") in {"blocked", "denied", "revoked"}:
+                return None
+            if existing.get("peer_state_ref"):
+                return existing
+        peer = await self._repo.upsert_peer(
+            {
+                "channel_peer_id": new_id("chpeer"),
+                "organization_id": account["organization_id"],
+                "channel_account_id": account["channel_account_id"],
+                "provider": account["provider"],
+                "peer_ref_redacted": peer_hash,
+                "peer_type": normalized["chat_type"],
+                "display_name_redacted": str(redact(normalized.get("display_name") or "")) or None,
+                "pairing_status": "paired",
+                "allow_inbound": allow_inbound,
+                "allow_outbound": allow_inbound,
+                "metadata": {"source": "wechat_direct_inbound"},
+                "created_at": utc_now_iso(),
+                "updated_at": utc_now_iso(),
+                "update_policy": True,
+            }
+        )
+        peer_state_ref, _ = self._secrets.put_secret(
+            json.dumps(
+                {
+                    "peer_ref": normalized["peer_ref"],
+                    "provider": account["provider"],
+                    "source": "wechat_direct_inbound",
+                },
+                ensure_ascii=False,
+            )
+        )
+        now = utc_now_iso()
+        session = await self._repo.upsert_peer_session(
+            {
+                "channel_peer_session_id": new_id("chps"),
+                "organization_id": account["organization_id"],
+                "channel_account_id": account["channel_account_id"],
+                "channel_peer_id": peer.get("channel_peer_id"),
+                "channel_id": account.get("channel_id"),
+                "provider": account["provider"],
+                "peer_ref_redacted": peer_hash,
+                "peer_type": normalized["chat_type"],
+                "conversation_id": None,
+                "session_id": new_id("chsess"),
+                "member_id": "mem_xiaoyao",
+                "peer_state_ref": peer_state_ref,
+                "pairing_status": "paired",
+                "allow_inbound": allow_inbound,
+                "allow_outbound": allow_inbound,
+                "policy_snapshot": _gateway_policy(self._config),
+                "last_inbound_at": now,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        await self._audit.write_event(
+            actor_type="system",
+            action="channel.peer_session.direct_inbound_accepted",
+            object_type="channel_peer_session",
+            object_id=str(session["channel_peer_session_id"]),
+            summary="微信直连接受入站并建立会话",
+            risk_level=RiskLevel.R2,
+            payload={
+                "provider": account["provider"],
+                "peer_ref_redacted": peer_hash,
+                "allow_inbound": allow_inbound,
+                "allow_outbound": allow_inbound,
+            },
+            trace_id=trace_id,
+        )
+        return session
+
 
 def _normalize_wechat_event(event: dict[str, Any]) -> dict[str, Any]:
     raw_source = event.get("source")
@@ -1213,6 +1661,7 @@ def _normalize_wechat_event(event: dict[str, Any]) -> dict[str, Any]:
         or event.get("content")
         or ""
     )
+    received_at = event.get("received_at") or event.get("timestamp")
     return {
         "provider_event_id": str(provider_event_id),
         "peer_ref": str(peer_ref),
@@ -1221,9 +1670,92 @@ def _normalize_wechat_event(event: dict[str, Any]) -> dict[str, Any]:
         "message_type": message_type,
         "text": text,
         "attachments": [dict(item) for item in attachments if isinstance(item, dict)],
-        "received_at": event.get("received_at") or event.get("timestamp"),
+        "links": _extract_links(text),
+        "received_at": received_at,
+        "gateway_created_at": utc_now_iso(),
         "raw_event": event,
     }
+
+
+def _wechat_content_parts(
+    text: str,
+    attachments: list[Attachment],
+    normalized: dict[str, Any],
+) -> list[ChatContentPart]:
+    parts: list[ChatContentPart] = []
+    if text:
+        parts.append(
+            ChatContentPart(
+                type="text",
+                text=text,
+                metadata={
+                    "source": "wechat",
+                    "message_type": normalized["message_type"],
+                    "untrusted_external_content": True,
+                },
+            )
+        )
+    for link in normalized.get("links") or []:
+        parts.append(
+            ChatContentPart(
+                type="link",
+                uri=str(link),
+                name="微信消息中的链接",
+                metadata={"source": "wechat", "untrusted_external_content": True},
+            )
+        )
+    for attachment in attachments:
+        attachment_type = str(attachment.metadata.get("attachment_type") or "")
+        part_type: Literal["image", "audio", "file"]
+        if attachment_type == "image":
+            part_type = "image"
+        elif attachment_type == "audio":
+            part_type = "audio"
+        else:
+            part_type = "file"
+        parts.append(
+            ChatContentPart(
+                type=part_type,
+                uri=attachment.uri,
+                name=attachment.name,
+                content_type=attachment.content_type,
+                ref_id=attachment.attachment_id,
+                metadata={
+                    **attachment.metadata,
+                    "source": "wechat",
+                    "untrusted_external_content": True,
+                },
+            )
+        )
+    return parts
+
+
+def _wechat_context_refs(normalized: dict[str, Any]) -> list[ChatContextRef]:
+    refs: list[ChatContextRef] = []
+    for link in normalized.get("links") or []:
+        refs.append(
+            ChatContextRef(
+                type="url",
+                uri=str(link),
+                label="微信消息链接",
+                metadata={"source": "wechat", "untrusted_external_content": True},
+            )
+        )
+    return refs
+
+
+def _extract_links(text: str) -> list[str]:
+    if not text:
+        return []
+    links = re.findall(r"https?://[^\s，。；;）)]+", text, flags=re.IGNORECASE)
+    result: list[str] = []
+    seen: set[str] = set()
+    for link in links:
+        if link in seen:
+            continue
+        seen.add(link)
+        result.append(link)
+    return result
 
 
 def _attachment_type(attachment: dict[str, Any]) -> str:
@@ -1249,12 +1781,56 @@ def _attachment_ref(attachment: dict[str, Any]) -> str:
     )
 
 
+def _safe_attachment_transcript(attachment: dict[str, Any]) -> str | None:
+    for key in ("transcript_text", "transcript", "recognized_text", "asr_text", "voice_text"):
+        value = attachment.get(key)
+        if isinstance(value, str) and value.strip():
+            return str(redact(value.strip()))[:1200]
+    metadata = attachment.get("metadata")
+    if isinstance(metadata, dict):
+        for key in ("transcript_text", "transcript", "recognized_text", "asr_text", "voice_text"):
+            value = metadata.get(key)
+            if isinstance(value, str) and value.strip():
+                return str(redact(value.strip()))[:1200]
+    return None
+
+
 def _attachment_prompt(attachments: list[Attachment]) -> str:
     kinds = [
         str(item.metadata.get("attachment_type") or item.content_type or "attachment")
         for item in attachments
     ]
     return "收到微信附件：" + "、".join(kinds)
+
+
+def _wechat_audio_transcript_parts(attachments: list[Attachment]) -> list[ChatContentPart]:
+    parts: list[ChatContentPart] = []
+    for attachment in attachments:
+        attachment_type = str(attachment.metadata.get("attachment_type") or "").lower()
+        if attachment_type != "audio":
+            continue
+        transcript = _safe_attachment_transcript(
+            {
+                "transcript_text": attachment.metadata.get("transcript_text"),
+                "metadata": attachment.metadata,
+            }
+        )
+        if not transcript:
+            continue
+        parts.append(
+            ChatContentPart(
+                type="audio_transcript",
+                text=f"语音转成文字：{transcript}",
+                name="语音内容线索",
+                metadata={
+                    "source": "wechat",
+                    "attachment_type": "audio",
+                    "untrusted_external_content": True,
+                    "transcript_text": transcript,
+                },
+            )
+        )
+    return parts
 
 
 def _write_bytes_with_parent_retry(path: Path, content: bytes) -> None:
@@ -1298,6 +1874,75 @@ def _media_policy(config: ChannelProviderSection) -> dict[str, Any]:
         "allowed_types": set(raw.get("allowed_types") or ["image", "audio", "file"]),
         "transcribe_provider": str(raw.get("transcribe_provider") or "local"),
         "vision_enabled": bool(raw.get("vision_enabled", True)),
+    }
+
+
+def _delivery_binding_status(notification: Any) -> str:
+    status = str(getattr(notification, "status", "") or "failed")
+    if status == "sent":
+        return "sent"
+    if status in {"rejected", "dead_letter", "provider_unavailable"}:
+        return status
+    metadata = getattr(notification, "metadata", {}) or {}
+    delivery = metadata.get("delivery") if isinstance(metadata, dict) else {}
+    if isinstance(delivery, dict):
+        delivery_status = str(delivery.get("delivery_status") or "")
+        if delivery_status in {"provider_unavailable", "rejected", "dead_letter"}:
+            return delivery_status
+    return "failed"
+
+
+def _wechat_worker_health_payload(worker_health: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(worker_health, dict):
+        return {
+            "available": False,
+            "enabled": None,
+            "running": None,
+            "automation_state": "unknown",
+            "reason": "worker_health_unavailable",
+        }
+    workers = worker_health.get("workers")
+    worker = workers.get("wechat_inbound_worker") if isinstance(workers, dict) else {}
+    if not isinstance(worker, dict):
+        worker = {}
+    enabled = bool(worker_health.get("enabled"))
+    running = bool(worker_health.get("running"))
+    last_status = str(worker.get("last_status") or "unknown")
+    if running:
+        automation_state = "running"
+        reason = None
+    elif not enabled:
+        automation_state = "disabled"
+        reason = "background_workers_disabled"
+    elif last_status == "healthy":
+        automation_state = "manual_tick_healthy"
+        reason = None
+    elif last_status == "never_run":
+        automation_state = "not_started"
+        reason = "wechat_inbound_worker_never_run"
+    elif last_status == "failed":
+        automation_state = "failed"
+        reason = worker.get("last_error_code") or "wechat_inbound_worker_failed"
+    else:
+        automation_state = "stopped"
+        reason = str(worker_health.get("loop_status") or last_status)
+    return {
+        "available": True,
+        "enabled": enabled,
+        "running": running,
+        "loop_status": worker_health.get("loop_status"),
+        "automation_state": automation_state,
+        "reason": reason,
+        "wechat_inbound_worker": {
+            "last_status": last_status,
+            "tick_count": worker.get("tick_count", 0),
+            "success_count": worker.get("success_count", 0),
+            "failure_count": worker.get("failure_count", 0),
+            "last_started_at": worker.get("last_started_at"),
+            "last_finished_at": worker.get("last_finished_at"),
+            "last_error_code": worker.get("last_error_code"),
+            "last_result": redact(worker.get("last_result") or {}),
+        },
     }
 
 

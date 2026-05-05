@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import importlib.util
 import json
@@ -28,6 +29,7 @@ from trace_service import TraceService, redact
 from app.core.errors import AppError
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.design_alignment_repo import DesignAlignmentRepository
+from app.db.repositories.member_repo import MemberRepository
 from app.db.repositories.retrieval_repo import RetrievalRepository
 from app.schemas.design_alignment import (
     HeartStateResponse,
@@ -39,6 +41,8 @@ from app.schemas.design_alignment import (
     PersonaProfileUpdateRequest,
     ResponseQualityEvaluationResponse,
     SafetyDecisionResponse,
+    SoulCompiledResponse,
+    SoulManifestResponse,
     SafetyEvaluateRequest,
     TonePolicyResolutionResponse,
     VectorProviderConfigResponse,
@@ -49,7 +53,21 @@ from app.schemas.design_alignment import (
     VectorSyncJobResponse,
 )
 from app.schemas.system import DesignGap, RuntimeContract
+from app.services.safety_policy import (
+    SafetyApprovalPolicy,
+    RuntimeSafetyPolicyService,
+    classify_action_category,
+)
 from app.services.audit import AuditEventService
+from app.services.soul_manifest import (
+    compile_soul_markdown,
+    existing_catchphrases,
+    existing_custom_notes,
+    existing_custom_sections,
+    render_soul_markdown,
+    soul_content_hash,
+    soul_manifest_path,
+)
 
 DEFAULT_TONE_POLICY = {
     "conciseness": 0.72,
@@ -59,6 +77,15 @@ DEFAULT_TONE_POLICY = {
     "formality": 0.42,
     "proactiveness": 0.58,
     "technical_depth": 0.66,
+}
+XIAOWU_TONE_POLICY = {
+    "conciseness": 0.62,
+    "warmth": 0.9,
+    "humor": 0.76,
+    "directness": 0.72,
+    "formality": 0.18,
+    "proactiveness": 0.88,
+    "technical_depth": 0.62,
 }
 DEFAULT_DISCLOSURE_POLICY = {
     "ai_identity_disclosure": "when_relevant_or_high_impact",
@@ -86,6 +113,18 @@ DEFAULT_STYLE_PRINCIPLES = [
     "stay_warm_without_overclaiming_closeness",
     "keep_boundaries_visible_in_high_risk_scenarios",
     "prefer_recoverable_next_steps_after_failures",
+]
+XIAOWU_STYLE_PRINCIPLES = [
+    "answer_directly_before_explaining",
+    "sound_like_a_familiar_friend_who_is_useful_not_like_a_system",
+    "start_by_picking_up_the_users_last_line_before_explaining",
+    "stay_lively_witty_and_useful_without_becoming_noisy",
+    "use_light_humor_or_a_small_wink_when_the_scene_is_relaxed",
+    "use_scene_specific_light_emojis_or_markers_when_natural",
+    "keep_professional_bottom_line_when_topics_are_serious",
+    "add_scene_specific_detail_so_replies_do_not_feel_thin",
+    "deescalate_to_clear_calm_language_for_safety_privacy_or_approval",
+    "never_claim_human_identity_hidden_accounts_or_fake_execution",
 ]
 DEFAULT_FORBIDDEN_CLAIMS = [
     "pretending_to_be_a_human",
@@ -2258,6 +2297,168 @@ class RuntimeContractService:
                 blocker_level="none",
                 details={"phase": "phase_54", "session_material_visible": False},
             ),
+            _contract(
+                "BrowserSessionHealthProbe",
+                "implemented",
+                "browser sessions expose redacted health probe, login state and recovery hints",
+                blocker_level="none",
+                details={"phase": "phase_55", "fail_closed": True},
+            ),
+            _contract(
+                "BrowserPageStateReplay",
+                "implemented",
+                "browser tools persist page state, network summary, console summary "
+                "and checkpoint evidence",
+                blocker_level="none",
+                details={"phase": "phase_55", "redaction": "trace_service.redact"},
+            ),
+            _contract(
+                "MemoryExperienceConsolidation",
+                "implemented",
+                "task results and explicit experience summaries are consolidated into "
+                "redacted long-term memory experience records",
+                blocker_level="none",
+                details={"phase": "phase_56", "writes_task_state": False},
+            ),
+            _contract(
+                "MemoryConflictGovernance",
+                "implemented",
+                "memory versions, supersede relations and conflict records are tracked "
+                "without leaking raw source messages",
+                blocker_level="none",
+                details={"phase": "phase_56", "fail_closed_for_sensitive_scope": True},
+            ),
+            _contract(
+                "MemoryReuseFeedback",
+                "implemented",
+                "retrieval feedback can adjust reuse evidence while preserving redacted "
+                "trace and task associations",
+                blocker_level="none",
+                details={"phase": "phase_56", "query_text_persisted": False},
+            ),
+            _contract(
+                "SkillMarketplaceCatalog",
+                "implemented",
+                "skill repositories expose redacted marketplace search, package detail and "
+                "health records",
+                blocker_level="none",
+                details={"phase": "phase_57", "source_uri_redacted": True},
+            ),
+            _contract(
+                "SkillMarketplaceGovernance",
+                "implemented",
+                "skill install, enable, upgrade and rollback keep evaluation and audit as "
+                "governance gates",
+                blocker_level="none",
+                details={"phase": "phase_57", "installed_disabled_default": True},
+            ),
+            _contract(
+                "SkillDependencyGraph",
+                "implemented",
+                "skill, MCP, tool and asset dependencies are tracked as edges and fail "
+                "closed on authorization gaps",
+                blocker_level="none",
+                details={"phase": "phase_57", "asset_broker_enforced": True},
+            ),
+            _contract(
+                "SkillGrowthCandidatePipeline",
+                "implemented",
+                "task and experience records can seed skill candidates without promoting "
+                "failed or sensitive experience to production skills",
+                blocker_level="none",
+                details={"phase": "phase_57", "experience_to_candidate": True},
+            ),
+            _contract(
+                "MediaProviderHealthDiagnostics",
+                "implemented",
+                "media provider health records capture STT/TTS/summary availability and redaction",
+                blocker_level="none",
+                details={"phase": "phase_58", "health_snapshot": True},
+            ),
+            _contract(
+                "MediaSpeechTranscriptPipeline",
+                "implemented",
+                "audio assets can produce redacted transcript artifacts and io records without leaking raw audio",
+                blocker_level="none",
+                details={"phase": "phase_58", "raw_transcript_visible": False},
+            ),
+            _contract(
+                "MediaSpeechRenderPipeline",
+                "implemented",
+                "text-to-speech requests produce audio artifacts and render evidence with redacted source text",
+                blocker_level="none",
+                details={"phase": "phase_58", "raw_text_visible": False},
+            ),
+            _contract(
+                "MediaMultimodalSummaryPipeline",
+                "implemented",
+                "image, video and document summaries emit redacted summaries and replay evidence",
+                blocker_level="none",
+                details={"phase": "phase_58", "summary_only": True},
+            ),
+            _contract(
+                "MediaChatBinding",
+                "implemented",
+                "chat attachments can bind to media io evidence for replay without exposing raw content",
+                blocker_level="none",
+                details={"phase": "phase_58", "chat_binding": True},
+            ),
+            _contract(
+                "SupervisorRoutingPreview",
+                "implemented",
+                "supervisor routing preview records host selection, rejected candidates and redacted boundaries",
+                blocker_level="none",
+                details={"phase": "phase_59", "preview_only": True},
+            ),
+            _contract(
+                "SupervisorTaskHandoff",
+                "implemented",
+                "subtask handoff records preserve least-privilege context and fail closed on unavailable members",
+                blocker_level="none",
+                details={"phase": "phase_59", "handoff_trace": True},
+            ),
+            _contract(
+                "CollaborationBoundaryIsolation",
+                "implemented",
+                "collaboration context boundaries expose only minimal per-member summaries and redact private memory",
+                blocker_level="none",
+                details={"phase": "phase_59", "other_members_private_memory": False},
+            ),
+            _contract(
+                "CollaborationReplayTraceability",
+                "implemented",
+                "collaboration replay includes routing decisions, handoff records and boundary evidence",
+                blocker_level="none",
+                details={"phase": "phase_59", "replay_visibility": True},
+            ),
+            _contract(
+                "AgentWorkbenchContextPack",
+                "implemented",
+                "agent workbench builds model-safe context packs from memory, skills and context files",
+                blocker_level="none",
+                details={"phase": "phase_61", "raw_artifact_injected": False},
+            ),
+            _contract(
+                "ContextFileVersioning",
+                "implemented",
+                "context files use DB indexes plus redacted artifact snapshots for diff and replay",
+                blocker_level="none",
+                details={"phase": "phase_61", "source_of_truth": "workbench_snapshot"},
+            ),
+            _contract(
+                "WorkbenchReflectionWorker",
+                "implemented",
+                "background workers process workbench reflection jobs independently with trace and audit",
+                blocker_level="none",
+                details={"phase": "phase_61", "turn_blocking": False},
+            ),
+            _contract(
+                "MemorySkillContextRoundTrip",
+                "implemented",
+                "turn reflection links memory candidates, experience records and skill growth evidence back into later context",
+                blocker_level="none",
+                details={"phase": "phase_61", "skill_bypasses_safety": False},
+            ),
         ]
         for item in contracts:
             await self._repo.upsert_runtime_contract({**item, "updated_at": now})
@@ -2651,11 +2852,13 @@ class SafetyDecisionService:
         repo: DesignAlignmentRepository,
         trace_service: TraceService,
         audit_service: AuditEventService,
+        safety_policy_service: RuntimeSafetyPolicyService | None = None,
     ) -> None:
         self._repo = repo
         self._trace = trace_service
         self._audit = audit_service
         self._safety = SafetyService()
+        self._safety_policy = safety_policy_service
 
     async def evaluate(
         self,
@@ -2677,6 +2880,45 @@ class SafetyDecisionService:
                 input_data=redact(action_request.model_dump(mode="json")),
             )
         decision = await self._safety.evaluate_action(action_request)
+        active_policy: SafetyApprovalPolicy | None = None
+        if self._safety_policy is not None:
+            active_policy = await self._safety_policy.get_policy(
+                organization_id=action_request.organization_id
+            )
+        if (
+            active_policy is not None
+            and decision.approval_required
+            and active_policy.should_skip_approval(
+                action=action_request.tool_name or action_request.action,
+                risk_level=decision.risk_level,
+                action_category=classify_action_category(
+                    action=action_request.action,
+                    tool_name=action_request.tool_name,
+                    object_type=action_request.object_type,
+                    destination=action_request.destination,
+                ),
+                payload=action_request.payload,
+            )
+        ):
+            decision = decision.model_copy(
+                update={
+                    "decision": "allow",
+                    "allowed": True,
+                    "approval_required": False,
+                    "reason": "allowed_by_balanced_personal_profile",
+                    "required_controls": active_policy.without_approval_controls(
+                        decision.required_controls
+                    ),
+                    "policy_sources": sorted(
+                        set(
+                            [
+                                *decision.policy_sources,
+                                "safety.approval_profile.balanced_personal",
+                            ]
+                        )
+                    ),
+                }
+            )
         decision_id = new_id("safe")
         now = utc_now_iso()
         decision = decision.model_copy(update={"safety_decision_id": decision_id})
@@ -2751,36 +2993,42 @@ class PersonaHeartService:
         self,
         *,
         repo: DesignAlignmentRepository,
+        member_repo: MemberRepository | None = None,
+        data_dir: Any | None = None,
         trace_service: TraceService,
         audit_service: AuditEventService,
     ) -> None:
         self._repo = repo
+        self._members = member_repo
+        self._data_dir = data_dir
         self._trace = trace_service
         self._audit = audit_service
 
     async def ensure_default_profile(
         self,
-        member_id: str = "mem_xiaoyao",
+        member_id: str | None = "mem_xiaoyao",
         profile_id: str | None = None,
     ) -> PersonaProfileResponse:
-        resolved_profile_id = profile_id or f"persona_{member_id}"
+        resolved_member_id = str(member_id) if member_id else None
+        resolved_profile_id = profile_id or f"persona_{resolved_member_id or 'default'}"
         existing = await self._repo.get_persona_profile(resolved_profile_id)
         if existing is not None:
             await self._ensure_consistency_profile_for(existing)
             return PersonaProfileResponse(**existing)
         now = utc_now_iso()
+        persona_defaults = _default_persona_seed(resolved_member_id or "")
         await self._repo.upsert_persona_profile(
             {
                 "persona_profile_id": resolved_profile_id,
                 "organization_id": "org_default",
-                "member_id": member_id,
-                "display_name": "Default Persona",
-                "summary": "Calm, direct, warm, conclusion-first.",
-                "tone_policy": DEFAULT_TONE_POLICY,
+                "member_id": resolved_member_id,
+                "display_name": persona_defaults["display_name"],
+                "summary": persona_defaults["summary"],
+                "tone_policy": persona_defaults["tone_policy"],
                 "disclosure_policy": DEFAULT_DISCLOSURE_POLICY,
                 "risk_tone_policy": DEFAULT_RISK_TONE_POLICY,
-                "allowed_modes": DEFAULT_ALLOWED_MODES,
-                "default_mode": "default",
+                "allowed_modes": persona_defaults["allowed_modes"],
+                "default_mode": persona_defaults["default_mode"],
                 "shell_label_mapping": {},
                 "status": "active",
                 "created_at": now,
@@ -2800,7 +3048,11 @@ class PersonaHeartService:
     async def get_profile(self, profile_id: str) -> PersonaProfileResponse:
         row = await self._repo.get_persona_profile(profile_id)
         if row is None:
-            return await self.ensure_default_profile(profile_id=profile_id)
+            member = await self._member_for_profile(profile_id)
+            return await self.ensure_default_profile(
+                member_id=member.get("member_id") if member else None,
+                profile_id=profile_id,
+            )
         return PersonaProfileResponse(**row)
 
     async def update_profile(
@@ -2828,8 +3080,10 @@ class PersonaHeartService:
         for key, value in request_data.items():
             if value is not None:
                 data[key] = value
-        data["updated_at"] = utc_now_iso()
-        data.setdefault("created_at", current.created_at or utc_now_iso())
+        now = utc_now_iso()
+        data["updated_at"] = now
+        data.setdefault("created_at", current.created_at or now)
+        member = await self._member_for_profile(profile_id)
         span_id = (
             await self._trace.start_span(
                 trace_id,
@@ -2840,15 +3094,44 @@ class PersonaHeartService:
             if trace_id
             else None
         )
-        await self._repo.upsert_persona_profile(data)
-        if consistency_updates:
+        if member is not None:
             consistency = await self.get_consistency_profile(profile_id)
             consistency_data = consistency.model_dump(mode="json")
             consistency_data.update(consistency_updates)
-            consistency_data["updated_at"] = utc_now_iso()
+            consistency_data["updated_at"] = now
             consistency_data["trace_id"] = trace_id
             consistency_data["source"] = "profile_update"
-            await self._repo.upsert_persona_consistency_profile(consistency_data)
+            existing_content = await self._load_soul_content(member["member_id"])
+            custom_sections = existing_custom_sections(existing_content) if existing_content else []
+            catchphrases = existing_catchphrases(existing_content) if existing_content else []
+            custom_notes = existing_custom_notes(existing_content) if existing_content else None
+            rendered = render_soul_markdown(
+                member=member,
+                profile=data,
+                consistency=consistency_data,
+                catchphrases=catchphrases or None,
+                custom_sections=custom_sections or None,
+                custom_notes=custom_notes,
+            )
+            await self._write_soul_content(member["member_id"], rendered)
+            await self._compile_and_persist_soul(
+                member=member,
+                profile_data=data,
+                consistency_data=consistency_data,
+                content=rendered,
+                source="profile_update",
+                trace_id=trace_id,
+            )
+        else:
+            await self._repo.upsert_persona_profile(data)
+            if consistency_updates:
+                consistency = await self.get_consistency_profile(profile_id)
+                consistency_data = consistency.model_dump(mode="json")
+                consistency_data.update(consistency_updates)
+                consistency_data["updated_at"] = now
+                consistency_data["trace_id"] = trace_id
+                consistency_data["source"] = "profile_update"
+                await self._repo.upsert_persona_consistency_profile(consistency_data)
         await self._audit.write_event(
             actor_type="system",
             actor_id=data.get("member_id"),
@@ -2871,6 +3154,7 @@ class PersonaHeartService:
                     "persona_profile_id": profile_id,
                     "default_mode": updated.default_mode,
                     "allowed_modes": updated.allowed_modes,
+                    "soul_synced": member is not None,
                 },
             )
         return updated
@@ -2883,43 +3167,250 @@ class PersonaHeartService:
         row = await self._ensure_consistency_profile_for(profile.model_dump(mode="json"))
         return PersonaConsistencyProfileResponse(**row)
 
+    async def ensure_soul_manifests_for_members(
+        self,
+        members: list[dict[str, Any]] | None = None,
+        *,
+        trace_id: str | None = None,
+    ) -> list[SoulManifestResponse]:
+        if self._members is None or self._data_dir is None:
+            return []
+        rows = members if members is not None else await self._members.list_members()
+        responses: list[SoulManifestResponse] = []
+        for member in rows:
+            responses.append(
+                await self.ensure_soul_manifest_for_member(
+                    str(member["member_id"]),
+                    profile_id=member.get("persona_profile_id"),
+                    trace_id=trace_id,
+                    source="startup",
+                )
+            )
+        return responses
+
+    async def ensure_soul_manifest_for_member(
+        self,
+        member_id: str,
+        *,
+        profile_id: str | None = None,
+        trace_id: str | None = None,
+        source: str = "file",
+        force: bool = False,
+    ) -> SoulManifestResponse:
+        member = await self._require_member(member_id)
+        profile = await self._ensure_profile_for_member(member, profile_id=profile_id)
+        consistency = await self.get_consistency_profile(profile.persona_profile_id)
+        content = await self._load_soul_content(member_id)
+        if not content:
+            content = render_soul_markdown(
+                member=member,
+                profile=profile.model_dump(mode="json"),
+                consistency=consistency.model_dump(mode="json"),
+            )
+            await self._write_soul_content(member_id, content)
+        current_hash = soul_content_hash(content)
+        manifest = await self._repo.get_soul_manifest(member_id)
+        if force or manifest is None or manifest.get("content_hash") != current_hash:
+            await self._compile_and_persist_soul(
+                member=member,
+                profile_data=profile.model_dump(mode="json"),
+                consistency_data=consistency.model_dump(mode="json"),
+                content=content,
+                source=source,
+                trace_id=trace_id,
+            )
+            manifest = await self._repo.get_soul_manifest(member_id)
+        if manifest is None:
+            raise AppError(ErrorCode.INTERNAL_ERROR, "SOUL.md 编译缓存不存在", status_code=500)
+        return self._soul_manifest_response(member=member, manifest=manifest, content=content)
+
+    async def get_soul_manifest(
+        self,
+        member_id: str,
+        *,
+        trace_id: str | None = None,
+    ) -> SoulManifestResponse:
+        return await self.ensure_soul_manifest_for_member(
+            member_id,
+            trace_id=trace_id,
+            source="read",
+        )
+
+    async def update_soul_manifest(
+        self,
+        member_id: str,
+        content: str,
+        *,
+        source: str = "api",
+        trace_id: str | None = None,
+    ) -> SoulManifestResponse:
+        member = await self._require_member(member_id)
+        profile = await self._ensure_profile_for_member(member)
+        consistency = await self.get_consistency_profile(profile.persona_profile_id)
+        normalized_content = str(content or "").replace("\r\n", "\n").replace("\r", "\n")
+        if not normalized_content.strip():
+            raise AppError(
+                ErrorCode.VALIDATION_ERROR,
+                "SOUL.md 内容不能为空",
+                status_code=422,
+            )
+        await self._write_soul_content(member_id, normalized_content)
+        manifest = await self._compile_and_persist_soul(
+            member=member,
+            profile_data=profile.model_dump(mode="json"),
+            consistency_data=consistency.model_dump(mode="json"),
+            content=normalized_content,
+            source=source,
+            trace_id=trace_id,
+        )
+        await self._audit.write_event(
+            actor_type="system",
+            actor_id=member_id,
+            action="persona.soul.updated",
+            object_type="soul_manifest",
+            object_id=member_id,
+            summary="SOUL.md 已更新并重新编译",
+            risk_level=RiskLevel.R1,
+            payload={
+                "member_id": member_id,
+                "content_hash": manifest["content_hash"],
+                "validation_status": manifest["validation_status"],
+            },
+            trace_id=trace_id,
+        )
+        return self._soul_manifest_response(
+            member=member,
+            manifest=manifest,
+            content=normalized_content,
+        )
+
+    async def compile_soul_manifest(
+        self,
+        member_id: str,
+        *,
+        trace_id: str | None = None,
+        source: str = "manual_compile",
+    ) -> SoulCompiledResponse:
+        manifest_response = await self.ensure_soul_manifest_for_member(
+            member_id,
+            trace_id=trace_id,
+            source=source,
+            force=True,
+        )
+        manifest = await self._repo.get_soul_manifest(member_id)
+        if manifest is None:
+            raise AppError(ErrorCode.INTERNAL_ERROR, "SOUL.md 编译缓存不存在", status_code=500)
+        await self._audit.write_event(
+            actor_type="system",
+            actor_id=member_id,
+            action="persona.soul.compiled",
+            object_type="soul_manifest",
+            object_id=member_id,
+            summary="SOUL.md 已重新编译",
+            risk_level=RiskLevel.R0,
+            payload={
+                "member_id": member_id,
+                "content_hash": manifest_response.content_hash,
+                "validation_status": manifest_response.validation_status,
+            },
+            trace_id=trace_id,
+        )
+        return self._soul_compiled_response(manifest)
+
+    async def get_soul_compiled(
+        self,
+        member_id: str,
+        *,
+        trace_id: str | None = None,
+    ) -> SoulCompiledResponse:
+        await self.ensure_soul_manifest_for_member(
+            member_id,
+            trace_id=trace_id,
+            source="read",
+        )
+        manifest = await self._repo.get_soul_manifest(member_id)
+        if manifest is None:
+            raise AppError(ErrorCode.INTERNAL_ERROR, "SOUL.md 编译缓存不存在", status_code=500)
+        return self._soul_compiled_response(manifest)
+
     async def persona_summary(
         self,
-        profile_id: str,
+        profile_id: str | None = None,
         *,
+        member_id: str | None = None,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
         risk_level: str | None = None,
     ) -> PersonaSummary:
+        resolved_profile_id = profile_id
+        if resolved_profile_id is None and member_id and self._members is not None:
+            member_row = await self._members.get_member(member_id)
+            if member_row and member_row.get("persona_profile_id"):
+                resolved_profile_id = str(member_row["persona_profile_id"])
+        if resolved_profile_id is None:
+            resolved_profile_id = f"persona_{member_id or 'mem_xiaoyao'}"
         span_id = (
             await self._trace.start_span(
                 trace_id,
                 span_type=TraceSpanType.PERSONA_PROFILE,
                 name="load persona summary",
                 parent_span_id=parent_span_id,
-                metadata={"persona_profile_id": profile_id},
+                metadata={"persona_profile_id": resolved_profile_id, "member_id": member_id},
             )
             if trace_id
             else None
         )
-        profile = await self.get_profile(profile_id)
+        member = await self._member_for_profile(resolved_profile_id, member_id=member_id)
+        soul_manifest = None
+        soul_snapshot: dict[str, Any] = {}
+        if member is not None:
+            soul_manifest = await self.ensure_soul_manifest_for_member(
+                str(member["member_id"]),
+                profile_id=resolved_profile_id,
+                trace_id=trace_id,
+                source="persona_summary",
+            )
+            manifest_row = await self._repo.get_soul_manifest(str(member["member_id"]))
+            if manifest_row:
+                soul_snapshot = dict(manifest_row.get("compiled_snapshot") or {})
+        profile = await self.get_profile(resolved_profile_id)
         consistency = await self.get_consistency_profile(profile.persona_profile_id)
         mode = _select_persona_mode(profile, risk_level=risk_level)
         summary = PersonaSummary(
             persona_profile_id=profile.persona_profile_id,
-            summary=profile.summary,
+            summary=str(soul_snapshot.get("summary") or profile.summary),
             mode=mode,
-            tone_policy=_public_tone_policy(profile.tone_policy),
-            disclosure_policy=_public_disclosure_policy(profile.disclosure_policy),
-            risk_tone_policy=profile.risk_tone_policy,
-            allowed_modes=profile.allowed_modes,
-            default_mode=profile.default_mode,
+            tone_policy=_public_tone_policy(
+                dict(soul_snapshot.get("tone_policy") or profile.tone_policy)
+            ),
+            disclosure_policy=_public_disclosure_policy(
+                dict(soul_snapshot.get("disclosure_policy") or profile.disclosure_policy)
+            ),
+            risk_tone_policy=dict(soul_snapshot.get("risk_tone_policy") or profile.risk_tone_policy),
+            allowed_modes=list(soul_snapshot.get("allowed_modes") or profile.allowed_modes),
+            default_mode=str(soul_snapshot.get("default_mode") or profile.default_mode),
             tone_hints=_tone_hints(profile.tone_policy, mode),
             disclosure_hints=_disclosure_hints(profile.disclosure_policy),
-            style_principles=consistency.style_principles,
-            forbidden_claims=consistency.forbidden_claims,
-            mode_switch_rules=consistency.mode_switch_rules,
-            consistency_markers=consistency.consistency_markers,
+            style_principles=list(
+                soul_snapshot.get("style_principles") or consistency.style_principles
+            ),
+            forbidden_claims=list(
+                soul_snapshot.get("forbidden_claims") or consistency.forbidden_claims
+            ),
+            mode_switch_rules=list(
+                soul_snapshot.get("mode_switch_rules") or consistency.mode_switch_rules
+            ),
+            consistency_markers=list(
+                soul_snapshot.get("consistency_markers") or consistency.consistency_markers
+            ),
+            soul_snapshot=soul_snapshot,
+            soul_content_hash=soul_manifest.content_hash if soul_manifest else None,
+            soul_compiled_at=soul_manifest.compiled_at if soul_manifest else None,
+            soul_validation_status=soul_manifest.validation_status if soul_manifest else None,
+            soul_validation_errors=soul_manifest.validation_errors if soul_manifest else [],
+            catchphrases=list(soul_snapshot.get("catchphrases") or []),
+            custom_sections=list(soul_snapshot.get("custom_sections") or []),
+            memory_policy=dict(soul_snapshot.get("memory_policy") or {}),
         )
         if span_id:
             await self._trace.end_span(
@@ -2932,6 +3423,182 @@ class PersonaHeartService:
                 },
             )
         return summary
+
+    async def _require_member(self, member_id: str) -> dict[str, Any]:
+        if self._members is None:
+            raise AppError(ErrorCode.INTERNAL_ERROR, "成员仓库未初始化", status_code=500)
+        member = await self._members.get_member(member_id)
+        if member is None:
+            raise AppError(ErrorCode.NOT_FOUND, "成员不存在", status_code=404)
+        return member
+
+    async def _member_for_profile(
+        self,
+        profile_id: str,
+        *,
+        member_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        if self._members is None:
+            return None
+        if member_id:
+            member = await self._members.get_member(member_id)
+            if member is not None:
+                return member
+        member = await self._members.get_member_by_persona_profile_id(profile_id)
+        if member is not None:
+            return member
+        if profile_id.startswith("persona_"):
+            inferred_member_id = profile_id.removeprefix("persona_")
+            return await self._members.get_member(inferred_member_id)
+        return None
+
+    async def _ensure_profile_for_member(
+        self,
+        member: dict[str, Any],
+        *,
+        profile_id: str | None = None,
+    ) -> PersonaProfileResponse:
+        resolved_profile_id = str(
+            profile_id or member.get("persona_profile_id") or f"persona_{member['member_id']}"
+        )
+        return await self.ensure_default_profile(
+            member_id=str(member["member_id"]),
+            profile_id=resolved_profile_id,
+        )
+
+    def _soul_path(self, member_id: str) -> Path:
+        if self._data_dir is None:
+            raise AppError(ErrorCode.INTERNAL_ERROR, "SOUL.md 数据目录未初始化", status_code=500)
+        return soul_manifest_path(Path(self._data_dir), member_id)
+
+    async def _load_soul_content(self, member_id: str) -> str:
+        path = self._soul_path(member_id)
+        if not path.exists():
+            return ""
+        return await asyncio.to_thread(path.read_text, encoding="utf-8")
+
+    async def _write_soul_content(self, member_id: str, content: str) -> None:
+        path = self._soul_path(member_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(path.write_text, content, encoding="utf-8")
+
+    async def _compile_and_persist_soul(
+        self,
+        *,
+        member: dict[str, Any],
+        profile_data: dict[str, Any],
+        consistency_data: dict[str, Any],
+        content: str,
+        source: str,
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        compiled = compile_soul_markdown(
+            member=member,
+            profile=profile_data,
+            consistency=consistency_data,
+            content=content,
+            source=source,
+        )
+        now = utc_now_iso()
+        existing_manifest = await self._repo.get_soul_manifest(member["member_id"])
+        profile_payload = {
+            **profile_data,
+            **compiled["profile_fields"],
+            "created_at": profile_data.get("created_at") or now,
+            "updated_at": now,
+        }
+        await self._repo.upsert_persona_profile(profile_payload)
+
+        consistency_payload = {
+            **consistency_data,
+            **compiled["consistency_fields"],
+            "consistency_profile_id": consistency_data.get("consistency_profile_id")
+            or new_id("pcp"),
+            "organization_id": profile_payload.get("organization_id", "org_default"),
+            "trace_id": trace_id,
+            "created_at": consistency_data.get("created_at") or now,
+            "updated_at": now,
+        }
+        await self._repo.upsert_persona_consistency_profile(consistency_payload)
+
+        manifest = {
+            "soul_manifest_id": (
+                existing_manifest.get("soul_manifest_id") if existing_manifest else None
+            )
+            or new_id("soul"),
+            "organization_id": member.get("organization_id", "org_default"),
+            "member_id": member["member_id"],
+            "file_path": str(self._soul_path(member["member_id"])),
+            "content_hash": compiled["content_hash"],
+            "compiled_profile_id": profile_payload["persona_profile_id"],
+            "compiled_snapshot": compiled["compiled_snapshot"],
+            "validation_status": compiled["validation_status"],
+            "validation_errors": compiled["validation_errors"],
+            "source": source,
+            "trace_id": trace_id,
+            "created_at": (existing_manifest.get("created_at") if existing_manifest else None) or now,
+            "updated_at": now,
+            "compiled_at": now,
+        }
+        await self._repo.upsert_soul_manifest(manifest)
+        return manifest
+
+    def _soul_manifest_response(
+        self,
+        *,
+        member: dict[str, Any],
+        manifest: dict[str, Any],
+        content: str,
+    ) -> SoulManifestResponse:
+        return SoulManifestResponse(
+            member_id=str(member["member_id"]),
+            persona_profile_id=manifest.get("compiled_profile_id")
+            or member.get("persona_profile_id"),
+            file_path=str(manifest.get("file_path") or self._soul_path(member["member_id"])),
+            content=content,
+            content_hash=str(manifest.get("content_hash") or soul_content_hash(content)),
+            validation_status=str(manifest.get("validation_status") or "unknown"),
+            validation_errors=list(manifest.get("validation_errors") or []),
+            compiled_profile_id=manifest.get("compiled_profile_id"),
+            compiled_at=manifest.get("compiled_at"),
+            source=str(manifest.get("source") or "file"),
+            trace_id=manifest.get("trace_id"),
+            updated_at=manifest.get("updated_at"),
+        )
+
+    def _soul_compiled_response(self, manifest: dict[str, Any]) -> SoulCompiledResponse:
+        snapshot = dict(manifest.get("compiled_snapshot") or {})
+        return SoulCompiledResponse(
+            member_id=str(snapshot.get("member_id") or manifest.get("member_id")),
+            persona_profile_id=str(
+                snapshot.get("persona_profile_id")
+                or manifest.get("compiled_profile_id")
+                or f"persona_{manifest.get('member_id')}"
+            ),
+            display_name=str(snapshot.get("display_name") or "当前成员"),
+            summary=str(snapshot.get("summary") or ""),
+            tone_policy=dict(snapshot.get("tone_policy") or {}),
+            disclosure_policy=dict(snapshot.get("disclosure_policy") or {}),
+            risk_tone_policy=dict(snapshot.get("risk_tone_policy") or {}),
+            allowed_modes=list(snapshot.get("allowed_modes") or []),
+            default_mode=str(snapshot.get("default_mode") or "default"),
+            style_principles=list(snapshot.get("style_principles") or []),
+            forbidden_claims=list(snapshot.get("forbidden_claims") or []),
+            mode_switch_rules=list(snapshot.get("mode_switch_rules") or []),
+            consistency_markers=list(snapshot.get("consistency_markers") or []),
+            identity=str(snapshot.get("identity") or ""),
+            voice=dict(snapshot.get("voice") or {}),
+            work_style=dict(snapshot.get("work_style") or {}),
+            boundaries=dict(snapshot.get("boundaries") or {}),
+            memory_policy=dict(snapshot.get("memory_policy") or {}),
+            catchphrases=list(snapshot.get("catchphrases") or []),
+            custom_notes=dict(snapshot.get("custom_notes") or {}),
+            custom_sections=list(snapshot.get("custom_sections") or []),
+            content_hash=str(manifest.get("content_hash") or ""),
+            validation_status=str(manifest.get("validation_status") or "unknown"),
+            validation_errors=list(manifest.get("validation_errors") or []),
+            compiled_at=manifest.get("compiled_at"),
+        )
 
     async def heart_state(
         self,
@@ -3007,6 +3674,7 @@ class PersonaHeartService:
         member_id: str,
         *,
         text: str | None = None,
+        source_turn_id: str | None = None,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
     ) -> HeartSummary:
@@ -3016,7 +3684,7 @@ class PersonaHeartService:
                 await self.heart_state(
                     member_id,
                     text=text,
-                    source_turn_id=None,
+                    source_turn_id=source_turn_id,
                     trace_id=trace_id,
                     parent_span_id=parent_span_id,
                 )
@@ -3028,7 +3696,7 @@ class PersonaHeartService:
                 await self.heart_state(
                     member_id,
                     text=text,
-                    source_turn_id=None,
+                    source_turn_id=source_turn_id,
                     trace_id=trace_id,
                     parent_span_id=parent_span_id,
                 )
@@ -3065,8 +3733,10 @@ class PersonaHeartService:
         trace_id: str | None = None,
     ) -> TonePolicyResolutionResponse:
         if persona is None:
-            profile_id = f"persona_{member_id or 'mem_xiaoyao'}"
-            persona = await self.persona_summary(profile_id, risk_level=risk_level)
+            persona = await self.persona_summary(
+                member_id=member_id,
+                risk_level=risk_level,
+            )
         if heart is None and member_id:
             heart = await self.heart_summary(member_id)
         scenario = _response_plan_scenario(response_plan)
@@ -3145,6 +3815,12 @@ class PersonaHeartService:
             or _plan_is_high_risk(response_plan)
         )
         boundary_violations = _high_risk_boundary_violations(text, response_plan, high_risk)
+        continuation = response_plan.structured_payload.get("continuation")
+        continuation = continuation if isinstance(continuation, dict) else {}
+        continuation_tags = [
+            str(item) for item in continuation.get("quality_tags") or [] if str(item).strip()
+        ]
+        continuation_verdict = str(continuation.get("quality_verdict") or "")
         markers = {
             "directness": bool(response_plan.plain_text or response_plan.summary),
             "continuity": bool(response_plan.continuity_refs)
@@ -3158,10 +3834,41 @@ class PersonaHeartService:
             "heart_appropriateness": not high_risk
             or (tone_resolution is not None and tone_resolution.anthropomorphic_level <= 0.2),
             "no_leakage": leak_count == 0,
+            "continuation_quality": continuation_verdict not in {
+                "bad",
+                "average",
+                "revise",
+                "block",
+            }
+            if continuation
+            else True,
         }
         violations: list[dict[str, Any]] = []
         for category in leak_categories:
             violations.append({"type": "internal_leakage", "category": category})
+        for tag in continuation_tags:
+            if tag in {
+                "too_short",
+                "too_hardcoded",
+                "internal_jargon",
+                "face_emoji",
+                "weak_structure",
+                "false_done",
+                "latency_slow",
+                "missing_reply",
+                "robotic_template",
+                "systemic_tone",
+                "secret_leak",
+                "weak_persona",
+                "too_chatty",
+                "too_stiff",
+                "humor_mismatch",
+                "emoji_misaligned",
+                "hard_boundary_tone",
+                "multimodal_generic_reply",
+                "strict_format_polluted",
+            }:
+                violations.append({"type": "continuation_quality", "category": tag})
         if boundary_violations:
             violations.append(
                 {
@@ -3211,7 +3918,7 @@ class PersonaHeartService:
         trace_id = turn.get("trace_id")
         risk_level = _risk_level_from_plan(response_plan)
         persona = await self.persona_summary(
-            f"persona_{member_id}",
+            member_id=member_id,
             risk_level=risk_level,
             trace_id=trace_id,
         )
@@ -3255,6 +3962,10 @@ class PersonaHeartService:
         )
         tone_metadata = {
             **prepared.tone_metadata,
+            "persona_mode": persona.mode,
+            "tone_hints": persona.tone_hints,
+            "disclosure_hints": persona.disclosure_hints,
+            "style_principles": persona.style_principles[:4],
             "tone_resolution_id": tone.resolution_id,
             "tone_mode": tone.tone_mode,
             "anthropomorphic_level": tone.anthropomorphic_level,
@@ -3374,7 +4085,7 @@ class PersonaHeartService:
             "organization_id": profile_data.get("organization_id", "org_default"),
             "persona_profile_id": profile_id,
             "member_id": profile_data.get("member_id"),
-            "style_principles": DEFAULT_STYLE_PRINCIPLES,
+            "style_principles": _default_style_principles(profile_data),
             "forbidden_claims": DEFAULT_FORBIDDEN_CLAIMS,
             "mode_switch_rules": DEFAULT_MODE_SWITCH_RULES,
             "consistency_markers": DEFAULT_CONSISTENCY_MARKERS,
@@ -5055,6 +5766,42 @@ def _public_disclosure_policy(policy: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _default_persona_seed(member_id: str) -> dict[str, Any]:
+    if member_id == "mem_xiaowu":
+        return {
+            "display_name": "小吴 Persona",
+            "summary": (
+                "像认识很多年的老朋友，反应快、机灵、会接梗，也能认真帮忙；"
+                "普通聊天会更自然、更有趣，先会顺着对方的话往下接，必要时能顺手来一点轻松调侃，但不会油腻；"
+                "涉及安全、隐私、审批或真实执行时会立刻收敛为清楚克制的边界表达，"
+                "不冒充真人、不越权、不假装已经执行。"
+            ),
+            "tone_policy": XIAOWU_TONE_POLICY,
+            "allowed_modes": [
+                "playful_witty",
+                "default",
+                "concise",
+                "deep_dialogue",
+                "task_status",
+                "safety_boundary",
+            ],
+            "default_mode": "playful_witty",
+        }
+    return {
+        "display_name": "Default Persona",
+        "summary": "Calm, direct, warm, conclusion-first.",
+        "tone_policy": DEFAULT_TONE_POLICY,
+        "allowed_modes": DEFAULT_ALLOWED_MODES,
+        "default_mode": "default",
+    }
+
+
+def _default_style_principles(profile_data: dict[str, Any]) -> list[str]:
+    if profile_data.get("member_id") == "mem_xiaowu":
+        return XIAOWU_STYLE_PRINCIPLES
+    return DEFAULT_STYLE_PRINCIPLES
+
+
 def _tone_hints(policy: dict[str, Any], mode: str) -> list[str]:
     hints = []
     if float(policy.get("conciseness", 0.5)) >= 0.65:
@@ -5065,6 +5812,13 @@ def _tone_hints(policy: dict[str, Any], mode: str) -> list[str]:
         hints.append("direct")
     if float(policy.get("technical_depth", 0.5)) >= 0.65:
         hints.append("technically_precise")
+    if float(policy.get("humor", 0.0)) >= 0.45:
+        hints.append("playful")
+        hints.append("light_humor")
+    if float(policy.get("proactiveness", 0.0)) >= 0.65:
+        hints.append("proactive")
+    if float(policy.get("warmth", 0.5)) >= 0.75:
+        hints.append("light_emoji_when_safe")
     if mode == "safety_boundary":
         hints.append("low_anthropomorphic")
     return hints or ["steady"]

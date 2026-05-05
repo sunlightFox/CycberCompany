@@ -43,7 +43,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         code=ErrorCode.VALIDATION_ERROR.value,
         message="请求参数不合法",
-        details={"errors": redact(exc.errors())},
+        details={"errors": redact(jsonable_encoder(exc.errors()))},
     )
 
 

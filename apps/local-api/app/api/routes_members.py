@@ -26,7 +26,13 @@ router = APIRouter(prefix="/api/members", tags=["members"])
 @router.get("", response_model=MemberListResponse)
 async def list_members(registry: ServiceRegistry = Depends(get_registry)) -> MemberListResponse:
     rows = await registry.members.list_members()
-    return MemberListResponse(items=[MemberListItem(**row) for row in rows])
+    public_fields = set(MemberListItem.model_fields)
+    return MemberListResponse(
+        items=[
+            MemberListItem(**{key: value for key, value in row.items() if key in public_fields})
+            for row in rows
+        ]
+    )
 
 
 @router.patch("/{member_id}/default-brain", response_model=MemberDefaultBrainUpdateResponse)

@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import hashlib
 import re
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import Any
 
 from core_types import ApprovalDetail, ResponsePlan, RiskLevel
 from response_composer import ResponseComposer
+from response_composer.chat_voice import voice_metadata_for_scenario
+from response_composer.opening_copy import opening_copy
+from app.services.chat_visible_guard import (
+    reset_visible_redaction_profile as _reset_visible_redaction_profile,
+    set_visible_redaction_profile as _set_visible_redaction_profile,
+    visible_text_guard as _visible_text_guard,
+)
 from trace_service import redact
 
 from app.core.errors import AppError
@@ -17,10 +26,19 @@ FORBIDDEN_MAIN_REPLY_TERMS = {
     "approval_id": "确认编号",
     "tool_call_id": "工具记录",
     "trace_id": "审计记录",
+    "内部 trace": "过程记录",
     "browser.download": "下载动作",
     "browser.snapshot": "网页快照",
     "browser.screenshot": "页面截图",
     "task_id": "任务记录",
+    "工具边界": "处理限制",
+    "受控任务": "处理流程",
+    "任务回放": "结果记录",
+    "工件": "结果记录",
+    "Capability Graph": "权限范围",
+    "Asset Broker": "授权资源通道",
+    "Safety": "风险检查",
+    "Approval": "确认",
     "R3": "需要确认的风险",
     "R4": "较高风险",
     "R5": "高风险",
@@ -28,6 +46,60 @@ FORBIDDEN_MAIN_REPLY_TERMS = {
 }
 
 _URL_RE = re.compile(r"https?://[^\s，。；;）)]+", re.IGNORECASE)
+_VISIBLE_REDACTION_PROFILE: ContextVar[str] = ContextVar(
+    "chat_visible_redaction_profile",
+    default="strict",
+)
+_RELAXED_SECRET_TEXT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{12,}"), "[REDACTED_API_KEY]"),
+    (
+        re.compile(
+            r"(?i)(api[_-]?key|token|secret|cookie|password|passwd|pwd)"
+            r"\s*[:=]\s*['\"]?[^'\"\s,;]+"
+        ),
+        r"\1=[REDACTED_TOKEN]",
+    ),
+    (
+        re.compile(
+            r"(?i)([?&](?:api[_-]?key|token|secret|cookie|password|passwd|pwd)=)"
+            r"[^&\s,;]+"
+        ),
+        r"\1[REDACTED_TOKEN]",
+    ),
+    (
+        re.compile(r"(?i)(private[_-]?key)\s*[:=]\s*['\"]?[^'\"\s,;]+"),
+        r"\1=[REDACTED_PRIVATE_KEY]",
+    ),
+    (
+        re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S),
+        "[REDACTED_PRIVATE_KEY]",
+    ),
+    (
+        re.compile(r"\b(?:[a-z]{3,8}\s+){11,23}[a-z]{3,8}\b", re.I),
+        "[REDACTED_MNEMONIC]",
+    ),
+)
+_RELAXED_SENSITIVE_LOCAL_PATH_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(
+            r"(?i)(?:[A-Za-z]:\\Users\\[^\\\s]+|/(?:Users|home)/[^/\s]+)"
+            r"(?:[\\/][^\s,;]*)?"
+            r"(?:[\\/](?:\.ssh|\.gnupg|wallet|browser profiles?|secrets?)[\\/][^\s,;]*)"
+        ),
+        "[REDACTED_SENSITIVE_LOCAL_PATH]",
+    ),
+    (
+        re.compile(
+            r"(?i)(?:[A-Za-z]:\\Users\\[^\\\s]+|/(?:Users|home)/[^/\s]+)"
+            r"(?:[\\/][^\s,;]*)?[\\/](?:\.env(?:\.local)?|id_rsa|id_ed25519|"
+            r"master\.key|local_secrets\.json|cookies|login data)"
+        ),
+        "[REDACTED_SENSITIVE_LOCAL_PATH]",
+    ),
+)
+
+def _natural_copy(key: str, seed: str = "", **values: Any) -> str:
+    return opening_copy(f"natural.{key}", seed or key, **values)
 
 
 @dataclass(frozen=True)
@@ -93,7 +165,7 @@ class NaturalChatActionGateway:
         if _is_ambiguous_continue(text):
             if not pending:
                 return _outcome(
-                    "当前没有等待确认的操作。我不会仅凭“好的”就执行下载、删除、登录或其他高风险动作。",
+                    opening_copy("action.no_pending", seed=text),
                     status="no_pending_action",
                     reason_codes=["ambiguous_continue_without_pending"],
                     clear_pending=False,
@@ -101,7 +173,7 @@ class NaturalChatActionGateway:
             if len(pending) > 1 or _max_risk(pending) >= 3:
                 return _outcome(
                     _ambiguous_pending_text(pending),
-                    status="ambiguous_confirmation_blocked",
+                    status="blocked",
                     reason_codes=["ambiguous_confirmation_blocked"],
                     pending_actions=pending,
                     clear_pending=False,
@@ -117,7 +189,7 @@ class NaturalChatActionGateway:
             if len(pending) > 1:
                 return _outcome(
                     _multiple_pending_text(pending),
-                    status="multiple_pending_actions",
+                    status="blocked",
                     reason_codes=["multiple_pending_actions"],
                     pending_actions=pending,
                     clear_pending=False,
@@ -125,8 +197,8 @@ class NaturalChatActionGateway:
             action = pending[0]
             if _is_always_allow(text) and _risk_order(str(action.get("risk_level") or "R1")) >= 3:
                 return _outcome(
-                    "这类操作不能设置成以后总是允许。你可以回复“只允许这一次”“本会话内同类操作都允许”或“拒绝”。",
-                    status="always_denied_for_risk",
+                    opening_copy("action.blocked", seed=text),
+                    status="blocked",
                     reason_codes=["always_denied_for_risk"],
                     pending_actions=pending,
                     clear_pending=False,
@@ -168,10 +240,16 @@ class NaturalChatActionGateway:
         label = str(action.get("user_label") or action.get("action_label") or "这一步操作")
         if not approval_id:
             return _outcome(
-                f"我找到了待确认的{label}，但内部确认记录不完整，所以没有执行。请重新发起这一步。",
-                status="pending_action_invalid",
+                opening_copy(
+                    "action.blocked",
+                    seed=label,
+                    label=label,
+                    reason="确认记录缺失",
+                ),
+                status="blocked",
                 reason_codes=["missing_approval_ref"],
                 clear_pending=True,
+                block_reason="missing_approval_ref",
             )
         try:
             if resolution == "deny":
@@ -198,15 +276,19 @@ class NaturalChatActionGateway:
             if resolution == "edit":
                 if edited_payload is None:
                     return _outcome(
-                        "",
-                        status="edit_missing_target",
+                        opening_copy(
+                            "action.blocked",
+                            seed=label,
+                            label=label,
+                            reason="你还没说清要改成什么",
+                        ),
+                        status="blocked",
                         reason_codes=["edit_missing_target"],
                         action=action,
                         clear_pending=False,
                         composer=self._composer,
-                        failure_reason=(
-                            "请直接说清要改成什么，比如把地址、目标、标题或正文改成新的内容。"
-                        ),
+                        failure_reason="请直接说清要改成什么，比如把地址、目标、标题或正文改成新的内容。",
+                        block_reason="edit_missing_target",
                     )
                 await self._approvals.edit(
                     approval_id,
@@ -270,15 +352,20 @@ class NaturalChatActionGateway:
             error_code = getattr(exc.code, "value", str(exc.code))
             return _outcome(
                 (
-                    f"我已理解你对{label}的处理意图，但这一步没有完成："
-                    f"{visible_text_guard(exc.message)}。你可以修改目标后重试，或取消这次操作。"
+                    opening_copy(
+                        "action.blocked",
+                        seed=f"{label}|{error_code}",
+                        label=label,
+                        reason=visible_text_guard(exc.message),
+                    )
                 ),
-                status="resolution_failed",
+                status="blocked",
                 reason_codes=["resolution_failed", error_code],
                 action=action,
                 clear_pending=True,
                 composer=self._composer,
                 failure_reason=visible_text_guard(exc.message),
+                block_reason=error_code,
             )
 
     async def _pending_actions(
@@ -351,36 +438,37 @@ def response_plan_for_pending_action(
     )
     plan = composer.response_plan_for_action_status(facts=facts)
     reply_options = _reply_options_from_actions([action])
-    natural = {
-        "status": "pending_action",
-        "reason_codes": ["approval_required", "natural_pending_action"],
-        "pending_actions": [action],
-        "natural_reply_options": reply_options,
-        "reply_option_items": _reply_option_items(reply_options),
-        "pending_confirmation": {
-            "kind": "natural_pending_actions",
-            "session_id": session_id,
-            "actions": [action],
-            "questions": reply_options,
-            "created_at": utc_now_iso(),
-        },
-        "clear_pending": False,
-        "session_grant": {},
+    natural = _natural_interaction_payload(
+        status="pending_action",
+        reason_codes=["approval_required", "natural_pending_action"],
+        pending_actions=[action],
+        reply_options=reply_options,
+        clear_pending=False,
+        action_result={"status": "pending_action", **_technical_detail(action)},
+    )
+    natural["natural_reply_options"] = reply_options
+    natural["pending_confirmation"] = {
+        "kind": "natural_pending_actions",
+        "session_id": session_id,
+        "actions": [action],
+        "questions": reply_options,
+        "created_at": utc_now_iso(),
     }
     structured_payload = {
         **plan.structured_payload,
         "scenario": "natural_interaction",
+        **voice_metadata_for_scenario("action_status"),
         "natural_interaction": natural,
         "pending_actions": [action],
         "pending_action_binding": _pending_action_binding("pending_action", [action]),
-        "response_quality_guard": {
-            "status": "pending_action",
-            "state_disclosed": True,
-            "boundary_disclosed": True,
-            "next_step_provided": bool(reply_options),
-            "no_false_done": True,
-            "no_internal_terms": True,
-        },
+        "response_quality_guard": _natural_quality_guard(
+            plan.structured_payload.get("response_quality_guard"),
+            visible_text_guard(plan.plain_text or plan.summary or ""),
+            status="pending_action",
+            state_disclosed=True,
+            boundary_disclosed=True,
+            next_step_provided=bool(reply_options),
+        ),
         "natural_reply_options": reply_options,
         "reply_option_items": _reply_option_items(reply_options),
         "technical_detail": redact(_technical_detail(action)),
@@ -402,13 +490,28 @@ def response_plan_for_pending_action(
     )
 
 
-def visible_text_guard(text: str) -> str:
-    result = str(redact(text))
-    for term, replacement in FORBIDDEN_MAIN_REPLY_TERMS.items():
-        result = re.sub(re.escape(term), replacement, result, flags=re.IGNORECASE)
-    result = re.sub(r"\btrc_[A-Za-z0-9_-]+", "审计记录", result)
-    result = re.sub(r"\bapr_[A-Za-z0-9_-]+", "确认编号", result)
-    result = re.sub(r"\btoolcall_[A-Za-z0-9_-]+", "工具记录", result)
+def set_visible_redaction_profile(profile: str) -> Token[str]:
+    return _set_visible_redaction_profile(profile)
+
+
+def reset_visible_redaction_profile(token: Token[str]) -> None:
+    _reset_visible_redaction_profile(token)
+
+
+def visible_text_guard(text: str, *, profile: str | None = None) -> str:
+    return _visible_text_guard(text, profile=profile)
+
+
+def _normalize_visible_profile(profile: str) -> str:
+    return "relaxed" if str(profile or "").lower() == "relaxed" else "strict"
+
+
+def _relaxed_visible_redact(text: str) -> str:
+    result = text
+    for pattern, replacement in _RELAXED_SECRET_TEXT_PATTERNS:
+        result = pattern.sub(replacement, result)
+    for pattern, replacement in _RELAXED_SENSITIVE_LOCAL_PATH_PATTERNS:
+        result = pattern.sub(replacement, result)
     return result
 
 
@@ -424,6 +527,7 @@ def _outcome(
     composer: ResponseComposer | None = None,
     detail: Any | None = None,
     failure_reason: str | None = None,
+    block_reason: str | None = None,
 ) -> NaturalChatOutcome:
     if composer is not None and action is not None:
         facts = _action_status_facts(
@@ -437,30 +541,37 @@ def _outcome(
             task_status=_task_status_payload(detail),
         )
         reply_options = _reply_options_from_actions(pending_actions or ([action] if action else []))
-        natural = {
-            "status": status,
-            "reason_codes": reason_codes,
-            "pending_actions": pending_actions or ([action] if action else []),
-            "natural_reply_options": reply_options,
-            "reply_option_items": _reply_option_items(reply_options),
-            "clear_pending": clear_pending,
-            "session_grant": session_grant or {},
-        }
+        natural = _natural_interaction_payload(
+            status=status,
+            reason_codes=reason_codes,
+            pending_actions=pending_actions or ([action] if action else []),
+            reply_options=reply_options,
+            clear_pending=clear_pending,
+            session_grant=session_grant,
+            block_reason=block_reason or _block_reason_for_status(status, reason_codes),
+            action_result={
+                **_technical_detail(action),
+                "detail_status": getattr(detail, "status", None),
+                "failure_reason": failure_reason,
+            },
+        )
+        natural["natural_reply_options"] = reply_options
         pending_action_binding = _pending_action_binding(status, pending_actions or [])
         structured_payload = {
             **plan.structured_payload,
             "scenario": "natural_interaction",
+            **voice_metadata_for_scenario("action_status"),
             "natural_interaction": natural,
             "pending_actions": pending_actions or ([action] if action else []),
             "pending_action_binding": pending_action_binding,
-            "response_quality_guard": {
-                "status": status,
-                "state_disclosed": True,
-                "boundary_disclosed": True,
-                "next_step_provided": bool(reply_options) or status != "approved",
-                "no_false_done": True,
-                "no_internal_terms": True,
-            },
+            "response_quality_guard": _natural_quality_guard(
+                plan.structured_payload.get("response_quality_guard"),
+                plan.plain_text or plan.summary or text,
+                status=status,
+                state_disclosed=True,
+                boundary_disclosed=True,
+                next_step_provided=bool(reply_options) or status != "approved",
+            ),
             "natural_reply_options": reply_options,
             "reply_option_items": _reply_option_items(reply_options),
             "technical_detail": redact(_technical_detail(action)),
@@ -484,8 +595,35 @@ def _outcome(
         clear_pending=clear_pending,
         session_grant=session_grant,
         technical_detail=_technical_detail(action) if action else {},
+        block_reason=block_reason or _block_reason_for_status(status, reason_codes),
     )
     return NaturalChatOutcome(text=visible_text_guard(text), response_plan=plan)
+
+
+def _natural_interaction_payload(
+    *,
+    status: str,
+    reason_codes: list[str],
+    pending_actions: list[dict[str, Any]] | None,
+    reply_options: list[str] | None,
+    clear_pending: bool,
+    session_grant: dict[str, Any] | None = None,
+    block_reason: str | None = None,
+    action_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    options = list(reply_options or [])
+    return {
+        "version": "natural_interaction.openclaw_hermes.v4",
+        "status": status,
+        "reason_codes": list(reason_codes),
+        "block_reason": block_reason,
+        "pending_actions": pending_actions or [],
+        "reply_options": options,
+        "reply_option_items": _reply_option_items(options),
+        "clear_pending": clear_pending,
+        "session_grant": session_grant or {},
+        "action_result": action_result or {},
+    }
 
 
 def _plan(
@@ -498,23 +636,28 @@ def _plan(
     clear_pending: bool = False,
     session_grant: dict[str, Any] | None = None,
     technical_detail: dict[str, Any] | None = None,
+    block_reason: str | None = None,
 ) -> ResponsePlan:
     visible = visible_text_guard(text)
     reply_options = _reply_options_from_actions(pending_actions or [])
-    natural = {
-        "status": status,
-        "reason_codes": reason_codes,
-        "pending_actions": pending_actions or [],
-        "natural_reply_options": reply_options,
-        "clear_pending": clear_pending,
-        "session_grant": session_grant or {},
-    }
+    natural = _natural_interaction_payload(
+        status=status,
+        reason_codes=reason_codes,
+        pending_actions=pending_actions,
+        reply_options=reply_options,
+        clear_pending=clear_pending,
+        session_grant=session_grant,
+        block_reason=block_reason,
+        action_result=technical_detail or {},
+    )
+    natural["natural_reply_options"] = reply_options
     pending_action_binding = {
         "conversation_session_bound": True,
         "unique_action_required": True,
         "action_count": len(pending_actions or []),
         "fail_closed": status
         in {
+            "blocked",
             "no_pending_action",
             "multiple_pending_actions",
             "ambiguous_confirmation_blocked",
@@ -527,7 +670,6 @@ def _plan(
     }
     if pending_confirmation is not None:
         natural["pending_confirmation"] = pending_confirmation
-    natural["reply_option_items"] = _reply_option_items(reply_options)
     return ResponsePlan(
         title="等待确认" if pending_actions else None,
         style="natural_action",
@@ -537,17 +679,18 @@ def _plan(
         plain_text=visible,
         structured_payload={
             "scenario": "natural_interaction",
+            **voice_metadata_for_scenario("action_status"),
             "natural_interaction": natural,
             "pending_actions": pending_actions or [],
             "pending_action_binding": pending_action_binding,
-            "response_quality_guard": {
-                "status": status,
-                "state_disclosed": True,
-                "boundary_disclosed": True,
-                "next_step_provided": bool(reply_options) or status != "approved",
-                "no_false_done": True,
-                "no_internal_terms": True,
-            },
+            "response_quality_guard": _natural_quality_guard(
+                None,
+                visible,
+                status=status,
+                state_disclosed=True,
+                boundary_disclosed=True,
+                next_step_provided=bool(reply_options) or status != "approved",
+            ),
             "natural_reply_options": reply_options,
             "reply_option_items": _reply_option_items(reply_options),
             "technical_detail": redact(technical_detail or {}),
@@ -563,6 +706,68 @@ def _plan(
     )
 
 
+def _natural_quality_guard(
+    base: Any,
+    text: str,
+    *,
+    status: str,
+    state_disclosed: bool,
+    boundary_disclosed: bool,
+    next_step_provided: bool,
+) -> dict[str, Any]:
+    base_guard = base if isinstance(base, dict) else {}
+    checks = dict(base_guard.get("checks") or {})
+    checks.update(
+        {
+            "state_disclosed": bool(state_disclosed),
+            "boundary_disclosed": bool(boundary_disclosed),
+            "next_step_provided": bool(next_step_provided),
+            "no_false_done": True,
+            "no_internal_terms": True,
+        }
+    )
+    violations = list(base_guard.get("violations") or [])
+    for check, passed in checks.items():
+        exists = any(
+            isinstance(item, dict) and item.get("check") == check
+            for item in violations
+        )
+        if not passed and not exists:
+            violations.append({"check": check})
+    return {
+        "version": str(
+            base_guard.get("version") or "response_quality_guard.openclaw_hermes.v4"
+        ),
+        "status": "passed" if all(bool(value) for value in checks.values()) else "warning",
+        "checks": checks,
+        "violations": violations,
+        "redaction_applied": bool(base_guard.get("redaction_applied")),
+        "strict_format_preserved": bool(base_guard.get("strict_format_preserved", True)),
+        "visible_text_hash": str(base_guard.get("visible_text_hash") or _visible_hash(text)),
+        "natural_action": {"status": status},
+    }
+
+
+def _visible_hash(text: str) -> str:
+    return "sha256:" + hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
+
+
+def _block_reason_for_status(status: str, reason_codes: list[str]) -> str | None:
+    if status != "blocked" and status != "no_pending_action":
+        return None
+    for code in reason_codes:
+        if code in {
+            "multiple_pending_actions",
+            "ambiguous_confirmation_blocked",
+            "always_denied_for_risk",
+            "missing_approval_ref",
+            "pending_action_invalid",
+            "no_pending_action",
+        }:
+            return code
+    return reason_codes[0] if reason_codes else status
+
+
 def _pending_action_binding(status: str, pending_actions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "conversation_session_bound": True,
@@ -570,6 +775,7 @@ def _pending_action_binding(status: str, pending_actions: list[dict[str, Any]]) 
         "action_count": len(pending_actions),
         "fail_closed": status
         in {
+            "blocked",
             "no_pending_action",
             "multiple_pending_actions",
             "ambiguous_confirmation_blocked",
@@ -628,7 +834,7 @@ def _action_status_facts(
         "completed": detail_status == "completed",
         "failed": detail_status == "failed",
         "failure_reason": failure_reason,
-        "evidence_summary": "结果可以通过任务记录、工件或回放证据复核。",
+        "evidence_summary": "结果可以通过任务记录、结果记录或过程记录复核。",
     }
 
 
@@ -643,8 +849,8 @@ def _task_status_payload(detail: Any | None) -> dict[str, Any] | None:
 
 
 def _pending_action_prompt(action: dict[str, Any]) -> str:
-    summary = str(action.get("user_summary") or "我准备执行这一步操作。")
-    impact = str(action.get("impact_summary") or "这一步需要你确认后才会继续。")
+    summary = str(action.get("user_summary") or "我准备执行这一步。")
+    impact = str(action.get("impact_summary") or "这一步需要你点头后才会继续。")
     options = list(action.get("reply_options") or [])
     if not options:
         options = ["只允许这一次", "拒绝", "修改目标为：..."]
@@ -652,7 +858,7 @@ def _pending_action_prompt(action: dict[str, Any]) -> str:
         f"{summary}\n{impact}\n\n"
         "请直接回复：\n"
         + "\n".join(f"- {option}" for option in options)
-        + "\n\n在你确认前，我不会声称这一步已经完成。"
+        + "\n\n在你确认前，我不会把这一步说成已经完成。"
     )
 
 
@@ -662,54 +868,48 @@ def _plain_next_step_text(pending: list[dict[str, Any]]) -> str:
         label = str(action.get("user_label") or "这一步操作")
         options = list(action.get("reply_options") or ["只允许这一次", "拒绝", "修改目标为：..."])
         return (
-            f"现在等待你确认的是：{label}。\n"
-            "你不用复制任何编号，直接回复下面任意一句就行：\n"
+            f"现在等你点头的是：{label}。\n"
+            "不用复制编号，直接回我下面任意一句就行：\n"
             + "\n".join(f"- {option}" for option in options)
         )
-    return (
-        "当前没有等待确认的操作。以后需要确认时，你可以直接回复："
-        "确认、拒绝、取消，或“修改地址为：...”"
-    )
+    return opening_copy("action.no_pending", "plain_next_step")
 
 
 def _no_pending_text(text: str) -> str:
     if _is_deny(text):
-        return "当前没有等待拒绝或取消的操作。我不会执行任何下载、删除、登录或外部动作。"
+        return opening_copy("action.no_pending", seed=text, mode="deny")
     if _is_edit(text):
-        return "当前没有可修改的待确认操作。请先发起需要执行的动作，再告诉我要改成什么。"
-    return "当前没有等待确认的操作。我不会仅凭这句话执行下载、删除、登录或其他高风险动作。"
+        return opening_copy("action.no_pending", seed=text, mode="edit")
+    return opening_copy("action.no_pending", seed=text)
 
 
 def _ambiguous_pending_text(pending: list[dict[str, Any]]) -> str:
     label = str(pending[0].get("user_label") or "这一步操作")
-    return (
-        f"我还不能只凭“好的/继续”来执行{label}。\n"
-        "请明确回复“只允许这一次”“拒绝”，或把目标改成新的地址/文件后再继续。"
-    )
+    return opening_copy("action.ambiguous_blocked", seed=label, label=label)
 
 
 def _multiple_pending_text(pending: list[dict[str, Any]]) -> str:
     labels = "、".join(str(item.get("user_label") or "待确认操作") for item in pending[:3])
-    return f"现在有多个待确认操作：{labels}。请明确说要确认哪一个，或者说“全部取消”。"
+    return opening_copy("action.multiple_pending", seed=labels, labels=labels)
 
 
 def _after_resolution_text(label: str, resolution: str, *, detail: Any | None) -> str:
     status = str(getattr(detail, "status", "") or "")
     if resolution == "edited":
-        prefix = f"已按新的目标修改{label}，并重新交给受控执行链路检查。"
+        prefix = _natural_copy("after_edited", seed=label, label=label)
     elif resolution == "session":
-        prefix = f"已确认这次{label}；本会话内同类、同范围、同风险的操作可以少问一次。"
+        prefix = _natural_copy("after_session", seed=label, label=label)
     else:
-        prefix = f"已确认这次{label}，我会把它交回受控任务链路继续处理。"
+        prefix = _natural_copy("after_once", seed=label, label=label)
     if not status:
-        return f"{prefix}如果后续仍等待、失败或完成，我会按真实状态说明，不会把未完成说成完成。"
+        return _natural_copy("after_no_status", seed=label, prefix=prefix)
     if status == "completed":
-        return f"{prefix}任务链路返回已完成；结果应能通过工件、页面状态或任务回放证据复核。"
+        return _natural_copy("after_completed", seed=label, prefix=prefix)
     if status in {"paused", "waiting_approval"}:
-        return f"{prefix}当前还有步骤在等待确认；确认前相关动作仍未执行，我不会跳过安全边界。"
+        return _natural_copy("after_waiting", seed=label, prefix=prefix)
     if status == "failed":
-        return f"{prefix}但执行没有完成；你可以修改目标后重试，或让我只给方案。"
-    return f"{prefix}当前状态是 {status}，下一步我会按实际结果说明。"
+        return _natural_copy("after_failed", seed=label, prefix=prefix)
+    return f"{prefix} 当前状态是 {status}，下一步我会按实际结果说。"
 
 
 def _deterministic_plain_reply(text: str) -> str | None:
@@ -762,19 +962,10 @@ def _hard_block_reason(text: str) -> str | None:
 
 def _hard_block_text(reason: str) -> str:
     if reason == "browser_file_url_denied":
-        return (
-            "我不能通过浏览器访问本机 file 地址或敏感路径；"
-            "这可能泄露本机文件。没有执行任何浏览器动作。"
-        )
+        return _natural_copy("hard_block_file", seed=reason)
     if reason == "metadata_or_private_network_target":
-        return (
-            "我不能访问 metadata 或私网敏感地址；"
-            "这可能泄露本机或云环境信息。没有执行任何网络或浏览器动作。"
-        )
-    return (
-        "这个请求涉及敏感凭据或越权内容，我不能读取、展示或外发这些信息。"
-        "我可以改为帮你做凭据轮换清单、脱敏示例，或解释安全处理流程。"
-    )
+        return _natural_copy("hard_block_network", seed=reason)
+    return _natural_copy("hard_block_secret", seed=reason)
 
 
 def _looks_like_resolution(text: str) -> bool:
@@ -851,7 +1042,9 @@ def _control_text(text: str) -> str:
         return stripped
     prefix, suffix = stripped.split("：", 1)
     normalized_prefix = prefix.strip().upper()
-    if normalized_prefix.startswith(("CHAT-E2E-", "PHASE34-", "NAT-")):
+    if normalized_prefix.startswith(
+        ("CHAT-E2E-", "PHASE34-", "NAT-", "WECHAT-REAL-")
+    ):
         return suffix.strip()
     suffix_normalized = suffix.strip().strip("。.!！?？~～ ")
     if suffix_normalized in {
@@ -1005,7 +1198,7 @@ def _impact_for_action(action_type: str) -> str:
     if action_type in {"browser.submit", "browser.fill", "browser.type", "browser.click"}:
         return "这可能改变页面状态或账号状态，所以需要你确认；确认前尚未提交。"
     if action_type == "browser.screenshot":
-        return "这会保存截图工件，所以需要你确认；确认前尚未保存。"
+        return "这会保存截图结果，所以需要你确认；确认前尚未保存。"
     if action_type == "file.delete":
         return "删除后可能无法从任务结果里直接恢复，所以需要你明确确认。"
     if action_type == "terminal.run":

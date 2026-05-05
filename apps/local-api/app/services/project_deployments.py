@@ -53,6 +53,7 @@ from app.schemas.tasks import TaskCreateRequest
 from app.services.approvals import ApprovalService
 from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
+from app.services.safety_policy import RuntimeSafetyPolicyService
 from app.services.tasks import TaskEngine
 
 ORG_DEFAULT = "org_default"
@@ -503,6 +504,7 @@ class ProjectDeploymentService:
         data_dir: Path,
         trace_service: TraceService,
         audit_service: AuditEventService,
+        safety_policy_service: RuntimeSafetyPolicyService | None = None,
     ) -> None:
         self._repo = repo
         self._workspaces = workspace_service
@@ -514,6 +516,7 @@ class ProjectDeploymentService:
         self._data_dir = data_dir
         self._trace = trace_service
         self._audit = audit_service
+        self._safety_policy = safety_policy_service
         self._stack_detector = StackDetectorService()
         self._backend_selector = ExecutionBackendSelector()
 
@@ -569,6 +572,19 @@ class ProjectDeploymentService:
             constraints=request.constraints,
         )
         approval_binding_hash = _deployment_binding_hash(plan)
+        approval_required = True
+        if self._safety_policy is not None:
+            policy = await self._safety_policy.get_policy(organization_id=ORG_DEFAULT)
+            approval_required = not policy.should_skip_approval(
+                action="project.deployment.run",
+                risk_level=RiskLevel.R4,
+                action_category="project_deployment",
+                payload={
+                    "source_uri": request.source_uri,
+                    "backend_type": selection.selected_backend,
+                    "preferred_port": plan.get("preferred_port"),
+                },
+            )
         now = utc_now_iso()
         deployment_id = new_id("dep")
         await self._repo.insert_deployment(
@@ -577,7 +593,7 @@ class ProjectDeploymentService:
                 "organization_id": ORG_DEFAULT,
                 "workspace_id": workspace.workspace_id,
                 "task_id": task_id,
-                "status": "waiting_approval",
+                "status": "waiting_approval" if approval_required else "planned",
                 "backend_type": selection.selected_backend,
                 "plan": plan,
                 "endpoint": {},
@@ -587,28 +603,36 @@ class ProjectDeploymentService:
                 "updated_at": now,
             }
         )
-        approval = await self._approvals.create_approval(
-            task_id=task_id,
-            organization_id=ORG_DEFAULT,
-            requested_action="project.deployment.run",
-            risk_level=RiskLevel.R4,
-            summary=f"需要确认部署项目 {redact(request.source_uri)}",
-            payload={
-                "deployment_id": deployment_id,
-                "workspace_id": workspace.workspace_id,
-                "source_uri": redact(request.source_uri),
-                "backend_type": selection.selected_backend,
-                "preferred_port": plan.get("preferred_port"),
+        if approval_required:
+            approval = await self._approvals.create_approval(
+                task_id=task_id,
+                organization_id=ORG_DEFAULT,
+                requested_action="project.deployment.run",
+                risk_level=RiskLevel.R4,
+                summary=f"需要确认部署项目 {redact(request.source_uri)}",
+                payload={
+                    "deployment_id": deployment_id,
+                    "workspace_id": workspace.workspace_id,
+                    "source_uri": redact(request.source_uri),
+                    "backend_type": selection.selected_backend,
+                    "preferred_port": plan.get("preferred_port"),
+                    "approval_binding_hash": approval_binding_hash,
+                },
+                trace_id=trace_id,
+            )
+            plan["approval_strategy"] = {
+                **dict(plan.get("approval_strategy") or {}),
+                "approval_id": approval.approval_id,
                 "approval_binding_hash": approval_binding_hash,
-            },
-            trace_id=trace_id,
-        )
-        plan["approval_strategy"] = {
-            **dict(plan.get("approval_strategy") or {}),
-            "approval_id": approval.approval_id,
-            "approval_binding_hash": approval_binding_hash,
-            "status": "required",
-        }
+                "status": "required",
+            }
+        else:
+            plan["approval_strategy"] = {
+                **dict(plan.get("approval_strategy") or {}),
+                "approval_id": None,
+                "approval_binding_hash": approval_binding_hash,
+                "status": "not_required_balanced_personal",
+            }
         await self._repo.update_deployment(
             deployment_id,
             {"plan": plan, "updated_at": utc_now_iso()},
@@ -631,17 +655,30 @@ class ProjectDeploymentService:
         deployment = await self.detail(deployment_id)
         if deployment.status in DEPLOYMENT_TERMINAL_STATUSES:
             return deployment
+        approval_strategy = dict(deployment.plan.get("approval_strategy") or {})
+        approval_required = str(approval_strategy.get("status") or "") == "required"
         if approval_id is None:
-            await self._repo.update_deployment(
-                deployment_id,
-                {
-                    "status": "waiting_approval",
-                    "health": {"status": "waiting_approval"},
-                    "updated_at": utc_now_iso(),
-                },
-            )
-            return await self.detail(deployment_id)
-        await self._verify_deployment_approval(deployment, approval_id)
+            if not approval_required:
+                await self._repo.update_deployment(
+                    deployment_id,
+                    {
+                        "status": "planned",
+                        "health": {"status": "not_started"},
+                        "updated_at": utc_now_iso(),
+                    },
+                )
+            else:
+                await self._repo.update_deployment(
+                    deployment_id,
+                    {
+                        "status": "waiting_approval",
+                        "health": {"status": "waiting_approval"},
+                        "updated_at": utc_now_iso(),
+                    },
+                )
+                return await self.detail(deployment_id)
+        if approval_id is not None and approval_required:
+            await self._verify_deployment_approval(deployment, approval_id)
         workspace = await self._workspaces.detail(deployment.workspace_id)
         workspace_path = self._workspaces.path_for(workspace)
         await self._repo.update_deployment(
@@ -1099,6 +1136,7 @@ class HostInstallService:
         brain_repo: Any | None = None,
         model_routing_service: Any | None = None,
         secret_store: Any | None = None,
+        safety_policy_service: RuntimeSafetyPolicyService | None = None,
     ) -> None:
         self._repo = repo
         self._task_engine = task_engine
@@ -1110,6 +1148,7 @@ class HostInstallService:
         self._brain_repo = brain_repo
         self._model_routing = model_routing_service
         self._secrets = secret_store
+        self._safety_policy = safety_policy_service
         self._model_router = ModelRouter()
 
     async def create_plan(
@@ -1291,7 +1330,7 @@ class HostInstallService:
                 ),
             }
         else:
-            execution = await self._execute_host_command(plan)
+            execution = await self._execute_host_command(plan, trace_id=trace_id)
         artifact = await self._artifacts.write_text(
             task_id=plan.task_id,
             organization_id=ORG_DEFAULT,
@@ -1485,7 +1524,7 @@ class HostInstallService:
                     model=str(brain["model_name"]),
                     messages=_host_package_model_messages(query),
                     temperature=0.0,
-                    max_output_tokens=384,
+                    max_output_tokens=1024,
                     top_p=0.2,
                     timeout_seconds=min(int(brain.get("timeout_seconds") or 180), 30),
                     stream=False,
@@ -1520,6 +1559,8 @@ class HostInstallService:
     async def _execute_host_command(
         self,
         plan: HostInstallPlan,
+        *,
+        trace_id: str | None = None,
     ) -> dict[str, Any]:
         steps = _host_command_steps(plan.command_preview)
         if not steps:
@@ -1539,40 +1580,68 @@ class HostInstallService:
         final_exit_code = 0
         failure_reason: str | None = None
         for index, step in enumerate(steps, start=1):
-            version_before = None
-            if step.get("step_type") == "windows_uninstall_registry":
-                version_before = await _detect_installed_version(
-                    str(step.get("target_display_name") or step.get("target_package_id") or "")
+            phase = await self._begin_host_install_phase(
+                trace_id=trace_id,
+                phase="primary",
+                plan=plan,
+                index=index,
+                step=step,
+            )
+            try:
+                version_before = None
+                if step.get("step_type") == "windows_uninstall_registry":
+                    version_before = await _detect_installed_version(
+                        str(
+                            step.get("target_display_name")
+                            or step.get("target_package_id")
+                            or ""
+                        )
+                    )
+                result = await _execute_host_install_step(step)
+                final_exit_code = int(result.get("exit_code") or 0)
+                if result.get("resolved_package_id"):
+                    resolved_package_id = str(result["resolved_package_id"])
+                if step.get("step_type") == "windows_uninstall_registry":
+                    target_display_name = str(
+                        step.get("target_display_name") or step.get("target_package_id") or ""
+                    )
+                    version_after = await _wait_for_windows_uninstall(target_display_name)
+                    result["version_before"] = version_before
+                    result["version_after"] = version_after
+                    result["uninstall_verified"] = version_after is None
+                    if version_after is None:
+                        final_exit_code = 0
+                        result["exit_code"] = 0
+                        result["failure_reason"] = None
+                    elif final_exit_code == 0:
+                        final_exit_code = 1
+                        result["exit_code"] = 1
+                        result["failure_reason"] = (
+                            "windows_uninstall_registry_entry_still_present"
+                        )
+                timing = await self._end_host_install_phase(
+                    phase,
+                    status=(
+                        TraceSpanStatus.COMPLETED
+                        if final_exit_code == 0
+                        else TraceSpanStatus.FAILED
+                    ),
+                    output_data={
+                        "exit_code": final_exit_code,
+                        "failure_reason": result.get("failure_reason"),
+                        "resolved_package_id": resolved_package_id,
+                    },
                 )
-            result = await _execute_host_install_step(step)
-            final_exit_code = int(result.get("exit_code") or 0)
-            if result.get("resolved_package_id"):
-                resolved_package_id = str(result["resolved_package_id"])
-            if step.get("step_type") == "windows_uninstall_registry":
-                target_display_name = str(
-                    step.get("target_display_name") or step.get("target_package_id") or ""
+                result.update(timing)
+            except Exception as exc:
+                await self._end_host_install_phase(
+                    phase,
+                    status=TraceSpanStatus.FAILED,
+                    output_data={"error": str(redact(str(exc)))[:240]},
                 )
-                version_after = await _wait_for_windows_uninstall(target_display_name)
-                result["version_before"] = version_before
-                result["version_after"] = version_after
-                result["uninstall_verified"] = version_after is None
-                if version_after is None:
-                    final_exit_code = 0
-                    result["exit_code"] = 0
-                    result["failure_reason"] = None
-                elif final_exit_code == 0:
-                    final_exit_code = 1
-                    result["exit_code"] = 1
-                    result["failure_reason"] = "windows_uninstall_registry_entry_still_present"
+                raise
             log_lines.extend(
-                [
-                    f"step[{index}].key={step.get('step_key') or step.get('step_type') or index}",
-                    f"step[{index}].command={redact(result.get('command') or [])}",
-                    f"step[{index}].exit_code={final_exit_code}",
-                    f"step[{index}].stdout_tail={result.get('stdout_tail') or ''}",
-                    f"step[{index}].stderr_tail={result.get('stderr_tail') or ''}",
-                    f"step[{index}].uninstall_verified={result.get('uninstall_verified')}",
-                ]
+                _host_install_step_log_lines("step", index, step, result, final_exit_code)
             )
             if final_exit_code != 0:
                 failure_reason = str(result.get("failure_reason") or "host install failed")
@@ -1584,60 +1653,108 @@ class HostInstallService:
                 final_exit_code = 0
                 failure_reason = None
                 for fallback_index, step in enumerate(fallback_steps, start=1):
-                    result = await _execute_host_install_step(step)
-                    final_exit_code = int(result.get("exit_code") or 0)
-                    if result.get("resolved_package_id"):
-                        resolved_package_id = str(result["resolved_package_id"])
+                    phase = await self._begin_host_install_phase(
+                        trace_id=trace_id,
+                        phase="fallback",
+                        plan=plan,
+                        index=fallback_index,
+                        step=step,
+                    )
+                    try:
+                        result = await _execute_host_install_step(step)
+                        final_exit_code = int(result.get("exit_code") or 0)
+                        if result.get("resolved_package_id"):
+                            resolved_package_id = str(result["resolved_package_id"])
+                        timing = await self._end_host_install_phase(
+                            phase,
+                            status=(
+                                TraceSpanStatus.COMPLETED
+                                if final_exit_code == 0
+                                else TraceSpanStatus.FAILED
+                            ),
+                            output_data={
+                                "exit_code": final_exit_code,
+                                "failure_reason": result.get("failure_reason"),
+                                "resolved_package_id": resolved_package_id,
+                            },
+                        )
+                        result.update(timing)
+                    except Exception as exc:
+                        await self._end_host_install_phase(
+                            phase,
+                            status=TraceSpanStatus.FAILED,
+                            output_data={"error": str(redact(str(exc)))[:240]},
+                        )
+                        raise
                     log_lines.extend(
-                        [
-                            (
-                                "fallback_step"
-                                f"[{fallback_index}].key="
-                                f"{step.get('step_key') or step.get('step_type') or fallback_index}"
-                            ),
-                            (
-                                f"fallback_step[{fallback_index}].command="
-                                f"{redact(result.get('command') or [])}"
-                            ),
-                            f"fallback_step[{fallback_index}].exit_code={final_exit_code}",
-                            (
-                                f"fallback_step[{fallback_index}].stdout_tail="
-                                f"{result.get('stdout_tail') or ''}"
-                            ),
-                            (
-                                f"fallback_step[{fallback_index}].stderr_tail="
-                                f"{result.get('stderr_tail') or ''}"
-                            ),
-                        ]
+                        _host_install_step_log_lines(
+                            "fallback_step",
+                            fallback_index,
+                            step,
+                            result,
+                            final_exit_code,
+                        )
                     )
                     if final_exit_code != 0:
                         failure_reason = str(result.get("failure_reason") or "host install failed")
                         break
         package_id = resolved_package_id or _host_install_target_query(plan)
-        version = await _detect_installed_version(package_id)
         success = final_exit_code == 0
         action = _host_install_plan_action(plan)
-        if success and action == "install":
-            source = plan.install_source
-            detect_terms = [
-                package_id,
-                _host_install_target_query(plan),
-                str(source.get("name") or ""),
-                str(source.get("publisher") or ""),
-                str(plan.requested_software or ""),
-            ]
-            for term in detect_terms:
-                clean_term = _host_install_visible_software_name(term)
-                if clean_term and not version:
-                    version = await _detect_installed_version(clean_term)
-            if not version:
-                success = False
-                final_exit_code = 1
-                failure_reason = (
-                    "official_installer_finished_but_install_not_verified"
-                    if _plan_uses_official_website_only(plan)
-                    else "package_manager_finished_but_install_not_verified"
+        source = plan.install_source
+        detect_terms = [
+            package_id,
+            _host_install_target_query(plan),
+            str(source.get("name") or ""),
+            str(source.get("publisher") or ""),
+            str(plan.requested_software or ""),
+        ]
+        detect_phase = await self._begin_host_install_phase(
+            trace_id=trace_id,
+            phase="detect",
+            plan=plan,
+            target_package_id=package_id,
+        )
+        try:
+            if action == "install":
+                version = await _detect_installed_version_for_terms(
+                    detect_terms,
+                    package_id=package_id,
                 )
+            else:
+                version = await _detect_installed_version(package_id)
+            detect_timing = await self._end_host_install_phase(
+                detect_phase,
+                output_data={
+                    "version_detected": version,
+                    "target_package_id": package_id,
+                    "term_count": len(_clean_detect_terms(detect_terms)),
+                },
+            )
+        except Exception as exc:
+            await self._end_host_install_phase(
+                detect_phase,
+                status=TraceSpanStatus.FAILED,
+                output_data={"error": str(redact(str(exc)))[:240]},
+            )
+            raise
+        log_lines.extend(
+            [
+                "detect.phase=detect",
+                f"detect.started_at={detect_timing['started_at']}",
+                f"detect.ended_at={detect_timing['ended_at']}",
+                f"detect.duration_ms={detect_timing['duration_ms']}",
+                f"detect.term_count={len(_clean_detect_terms(detect_terms))}",
+            ]
+        )
+        if success and action == "install" and not version:
+            success = False
+            final_exit_code = 1
+            failure_reason = (
+                "official_installer_finished_but_install_not_verified"
+                if _plan_uses_official_website_only(plan)
+                else "package_manager_finished_but_install_not_verified"
+            )
         install_path_summary = (
             "not_installed"
             if success and action == "uninstall"
@@ -1658,6 +1775,81 @@ class HostInstallService:
             "failure_reason": None if success else failure_reason or "host install failed",
             "log": log,
         }
+
+    async def _begin_host_install_phase(
+        self,
+        *,
+        trace_id: str | None,
+        phase: str,
+        plan: HostInstallPlan,
+        index: int | None = None,
+        step: dict[str, Any] | None = None,
+        target_package_id: str | None = None,
+    ) -> dict[str, Any]:
+        started_at = utc_now_iso()
+        step_key = str((step or {}).get("step_key") or (step or {}).get("step_type") or "")
+        target = str(
+            target_package_id
+            or (step or {}).get("target_package_id")
+            or _host_install_target_package_id(plan)
+            or ""
+        )
+        span_id = None
+        if trace_id:
+            span_id = await self._trace.start_span(
+                trace_id,
+                span_type="host_install.phase",
+                name=f"host install {phase}",
+                input_data={
+                    "phase": phase,
+                    "step_index": index,
+                    "step_key": step_key,
+                    "step_type": (step or {}).get("step_type"),
+                    "target_package_id": target,
+                    "host_install_plan_id": plan.host_install_plan_id,
+                },
+                metadata={
+                    "workflow": "host_install",
+                    "host_action": _host_install_plan_action(plan),
+                    "phase": phase,
+                },
+            )
+        return {
+            "phase": phase,
+            "step_index": index,
+            "step_key": step_key,
+            "target_package_id": target,
+            "started_at": started_at,
+            "started_monotonic": time.monotonic(),
+            "span_id": span_id,
+        }
+
+    async def _end_host_install_phase(
+        self,
+        phase_state: dict[str, Any],
+        *,
+        status: TraceSpanStatus = TraceSpanStatus.COMPLETED,
+        output_data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        ended_at = utc_now_iso()
+        duration_ms = max(
+            0,
+            int((time.monotonic() - float(phase_state.get("started_monotonic") or 0.0)) * 1000),
+        )
+        timing = {
+            "phase": phase_state.get("phase"),
+            "started_at": phase_state.get("started_at"),
+            "ended_at": ended_at,
+            "duration_ms": duration_ms,
+        }
+        span_id = phase_state.get("span_id")
+        if span_id:
+            await self._trace.end_span(
+                str(span_id),
+                status=status,
+                output_data={**timing, **(output_data or {})},
+            )
+        return timing
 
 
 def _candidate(backend_type: str, available: bool, reason: str) -> dict[str, Any]:
@@ -2239,6 +2431,27 @@ async def _host_install_plan_for(
                 else 0.0,
             }
         )
+    if (
+        candidate is not None
+        and manifest_candidate is not None
+        and _official_manifest_has_installer(manifest_candidate)
+        and manifest_candidate.confidence >= candidate.confidence
+    ):
+        return finish(
+            _official_manifest_installer_fallback_plan(
+                manifest_candidate,
+                source_type="official_manifest_installer_primary",
+                bootstrap_skipped_reason="official_manifest_installer_preferred",
+                preferred_over_source={
+                    "source_type": candidate.source_type,
+                    "package_id": candidate.package_id,
+                    "match_confidence": candidate.confidence,
+                    "match_reason": candidate.match_reason,
+                },
+            ),
+            resolved_via="official_winget_manifest_installer_primary",
+            final_match_confidence=manifest_candidate.confidence,
+        )
     if candidate is None and manifest_candidate is not None:
         return finish(
             _winget_manifest_package_manager_plan(manifest_candidate),
@@ -2391,7 +2604,10 @@ def _with_resolution_metadata(
     official_verification = source.get("official_source_verification")
     source["official_source_assisted"] = bool(
         official_verification
+        or str(source.get("source_type") or "").startswith("official_manifest")
+        or str(source.get("source_type") or "") == "official_winget_manifest"
         or str(source.get("source_type") or "").startswith("official_website")
+        or "official_winget_manifest" in resolved_via
         or "official_source_assisted" in resolved_via
         or "official_source_assisted" in str(source.get("match_reason") or "")
     )
@@ -2616,11 +2832,15 @@ def _host_action_rollback(package_manager: str, package_id: str, action: str) ->
 def _winget_manifest_package_manager_plan(
     package: HostPackageCandidate,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str]:
-    bootstrap = _winget_bootstrap_plan() if shutil.which("winget") is None else None
-    if bootstrap is None and shutil.which("winget") is None:
-        source, command, impact, status = _official_manifest_installer_fallback_plan(package)
-        source["resolved_via"] = "official_winget_manifest_installer_fallback"
-        return source, command, impact, status
+    winget_available = shutil.which("winget") is not None
+    if not winget_available and _official_manifest_has_installer(package):
+        return _official_manifest_installer_fallback_plan(
+            package,
+            bootstrap_skipped_reason="official_manifest_installer_available",
+        )
+    bootstrap = _winget_bootstrap_plan() if not winget_available else None
+    if bootstrap is None and not winget_available:
+        return _official_manifest_installer_fallback_plan(package)
     install_step = _winget_install_step(package.package_id, action="install")
     steps = [*bootstrap.steps, install_step] if bootstrap is not None else [install_step]
     command = _command_preview_from_steps(steps)
@@ -2677,6 +2897,10 @@ def _winget_manifest_package_manager_plan(
     return source, command, impact, "waiting_approval"
 
 
+def _official_manifest_has_installer(package: HostPackageCandidate) -> bool:
+    return bool(package.installer_url and package.installer_sha256)
+
+
 def _command_preview_from_steps(steps: list[dict[str, Any]]) -> dict[str, Any]:
     first = steps[0] if steps else {}
     return {
@@ -2691,14 +2915,21 @@ def _command_preview_from_steps(steps: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _official_manifest_installer_fallback_plan(
     package: HostPackageCandidate,
+    *,
+    source_type: str = "official_manifest_installer_fallback",
+    bootstrap_skipped_reason: str = "no_supported_package_manager_bootstrap",
+    preferred_over_source: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str]:
     step = _official_manifest_installer_step(package)
     source = {
         **_official_manifest_source(package),
-        "source_type": "official_manifest_installer_fallback",
+        "source_type": source_type,
     }
+    if preferred_over_source is not None:
+        source["preferred_over_source"] = dict(preferred_over_source)
     command = _command_preview_from_steps([step])
     impact = {
+        "host_action": "install",
         "modifies_global_environment": True,
         "may_require_admin": True,
         "writes_system_locations": True,
@@ -2713,13 +2944,15 @@ def _official_manifest_installer_fallback_plan(
         "package_resolution": {
             "source_type": "official_winget_manifest",
             "target_package_id": package.package_id,
-            "match_confidence": 0.99,
+            "match_confidence": package.confidence,
             "match_reason": package.match_reason,
         },
         "bootstrap_required": False,
-        "bootstrap_skipped_reason": "no_supported_package_manager_bootstrap",
+        "bootstrap_skipped_reason": bootstrap_skipped_reason,
         "checksum_verification": "sha256",
     }
+    if preferred_over_source is not None:
+        impact["preferred_over_package_resolution"] = dict(preferred_over_source)
     return source, command, impact, "waiting_approval"
 
 
@@ -3144,8 +3377,8 @@ def _winget_bootstrap_script() -> str:
         "+ $_.Exception.Message) }; "
         "if (-not $installed) { "
         f"  try {{ Invoke-WebRequest -Uri '{_WINGET_BOOTSTRAP_URL}' "
-        "-OutFile $bundle -UseBasicParsing }} "
-        "  catch { "
+        "-OutFile $bundle -UseBasicParsing } "
+        "catch { "
         "    Write-Host ('aka.ms bootstrap download failed: ' + $_.Exception.Message); "
         f"    Invoke-WebRequest -Uri '{_WINGET_GITHUB_RELEASE_URL}' "
         "-OutFile $bundle -UseBasicParsing; "
@@ -3546,16 +3779,25 @@ def _normalize_software_query(software: str) -> str:
 
 def _candidate_queries_for_manifest_lookup(software: str) -> list[str]:
     normalized = _normalize_software_query(software)
-    queries = [normalized]
+    visible = _host_install_visible_software_name(software)
+    queries = [visible, normalized]
+    if "." in visible and re.search(r"[a-zA-Z]", visible):
+        queries.insert(0, visible)
     if "." in normalized and re.search(r"[a-zA-Z]", normalized):
         queries.insert(0, normalized)
+    visible_ascii_tokens = [
+        token
+        for token in re.split(r"[^a-zA-Z0-9.]+", visible)
+        if token and len(token) >= 2
+    ]
     ascii_tokens = [
         token
         for token in re.split(r"[^a-zA-Z0-9.]+", normalized)
         if token and len(token) >= 2
     ]
+    queries.extend(visible_ascii_tokens)
     queries.extend(ascii_tokens)
-    return [query for query in queries if query]
+    return [query for query in dict.fromkeys(queries) if query]
 
 
 def _winget_manifest_candidate_for_query(query: str) -> HostPackageCandidate | None:
@@ -4278,7 +4520,8 @@ def _host_package_model_messages(query: str) -> list[dict[str, str]]:
             "role": "system",
             "content": (
                 "You resolve user-facing software names to Windows package manager search "
-                "and installed application lookup candidates. Return strict JSON only. "
+                "and installed application lookup candidates. Return strict minified JSON only, "
+                "with no markdown and no explanation. Return at most 3 candidates. "
                 "You may include official vendor HTTPS home/download pages and vendor domains "
                 "as candidates only; never include shell commands, executable paths, flags, "
                 "or installer arguments. "
@@ -4292,7 +4535,8 @@ def _host_package_model_messages(query: str) -> list[dict[str, str]]:
                 "\"package_id\":\"optional string\",\"source_type\":\"winget|choco|any\","
                 "\"confidence\":0.0,\"reason\":\"short\"}]}. Prefer official winget IDs "
                 "when confident, common installed display names for Windows uninstall lookup, "
-                "official vendor pages for install fallback, and short aliases otherwise."
+                "official vendor pages for install fallback, and short aliases otherwise. "
+                "If unsure, return {\"candidates\":[]}."
             ),
         },
         {
@@ -4587,6 +4831,27 @@ def _host_fallback_steps(command_preview: dict[str, Any]) -> list[dict[str, Any]
     return []
 
 
+def _host_install_step_log_lines(
+    prefix: str,
+    index: int,
+    step: dict[str, Any],
+    result: dict[str, Any],
+    exit_code: int,
+) -> list[str]:
+    return [
+        f"{prefix}[{index}].phase={result.get('phase') or ''}",
+        f"{prefix}[{index}].started_at={result.get('started_at') or ''}",
+        f"{prefix}[{index}].ended_at={result.get('ended_at') or ''}",
+        f"{prefix}[{index}].duration_ms={result.get('duration_ms')}",
+        f"{prefix}[{index}].key={step.get('step_key') or step.get('step_type') or index}",
+        f"{prefix}[{index}].command={redact(result.get('command') or [])}",
+        f"{prefix}[{index}].exit_code={exit_code}",
+        f"{prefix}[{index}].stdout_tail={result.get('stdout_tail') or ''}",
+        f"{prefix}[{index}].stderr_tail={result.get('stderr_tail') or ''}",
+        f"{prefix}[{index}].uninstall_verified={result.get('uninstall_verified')}",
+    ]
+
+
 async def _execute_host_install_step(step: dict[str, Any]) -> dict[str, Any]:
     if step.get("step_type") == "windows_uninstall_absent":
         target = str(step.get("target_display_name") or step.get("target_package_id") or "")
@@ -4707,20 +4972,54 @@ def _resolve_windows_uninstall_candidate(software: str) -> WindowsUninstallCandi
 
 
 async def _detect_installed_version(package_id: str) -> str | None:
-    for display_name in _display_name_terms_for_package(package_id):
-        version = await asyncio.to_thread(_windows_uninstall_version, display_name)
+    return await _detect_installed_version_for_terms(
+        _display_name_terms_for_package(package_id),
+        package_id=package_id,
+    )
+
+
+async def _detect_installed_version_for_terms(
+    terms: list[str],
+    *,
+    package_id: str | None = None,
+) -> str | None:
+    clean_terms = _clean_detect_terms([package_id or "", *terms])
+    version = await asyncio.to_thread(_windows_uninstall_version_for_terms, clean_terms)
+    if version:
+        return version
+    package_id = str(package_id or (clean_terms[0] if clean_terms else "")).strip()
+    for term in clean_terms:
+        version = await _detect_direct_executable_version(term)
         if version:
             return version
-    executable = _safe_direct_executable_name(package_id)
+    version = await _detect_package_manager_installed_version(package_id)
+    if version:
+        return version
+    return None
+
+
+async def _detect_installed_version_without_registry(package_id: str) -> str | None:
+    version = await _detect_direct_executable_version(package_id)
+    if version:
+        return version
+    return await _detect_package_manager_installed_version(package_id)
+
+
+async def _detect_direct_executable_version(term: str) -> str | None:
+    executable = _safe_direct_executable_name(term)
     if executable and shutil.which(executable):
-        completed = await _run_command([executable, "--version"], cwd=Path.cwd(), timeout=30)
+        completed = await _run_command([executable, "--version"], cwd=Path.cwd(), timeout=15)
         if completed["exit_code"] == 0:
             return _tail(str(completed["stdout"]).strip(), count=1) or None
+    return None
+
+
+async def _detect_package_manager_installed_version(package_id: str) -> str | None:
     if package_id and shutil.which("choco"):
         completed = await _run_command(
             ["choco", "list", package_id, "--exact", "--limit-output"],
             cwd=Path.cwd(),
-            timeout=60,
+            timeout=30,
         )
         text = str(completed["stdout"]).strip()
         return text or None
@@ -4728,13 +5027,24 @@ async def _detect_installed_version(package_id: str) -> str | None:
         completed = await _run_command(
             ["winget", "list", "--id", package_id, "--source", "winget"],
             cwd=Path.cwd(),
-            timeout=60,
+            timeout=30,
         )
         if int(completed.get("exit_code") or 0) == 0 and package_id.lower() in str(
             completed.get("stdout") or ""
         ).lower():
             return _tail(str(completed.get("stdout") or ""), count=3) or "installed_by_winget"
     return None
+
+
+def _clean_detect_terms(terms: list[str]) -> list[str]:
+    candidates: list[str] = []
+    for term in terms:
+        raw = str(term or "").strip()
+        if not raw:
+            continue
+        candidates.extend(_display_name_terms_for_package(raw))
+        candidates.append(_host_install_visible_software_name(raw))
+    return list(dict.fromkeys(term for term in candidates if term))
 
 
 async def _wait_for_windows_uninstall(display_name: str, *, timeout: float = 120.0) -> str | None:
@@ -4764,6 +5074,15 @@ def _windows_uninstall_version(display_name: str) -> str | None:
     row = _windows_uninstall_entry(display_name)
     version = str(row.get("DisplayVersion") or "").strip() if row else ""
     return str(redact(version)) if version else None
+
+
+def _windows_uninstall_version_for_terms(display_names: list[str]) -> str | None:
+    rows = _windows_uninstall_entries_for_terms(display_names)
+    for row in rows:
+        version = str(row.get("DisplayVersion") or "").strip()
+        if version:
+            return str(redact(version))
+    return None
 
 
 def _windows_uninstall_entry(display_name: str) -> dict[str, str] | None:
@@ -4799,7 +5118,14 @@ def _windows_uninstall_match_confidence(query: str, display_name: str) -> float:
 
 
 def _windows_uninstall_entries(display_name: str) -> list[dict[str, str]]:
+    return _windows_uninstall_entries_for_terms([display_name])
+
+
+def _windows_uninstall_entries_for_terms(display_names: list[str]) -> list[dict[str, str]]:
     if not _windows_uninstall_lookup_supported():
+        return []
+    terms = list(dict.fromkeys(str(item).strip() for item in display_names if str(item).strip()))
+    if not terms:
         return []
     roots = (
         r"HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
@@ -4807,7 +5133,8 @@ def _windows_uninstall_entries(display_name: str) -> list[dict[str, str]]:
         r"HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
     )
     powershell = _powershell_executable() or "powershell"
-    escaped = display_name.replace("'", "''")
+    terms_json = json.dumps(terms, ensure_ascii=False)
+    escaped_terms_json = terms_json.replace("'", "''")
     command = [
         powershell,
         "-NoProfile",
@@ -4815,13 +5142,18 @@ def _windows_uninstall_entries(display_name: str) -> list[dict[str, str]]:
         "Bypass",
         "-Command",
         (
+            f"$terms = '{escaped_terms_json}' | ConvertFrom-Json; "
             "$items=@(); "
             + " ".join(
                 f"$items += Get-ItemProperty '{root}' -ErrorAction SilentlyContinue;"
                 for root in roots
             )
-            + f" $match=$items | Where-Object {{ $_.DisplayName -eq '{escaped}' "
-            f"-or $_.DisplayName -like '*{escaped}*' }}; "
+            + " $match=$items | Where-Object { "
+            "$name=[string]$_.DisplayName; "
+            "$name -and ($terms | Where-Object { "
+            "$term=[string]$_; $name -eq $term -or $name -like ('*' + $term + '*') "
+            "}) "
+            "}; "
             "if ($match) { $match | Select-Object DisplayName,DisplayVersion,"
             "Publisher,InstallLocation,DisplayIcon,UninstallString,QuietUninstallString,"
             "@{Name='RegistryKey';Expression={$_.PSChildName}} | ConvertTo-Json -Compress }"

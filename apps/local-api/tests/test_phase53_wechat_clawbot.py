@@ -90,7 +90,7 @@ def test_phase53_wechat_send_text_records_attempt_and_never_fakes_sent(
     failed_attempts = client.get(
         f"/api/notification/messages/{failed_payload['notification_id']}/attempts"
     ).json()["items"]
-    assert failed_attempts[0]["status"] == "failed"
+    assert failed_attempts[0]["status"] == "retryable_failure"
     assert failed_attempts[0]["error_code"] == "provider_send_failed"
     assert "send-secret" not in json.dumps(failed_attempts, ensure_ascii=False)
 
@@ -147,7 +147,13 @@ def test_phase53_wechat_health_reports_disabled_and_enabled_sdk(client: TestClie
     assert enabled.status_code == 200, enabled.text
     assert enabled.json()["enabled"] is True
     assert enabled.json()["reachable"] is True
-    assert enabled.json()["login_state"] == "sdk_available"
+    assert enabled.json()["login_state"] in {"sdk_available", "logged_in"}
+
+    _bind_real_wechat(client)
+    connected = client.get("/api/channels/providers/wechat/health")
+    assert connected.status_code == 200, connected.text
+    assert connected.json()["login_state"] == "logged_in"
+    assert connected.json()["details"]["connection_state"] == "connected"
 
 
 class FakeWechatClient:

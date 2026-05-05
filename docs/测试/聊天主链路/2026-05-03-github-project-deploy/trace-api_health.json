@@ -1,0 +1,32 @@
+{
+  "conversation_id": null,
+  "ended_at": "2026-05-03T09:38:59.236895Z",
+  "root_span_id": "spn_999e490dc41f4125a8d082dfd9331761",
+  "spans": [
+    {
+      "ended_at": "2026-05-03T09:38:59.236895Z",
+      "error_code": null,
+      "input": null,
+      "latency_ms": 15,
+      "metadata": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "name": "GET /health",
+      "output": {
+        "status_code": 200
+      },
+      "parent_span_id": null,
+      "span_id": "spn_999e490dc41f4125a8d082dfd9331761",
+      "span_type": "api.request",
+      "started_at": "2026-05-03T09:38:59.221162Z",
+      "status": "completed",
+      "trace_id": "trc_d5caba2473f44b22b499fd032dff787a"
+    }
+  ],
+  "started_at": "2026-05-03T09:38:59.221162Z",
+  "status": "completed",
+  "task_id": null,
+  "trace_id": "trc_d5caba2473f44b22b499fd032dff787a",
+  "turn_id": null
+}

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from core_types import ApiModel, EntityId
 from pydantic import Field
@@ -19,7 +19,9 @@ class SafetySettings(ApiModel):
     require_confirmation: list[str] = Field(default_factory=list)
     deny_paths: list[str] = Field(default_factory=list)
     terminal_policy_profile: str = "task_artifact_sandbox"
-    approval_policy: dict[str, str | bool | int | float] = Field(default_factory=dict)
+    approval_profile: str = "strict"
+    chat_visible_redaction: str = "strict"
+    approval_policy: dict[str, Any] = Field(default_factory=dict)
 
 
 class VectorSettings(ApiModel):

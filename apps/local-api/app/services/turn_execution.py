@@ -11,9 +11,14 @@ class TurnExecutionManager:
         self._runner = runner
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
-    def schedule(self, turn_id: str) -> None:
+    def schedule(self, turn_id: str, *, delay_seconds: float = 0.0) -> None:
         task = self._tasks.get(turn_id)
         if task is not None and not task.done():
+            return
+        if delay_seconds > 0:
+            self._tasks[turn_id] = asyncio.create_task(
+                self._run_after(turn_id, delay_seconds)
+            )
             return
         self._tasks[turn_id] = asyncio.create_task(self._run(turn_id))
 
@@ -23,6 +28,13 @@ class TurnExecutionManager:
 
     async def _run(self, turn_id: str) -> None:
         try:
+            await self._runner(turn_id)
+        finally:
+            self._tasks.pop(turn_id, None)
+
+    async def _run_after(self, turn_id: str, delay_seconds: float) -> None:
+        try:
+            await asyncio.sleep(delay_seconds)
             await self._runner(turn_id)
         finally:
             self._tasks.pop(turn_id, None)

@@ -1,0 +1,7 @@
+{
+  "body_preview": "<!DOCTYPE html>\r\n<html lang=\"en\">\r\n  <head>\r\n    <meta charset=\"utf-8\">\r\n    <title>My test page</title>\r\n    <link href=\"http://fonts.googleapis.com/css?family=Open+Sans\" rel=\"stylesheet\" type=\"text/css\">\r\n    <link href=\"styles/style.css\" rel=\"stylesheet\" type=\"text/css\">\r\n  </head>\r\n  <body>\r\n    <h1>Mozilla is cool</h1>\r\n    <img src=\"images/firefox-icon.png\" alt=\"The Firefox logo: a flaming fox surrounding the Earth.\">\r\n\r\n    <p>At Mozilla, we’re a global community of</p>\r\n\r\n    <ul> <!-- c",
+  "client_wall_ms": 2.89,
+  "content_type": "text/html",
+  "ok": true,
+  "status_code": 200
+}

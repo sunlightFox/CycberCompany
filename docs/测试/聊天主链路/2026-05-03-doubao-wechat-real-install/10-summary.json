@@ -1,0 +1,1214 @@
+{
+  "approval": {
+    "approval_id": "apr_aa24273144bc406db141a29a047347fc",
+    "approval_type": "action",
+    "created_at": "2026-05-02T18:49:42.397989Z",
+    "decision_reason": "natural_language_once",
+    "edited_payload": null,
+    "expires_at": "2026-05-02T20:49:42.397989Z",
+    "options": [
+      "approve",
+      "deny",
+      "edit"
+    ],
+    "organization_id": "org_default",
+    "payload_redacted": {
+      "approval_binding_hash": "sha256:4cdfbc807ed0f7791a57d7d9811b25d451898cdfa21083922a3e46b64319dac8",
+      "command_preview": {
+        "action": "install",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_doubao.exe'; try { Invoke-WebRequest -Uri 'https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }"
+        ],
+        "cwd": "host_default",
+        "env_policy": "minimal",
+        "executable": "pwsh",
+        "steps": [
+          {
+            "action": "install",
+            "args": [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-Command",
+              "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_doubao.exe'; try { Invoke-WebRequest -Uri 'https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }"
+            ],
+            "cwd": "host_default",
+            "env_policy": "minimal",
+            "executable": "pwsh",
+            "fallback_for": "package_manager_install_failed",
+            "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Doubao/2.8.7/ByteDance.Doubao.installer.yaml",
+            "official_source": "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe",
+            "package_manager": "winget_manifest",
+            "sha256": "8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891",
+            "step_key": "official_manifest_install_bytedance_doubao",
+            "step_type": "official_manifest_installer",
+            "target_package_id": "ByteDance.Doubao",
+            "timeout_seconds": 1800
+          }
+        ]
+      },
+      "host_action": "install",
+      "host_install_plan_id": "hip_d80f4351cce24aaabe3ffe8580b3128d",
+      "impact_summary": {
+        "bootstrap_required": false,
+        "bootstrap_skipped_reason": "official_manifest_installer_available",
+        "checksum_verification": "sha256",
+        "host_action": "install",
+        "may_require_admin": true,
+        "modifies_global_environment": true,
+        "modifies_path_or_registry": true,
+        "package_resolution": {
+          "candidate_attempts": [
+            {
+              "match_confidence": 0.0,
+              "query": "豆包",
+              "source_type": "package_manager_search",
+              "status": "no_match"
+            },
+            {
+              "candidate_count": 0,
+              "query": "豆包",
+              "source_type": "model_candidate_expansion",
+              "status": "no_match"
+            },
+            {
+              "match_confidence": 0.0,
+              "query": "豆包",
+              "source_type": "package_manager_search_model_candidates",
+              "status": "no_match"
+            },
+            {
+              "match_confidence": 0.92,
+              "query": "豆包",
+              "source_type": "official_winget_manifest",
+              "status": "matched"
+            }
+          ],
+          "final_match_confidence": 0.92,
+          "match_confidence": 0.92,
+          "match_reason": "official_source_assisted_official_winget_manifest_dynamic",
+          "model_assisted": false,
+          "model_candidate_count": 0,
+          "official_source_assisted": true,
+          "resolved_via": "official_winget_manifest",
+          "source_type": "official_winget_manifest",
+          "target_package_id": "ByteDance.Doubao"
+        },
+        "preserve_preexisting_install": true,
+        "real_execution_default": false,
+        "risk_level": "R6",
+        "rollback": "winget uninstall --id ByteDance.Doubao 或通过系统应用卸载 ByteDance.Doubao",
+        "writes_system_locations": true
+      },
+      "install_source": {
+        "candidate_attempts": [
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "package_manager_search",
+            "status": "no_match"
+          },
+          {
+            "candidate_count": 0,
+            "query": "豆包",
+            "source_type": "model_candidate_expansion",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "package_manager_search_model_candidates",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.92,
+            "query": "豆包",
+            "source_type": "official_winget_manifest",
+            "status": "matched"
+          }
+        ],
+        "final_match_confidence": 0.92,
+        "installer_sha256": "8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891",
+        "installer_url": "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe",
+        "match_confidence": 0.92,
+        "match_reason": "official_source_assisted_official_winget_manifest_dynamic",
+        "model_assisted": false,
+        "model_candidate_count": 0,
+        "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+        "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Doubao/2.8.7/ByteDance.Doubao.installer.yaml",
+        "official_source_assisted": true,
+        "package_id": "ByteDance.Doubao",
+        "package_manager": "winget_manifest",
+        "publisher": "ByteDance",
+        "resolved_via": "official_winget_manifest",
+        "source_type": "official_manifest_installer_fallback",
+        "target_source_type": "official_installer_from_winget_manifest",
+        "trust": "official_manifest_with_sha256",
+        "version": "2.8.7"
+      },
+      "requested_software": "豆包"
+    },
+    "requested_action": "host.install_software",
+    "resolved_at": "2026-05-02T18:49:42.923270Z",
+    "risk_level": "R6",
+    "status": "approved",
+    "step_id": null,
+    "summary": "需要确认安装本机软件 豆包",
+    "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+    "tool_call_id": null,
+    "trace_id": "trc_2d43ab50205c4b099907edd330aaa97a",
+    "updated_at": "2026-05-02T18:49:42.923270Z"
+  },
+  "binding": {
+    "account": {
+      "account_ref_redacted": "sha256:15026ac87e116ffd4f66ef0c864afe07ba0558c4ce3fb591f2d4fcd636492ae8",
+      "asset_id": "ast_d7f405abae79477e89c1fd72b54c5902",
+      "bind_session_id": "chbind_3255ac6c81c8480da4d6692e2931a853",
+      "capabilities": [
+        "message_channel",
+        "notification.inbound",
+        "notification.outbound",
+        "approval.reply"
+      ],
+      "channel_account_id": "chacc_5d1ed095429c40459425a109e8fe3eed",
+      "channel_id": "nch_f16059ac1eb1456ba0ab6784805d8ca7",
+      "created_at": "2026-05-02T18:49:36.541801Z",
+      "display_name": "Doubao Real Test WeChat",
+      "last_seen_at": "2026-05-02T18:49:36.541801Z",
+      "last_verified_at": "2026-05-02T18:49:36.541801Z",
+      "organization_id": "org_default",
+      "policy": {
+        "allow_inbound": true,
+        "allow_outbound": true,
+        "default_peer_policy": "deny_until_paired",
+        "private_chat_only": true
+      },
+      "provider": "wechat",
+      "provider_state_ref": "sec_fa8f610ec9da452dade7d118412563f9",
+      "status": "active",
+      "updated_at": "2026-05-02T18:49:36.541801Z"
+    },
+    "asset": {
+      "archived_at": null,
+      "asset_id": "ast_d7f405abae79477e89c1fd72b54c5902",
+      "asset_type": "account",
+      "capabilities": [
+        "message_channel",
+        "notification.inbound",
+        "notification.outbound",
+        "approval.reply"
+      ],
+      "config": {
+        "auth_type": "channel_provider_state",
+        "channel_kind": "direct_message",
+        "platform": "wechat",
+        "provider": "wechat",
+        "username": "Doubao Real Test WeChat"
+      },
+      "created_at": "2026-05-02T18:49:36.553668Z",
+      "display_name": "微信：Doubao Real Test WeChat",
+      "expires_at": null,
+      "has_secret": false,
+      "last_verified_at": null,
+      "metadata": {
+        "asset_subtype": "communication_channel",
+        "bind_session_id": "chbind_3255ac6c81c8480da4d6692e2931a853",
+        "provider_state_ref": "sec_fa8f610ec9da452dade7d118412563f9"
+      },
+      "organization_id": "org_default",
+      "owner_scope_id": "mem_xiaoyao",
+      "owner_scope_type": "member",
+      "policy": {
+        "allow_inbound": true,
+        "allow_outbound": true,
+        "channel_binding": true,
+        "default_peer_policy": "deny_until_paired",
+        "private_chat_only": true
+      },
+      "provider": "wechat",
+      "risk_level": "R3",
+      "secret_ref": null,
+      "sensitivity": "high",
+      "status": "active",
+      "summary_text": "Doubao Real Test WeChat 微信通讯渠道",
+      "updated_at": "2026-05-02T18:49:36.553668Z",
+      "visibility": "private"
+    },
+    "bind_session": {
+      "bind_session_id": "chbind_3255ac6c81c8480da4d6692e2931a853",
+      "bound_asset_id": "ast_d7f405abae79477e89c1fd72b54c5902",
+      "bound_channel_id": "nch_f16059ac1eb1456ba0ab6784805d8ca7",
+      "confirmed_at": null,
+      "created_at": "2026-05-02T18:49:36.510762Z",
+      "display_name_hint": "Doubao Real Test WeChat",
+      "expires_at": "2030-01-01T00:00:00Z",
+      "failure_reason": null,
+      "organization_id": "org_default",
+      "policy_snapshot": {
+        "allow_inbound": true,
+        "allow_outbound": true,
+        "default_peer_policy": "deny_until_paired",
+        "private_chat_only": true
+      },
+      "provider": "wechat",
+      "provider_account_ref_redacted": "sha256:15026ac87e116ffd4f66ef0c864afe07ba0558c4ce3fb591f2d4fcd636492ae8",
+      "provider_state_ref": "sec_fa8f610ec9da452dade7d118412563f9",
+      "provider_status": {
+        "finalized": true
+      },
+      "qr_artifact_id": null,
+      "qr_format": "text",
+      "qr_payload_ref": "sha256:50ac3e53a43276b4acde1eef1f14a0bfde28de68d20f91e17ec5a1083c8d838c",
+      "requested_by_member_id": "mem_xiaoyao",
+      "risk_level": "R3",
+      "status": "bound",
+      "trace_id": "trc_9c8d0781b171435aa30dbd2a0e89d6b1",
+      "updated_at": "2026-05-02T18:49:36.541801Z"
+    },
+    "channel": {
+      "asset_id": "ast_d7f405abae79477e89c1fd72b54c5902",
+      "channel_id": "nch_f16059ac1eb1456ba0ab6784805d8ca7",
+      "channel_type": "direct_message",
+      "created_at": "2026-05-02T18:49:36.597471Z",
+      "created_by_member_id": "mem_xiaoyao",
+      "display_name": "微信：Doubao Real Test WeChat",
+      "last_error": null,
+      "last_health_status": "unknown",
+      "organization_id": "org_default",
+      "policy": {
+        "allow_inbound": true,
+        "allow_outbound": true,
+        "default_peer_policy": "deny_until_paired",
+        "external_provider_default": "disabled",
+        "max_message_length": 2000,
+        "private_chat_only": true,
+        "requires_approval_for_external": true
+      },
+      "provider": "wechat",
+      "provider_config": {
+        "channel_account_ref": "sha256:15026ac87e116ffd4f66ef0c864afe07ba0558c4ce3fb591f2d4fcd636492ae8",
+        "provider_state_ref": "sec_fa8f610ec9da452dade7d118412563f9"
+      },
+      "sensitivity": "high",
+      "status": "active",
+      "trace_id": "trc_32a795934e524872ba5f163e8aee2f30",
+      "updated_at": "2026-05-02T18:49:36.597471Z"
+    }
+  },
+  "confirm_poll": {
+    "chat_turns_created": 1,
+    "created_pairing_requests": 0,
+    "deliveries_sent": 0,
+    "details": {},
+    "duplicate_events": 0,
+    "failures": 0,
+    "media_attachments": 0,
+    "processed_accounts": 1,
+    "processed_events": 1,
+    "rejected_events": 0,
+    "status": "healthy"
+  },
+  "data_dir": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\data\\doubao-wechat-real-install-20260503-0002",
+  "final_plan": {
+    "approval_id": "apr_aa24273144bc406db141a29a047347fc",
+    "command_preview": {
+      "action": "install",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_doubao.exe'; try { Invoke-WebRequest -Uri 'https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }"
+      ],
+      "cwd": "host_default",
+      "env_policy": "minimal",
+      "executable": "pwsh",
+      "steps": [
+        {
+          "action": "install",
+          "args": [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_doubao.exe'; try { Invoke-WebRequest -Uri 'https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }"
+          ],
+          "cwd": "host_default",
+          "env_policy": "minimal",
+          "executable": "pwsh",
+          "fallback_for": "package_manager_install_failed",
+          "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Doubao/2.8.7/ByteDance.Doubao.installer.yaml",
+          "official_source": "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe",
+          "package_manager": "winget_manifest",
+          "sha256": "8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891",
+          "step_key": "official_manifest_install_bytedance_doubao",
+          "step_type": "official_manifest_installer",
+          "target_package_id": "ByteDance.Doubao",
+          "timeout_seconds": 1800
+        }
+      ]
+    },
+    "created_at": "2026-05-02T18:49:42.394886Z",
+    "host_install_plan_id": "hip_d80f4351cce24aaabe3ffe8580b3128d",
+    "impact_summary": {
+      "bootstrap_required": false,
+      "bootstrap_skipped_reason": "official_manifest_installer_available",
+      "checksum_verification": "sha256",
+      "host_action": "install",
+      "may_require_admin": true,
+      "modifies_global_environment": true,
+      "modifies_path_or_registry": true,
+      "package_resolution": {
+        "candidate_attempts": [
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "package_manager_search",
+            "status": "no_match"
+          },
+          {
+            "candidate_count": 0,
+            "query": "豆包",
+            "source_type": "model_candidate_expansion",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "package_manager_search_model_candidates",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.92,
+            "query": "豆包",
+            "source_type": "official_winget_manifest",
+            "status": "matched"
+          }
+        ],
+        "final_match_confidence": 0.92,
+        "match_confidence": 0.92,
+        "match_reason": "official_source_assisted_official_winget_manifest_dynamic",
+        "model_assisted": false,
+        "model_candidate_count": 0,
+        "official_source_assisted": true,
+        "resolved_via": "official_winget_manifest",
+        "source_type": "official_winget_manifest",
+        "target_package_id": "ByteDance.Doubao"
+      },
+      "preserve_preexisting_install": true,
+      "real_execution_default": false,
+      "risk_level": "R6",
+      "rollback": "winget uninstall --id ByteDance.Doubao 或通过系统应用卸载 ByteDance.Doubao",
+      "writes_system_locations": true
+    },
+    "install_source": {
+      "candidate_attempts": [
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "package_manager_search",
+          "status": "no_match"
+        },
+        {
+          "candidate_count": 0,
+          "query": "豆包",
+          "source_type": "model_candidate_expansion",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "package_manager_search_model_candidates",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.92,
+          "query": "豆包",
+          "source_type": "official_winget_manifest",
+          "status": "matched"
+        }
+      ],
+      "final_match_confidence": 0.92,
+      "installer_sha256": "8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891",
+      "installer_url": "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe",
+      "match_confidence": 0.92,
+      "match_reason": "official_source_assisted_official_winget_manifest_dynamic",
+      "model_assisted": false,
+      "model_candidate_count": 0,
+      "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+      "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Doubao/2.8.7/ByteDance.Doubao.installer.yaml",
+      "official_source_assisted": true,
+      "package_id": "ByteDance.Doubao",
+      "package_manager": "winget_manifest",
+      "publisher": "ByteDance",
+      "resolved_via": "official_winget_manifest",
+      "source_type": "official_manifest_installer_fallback",
+      "target_source_type": "official_installer_from_winget_manifest",
+      "trust": "official_manifest_with_sha256",
+      "version": "2.8.7"
+    },
+    "organization_id": "org_default",
+    "requested_software": "豆包",
+    "risk_level": "R6",
+    "status": "installed",
+    "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+    "trace_id": "trc_2d43ab50205c4b099907edd330aaa97a",
+    "updated_at": "2026-05-02T18:51:13.870545Z"
+  },
+  "first_turn": {
+    "assistant_message_id": "msg_d23cf357002a456f817518eab0f6b91e",
+    "brain_decision_id": "bd_3e796d3f9ae143aa9f74710dda1ef474",
+    "cancel_requested": false,
+    "conversation_id": "conv_a65a519f36f2417ea05ecb86c34e44e0",
+    "created_at": "2026-05-02T18:49:36.754637+00:00",
+    "ended_at": "2026-05-02T18:49:42.534896+00:00",
+    "error_code": null,
+    "error_message": null,
+    "experience": {
+      "chat_route_decision": {
+        "confidence": 0.9,
+        "metadata": {},
+        "office_request": null,
+        "reason_code": "explicit_host_software_install",
+        "requires_confirmation": true,
+        "route_type": "host_software_install",
+        "safe_user_summary": "帮我安装豆包",
+        "task_goal": "帮我安装豆包"
+      },
+      "chat_style": "simple_qa",
+      "complexity_score": 0.02,
+      "context_selection_reason": [
+        "current_input",
+        "recent_messages",
+        "capability_boundary_summary"
+      ],
+      "conversation_depth": 1,
+      "needs_long_output": false,
+      "needs_strong_reasoning": false,
+      "needs_tool_or_task": false,
+      "recoverable": true,
+      "route_profile": "simple_qa"
+    },
+    "intent": "host_software_install_request",
+    "member_id": "mem_xiaoyao",
+    "mode": "workflow",
+    "privacy_level": "medium",
+    "retry_of_turn_id": null,
+    "route": {
+      "brain_id": null,
+      "fallback_used": false
+    },
+    "status": "completed",
+    "trace_id": "trc_2d43ab50205c4b099907edd330aaa97a",
+    "turn_id": "turn_4dfcf6453c314d06bbf7d01ff0388109",
+    "updated_at": "2026-05-02T18:49:42.534896+00:00",
+    "usage": {},
+    "user_message_id": "msg_546853a380de49549eefb53d015bc465"
+  },
+  "health": {
+    "db": "ok",
+    "default_shell": "company",
+    "status": "ok",
+    "trace_id": "trc_e97644bab7b841c1a5bad18affc5e583",
+    "version": "0.1.0"
+  },
+  "host_install_plan": {
+    "approval_id": "apr_aa24273144bc406db141a29a047347fc",
+    "command_preview": {
+      "action": "install",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_doubao.exe'; try { Invoke-WebRequest -Uri 'https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }"
+      ],
+      "cwd": "host_default",
+      "env_policy": "minimal",
+      "executable": "pwsh",
+      "steps": [
+        {
+          "action": "install",
+          "args": [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_doubao.exe'; try { Invoke-WebRequest -Uri 'https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }"
+          ],
+          "cwd": "host_default",
+          "env_policy": "minimal",
+          "executable": "pwsh",
+          "fallback_for": "package_manager_install_failed",
+          "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Doubao/2.8.7/ByteDance.Doubao.installer.yaml",
+          "official_source": "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe",
+          "package_manager": "winget_manifest",
+          "sha256": "8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891",
+          "step_key": "official_manifest_install_bytedance_doubao",
+          "step_type": "official_manifest_installer",
+          "target_package_id": "ByteDance.Doubao",
+          "timeout_seconds": 1800
+        }
+      ]
+    },
+    "created_at": "2026-05-02T18:49:42.394886Z",
+    "host_install_plan_id": "hip_d80f4351cce24aaabe3ffe8580b3128d",
+    "impact_summary": {
+      "bootstrap_required": false,
+      "bootstrap_skipped_reason": "official_manifest_installer_available",
+      "checksum_verification": "sha256",
+      "host_action": "install",
+      "may_require_admin": true,
+      "modifies_global_environment": true,
+      "modifies_path_or_registry": true,
+      "package_resolution": {
+        "candidate_attempts": [
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "package_manager_search",
+            "status": "no_match"
+          },
+          {
+            "candidate_count": 0,
+            "query": "豆包",
+            "source_type": "model_candidate_expansion",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "豆包",
+            "source_type": "package_manager_search_model_candidates",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.92,
+            "query": "豆包",
+            "source_type": "official_winget_manifest",
+            "status": "matched"
+          }
+        ],
+        "final_match_confidence": 0.92,
+        "match_confidence": 0.92,
+        "match_reason": "official_source_assisted_official_winget_manifest_dynamic",
+        "model_assisted": false,
+        "model_candidate_count": 0,
+        "official_source_assisted": true,
+        "resolved_via": "official_winget_manifest",
+        "source_type": "official_winget_manifest",
+        "target_package_id": "ByteDance.Doubao"
+      },
+      "preserve_preexisting_install": true,
+      "real_execution_default": false,
+      "risk_level": "R6",
+      "rollback": "winget uninstall --id ByteDance.Doubao 或通过系统应用卸载 ByteDance.Doubao",
+      "writes_system_locations": true
+    },
+    "install_source": {
+      "candidate_attempts": [
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "package_manager_search",
+          "status": "no_match"
+        },
+        {
+          "candidate_count": 0,
+          "query": "豆包",
+          "source_type": "model_candidate_expansion",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "豆包",
+          "source_type": "package_manager_search_model_candidates",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.92,
+          "query": "豆包",
+          "source_type": "official_winget_manifest",
+          "status": "matched"
+        }
+      ],
+      "final_match_confidence": 0.92,
+      "installer_sha256": "8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891",
+      "installer_url": "https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe",
+      "match_confidence": 0.92,
+      "match_reason": "official_source_assisted_official_winget_manifest_dynamic",
+      "model_assisted": false,
+      "model_candidate_count": 0,
+      "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+      "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Doubao/2.8.7/ByteDance.Doubao.installer.yaml",
+      "official_source_assisted": true,
+      "package_id": "ByteDance.Doubao",
+      "package_manager": "winget_manifest",
+      "publisher": "ByteDance",
+      "resolved_via": "official_winget_manifest",
+      "source_type": "official_manifest_installer_fallback",
+      "target_source_type": "official_installer_from_winget_manifest",
+      "trust": "official_manifest_with_sha256",
+      "version": "2.8.7"
+    },
+    "organization_id": "org_default",
+    "requested_software": "豆包",
+    "risk_level": "R6",
+    "status": "waiting_approval",
+    "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+    "trace_id": "trc_2d43ab50205c4b099907edd330aaa97a",
+    "updated_at": "2026-05-02T18:49:42.470230Z"
+  },
+  "install_request_poll": {
+    "chat_turns_created": 1,
+    "created_pairing_requests": 0,
+    "deliveries_sent": 0,
+    "details": {},
+    "duplicate_events": 0,
+    "failures": 0,
+    "media_attachments": 0,
+    "processed_accounts": 1,
+    "processed_events": 1,
+    "rejected_events": 0,
+    "status": "healthy"
+  },
+  "log_artifact": {
+    "artifact": {
+      "artifact_id": "art_da6c9bc29b314f7ba1c3e3aa294ff7d1",
+      "artifact_type": "host_install_log",
+      "checksum": "sha256:6e2ebb129f9140a37fe227e5db340e31e9d1533fc1e750c5adaf8de407d22b80",
+      "content_type": "text/plain; charset=utf-8",
+      "created_at": "2026-05-02T18:51:13.851602Z",
+      "display_name": "host-install.log",
+      "metadata": {
+        "dry_run": false,
+        "host_install_plan_id": "hip_d80f4351cce24aaabe3ffe8580b3128d"
+      },
+      "organization_id": "org_default",
+      "sensitivity": "low",
+      "size_bytes": 3157,
+      "step_id": null,
+      "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+      "tool_call_id": null,
+      "uri": "artifact://tsk_ab4a53d7f7374e86af243c10a05b6a18/logs/host-install.log"
+    },
+    "content_preview": "host install real execution\r\nsoftware=豆包\r\nsteps=[{'action': 'install', 'args': ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', \"$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_doubao.exe'; try { Invoke-WebRequest -Uri 'https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }\"], 'cwd': 'host_default', 'env_policy': 'minimal', 'executable': 'pwsh', 'fallback_for': 'package_manager_install_failed', 'official_manifest': 'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Doubao/2.8.7/ByteDance.Doubao.installer.yaml', 'official_source': 'https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe', 'package_manager': 'winget_manifest', 'sha256': '8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891', 'step_key': 'official_manifest_install_bytedance_doubao', 'step_type': 'official_manifest_installer', 'target_package_id': 'ByteDance.Doubao', 'timeout_seconds': 1800}]\r\nstep[1].phase=primary\r\nstep[1].started_at=2026-05-02T18:49:42.934999+00:00\r\nstep[1].ended_at=2026-05-02T18:50:59.266906+00:00\r\nstep[1].duration_ms=76328\r\nstep[1].key=official_manifest_install_bytedance_doubao\r\nstep[1].command=['pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', \"$ErrorActionPreference='Stop'; $progr"
+  },
+  "out_dir": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-03-doubao-wechat-real-install",
+  "pairing": {
+    "pairing_request": {
+      "channel_account_id": "chacc_5d1ed095429c40459425a109e8fe3eed",
+      "channel_peer_id": "chpeer_5342c92f9bb940479cc1cb308228e8b4",
+      "created_at": "2026-05-02T18:49:36.623499Z",
+      "decided_at": "2026-05-02T18:49:36.699981Z",
+      "decision_by_member_id": "mem_xiaoyao",
+      "decision_reason": "real doubao install test",
+      "display_name_redacted": "真实测试微信联系人",
+      "expires_at": null,
+      "organization_id": "org_default",
+      "pairing_request_id": "chpair_b2bf9405cb894f69a3792e0807bc233f",
+      "peer_ref_redacted": "sha256:67f16fc159d62e2a02f383e1ae2ec53373c2979710a218c4df9a27dd0854c341",
+      "peer_state_ref": "sec_08af79ec0a0a43b890b3c3bc707dbd8a",
+      "peer_type": "private",
+      "provider": "wechat",
+      "requested_member_id": "mem_xiaoyao",
+      "status": "approved",
+      "trace_id": "trc_239c392e900a45068c8d4ecf8a1a2946",
+      "updated_at": "2026-05-02T18:49:36.699981Z"
+    },
+    "peer_session": {
+      "allow_inbound": true,
+      "allow_outbound": true,
+      "channel_account_id": "chacc_5d1ed095429c40459425a109e8fe3eed",
+      "channel_id": "nch_f16059ac1eb1456ba0ab6784805d8ca7",
+      "channel_peer_id": "chpeer_5342c92f9bb940479cc1cb308228e8b4",
+      "channel_peer_session_id": "chps_96d99c3f584140f0a511cc9e5ca9e1f6",
+      "conversation_id": null,
+      "created_at": "2026-05-02T18:49:36.699981+00:00",
+      "last_inbound_at": null,
+      "last_outbound_at": null,
+      "member_id": "mem_xiaoyao",
+      "organization_id": "org_default",
+      "pairing_status": "paired",
+      "peer_ref_redacted": "sha256:67f16fc159d62e2a02f383e1ae2ec53373c2979710a218c4df9a27dd0854c341",
+      "peer_state_ref": "sec_08af79ec0a0a43b890b3c3bc707dbd8a",
+      "peer_type": "private",
+      "policy_snapshot": {
+        "allow_unknown_private": false,
+        "group_messages": "disabled",
+        "pairing_required": true,
+        "private_chat_only": true
+      },
+      "provider": "wechat",
+      "session_id": "chsess_2d1702d0d5fa46e7bc4392efe23d214c",
+      "updated_at": "2026-05-02T18:49:36.699981+00:00"
+    }
+  },
+  "preexisting_install": null,
+  "request": "微信渠道私聊：帮我安装豆包 -> 只允许这一次",
+  "run_id": "doubao-wechat-real-install-20260503-0002",
+  "second_turn": {
+    "assistant_message_id": "msg_79d7563e204e4fcdac2704ff93ea33b1",
+    "brain_decision_id": "bd_6d5bea924f2f4096b6b098681dfec0d0",
+    "cancel_requested": false,
+    "conversation_id": "conv_a65a519f36f2417ea05ecb86c34e44e0",
+    "created_at": "2026-05-02T18:49:42.750740+00:00",
+    "ended_at": "2026-05-02T18:51:13.935426+00:00",
+    "error_code": null,
+    "error_message": null,
+    "experience": {
+      "chat_style": "simple_qa",
+      "complexity_score": 0.02,
+      "context_selection_reason": [
+        "current_input",
+        "working_state",
+        "recent_messages",
+        "capability_boundary_summary"
+      ],
+      "conversation_depth": 3,
+      "needs_long_output": false,
+      "needs_strong_reasoning": false,
+      "needs_tool_or_task": false,
+      "recoverable": true,
+      "route_profile": "simple_qa"
+    },
+    "intent": "natural_interaction",
+    "member_id": "mem_xiaoyao",
+    "mode": "direct",
+    "privacy_level": "medium",
+    "retry_of_turn_id": null,
+    "route": {
+      "brain_id": null,
+      "fallback_used": false
+    },
+    "status": "completed",
+    "trace_id": "trc_e7ff2a2ffc3a479c9b9bae692ee5b7c9",
+    "turn_id": "turn_730264ca18084bceab3e290167cafd12",
+    "updated_at": "2026-05-02T18:51:13.935426+00:00",
+    "usage": {},
+    "user_message_id": "msg_8f07ef3a01fb4171bc65185d5429cc93"
+  },
+  "system_verify": {
+    "executable_candidates": [
+      {
+        "Exists": false,
+        "Path": "C:\\Users\\Administrator\\AppData\\Local\\Doubao\\doubao.exe"
+      },
+      {
+        "Exists": false,
+        "Path": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\doubao\\Doubao.exe"
+      },
+      {
+        "Exists": false,
+        "Path": "C:\\Program Files\\Doubao\\Doubao.exe"
+      },
+      {
+        "Exists": false,
+        "Path": "C:\\Program Files (x86)\\Doubao\\Doubao.exe"
+      }
+    ],
+    "uninstall_entries": {
+      "DisplayIcon": "\"C:\\Users\\Administrator\\AppData\\Local\\Doubao\\Application\\icon.ico\"",
+      "DisplayName": "豆包",
+      "DisplayVersion": "2.8.7",
+      "InstallLocation": null,
+      "Publisher": "Beijing Chuntian Zhiyun Technology Co., Ltd.",
+      "QuietUninstallString": null,
+      "UninstallString": "\"C:\\Users\\Administrator\\AppData\\Local\\Doubao\\Application\\uninstall.exe\""
+    }
+  },
+  "task": {
+    "artifact_count": 1,
+    "artifact_plan": {
+      "expected_outputs": [
+        "task_report"
+      ]
+    },
+    "budget": {
+      "max_artifact_bytes": 10000000,
+      "max_loop_steps": 8,
+      "max_model_calls": 20,
+      "max_runtime_seconds": 1800,
+      "max_steps": 20,
+      "max_tool_calls": 30,
+      "max_total_cost": 0.0
+    },
+    "cancellation_reason": null,
+    "collaboration_plan_id": null,
+    "conversation_id": "conv_a65a519f36f2417ea05ecb86c34e44e0",
+    "created_at": "2026-05-02T18:49:36.900650Z",
+    "current_approval_id": null,
+    "failure_reason": null,
+    "goal": "安装本机软件 豆包",
+    "host_member_id": null,
+    "mode": "agent",
+    "organization_id": "org_default",
+    "owner_member_id": "mem_xiaoyao",
+    "parent_task_id": null,
+    "plan": {
+      "approval_strategy": {
+        "high_risk_step_keys": [],
+        "phase19_candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+        "phase25_selected_candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+        "required_before_execution": false,
+        "strategy": "step_gate"
+      },
+      "artifact_plan": {
+        "expected_outputs": [
+          "task_report"
+        ]
+      },
+      "assumptions": [
+        "规则优先 planner；未启用模型辅助规划。",
+        "Agent loop 只按预算执行当前任务步骤，不做后台自主动作。",
+        "未声明资产句柄，步骤只能使用无需资产的能力。"
+      ],
+      "budget": {
+        "max_artifact_bytes": 10000000,
+        "max_loop_steps": 8,
+        "max_model_calls": 20,
+        "max_runtime_seconds": 1800,
+        "max_steps": 20,
+        "max_tool_calls": 30,
+        "max_total_cost": 0.0
+      },
+      "checkpoint_policy": {
+        "checkpoint_after_each_step": true,
+        "persist_observations": true
+      },
+      "collaboration": {},
+      "constraints": {
+        "action": "install",
+        "phase52": "host_install",
+        "requested_software": "豆包"
+      },
+      "failure_policy": {
+        "allow_alternate_path_without_approval": false,
+        "on_step_failure": "pause_and_create_retry_plan"
+      },
+      "goal": "安装本机软件 豆包",
+      "host_member_id": null,
+      "mode": "agent",
+      "owner_member_id": "mem_xiaoyao",
+      "participants": [],
+      "planner_reason_codes": [
+        "mode_agent",
+        "rule_first_planner",
+        "explicit_mode_hint"
+      ],
+      "planner_type": "agent_exploratory_planner",
+      "preflight": {
+        "blocked_actions": [],
+        "brain_decision_id": null,
+        "capability_snapshot": {
+          "active_mcp_tool_count": 0,
+          "enabled_skill_count": 0,
+          "explicit_skill_available": false,
+          "mcp_tool_refs": [],
+          "model_assist": {
+            "enabled": false,
+            "reason": "rule_first_planner"
+          },
+          "ready_mcp_server_count": 0,
+          "reason_codes": [],
+          "skill_match_refs": []
+        },
+        "mcp_tool_refs": [],
+        "phase19": {
+          "candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+          "capability_candidate_count": 0,
+          "fallback_used": true,
+          "model_assist_enabled": false,
+          "policy_prune_count": 0,
+          "safe_final_step_count": 1,
+          "unsafe_prune_types": [],
+          "verification_status": "passed"
+        },
+        "phase25": {
+          "candidate_count": 1,
+          "candidate_only": true,
+          "fallback_reason": "no_routable_planner_brain",
+          "fallback_used": true,
+          "generation_id": "plangen_6ebc8007056b470abdee367c997bc52b",
+          "model_assist_attempted": false,
+          "model_call": {
+            "adapter": "brain_openai_compatible",
+            "fallback_reason": "no_routable_planner_brain",
+            "privacy_level": "medium",
+            "status": "fallback"
+          },
+          "quality_score": {
+            "artifact_clarity": 0.9,
+            "budget_efficiency": 1.0,
+            "candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+            "capability_fit": 1.0,
+            "created_at": "2026-05-02T18:49:36.911639+00:00",
+            "goal_coverage": 0.5,
+            "missing_information_handling": 0.72,
+            "reason_codes": [
+              "quality_scored",
+              "source_deterministic_rule_surrogate"
+            ],
+            "recoverability": 0.85,
+            "safety_compliance": 1.0,
+            "score_id": "planscore_8e8cc5c7a08046618fca91d4de20feeb",
+            "selected": true,
+            "step_coherence": 1.0,
+            "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+            "total_score": 0.8712
+          },
+          "selected_candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+          "selected_candidate_source": "deterministic_rule_surrogate",
+          "selected_quality_score": 0.8712
+        },
+        "planner_context": {
+          "phase52": {
+            "action": "install",
+            "workflow": "host_install"
+          }
+        },
+        "required_approvals": [],
+        "required_handles": [],
+        "skill_match_refs": []
+      },
+      "reflection_policy": {
+        "candidate_only": true,
+        "candidate_types": [
+          "memory_candidate",
+          "workflow_template_candidate",
+          "skill_candidate",
+          "failure_pattern_candidate"
+        ]
+      },
+      "required_assets": [],
+      "required_capabilities": [],
+      "risk_level": "R2",
+      "steps": [
+        {
+          "input": {},
+          "risk_level": "R1",
+          "step_key": "compose_report",
+          "step_type": "compose",
+          "title": "生成任务报告"
+        }
+      ],
+      "success_criteria": [
+        "任务产生可回放结果"
+      ],
+      "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+      "title": "安装本机软件 豆包"
+    },
+    "preflight": {
+      "blocked_actions": [],
+      "brain_decision_id": null,
+      "capability_snapshot": {
+        "active_mcp_tool_count": 0,
+        "enabled_skill_count": 0,
+        "explicit_skill_available": false,
+        "mcp_tool_refs": [],
+        "model_assist": {
+          "enabled": false,
+          "reason": "rule_first_planner"
+        },
+        "ready_mcp_server_count": 0,
+        "reason_codes": [],
+        "skill_match_refs": []
+      },
+      "mcp_tool_refs": [],
+      "phase19": {
+        "candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+        "capability_candidate_count": 0,
+        "fallback_used": true,
+        "model_assist_enabled": false,
+        "policy_prune_count": 0,
+        "safe_final_step_count": 1,
+        "unsafe_prune_types": [],
+        "verification_status": "passed"
+      },
+      "phase25": {
+        "candidate_count": 1,
+        "candidate_only": true,
+        "fallback_reason": "no_routable_planner_brain",
+        "fallback_used": true,
+        "generation_id": "plangen_6ebc8007056b470abdee367c997bc52b",
+        "model_assist_attempted": false,
+        "model_call": {
+          "adapter": "brain_openai_compatible",
+          "fallback_reason": "no_routable_planner_brain",
+          "privacy_level": "medium",
+          "status": "fallback"
+        },
+        "quality_score": {
+          "artifact_clarity": 0.9,
+          "budget_efficiency": 1.0,
+          "candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+          "capability_fit": 1.0,
+          "created_at": "2026-05-02T18:49:36.911639+00:00",
+          "goal_coverage": 0.5,
+          "missing_information_handling": 0.72,
+          "reason_codes": [
+            "quality_scored",
+            "source_deterministic_rule_surrogate"
+          ],
+          "recoverability": 0.85,
+          "safety_compliance": 1.0,
+          "score_id": "planscore_8e8cc5c7a08046618fca91d4de20feeb",
+          "selected": true,
+          "step_coherence": 1.0,
+          "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+          "total_score": 0.8712
+        },
+        "selected_candidate_id": "plancand_fe7acb7ce88947e1b5fe9415cc6ece33",
+        "selected_candidate_source": "deterministic_rule_surrogate",
+        "selected_quality_score": 0.8712
+      },
+      "planner_context": {
+        "phase52": {
+          "action": "install",
+          "workflow": "host_install"
+        }
+      },
+      "required_approvals": [],
+      "required_handles": [],
+      "skill_match_refs": []
+    },
+    "progress": {
+      "completed_steps": 0,
+      "current_step_key": null,
+      "total_steps": 1
+    },
+    "result": {
+      "dry_run": false,
+      "exit_code": 0,
+      "host_action": "install",
+      "host_install_execution_id": "hie_a21abbba776a4b11b3ec75edaae81154",
+      "host_install_plan_id": "hip_d80f4351cce24aaabe3ffe8580b3128d",
+      "install_path_summary": "installed_by_package_manager",
+      "log_artifact_id": "art_da6c9bc29b314f7ba1c3e3aa294ff7d1",
+      "status": "installed",
+      "version_detected": "2.8.7",
+      "workflow": "host_install"
+    },
+    "risk_level": "R2",
+    "status": "completed",
+    "success_criteria": [
+      "任务产生可回放结果"
+    ],
+    "supervisor_mode": null,
+    "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+    "title": "安装本机软件 豆包",
+    "trace_id": "trc_2d43ab50205c4b099907edd330aaa97a",
+    "updated_at": "2026-05-02T18:51:13.875149Z"
+  },
+  "timings": [
+    {
+      "duration_ms": 13,
+      "ended_perf": 25455.96185,
+      "stage": "api health/bootstrap",
+      "started_perf": 25455.948667
+    },
+    {
+      "duration_ms": 17,
+      "ended_perf": 25455.979611,
+      "stage": "wechat bind start",
+      "started_perf": 25455.961894
+    },
+    {
+      "duration_ms": 90,
+      "ended_perf": 25456.070634,
+      "stage": "wechat bind finalize",
+      "started_perf": 25455.979669
+    },
+    {
+      "duration_ms": 68,
+      "ended_perf": 25456.138983,
+      "stage": "wechat pairing poll",
+      "started_perf": 25456.070735
+    },
+    {
+      "duration_ms": 19,
+      "ended_perf": 25456.169853,
+      "stage": "wechat pairing approve",
+      "started_perf": 25456.150716
+    },
+    {
+      "duration_ms": 50,
+      "ended_perf": 25456.232255,
+      "stage": "wechat inbound install request poll",
+      "started_perf": 25456.181709
+    },
+    {
+      "duration_ms": 17,
+      "ended_perf": 25456.249956,
+      "stage": "wechat delivery binding for install plan",
+      "started_perf": 25456.2323,
+      "turn_id": "turn_4dfcf6453c314d06bbf7d01ff0388109"
+    },
+    {
+      "duration_ms": 5904,
+      "ended_perf": 25462.154356,
+      "stage": "chat turn plan completed",
+      "started_perf": 25456.249967,
+      "turn_status": "completed"
+    },
+    {
+      "duration_ms": 51,
+      "ended_perf": 25462.233085,
+      "stage": "wechat inbound approval poll and real install",
+      "started_perf": 25462.181864
+    },
+    {
+      "duration_ms": 28,
+      "ended_perf": 25462.261247,
+      "stage": "wechat delivery binding for install result",
+      "started_perf": 25462.233122,
+      "turn_id": "turn_730264ca18084bceab3e290167cafd12"
+    },
+    {
+      "duration_ms": 91333,
+      "ended_perf": 25553.594815,
+      "stage": "chat turn approval/install completed",
+      "started_perf": 25462.26126,
+      "turn_status": "completed"
+    },
+    {
+      "duration_ms": 13,
+      "ended_perf": 25553.608231,
+      "stage": "host install detail fetch",
+      "started_perf": 25553.594833
+    },
+    {
+      "duration_ms": 17,
+      "ended_perf": 25553.627296,
+      "stage": "approval detail fetch",
+      "started_perf": 25553.61025
+    },
+    {
+      "duration_ms": 16,
+      "ended_perf": 25553.64601,
+      "stage": "task detail fetch",
+      "started_perf": 25553.62994
+    },
+    {
+      "duration_ms": 15,
+      "ended_perf": 25553.664439,
+      "stage": "host install log artifact fetch",
+      "started_perf": 25553.6491
+    },
+    {
+      "duration_ms": 1089,
+      "ended_perf": 25554.754749,
+      "stage": "windows installed app verification",
+      "started_perf": 25553.665705
+    },
+    {
+      "duration_ms": 101320,
+      "ended_perf": 25554.80071,
+      "stage": "total run",
+      "started_perf": 25453.480192
+    }
+  ]
+}

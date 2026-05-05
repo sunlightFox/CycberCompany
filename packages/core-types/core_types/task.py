@@ -395,6 +395,24 @@ class CollaborationPlan(ApiModel):
     updated_at: datetime | None = None
 
 
+class CollaborationRoutingDecision(ApiModel):
+    routing_decision_id: EntityId
+    organization_id: EntityId
+    task_id: EntityId
+    collaboration_plan_id: EntityId | None = None
+    host_member_id: EntityId
+    mode: str
+    status: str
+    selected_member_ids: list[EntityId] = Field(default_factory=list)
+    rejected_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    routing_factors: dict[str, Any] = Field(default_factory=dict)
+    risk_summary: dict[str, Any] = Field(default_factory=dict)
+    boundary_summary: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class CollaborationRound(ApiModel):
     round_id: EntityId
     organization_id: EntityId
@@ -412,6 +430,45 @@ class CollaborationRound(ApiModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     completed_at: datetime | None = None
+
+
+class CollaborationHandoffRecord(ApiModel):
+    handoff_id: EntityId
+    organization_id: EntityId
+    task_id: EntityId
+    collaboration_plan_id: EntityId | None = None
+    subtask_id: EntityId
+    from_participant_id: EntityId | None = None
+    from_member_id: EntityId | None = None
+    to_participant_id: EntityId | None = None
+    to_member_id: EntityId
+    reason: str
+    status: str
+    context_summary: dict[str, Any] = Field(default_factory=dict)
+    boundary_summary: dict[str, Any] = Field(default_factory=dict)
+    source_refs: list[dict[str, Any]] = Field(default_factory=list)
+    trace_id: EntityId | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class CollaborationContextBoundary(ApiModel):
+    boundary_id: EntityId
+    organization_id: EntityId
+    task_id: EntityId
+    collaboration_plan_id: EntityId | None = None
+    participant_id: EntityId | None = None
+    member_id: EntityId
+    context_scope: dict[str, Any] = Field(default_factory=dict)
+    allowed_context: list[str] = Field(default_factory=list)
+    excluded_context: list[str] = Field(default_factory=list)
+    asset_scope: list[dict[str, Any]] = Field(default_factory=list)
+    memory_scope: str = "member_private_only"
+    redaction_summary: dict[str, Any] = Field(default_factory=dict)
+    status: str
+    trace_id: EntityId | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class CollaborationOutput(ApiModel):
@@ -773,8 +830,11 @@ class TaskReplay(ApiModel):
     checkpoints: list[dict[str, Any]] = Field(default_factory=list)
     rollback_events: list[dict[str, Any]] = Field(default_factory=list)
     collaboration_plan: CollaborationPlan | None = None
+    routing_decisions: list[CollaborationRoutingDecision] = Field(default_factory=list)
     participants: list[TaskParticipant] = Field(default_factory=list)
     subtasks: list[TaskSubtask] = Field(default_factory=list)
+    handoff_records: list[CollaborationHandoffRecord] = Field(default_factory=list)
+    context_boundaries: list[CollaborationContextBoundary] = Field(default_factory=list)
     rounds: list[CollaborationRound] = Field(default_factory=list)
     outputs: list[CollaborationOutput] = Field(default_factory=list)
     host_decisions: list[HostDecision] = Field(default_factory=list)
@@ -784,8 +844,11 @@ class TaskReplay(ApiModel):
 class CollaborationReplay(ApiModel):
     task: TaskDetail
     collaboration_plan: CollaborationPlan | None = None
+    routing_decisions: list[CollaborationRoutingDecision] = Field(default_factory=list)
     participants: list[TaskParticipant] = Field(default_factory=list)
     subtasks: list[TaskSubtask] = Field(default_factory=list)
+    handoff_records: list[CollaborationHandoffRecord] = Field(default_factory=list)
+    context_boundaries: list[CollaborationContextBoundary] = Field(default_factory=list)
     rounds: list[CollaborationRound] = Field(default_factory=list)
     outputs: list[CollaborationOutput] = Field(default_factory=list)
     host_decisions: list[HostDecision] = Field(default_factory=list)

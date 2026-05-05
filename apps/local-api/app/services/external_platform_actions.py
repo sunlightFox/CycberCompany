@@ -47,6 +47,7 @@ from app.services.external_platform_providers import (
     ProviderInfo,
     default_external_platform_provider_registry,
 )
+from app.services.safety_policy import RuntimeSafetyPolicyService
 from app.services.tasks import TaskEngine
 
 ACTION_MARKERS = {
@@ -91,6 +92,7 @@ class ExternalPlatformActionService:
         trace_service: TraceService,
         audit_service: AuditEventService,
         provider_registry: ExternalPlatformProviderRegistry | None = None,
+        safety_policy_service: RuntimeSafetyPolicyService | None = None,
     ) -> None:
         self._repo = repo
         self._asset_repo = asset_repo
@@ -100,6 +102,7 @@ class ExternalPlatformActionService:
         self._trace = trace_service
         self._audit = audit_service
         self._providers = provider_registry or default_external_platform_provider_registry()
+        self._safety_policy = safety_policy_service
 
     async def ensure_seeded_targets(self, *, trace_id: str | None = None) -> None:
         existing = await self._repo.get_target_by_key(str(FAKE_PROVIDER_TARGET["platform_key"]))
@@ -809,6 +812,36 @@ class ExternalPlatformActionService:
             "updated_at": utc_now_iso(),
         }
         if _risk_order(plan.risk_level) >= 3:
+            approval_required = True
+            if self._safety_policy is not None:
+                policy = await self._safety_policy.get_policy(
+                    organization_id=plan.organization_id
+                )
+                approval_required = not policy.should_skip_approval(
+                    action=f"external_platform.{plan.action_type}",
+                    risk_level=_risk_enum(plan.risk_level),
+                    action_category="network_write",
+                    payload={
+                        "platform_key": plan.platform_key,
+                        "target_id": target.target_id,
+                        "action_type": plan.action_type,
+                        "content_summary": plan.content_summary,
+                    },
+                )
+            if not approval_required:
+                update["status"] = "ready"
+                await self._repo.update_plan(plan.plan_id, update)
+                await self._plan_event(
+                    plan.plan_id,
+                    "plan.ready",
+                    {"risk_level": plan.risk_level, "approval_profile": "balanced_personal"},
+                    trace_id=trace_id,
+                )
+                return await self._response_for_plan(
+                    plan.plan_id,
+                    message="外部平台动作计划已准备好，当前个人审批策略不要求额外确认。",
+                    next_step="execute_action_plan",
+                )
             task = await self._tasks.create_task(
                 TaskCreateRequest(
                     conversation_id=plan.conversation_id,

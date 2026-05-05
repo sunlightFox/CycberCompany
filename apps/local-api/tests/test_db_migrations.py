@@ -61,6 +61,14 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     assert "036_channel_bindings_wechat.sql" in first
     assert "037_channel_gateway_wechat_full_link.sql" in first
     assert "038_chat_turn_recovery_attempts.sql" in first
+    assert "039_chat_ingress_rich_content_queue.sql" in first
+    assert "040_browser_session_persistence_deepening.sql" in first
+    assert "043_media_multimodal_io_foundation.sql" in first
+    assert "044_voice_reply_runtime.sql" in first
+    assert "045_multi_member_collaboration_routing_deepening.sql" in first
+    assert "046_agent_workbench_context_files.sql" in first
+    assert "047_feishu_message_channel.sql" in first
+    assert "048_soul_manifests.sql" in first
     for phase, contract in PHASE_MIGRATION_REQUIREMENTS.items():
         assert contract["required_migration"] in first, phase
         assert set(contract.get("tables") or ()).issubset(table_names), phase
@@ -83,6 +91,9 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "secret_refs",
         "chat_events",
         "chat_turn_recovery_attempts",
+        "chat_message_envelopes",
+        "chat_turn_queue",
+        "chat_context_compactions",
         "memory_items",
         "memory_candidates",
         "memory_relations",
@@ -131,6 +142,9 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "collaboration_rounds",
         "collaboration_outputs",
         "host_decisions",
+        "collaboration_routing_decisions",
+        "collaboration_handoff_records",
+        "collaboration_context_boundaries",
         "member_availability",
         "member_skill_policies",
         "shell_switch_events",
@@ -194,6 +208,7 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "tone_policy_resolutions",
         "response_quality_evaluations",
         "persona_heart_replay_runs",
+        "soul_manifests",
         "semantic_review_requests",
         "semantic_review_suggestions",
         "semantic_review_model_calls",
@@ -212,6 +227,8 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "browser_evidence",
         "browser_network_events",
         "browser_console_events",
+        "browser_session_health_probes",
+        "browser_page_states",
         "skill_bundle_sources",
         "skill_bundle_versions",
         "skill_permission_previews",
@@ -239,6 +256,9 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "media_derivatives",
         "media_analysis",
         "media_edit_plans",
+        "voice_profiles",
+        "member_voice_bindings",
+        "voice_render_jobs",
         "external_platform_adapters",
         "external_platform_adapter_versions",
         "external_platform_adapter_steps",
@@ -266,6 +286,9 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "channel_attachments",
         "channel_delivery_bindings",
         "channel_event_offsets",
+        "agent_workbench_jobs",
+        "agent_context_file_versions",
+        "agent_workbench_context_packs",
     }.issubset(table_names)
 
     db = Database(tmp_path / "app.db")
@@ -318,6 +341,22 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         chat_turn_recovery_columns = {
             row["name"]
             for row in await db.fetch_all("PRAGMA table_info(chat_turn_recovery_attempts)")
+        }
+        chat_turn_recovery_indexes = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA index_list(chat_turn_recovery_attempts)")
+        }
+        chat_message_envelope_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(chat_message_envelopes)")
+        }
+        chat_turn_queue_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(chat_turn_queue)")
+        }
+        chat_context_compaction_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(chat_context_compactions)")
         }
         local_vector_columns = {
             row["name"]
@@ -528,6 +567,9 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
                 "PRAGMA table_info(notification_delivery_attempts)"
             )
         }
+        message_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(messages)")
+        }
         inbound_message_columns = {
             row["name"] for row in await db.fetch_all("PRAGMA table_info(inbound_messages)")
         }
@@ -570,6 +612,27 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         }
         media_edit_plan_columns = {
             row["name"] for row in await db.fetch_all("PRAGMA table_info(media_edit_plans)")
+        }
+        media_provider_health_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(media_provider_health_records)")
+        }
+        media_io_request_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(media_io_requests)")
+        }
+        media_speech_transcript_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(media_speech_transcripts)")
+        }
+        media_speech_render_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(media_speech_renders)")
+        }
+        media_multimodal_summary_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(media_multimodal_summaries)")
+        }
+        media_chat_binding_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(media_chat_bindings)")
         }
         external_adapter_columns = {
             row["name"]
@@ -629,6 +692,24 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         }
         channel_offset_columns = {
             row["name"] for row in await db.fetch_all("PRAGMA table_info(channel_event_offsets)")
+        }
+        workbench_job_columns = {
+            row["name"] for row in await db.fetch_all("PRAGMA table_info(agent_workbench_jobs)")
+        }
+        context_file_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(agent_context_file_versions)")
+        }
+        context_pack_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(agent_workbench_context_packs)")
+        }
+        workbench_job_indexes = {
+            row["name"] for row in await db.fetch_all("PRAGMA index_list(agent_workbench_jobs)")
+        }
+        context_file_indexes = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA index_list(agent_context_file_versions)")
         }
     finally:
         await db.close()
@@ -694,8 +775,55 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "root_cause",
         "recovery_action",
         "status",
+        "recovery_stage",
+        "error_signature",
+        "action_result_json",
         "diagnostic_payload_json",
     }.issubset(chat_turn_recovery_columns)
+    assert {
+        "idx_chat_turn_recovery_attempts_turn",
+        "idx_chat_turn_recovery_attempts_task",
+        "idx_chat_turn_recovery_attempts_stage",
+        "idx_chat_turn_recovery_attempts_signature",
+    }.issubset(chat_turn_recovery_indexes)
+    assert {
+        "envelope_id",
+        "turn_id",
+        "session_id",
+        "dedupe_key",
+        "content_parts_json",
+        "context_refs_json",
+        "model_safe_text",
+        "normalized_summary_json",
+        "ingress_metadata_json",
+    }.issubset(chat_message_envelope_columns)
+    assert {
+        "voice_profile_id",
+        "voice_render_job_id",
+        "audio_uri",
+        "audio_content_type",
+        "voice_metadata_json",
+    }.issubset(message_columns)
+    assert {
+        "queue_id",
+        "turn_id",
+        "session_id",
+        "status",
+        "queue_policy",
+        "locked_by",
+        "locked_until",
+        "dedupe_key",
+    }.issubset(chat_turn_queue_columns)
+    assert {
+        "compaction_id",
+        "turn_id",
+        "reason",
+        "status",
+        "token_estimate_before",
+        "token_estimate_after",
+        "summary_redacted",
+        "payload_redacted_json",
+    }.issubset(chat_context_compaction_columns)
     assert {
         "embedding_id",
         "collection_name",
@@ -1143,6 +1271,11 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "media_type",
         "checksum",
         "metadata_json",
+        "io_role",
+        "source_kind",
+        "privacy_level",
+        "provider_status",
+        "replay_summary_json",
     }.issubset(media_asset_columns)
     assert {"derivative_id", "media_id", "artifact_id", "derivative_type"}.issubset(
         media_derivative_columns
@@ -1152,6 +1285,24 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     )
     assert {"edit_plan_id", "media_id", "operations_json", "requires_approval"}.issubset(
         media_edit_plan_columns
+    )
+    assert {"health_record_id", "provider_name", "capability", "status"}.issubset(
+        media_provider_health_columns
+    )
+    assert {"io_request_id", "media_id", "operation", "provider_name", "status"}.issubset(
+        media_io_request_columns
+    )
+    assert {"transcript_id", "io_request_id", "artifact_id", "status"}.issubset(
+        media_speech_transcript_columns
+    )
+    assert {"render_id", "io_request_id", "artifact_id", "source_text_hash"}.issubset(
+        media_speech_render_columns
+    )
+    assert {"summary_id", "io_request_id", "media_id", "summary_text"}.issubset(
+        media_multimodal_summary_columns
+    )
+    assert {"binding_id", "media_id", "io_request_id", "binding_type"}.issubset(
+        media_chat_binding_columns
     )
     assert {
         "adapter_id",
@@ -1251,6 +1402,39 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "channel_event_id",
         "status",
     }.issubset(channel_offset_columns)
+    assert {
+        "job_id",
+        "turn_id",
+        "idempotency_key",
+        "job_type",
+        "status",
+        "payload_json",
+        "trace_id",
+    }.issubset(workbench_job_columns)
+    assert {
+        "version_id",
+        "member_id",
+        "conversation_id",
+        "version_index",
+        "artifact_uri",
+        "artifact_checksum",
+        "source_refs_json",
+        "memory_refs_json",
+        "skill_refs_json",
+        "source_trace_id",
+    }.issubset(context_file_columns)
+    assert {
+        "context_pack_id",
+        "member_id",
+        "conversation_id",
+        "memory_refs_json",
+        "skill_refs_json",
+        "context_file_refs_json",
+        "source_refs_json",
+        "trace_id",
+    }.issubset(context_pack_columns)
+    assert "idx_agent_workbench_jobs_status" in workbench_job_indexes
+    assert "idx_agent_context_file_versions_member" in context_file_indexes
 
 
 @pytest.mark.asyncio

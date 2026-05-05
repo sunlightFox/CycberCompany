@@ -14,6 +14,7 @@ from app.services.chat_response import ChatResponseCoordinator
 from app.services.chat_tasks import ChatTaskCoordinator, ChatTurnOrchestrator
 from fastapi.testclient import TestClient
 from phase_contracts import assert_phase_migration_contract
+from response_composer import ResponseComposer
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 
@@ -56,6 +57,18 @@ def test_phase45_source_cleanup_and_coordinator_units() -> None:
     assert "quality_case" not in json.dumps(quality_payload, ensure_ascii=False)
     assert "chat_quality_policy" in json.dumps(quality_payload, ensure_ascii=False)
     assert "model" in ChatTurnOrchestrator().stage_names()
+
+
+def test_phase45_scheduled_task_parser_accepts_real_schedule_and_rejects_planning_text() -> None:
+    coordinator = ChatTaskCoordinator()
+
+    scheduled = coordinator.scheduled_intents.parse("每天上午 9 点帮我整理待办")
+    planning = coordinator.scheduled_intents.parse("给我一周学习计划。每天只保留一个重点。")
+
+    assert scheduled is not None
+    assert scheduled.schedule["type"] == "daily"
+    assert scheduled.schedule["time"] == "09:00"
+    assert planning is None
 
 
 def test_phase45_model_and_privacy_coordinators_keep_sensitive_context_out() -> None:
@@ -142,7 +155,9 @@ def test_phase45_chat_paths_remain_compatible_after_refactor(client: TestClient)
     assert "quality_case" not in serialized
     assert any(event["event"] == "turn.completed" for event in scheduled_events)
     assert scheduled_detail["intent"] == "scheduled_task_request"
-    assert "已创建定时任务" in _reply_from_events(scheduled_events)
+    scheduled_reply = _reply_from_events(scheduled_events)
+    assert "定时任务" in scheduled_reply
+    assert any(marker in scheduled_reply for marker in ["建好了", "已创建", "创建"])
 
 
 def test_phase45_release_contracts_eval_report_and_diagnostic(
@@ -194,6 +209,129 @@ def test_phase45_release_contracts_eval_report_and_diagnostic(
     assert any(item["source_type"] == "phase45_chat_refactor" for item in evidence)
     assert "phase45" in diagnostic
     assert "phase45_chat_refactor" in diagnostic
+
+
+def test_phase45_wechat_style_text_shortens_repeated_openers() -> None:
+    composer = ResponseComposer()
+
+    assert (
+        composer.style_text("好的，先说结果：可以继续。", ui_mode="wechat_chat")
+        == "可以继续。"
+    )
+    assert composer.style_text("好的，先说结果：可以继续。") == "好的，先说结果：可以继续。"
+
+
+def test_phase45_wechat_style_text_strips_mechanical_boundary_openers() -> None:
+    composer = ResponseComposer()
+
+    text = (
+        "这块我先坦白一句：桌面控制这步我现在还接不住真实能力，"
+        "所以我不会装作已经替你点完了。"
+    )
+
+    styled = composer.style_text(text, ui_mode="wechat_chat")
+
+    assert not styled.startswith("这块我先坦白一句")
+    assert "桌面控制这步我现在还接不住真实能力" in styled
+
+
+def test_phase45_wechat_style_text_adds_light_reading_markers_for_structured_reply() -> None:
+    composer = ResponseComposer()
+    text = (
+        "## 目标\n"
+        "把真实微信链路的回复质量和耗时拆开看，先记录瓶颈，再做最小后端优化。\n"
+        "步骤：\n"
+        "- 先跑真实微信基线，保留 trace 和人工耗时。\n"
+        "- 再按 context、model、tool、delivery 分类定位慢点。\n"
+        "- 最后重跑质量和微信相关回归。\n"
+        "- 这套结果还要回收成问题清单、修复清单和再验证清单。"
+    )
+
+    styled = composer.style_text(text, ui_mode="wechat_chat")
+
+    assert "📘 目标" in styled
+    assert "📌 步骤" in styled
+    assert "😀" not in styled
+
+
+def test_phase45_wechat_style_text_uses_richer_scene_markers() -> None:
+    composer = ResponseComposer()
+    text = (
+        "目标：把微信回复从系统说明味拉回到更像人说话的状态。\n"
+        "## 分析\n"
+        "先看用户为什么会觉得机械，通常是因为开头太模板、收口太像说明书，"
+        "中间又没有一点像人在接话的过渡。\n"
+        "优化：把系统说明味压下去，改成熟人式接话，顺手加一点机灵的轻松感。\n"
+        "验证：再跑一轮 100 场景回归，观察长回复、边界回复和多轮追问有没有一起变顺。"
+    )
+
+    styled = composer.style_text(text, ui_mode="wechat_chat")
+
+    assert "🧠 分析" in styled
+    assert "⚡ 优化" in styled
+    assert "🔍 验证" in styled
+    assert "📘 目标" in styled
+
+
+def test_phase45_wechat_style_text_promotes_short_structured_headings() -> None:
+    composer = ResponseComposer()
+    text = (
+        "先说结论：可以继续。\n"
+        "目标：提升微信聊天质量，让闲聊、办公、记忆、工具和审批边界都更自然。\n"
+        "下一步：先压耗时，再把每条低分回复归因到文本质量、路由、记忆、工具或投递。\n"
+        "补充：同时保留严格 JSON、表格和审批话术的纯净格式。"
+    )
+
+    styled = composer.style_text(text, ui_mode="wechat_chat")
+
+    assert styled.startswith("可以继续。")
+    assert "📘 目标" in styled
+    assert "▸ 下一步" in styled
+
+
+def test_phase45_wechat_style_text_keeps_strict_formats_clean() -> None:
+    composer = ResponseComposer()
+
+    json_text = '{"conclusion":"ok","risks":["a","b"]}'
+    table_text = "| 风险 | 建议 |\n|---|---|\n| 慢 | 先测 |"
+    code_text = "```json\n{\"ok\": true}\n```"
+
+    assert composer.style_text(json_text, ui_mode="wechat_chat") == json_text
+    assert composer.style_text(table_text, ui_mode="wechat_chat") == table_text
+    assert composer.style_text(code_text, ui_mode="wechat_chat") == code_text
+
+
+def test_phase45_boundary_and_approval_notices_sound_natural() -> None:
+    composer = ResponseComposer()
+    boundary_plan = composer.response_plan_for_tool_boundary(
+        summary="网页读取可以继续，但写入动作不行。",
+        required_capability="browser.write",
+        next_actions=["只生成方案", "改用只读流程"],
+    )
+    approval_plan = composer.response_plan_for_status(
+        summary="这一步需要你确认一下。",
+        approval_prompt={"status": "required", "summary": "等待确认"},
+    )
+
+    assert "接上对应工具" in (boundary_plan.tool_notice or "") or "工具" in (boundary_plan.tool_notice or "")
+    assert any(
+        marker in (boundary_plan.tool_notice or "")
+        for marker in ["不把结果说满", "不装作已经做完", "不冒充已经收尾"]
+    )
+    assert boundary_plan.title == "能力边界"
+    assert approval_plan.style == "approval_required"
+    assert approval_plan.title is None or approval_plan.title == "等待确认"
+    assert boundary_plan.structured_payload["conversation_voice"]["scene"] in {"boundary", "followthrough"}
+    assert approval_plan.structured_payload["conversation_voice"]["deescalated"] is True
+
+
+def test_phase45_wechat_style_text_removes_face_emoji_without_removing_reading_markers() -> None:
+    composer = ResponseComposer()
+
+    assert (
+        composer.style_text("好的，📘 先看结论：可以继续 😀", ui_mode="wechat_chat")
+        == "📘 先看结论：可以继续"
+    )
 
 
 def _create_turn(

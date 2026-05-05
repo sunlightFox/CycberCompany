@@ -1,0 +1,156 @@
+{
+  "body": {
+    "backend_type": "wsl",
+    "created_at": "2026-05-03T09:38:59.317024Z",
+    "current_step_key": null,
+    "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+    "endpoint": {},
+    "failure_reason": null,
+    "health": {
+      "status": "not_started"
+    },
+    "managed_process": null,
+    "organization_id": "org_default",
+    "plan": {
+      "approval_strategy": {
+        "approval_binding_hash": "sha256:aecf9e7d30a812bebc4003a827cb563b8f888f89a1c9a6884b3c1d4eda9b5951",
+        "approval_binds": [
+          "source_uri",
+          "backend_type",
+          "workspace_root",
+          "network_policy",
+          "install_commands",
+          "port_range"
+        ],
+        "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+        "required_before_execution": true,
+        "status": "required"
+      },
+      "backend_selection": {
+        "backend_candidates": [
+          {
+            "available": false,
+            "backend_type": "container",
+            "reason": "docker"
+          },
+          {
+            "available": true,
+            "backend_type": "wsl",
+            "reason": "wsl"
+          },
+          {
+            "available": true,
+            "backend_type": "local_workspace",
+            "reason": "policy guarded fallback"
+          }
+        ],
+        "blocked_reason": null,
+        "degraded_reason": null,
+        "selected_backend": "wsl"
+      },
+      "backend_type": "wsl",
+      "degraded_isolation": false,
+      "preferred_port": 5588,
+      "risk_level": "R4",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "steps": [
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "clone",
+          "tool": "project.clone"
+        },
+        {
+          "risk_level": "R1",
+          "status": "planned",
+          "step_key": "detect_stack",
+          "tool": "project.detect_stack"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "ensure_toolchain",
+          "tool": "runtime.ensure"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "install_deps",
+          "tool": "project.install_deps"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "build",
+          "tool": "project.build"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "run",
+          "tool": "project.run"
+        },
+        {
+          "risk_level": "R2",
+          "status": "planned",
+          "step_key": "health_check",
+          "tool": "project.health_check"
+        }
+      ],
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "port_lease": null,
+    "status": "waiting_approval",
+    "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+    "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+    "updated_at": "2026-05-03T09:38:59.380948Z",
+    "workspace": {
+      "backend_type": "wsl",
+      "created_at": "2026-05-03T09:38:59.309116Z",
+      "organization_id": "org_default",
+      "owner_member_id": "mem_xiaoyao",
+      "policy_snapshot": {
+        "backend_selection": {
+          "backend_candidates": [
+            {
+              "available": false,
+              "backend_type": "container",
+              "reason": "docker"
+            },
+            {
+              "available": true,
+              "backend_type": "wsl",
+              "reason": "wsl"
+            },
+            {
+              "available": true,
+              "backend_type": "local_workspace",
+              "reason": "policy guarded fallback"
+            }
+          ],
+          "blocked_reason": null,
+          "degraded_reason": null,
+          "selected_backend": "wsl"
+        },
+        "constraints": {
+          "preferred_port": 5588,
+          "test_label": "github-real-deploy-20260503"
+        },
+        "filesystem_policy": "workspace_root_only",
+        "workspace_root": "data/workspaces/projects/{workspace_id}"
+      },
+      "root_uri": "workspace://projects/pws_706e1c266585426c9d1c9ca415e18353",
+      "source_type": "github",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "stack_summary": {},
+      "status": "created",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+      "updated_at": "2026-05-03T09:38:59.309116Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+  },
+  "status_code": 200,
+  "trace_id": "trc_754bcccd141b498694bc5904fc2c7008"
+}

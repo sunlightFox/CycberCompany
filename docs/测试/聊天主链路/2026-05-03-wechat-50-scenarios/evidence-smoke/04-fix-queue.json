@@ -1,0 +1,21 @@
+{
+  "items": [
+    {
+      "case_id": "wechat-50-001",
+      "latency_reasons": [],
+      "owner_area": "routing",
+      "quality_verdict": "差",
+      "severity": "P1",
+      "suggestions": [
+        "先修入站、配对或 worker 链路。",
+        "补充 manual-times 中的微信可见回复文本。"
+      ],
+      "tags": [
+        "missing_observed_reply",
+        "no_turn"
+      ],
+      "trace_id": null,
+      "turn_id": null
+    }
+  ]
+}

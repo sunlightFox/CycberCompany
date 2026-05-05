@@ -1,0 +1,959 @@
+{
+  "approval_status_code": 200,
+  "approval_response": {
+    "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+    "organization_id": "org_default",
+    "title": "安装本机软件 飞书",
+    "goal": "安装本机软件 飞书",
+    "mode": "agent",
+    "status": "completed",
+    "risk_level": "R2",
+    "owner_member_id": "mem_xiaoyao",
+    "conversation_id": null,
+    "parent_task_id": null,
+    "host_member_id": null,
+    "collaboration_plan_id": null,
+    "supervisor_mode": null,
+    "success_criteria": [
+      "任务产生可回放结果"
+    ],
+    "progress": {
+      "total_steps": 1,
+      "completed_steps": 0,
+      "current_step_key": null
+    },
+    "current_approval_id": null,
+    "artifact_count": 1,
+    "failure_reason": null,
+    "cancellation_reason": null,
+    "trace_id": "trc_b6d32bb97be844348bab3552db44388d",
+    "created_at": "2026-05-03T01:01:02.209909Z",
+    "updated_at": "2026-05-03T01:04:51.678259Z",
+    "plan": {
+      "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+      "title": "安装本机软件 飞书",
+      "goal": "安装本机软件 飞书",
+      "mode": "agent",
+      "owner_member_id": "mem_xiaoyao",
+      "host_member_id": null,
+      "success_criteria": [
+        "任务产生可回放结果"
+      ],
+      "constraints": {
+        "phase52": "host_install",
+        "requested_software": "飞书",
+        "action": "install"
+      },
+      "assumptions": [
+        "规则优先 planner；未启用模型辅助规划。",
+        "Agent loop 只按预算执行当前任务步骤，不做后台自主动作。",
+        "未声明资产句柄，步骤只能使用无需资产的能力。"
+      ],
+      "required_capabilities": [],
+      "required_assets": [],
+      "approval_strategy": {
+        "strategy": "step_gate",
+        "required_before_execution": false,
+        "high_risk_step_keys": [],
+        "phase19_candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+        "phase25_selected_candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb"
+      },
+      "steps": [
+        {
+          "step_key": "compose_report",
+          "step_type": "compose",
+          "title": "生成任务报告",
+          "risk_level": "R1",
+          "input": {}
+        }
+      ],
+      "participants": [],
+      "collaboration": {},
+      "risk_level": "R2",
+      "budget": {
+        "max_steps": 20,
+        "max_loop_steps": 8,
+        "max_tool_calls": 30,
+        "max_runtime_seconds": 1800,
+        "max_model_calls": 20,
+        "max_total_cost": 0.0,
+        "max_artifact_bytes": 10000000
+      },
+      "checkpoint_policy": {
+        "checkpoint_after_each_step": true,
+        "persist_observations": true
+      },
+      "failure_policy": {
+        "on_step_failure": "pause_and_create_retry_plan",
+        "allow_alternate_path_without_approval": false
+      },
+      "reflection_policy": {
+        "candidate_only": true,
+        "candidate_types": [
+          "memory_candidate",
+          "workflow_template_candidate",
+          "skill_candidate",
+          "failure_pattern_candidate"
+        ]
+      },
+      "planner_type": "agent_exploratory_planner",
+      "planner_reason_codes": [
+        "mode_agent",
+        "rule_first_planner",
+        "explicit_mode_hint"
+      ],
+      "preflight": {
+        "required_handles": [],
+        "required_approvals": [],
+        "blocked_actions": [],
+        "capability_snapshot": {
+          "enabled_skill_count": 49,
+          "ready_mcp_server_count": 39,
+          "active_mcp_tool_count": 56,
+          "explicit_skill_available": false,
+          "skill_match_refs": [
+            {
+              "skill_id": "skill.clawhub-calendar-plan.clawhub-calendar-plan",
+              "bundle_id": "clawhub-calendar-plan",
+              "confidence": 0.15,
+              "reason": "匹配 display_name"
+            },
+            {
+              "skill_id": "skill.clawhub-file-conversion-plan.clawhub-file-conversion-plan",
+              "bundle_id": "clawhub-file-conversion-plan",
+              "confidence": 0.15,
+              "reason": "匹配 display_name"
+            }
+          ],
+          "mcp_tool_refs": [],
+          "reason_codes": [],
+          "model_assist": {
+            "enabled": false,
+            "reason": "rule_first_planner"
+          }
+        },
+        "skill_match_refs": [
+          {
+            "skill_id": "skill.clawhub-calendar-plan.clawhub-calendar-plan",
+            "bundle_id": "clawhub-calendar-plan",
+            "confidence": 0.15,
+            "reason": "匹配 display_name"
+          },
+          {
+            "skill_id": "skill.clawhub-file-conversion-plan.clawhub-file-conversion-plan",
+            "bundle_id": "clawhub-file-conversion-plan",
+            "confidence": 0.15,
+            "reason": "匹配 display_name"
+          }
+        ],
+        "mcp_tool_refs": [],
+        "planner_context": {
+          "phase52": {
+            "workflow": "host_install",
+            "action": "install"
+          }
+        },
+        "brain_decision_id": null,
+        "phase19": {
+          "candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+          "verification_status": "passed",
+          "policy_prune_count": 1,
+          "capability_candidate_count": 2,
+          "model_assist_enabled": true,
+          "safe_final_step_count": 1,
+          "fallback_used": true,
+          "unsafe_prune_types": [
+            "fallback_to_rule_plan"
+          ]
+        },
+        "phase25": {
+          "generation_id": "plangen_c36976c912174531960b33916f950cde",
+          "candidate_count": 2,
+          "selected_candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+          "selected_candidate_source": "deterministic_rule_surrogate",
+          "selected_quality_score": 0.8712,
+          "quality_score": {
+            "score_id": "planscore_660efa11449a4610b81f3f13b1338cd9",
+            "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+            "candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+            "total_score": 0.8712,
+            "goal_coverage": 0.5,
+            "step_coherence": 1.0,
+            "capability_fit": 1.0,
+            "safety_compliance": 1.0,
+            "budget_efficiency": 1.0,
+            "missing_information_handling": 0.72,
+            "recoverability": 0.85,
+            "artifact_clarity": 0.9,
+            "selected": true,
+            "reason_codes": [
+              "quality_scored",
+              "source_deterministic_rule_surrogate"
+            ],
+            "created_at": "2026-05-03T01:01:02.270579+00:00"
+          },
+          "model_assist_attempted": true,
+          "fallback_used": true,
+          "fallback_reason": "schema_invalid",
+          "model_call": {
+            "adapter": "brain_openai_compatible",
+            "status": "fallback",
+            "fallback_reason": "schema_invalid",
+            "latency_ms": 17608
+          },
+          "candidate_only": true
+        },
+        "policy_prunes": [
+          {
+            "prune_id": "prune_28d02684b73b4b98a30fd5533ae72116",
+            "prune_type": "fallback_to_rule_plan",
+            "reason_codes": [
+              "candidate_actions_pruned",
+              "safe_compose_fallback"
+            ]
+          }
+        ]
+      },
+      "artifact_plan": {
+        "expected_outputs": [
+          "task_report"
+        ]
+      }
+    },
+    "budget": {
+      "max_steps": 20,
+      "max_loop_steps": 8,
+      "max_tool_calls": 30,
+      "max_runtime_seconds": 1800,
+      "max_model_calls": 20,
+      "max_total_cost": 0.0,
+      "max_artifact_bytes": 10000000
+    },
+    "preflight": {
+      "required_handles": [],
+      "required_approvals": [],
+      "blocked_actions": [],
+      "capability_snapshot": {
+        "enabled_skill_count": 49,
+        "ready_mcp_server_count": 39,
+        "active_mcp_tool_count": 56,
+        "explicit_skill_available": false,
+        "skill_match_refs": [
+          {
+            "skill_id": "skill.clawhub-calendar-plan.clawhub-calendar-plan",
+            "bundle_id": "clawhub-calendar-plan",
+            "confidence": 0.15,
+            "reason": "匹配 display_name"
+          },
+          {
+            "skill_id": "skill.clawhub-file-conversion-plan.clawhub-file-conversion-plan",
+            "bundle_id": "clawhub-file-conversion-plan",
+            "confidence": 0.15,
+            "reason": "匹配 display_name"
+          }
+        ],
+        "mcp_tool_refs": [],
+        "reason_codes": [],
+        "model_assist": {
+          "enabled": false,
+          "reason": "rule_first_planner"
+        }
+      },
+      "skill_match_refs": [
+        {
+          "skill_id": "skill.clawhub-calendar-plan.clawhub-calendar-plan",
+          "bundle_id": "clawhub-calendar-plan",
+          "confidence": 0.15,
+          "reason": "匹配 display_name"
+        },
+        {
+          "skill_id": "skill.clawhub-file-conversion-plan.clawhub-file-conversion-plan",
+          "bundle_id": "clawhub-file-conversion-plan",
+          "confidence": 0.15,
+          "reason": "匹配 display_name"
+        }
+      ],
+      "mcp_tool_refs": [],
+      "planner_context": {
+        "phase52": {
+          "workflow": "host_install",
+          "action": "install"
+        }
+      },
+      "brain_decision_id": null,
+      "phase19": {
+        "candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+        "verification_status": "passed",
+        "policy_prune_count": 1,
+        "capability_candidate_count": 2,
+        "model_assist_enabled": true,
+        "safe_final_step_count": 1,
+        "fallback_used": true,
+        "unsafe_prune_types": [
+          "fallback_to_rule_plan"
+        ]
+      },
+      "phase25": {
+        "generation_id": "plangen_c36976c912174531960b33916f950cde",
+        "candidate_count": 2,
+        "selected_candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+        "selected_candidate_source": "deterministic_rule_surrogate",
+        "selected_quality_score": 0.8712,
+        "quality_score": {
+          "score_id": "planscore_660efa11449a4610b81f3f13b1338cd9",
+          "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+          "candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+          "total_score": 0.8712,
+          "goal_coverage": 0.5,
+          "step_coherence": 1.0,
+          "capability_fit": 1.0,
+          "safety_compliance": 1.0,
+          "budget_efficiency": 1.0,
+          "missing_information_handling": 0.72,
+          "recoverability": 0.85,
+          "artifact_clarity": 0.9,
+          "selected": true,
+          "reason_codes": [
+            "quality_scored",
+            "source_deterministic_rule_surrogate"
+          ],
+          "created_at": "2026-05-03T01:01:02.270579+00:00"
+        },
+        "model_assist_attempted": true,
+        "fallback_used": true,
+        "fallback_reason": "schema_invalid",
+        "model_call": {
+          "adapter": "brain_openai_compatible",
+          "status": "fallback",
+          "fallback_reason": "schema_invalid",
+          "latency_ms": 17608
+        },
+        "candidate_only": true
+      },
+      "policy_prunes": [
+        {
+          "prune_id": "prune_28d02684b73b4b98a30fd5533ae72116",
+          "prune_type": "fallback_to_rule_plan",
+          "reason_codes": [
+            "candidate_actions_pruned",
+            "safe_compose_fallback"
+          ]
+        }
+      ]
+    },
+    "artifact_plan": {
+      "expected_outputs": [
+        "task_report"
+      ]
+    },
+    "result": {
+      "workflow": "host_install",
+      "host_action": "install",
+      "host_install_plan_id": "hip_750a57a127f84dc6bebe30069a55014b",
+      "host_install_execution_id": "hie_735a80c983fd451da6d1874b30feaf35",
+      "status": "installed",
+      "exit_code": 0,
+      "log_artifact_id": "art_84679994fdc64fdf9571899d4db0622c",
+      "version_detected": "7.67.9",
+      "install_path_summary": "installed_by_package_manager",
+      "dry_run": false
+    }
+  },
+  "plan_detail_status_code": 200,
+  "plan_detail": {
+    "host_install_plan_id": "hip_750a57a127f84dc6bebe30069a55014b",
+    "organization_id": "org_default",
+    "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+    "requested_software": "飞书",
+    "install_source": {
+      "candidate_attempts": [
+        {
+          "match_confidence": 0.0,
+          "query": "飞书",
+          "source_type": "package_manager_search",
+          "status": "no_match"
+        },
+        {
+          "candidate_count": 1,
+          "query": "飞书",
+          "source_type": "model_candidate_expansion",
+          "status": "matched"
+        },
+        {
+          "match_confidence": 0.0,
+          "query": "飞书",
+          "source_type": "package_manager_search_model_candidates",
+          "status": "no_match"
+        },
+        {
+          "match_confidence": 0.96,
+          "query": "飞书",
+          "source_type": "official_winget_manifest",
+          "status": "matched"
+        }
+      ],
+      "final_match_confidence": 0.96,
+      "installer_sha256": "31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F",
+      "installer_url": "https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe",
+      "match_confidence": 0.96,
+      "match_reason": "official_winget_manifest_dynamic",
+      "model_assisted": true,
+      "model_candidate_count": 1,
+      "official_docs": "https://learn.microsoft.com/en-us/windows/package-manager/winget/",
+      "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Feishu/7.67.9/ByteDance.Feishu.installer.yaml",
+      "official_source_assisted": true,
+      "package_id": "ByteDance.Feishu",
+      "package_manager": "winget_manifest",
+      "publisher": "ByteDance",
+      "resolved_via": "official_winget_manifest",
+      "source_type": "official_manifest_installer_fallback",
+      "target_source_type": "official_installer_from_winget_manifest",
+      "trust": "official_manifest_with_sha256",
+      "version": "7.67.9"
+    },
+    "command_preview": {
+      "action": "install",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_feishu.exe'; try { Invoke-WebRequest -Uri 'https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }"
+      ],
+      "cwd": "host_default",
+      "env_policy": "minimal",
+      "executable": "pwsh",
+      "steps": [
+        {
+          "action": "install",
+          "args": [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            "$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_feishu.exe'; try { Invoke-WebRequest -Uri 'https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }"
+          ],
+          "cwd": "host_default",
+          "env_policy": "minimal",
+          "executable": "pwsh",
+          "fallback_for": "package_manager_install_failed",
+          "official_manifest": "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Feishu/7.67.9/ByteDance.Feishu.installer.yaml",
+          "official_source": "https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe",
+          "package_manager": "winget_manifest",
+          "sha256": "31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F",
+          "step_key": "official_manifest_install_bytedance_feishu",
+          "step_type": "official_manifest_installer",
+          "target_package_id": "ByteDance.Feishu",
+          "timeout_seconds": 1800
+        }
+      ]
+    },
+    "impact_summary": {
+      "bootstrap_required": false,
+      "bootstrap_skipped_reason": "official_manifest_installer_available",
+      "checksum_verification": "sha256",
+      "host_action": "install",
+      "may_require_admin": true,
+      "modifies_global_environment": true,
+      "modifies_path_or_registry": true,
+      "package_resolution": {
+        "candidate_attempts": [
+          {
+            "match_confidence": 0.0,
+            "query": "飞书",
+            "source_type": "package_manager_search",
+            "status": "no_match"
+          },
+          {
+            "candidate_count": 1,
+            "query": "飞书",
+            "source_type": "model_candidate_expansion",
+            "status": "matched"
+          },
+          {
+            "match_confidence": 0.0,
+            "query": "飞书",
+            "source_type": "package_manager_search_model_candidates",
+            "status": "no_match"
+          },
+          {
+            "match_confidence": 0.96,
+            "query": "飞书",
+            "source_type": "official_winget_manifest",
+            "status": "matched"
+          }
+        ],
+        "final_match_confidence": 0.96,
+        "match_confidence": 0.96,
+        "match_reason": "official_winget_manifest_dynamic",
+        "model_assisted": true,
+        "model_candidate_count": 1,
+        "official_source_assisted": true,
+        "resolved_via": "official_winget_manifest",
+        "source_type": "official_winget_manifest",
+        "target_package_id": "ByteDance.Feishu"
+      },
+      "preserve_preexisting_install": true,
+      "real_execution_default": false,
+      "risk_level": "R6",
+      "rollback": "winget uninstall --id ByteDance.Feishu 或通过系统应用卸载 ByteDance.Feishu",
+      "writes_system_locations": true
+    },
+    "risk_level": "R6",
+    "status": "installed",
+    "approval_id": "apr_416de391be7141159b2a356d6bab3947",
+    "trace_id": "trc_b6d32bb97be844348bab3552db44388d",
+    "created_at": "2026-05-03T01:02:06.358290Z",
+    "updated_at": "2026-05-03T01:04:51.675166Z"
+  },
+  "task_detail": {
+    "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+    "organization_id": "org_default",
+    "title": "安装本机软件 飞书",
+    "goal": "安装本机软件 飞书",
+    "mode": "agent",
+    "status": "completed",
+    "risk_level": "R2",
+    "owner_member_id": "mem_xiaoyao",
+    "conversation_id": null,
+    "parent_task_id": null,
+    "host_member_id": null,
+    "collaboration_plan_id": null,
+    "supervisor_mode": null,
+    "success_criteria": [
+      "任务产生可回放结果"
+    ],
+    "progress": {
+      "total_steps": 1,
+      "completed_steps": 0,
+      "current_step_key": null
+    },
+    "current_approval_id": null,
+    "artifact_count": 1,
+    "failure_reason": null,
+    "cancellation_reason": null,
+    "trace_id": "trc_b6d32bb97be844348bab3552db44388d",
+    "created_at": "2026-05-03T01:01:02.209909Z",
+    "updated_at": "2026-05-03T01:04:51.678259Z",
+    "plan": {
+      "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+      "title": "安装本机软件 飞书",
+      "goal": "安装本机软件 飞书",
+      "mode": "agent",
+      "owner_member_id": "mem_xiaoyao",
+      "host_member_id": null,
+      "success_criteria": [
+        "任务产生可回放结果"
+      ],
+      "constraints": {
+        "phase52": "host_install",
+        "requested_software": "飞书",
+        "action": "install"
+      },
+      "assumptions": [
+        "规则优先 planner；未启用模型辅助规划。",
+        "Agent loop 只按预算执行当前任务步骤，不做后台自主动作。",
+        "未声明资产句柄，步骤只能使用无需资产的能力。"
+      ],
+      "required_capabilities": [],
+      "required_assets": [],
+      "approval_strategy": {
+        "strategy": "step_gate",
+        "required_before_execution": false,
+        "high_risk_step_keys": [],
+        "phase19_candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+        "phase25_selected_candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb"
+      },
+      "steps": [
+        {
+          "step_key": "compose_report",
+          "step_type": "compose",
+          "title": "生成任务报告",
+          "risk_level": "R1",
+          "input": {}
+        }
+      ],
+      "participants": [],
+      "collaboration": {},
+      "risk_level": "R2",
+      "budget": {
+        "max_steps": 20,
+        "max_loop_steps": 8,
+        "max_tool_calls": 30,
+        "max_runtime_seconds": 1800,
+        "max_model_calls": 20,
+        "max_total_cost": 0.0,
+        "max_artifact_bytes": 10000000
+      },
+      "checkpoint_policy": {
+        "checkpoint_after_each_step": true,
+        "persist_observations": true
+      },
+      "failure_policy": {
+        "on_step_failure": "pause_and_create_retry_plan",
+        "allow_alternate_path_without_approval": false
+      },
+      "reflection_policy": {
+        "candidate_only": true,
+        "candidate_types": [
+          "memory_candidate",
+          "workflow_template_candidate",
+          "skill_candidate",
+          "failure_pattern_candidate"
+        ]
+      },
+      "planner_type": "agent_exploratory_planner",
+      "planner_reason_codes": [
+        "mode_agent",
+        "rule_first_planner",
+        "explicit_mode_hint"
+      ],
+      "preflight": {
+        "required_handles": [],
+        "required_approvals": [],
+        "blocked_actions": [],
+        "capability_snapshot": {
+          "enabled_skill_count": 49,
+          "ready_mcp_server_count": 39,
+          "active_mcp_tool_count": 56,
+          "explicit_skill_available": false,
+          "skill_match_refs": [
+            {
+              "skill_id": "skill.clawhub-calendar-plan.clawhub-calendar-plan",
+              "bundle_id": "clawhub-calendar-plan",
+              "confidence": 0.15,
+              "reason": "匹配 display_name"
+            },
+            {
+              "skill_id": "skill.clawhub-file-conversion-plan.clawhub-file-conversion-plan",
+              "bundle_id": "clawhub-file-conversion-plan",
+              "confidence": 0.15,
+              "reason": "匹配 display_name"
+            }
+          ],
+          "mcp_tool_refs": [],
+          "reason_codes": [],
+          "model_assist": {
+            "enabled": false,
+            "reason": "rule_first_planner"
+          }
+        },
+        "skill_match_refs": [
+          {
+            "skill_id": "skill.clawhub-calendar-plan.clawhub-calendar-plan",
+            "bundle_id": "clawhub-calendar-plan",
+            "confidence": 0.15,
+            "reason": "匹配 display_name"
+          },
+          {
+            "skill_id": "skill.clawhub-file-conversion-plan.clawhub-file-conversion-plan",
+            "bundle_id": "clawhub-file-conversion-plan",
+            "confidence": 0.15,
+            "reason": "匹配 display_name"
+          }
+        ],
+        "mcp_tool_refs": [],
+        "planner_context": {
+          "phase52": {
+            "workflow": "host_install",
+            "action": "install"
+          }
+        },
+        "brain_decision_id": null,
+        "phase19": {
+          "candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+          "verification_status": "passed",
+          "policy_prune_count": 1,
+          "capability_candidate_count": 2,
+          "model_assist_enabled": true,
+          "safe_final_step_count": 1,
+          "fallback_used": true,
+          "unsafe_prune_types": [
+            "fallback_to_rule_plan"
+          ]
+        },
+        "phase25": {
+          "generation_id": "plangen_c36976c912174531960b33916f950cde",
+          "candidate_count": 2,
+          "selected_candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+          "selected_candidate_source": "deterministic_rule_surrogate",
+          "selected_quality_score": 0.8712,
+          "quality_score": {
+            "score_id": "planscore_660efa11449a4610b81f3f13b1338cd9",
+            "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+            "candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+            "total_score": 0.8712,
+            "goal_coverage": 0.5,
+            "step_coherence": 1.0,
+            "capability_fit": 1.0,
+            "safety_compliance": 1.0,
+            "budget_efficiency": 1.0,
+            "missing_information_handling": 0.72,
+            "recoverability": 0.85,
+            "artifact_clarity": 0.9,
+            "selected": true,
+            "reason_codes": [
+              "quality_scored",
+              "source_deterministic_rule_surrogate"
+            ],
+            "created_at": "2026-05-03T01:01:02.270579+00:00"
+          },
+          "model_assist_attempted": true,
+          "fallback_used": true,
+          "fallback_reason": "schema_invalid",
+          "model_call": {
+            "adapter": "brain_openai_compatible",
+            "status": "fallback",
+            "fallback_reason": "schema_invalid",
+            "latency_ms": 17608
+          },
+          "candidate_only": true
+        },
+        "policy_prunes": [
+          {
+            "prune_id": "prune_28d02684b73b4b98a30fd5533ae72116",
+            "prune_type": "fallback_to_rule_plan",
+            "reason_codes": [
+              "candidate_actions_pruned",
+              "safe_compose_fallback"
+            ]
+          }
+        ]
+      },
+      "artifact_plan": {
+        "expected_outputs": [
+          "task_report"
+        ]
+      }
+    },
+    "budget": {
+      "max_steps": 20,
+      "max_loop_steps": 8,
+      "max_tool_calls": 30,
+      "max_runtime_seconds": 1800,
+      "max_model_calls": 20,
+      "max_total_cost": 0.0,
+      "max_artifact_bytes": 10000000
+    },
+    "preflight": {
+      "required_handles": [],
+      "required_approvals": [],
+      "blocked_actions": [],
+      "capability_snapshot": {
+        "enabled_skill_count": 49,
+        "ready_mcp_server_count": 39,
+        "active_mcp_tool_count": 56,
+        "explicit_skill_available": false,
+        "skill_match_refs": [
+          {
+            "skill_id": "skill.clawhub-calendar-plan.clawhub-calendar-plan",
+            "bundle_id": "clawhub-calendar-plan",
+            "confidence": 0.15,
+            "reason": "匹配 display_name"
+          },
+          {
+            "skill_id": "skill.clawhub-file-conversion-plan.clawhub-file-conversion-plan",
+            "bundle_id": "clawhub-file-conversion-plan",
+            "confidence": 0.15,
+            "reason": "匹配 display_name"
+          }
+        ],
+        "mcp_tool_refs": [],
+        "reason_codes": [],
+        "model_assist": {
+          "enabled": false,
+          "reason": "rule_first_planner"
+        }
+      },
+      "skill_match_refs": [
+        {
+          "skill_id": "skill.clawhub-calendar-plan.clawhub-calendar-plan",
+          "bundle_id": "clawhub-calendar-plan",
+          "confidence": 0.15,
+          "reason": "匹配 display_name"
+        },
+        {
+          "skill_id": "skill.clawhub-file-conversion-plan.clawhub-file-conversion-plan",
+          "bundle_id": "clawhub-file-conversion-plan",
+          "confidence": 0.15,
+          "reason": "匹配 display_name"
+        }
+      ],
+      "mcp_tool_refs": [],
+      "planner_context": {
+        "phase52": {
+          "workflow": "host_install",
+          "action": "install"
+        }
+      },
+      "brain_decision_id": null,
+      "phase19": {
+        "candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+        "verification_status": "passed",
+        "policy_prune_count": 1,
+        "capability_candidate_count": 2,
+        "model_assist_enabled": true,
+        "safe_final_step_count": 1,
+        "fallback_used": true,
+        "unsafe_prune_types": [
+          "fallback_to_rule_plan"
+        ]
+      },
+      "phase25": {
+        "generation_id": "plangen_c36976c912174531960b33916f950cde",
+        "candidate_count": 2,
+        "selected_candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+        "selected_candidate_source": "deterministic_rule_surrogate",
+        "selected_quality_score": 0.8712,
+        "quality_score": {
+          "score_id": "planscore_660efa11449a4610b81f3f13b1338cd9",
+          "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+          "candidate_id": "plancand_8711ccd5f6d04e15be71e78ed8ecb8fb",
+          "total_score": 0.8712,
+          "goal_coverage": 0.5,
+          "step_coherence": 1.0,
+          "capability_fit": 1.0,
+          "safety_compliance": 1.0,
+          "budget_efficiency": 1.0,
+          "missing_information_handling": 0.72,
+          "recoverability": 0.85,
+          "artifact_clarity": 0.9,
+          "selected": true,
+          "reason_codes": [
+            "quality_scored",
+            "source_deterministic_rule_surrogate"
+          ],
+          "created_at": "2026-05-03T01:01:02.270579+00:00"
+        },
+        "model_assist_attempted": true,
+        "fallback_used": true,
+        "fallback_reason": "schema_invalid",
+        "model_call": {
+          "adapter": "brain_openai_compatible",
+          "status": "fallback",
+          "fallback_reason": "schema_invalid",
+          "latency_ms": 17608
+        },
+        "candidate_only": true
+      },
+      "policy_prunes": [
+        {
+          "prune_id": "prune_28d02684b73b4b98a30fd5533ae72116",
+          "prune_type": "fallback_to_rule_plan",
+          "reason_codes": [
+            "candidate_actions_pruned",
+            "safe_compose_fallback"
+          ]
+        }
+      ]
+    },
+    "artifact_plan": {
+      "expected_outputs": [
+        "task_report"
+      ]
+    },
+    "result": {
+      "workflow": "host_install",
+      "host_action": "install",
+      "host_install_plan_id": "hip_750a57a127f84dc6bebe30069a55014b",
+      "host_install_execution_id": "hie_735a80c983fd451da6d1874b30feaf35",
+      "status": "installed",
+      "exit_code": 0,
+      "log_artifact_id": "art_84679994fdc64fdf9571899d4db0622c",
+      "version_detected": "7.67.9",
+      "install_path_summary": "installed_by_package_manager",
+      "dry_run": false
+    }
+  },
+  "log_artifact": {
+    "artifact": {
+      "artifact_id": "art_84679994fdc64fdf9571899d4db0622c",
+      "organization_id": "org_default",
+      "task_id": "tsk_e6dd01ff6c3049548444167359d0bcd5",
+      "step_id": null,
+      "tool_call_id": null,
+      "artifact_type": "host_install_log",
+      "display_name": "host-install.log",
+      "uri": "artifact://tsk_e6dd01ff6c3049548444167359d0bcd5/logs/host-install.log",
+      "content_type": "text/plain; charset=utf-8",
+      "size_bytes": 3148,
+      "checksum": "sha256:0055f152da0c1b7c30d9be853b154ada2a25661d1dae6fa2a9d6f282772d0e88",
+      "sensitivity": "low",
+      "metadata": {
+        "host_install_plan_id": "hip_750a57a127f84dc6bebe30069a55014b",
+        "dry_run": false
+      },
+      "created_at": "2026-05-03T01:04:51.652141Z"
+    },
+    "content_preview": "host install real execution\r\nsoftware=飞书\r\nsteps=[{'action': 'install', 'args': ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', \"$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_feishu.exe'; try { Invoke-WebRequest -Uri 'https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }\"], 'cwd': 'host_default', 'env_policy': 'minimal', 'executable': 'pwsh', 'fallback_for': 'package_manager_install_failed', 'official_manifest': 'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Feishu/7.67.9/ByteDance.Feishu.installer.yaml', 'official_source': 'https://sf3-cn.feishucdn.com/obj/ee-appcenter/cd01131c/Feishu-win32_x64-7.67.9-signed.exe', 'package_manager': 'winget_manifest', 'sha256': '31B8EC6D18C375D28C20A7A63062B20F0400F0CB1F76B4976B40CB069BD7666F', 'step_key': 'official_manifest_install_bytedance_feishu', 'step_type': 'official_manifest_installer', 'target_package_id': 'ByteDance.Feishu', 'timeout_seconds': 1800}]\r\nstep[1].phase=primary\r\nstep[1].started_at=2026-05-03T01:02:33.092004+00:00\r\nstep[1].ended_at=2026-05-03T01:04:43.598059+00:00\r\nstep[1].duration_ms=130500\r\nstep[1].key=official_manifest_install_bytedance_feishu\r\nstep[1].command=['pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', \"$ErrorActionPreference='Stop'; $progressPre"
+  },
+  "system_verify": {
+    "exit_code": 0,
+    "stdout": "{\"uninstall_entries\":{\"DisplayName\":\"椋炰功\",\"DisplayVersion\":\"7.67.9\",\"Publisher\":\"Beijing Feishu Technology Co., Ltd.\",\"InstallLocation\":null,\"DisplayIcon\":\"\\\"C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Feishu\\\\icon.ico\\\"\",\"UninstallString\":\"\\\"C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Feishu\\\\uninstall.exe\\\"\",\"QuietUninstallString\":null,\"PSChildName\":\"Feishu\"},\"executable_candidates\":[{\"Path\":\"C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Feishu\\\\Feishu.exe\",\"Exists\":true},{\"Path\":\"C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Programs\\\\Feishu\\\\Feishu.exe\",\"Exists\":false},{\"Path\":\"C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Feishu\\\\Application\\\\Feishu.exe\",\"Exists\":false},{\"Path\":\"C:\\\\Program Files\\\\Feishu\\\\Feishu.exe\",\"Exists\":false},{\"Path\":\"C:\\\\Program Files (x86)\\\\Feishu\\\\Feishu.exe\",\"Exists\":false}]}",
+    "stderr": "",
+    "json": {
+      "uninstall_entries": {
+        "DisplayName": "椋炰功",
+        "DisplayVersion": "7.67.9",
+        "Publisher": "Beijing Feishu Technology Co., Ltd.",
+        "InstallLocation": null,
+        "DisplayIcon": "\"C:\\Users\\Administrator\\AppData\\Local\\Feishu\\icon.ico\"",
+        "UninstallString": "\"C:\\Users\\Administrator\\AppData\\Local\\Feishu\\uninstall.exe\"",
+        "QuietUninstallString": null,
+        "PSChildName": "Feishu"
+      },
+      "executable_candidates": [
+        {
+          "Path": "C:\\Users\\Administrator\\AppData\\Local\\Feishu\\Feishu.exe",
+          "Exists": true
+        },
+        {
+          "Path": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Feishu\\Feishu.exe",
+          "Exists": false
+        },
+        {
+          "Path": "C:\\Users\\Administrator\\AppData\\Local\\Feishu\\Application\\Feishu.exe",
+          "Exists": false
+        },
+        {
+          "Path": "C:\\Program Files\\Feishu\\Feishu.exe",
+          "Exists": false
+        },
+        {
+          "Path": "C:\\Program Files (x86)\\Feishu\\Feishu.exe",
+          "Exists": false
+        }
+      ]
+    }
+  },
+  "timings": [
+    {
+      "stage": "approval approve and real install",
+      "duration_ms": 138650
+    },
+    {
+      "stage": "host install detail fetch",
+      "duration_ms": 18
+    },
+    {
+      "stage": "task detail fetch",
+      "duration_ms": 17
+    },
+    {
+      "stage": "host install log artifact fetch",
+      "duration_ms": 23
+    },
+    {
+      "stage": "windows installed app verification",
+      "duration_ms": 1341
+    },
+    {
+      "stage": "total approval/install/verify run",
+      "duration_ms": 140051
+    }
+  ],
+  "trace_ids": {
+    "approval": "trc_639a406b4182451680fc9009578e3e55",
+    "plan_detail": "trc_c3b3cc9689c84ffc9eac10a4dc58c325"
+  }
+}

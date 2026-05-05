@@ -12,6 +12,7 @@ from trace_service import TraceService, redact
 from app.core.time import utc_now_iso
 from app.services.audit import AuditEventService
 from app.services.checkpoints import CheckpointService
+from app.services.feishu_gateway import FeishuChannelGatewayService
 from app.services.memory import MemoryService
 from app.services.notifications import NotificationGatewayService
 from app.services.scheduled_tasks import ScheduledTaskService
@@ -70,7 +71,9 @@ class BackgroundWorkerService:
         checkpoints: CheckpointService,
         task_engine: TaskEngine,
         memory_service: MemoryService,
+        agent_workbench_service: Any | None = None,
         wechat_gateway: WechatChannelGatewayService | None = None,
+        feishu_gateway: FeishuChannelGatewayService | None = None,
         trace_service: TraceService,
         audit_service: AuditEventService,
         enabled: bool = False,
@@ -82,7 +85,9 @@ class BackgroundWorkerService:
         self._checkpoints = checkpoints
         self._task_engine = task_engine
         self._memory = memory_service
+        self._agent_workbench = agent_workbench_service
         self._wechat_gateway = wechat_gateway
+        self._feishu_gateway = feishu_gateway
         self._trace = trace_service
         self._audit = audit_service
         self._enabled = enabled
@@ -99,8 +104,10 @@ class BackgroundWorkerService:
             "scheduled_due_worker": self._scheduled_due_worker,
             "notification_retry_worker": self._notification_retry_worker,
             "wechat_inbound_worker": self._wechat_inbound_worker,
+            "feishu_inbound_worker": self._feishu_inbound_worker,
             "checkpoint_cleanup_worker": self._checkpoint_cleanup_worker,
             "stale_recovery_worker": self._stale_recovery_worker,
+            "agent_workbench_reflection_worker": self._agent_workbench_reflection_worker,
         }
         self._states = {
             name: WorkerState(name=name, enabled=True) for name in self._handlers
@@ -108,6 +115,9 @@ class BackgroundWorkerService:
 
     def set_wechat_gateway(self, wechat_gateway: WechatChannelGatewayService) -> None:
         self._wechat_gateway = wechat_gateway
+
+    def set_feishu_gateway(self, feishu_gateway: FeishuChannelGatewayService) -> None:
+        self._feishu_gateway = feishu_gateway
 
     async def start(self) -> None:
         if not self._enabled or self._loop_task is not None:
@@ -342,6 +352,16 @@ class BackgroundWorkerService:
             "outbound": outbound.model_dump(mode="json"),
         }
 
+    async def _feishu_inbound_worker(self, trace_id: str) -> dict[str, Any]:
+        if self._feishu_gateway is None:
+            return {"status": "skipped", "reason": "feishu_gateway_unavailable"}
+        inbound = await self._feishu_gateway.poll_once(trace_id=trace_id)
+        outbound = await self._feishu_gateway.deliver_due(trace_id=trace_id)
+        return {
+            "inbound": inbound.model_dump(mode="json"),
+            "outbound": outbound.model_dump(mode="json"),
+        }
+
     async def _checkpoint_cleanup_worker(self, trace_id: str) -> dict[str, Any]:
         expired = await self._checkpoints.expire_due_checkpoints(trace_id=trace_id)
         return {"expired_checkpoints": expired, "mode": "mark_expired"}
@@ -358,4 +378,17 @@ class BackgroundWorkerService:
             "memory_jobs_restored": memory_restored,
             "memory_jobs_processed": memory_processed,
             "scheduled_runs_recovered": scheduled_runs_recovered,
+        }
+
+    async def _agent_workbench_reflection_worker(self, trace_id: str) -> dict[str, Any]:
+        if self._agent_workbench is None:
+            return {"status": "skipped", "reason": "agent_workbench_unavailable"}
+        restored = await self._agent_workbench.recover_stale_jobs()
+        processed = await self._agent_workbench.process_pending_jobs(
+            limit=10,
+            trace_id=trace_id,
+        )
+        return {
+            "agent_workbench_jobs_restored": restored,
+            "agent_workbench_jobs_processed": processed,
         }

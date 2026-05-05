@@ -1,0 +1,36 @@
+{
+  "body": {
+    "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+    "approval_type": "action",
+    "created_at": "2026-05-03T09:38:59.317024Z",
+    "decision_reason": null,
+    "edited_payload": null,
+    "expires_at": "2026-05-03T11:38:59.317024Z",
+    "options": [
+      "approve",
+      "deny",
+      "edit"
+    ],
+    "organization_id": "org_default",
+    "payload_redacted": {
+      "approval_binding_hash": "sha256:aecf9e7d30a812bebc4003a827cb563b8f888f89a1c9a6884b3c1d4eda9b5951",
+      "backend_type": "wsl",
+      "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "preferred_port": 5588,
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "requested_action": "project.deployment.run",
+    "resolved_at": null,
+    "risk_level": "R4",
+    "status": "pending",
+    "step_id": null,
+    "summary": "需要确认部署项目 https://github.com/mdn/beginner-html-site-styled.git",
+    "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+    "tool_call_id": null,
+    "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+    "updated_at": "2026-05-03T09:38:59.317024Z"
+  },
+  "status_code": 200,
+  "trace_id": "trc_9e2e8c8c14854992833d95de09ad82da"
+}

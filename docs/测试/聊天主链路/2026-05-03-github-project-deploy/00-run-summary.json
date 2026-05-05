@@ -1,0 +1,1491 @@
+{
+  "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+  "approval_pending_body": {
+    "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+    "approval_type": "action",
+    "created_at": "2026-05-03T09:38:59.317024Z",
+    "decision_reason": null,
+    "edited_payload": null,
+    "expires_at": "2026-05-03T11:38:59.317024Z",
+    "options": [
+      "approve",
+      "deny",
+      "edit"
+    ],
+    "organization_id": "org_default",
+    "payload_redacted": {
+      "approval_binding_hash": "sha256:aecf9e7d30a812bebc4003a827cb563b8f888f89a1c9a6884b3c1d4eda9b5951",
+      "backend_type": "wsl",
+      "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "preferred_port": 5588,
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "requested_action": "project.deployment.run",
+    "resolved_at": null,
+    "risk_level": "R4",
+    "status": "pending",
+    "step_id": null,
+    "summary": "需要确认部署项目 https://github.com/mdn/beginner-html-site-styled.git",
+    "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+    "tool_call_id": null,
+    "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+    "updated_at": "2026-05-03T09:38:59.317024Z"
+  },
+  "approve_body": {
+    "artifact_count": 1,
+    "artifact_plan": {
+      "expected_outputs": [
+        "task_report"
+      ]
+    },
+    "budget": {
+      "max_artifact_bytes": 10000000,
+      "max_loop_steps": 8,
+      "max_model_calls": 20,
+      "max_runtime_seconds": 1800,
+      "max_steps": 20,
+      "max_tool_calls": 30,
+      "max_total_cost": 0.0
+    },
+    "cancellation_reason": null,
+    "collaboration_plan_id": null,
+    "conversation_id": null,
+    "created_at": "2026-05-03T09:38:59.268836Z",
+    "current_approval_id": null,
+    "failure_reason": null,
+    "goal": "部署项目 https://github.com/mdn/beginner-html-site-styled.git",
+    "host_member_id": null,
+    "mode": "agent",
+    "organization_id": "org_default",
+    "owner_member_id": "mem_xiaoyao",
+    "parent_task_id": null,
+    "plan": {
+      "approval_strategy": {
+        "high_risk_step_keys": [],
+        "phase19_candidate_id": "plancand_04947d253f2940dd94e6bc2cacab8399",
+        "phase25_selected_candidate_id": "plancand_04947d253f2940dd94e6bc2cacab8399",
+        "required_before_execution": false,
+        "strategy": "step_gate"
+      },
+      "artifact_plan": {
+        "expected_outputs": [
+          "task_report"
+        ]
+      },
+      "assumptions": [
+        "规则优先 planner；未启用模型辅助规划。",
+        "Agent loop 只按预算执行当前任务步骤，不做后台自主动作。",
+        "未声明资产句柄，步骤只能使用无需资产的能力。"
+      ],
+      "budget": {
+        "max_artifact_bytes": 10000000,
+        "max_loop_steps": 8,
+        "max_model_calls": 20,
+        "max_runtime_seconds": 1800,
+        "max_steps": 20,
+        "max_tool_calls": 30,
+        "max_total_cost": 0.0
+      },
+      "checkpoint_policy": {
+        "checkpoint_after_each_step": true,
+        "persist_observations": true
+      },
+      "collaboration": {},
+      "constraints": {
+        "phase52": "project_deployment",
+        "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+        "target": {
+          "mode": "preview"
+        }
+      },
+      "failure_policy": {
+        "allow_alternate_path_without_approval": false,
+        "on_step_failure": "pause_and_create_retry_plan"
+      },
+      "goal": "部署项目 https://github.com/mdn/beginner-html-site-styled.git",
+      "host_member_id": null,
+      "mode": "agent",
+      "owner_member_id": "mem_xiaoyao",
+      "participants": [],
+      "planner_reason_codes": [
+        "mode_agent",
+        "rule_first_planner",
+        "explicit_mode_hint"
+      ],
+      "planner_type": "agent_exploratory_planner",
+      "preflight": {
+        "blocked_actions": [],
+        "brain_decision_id": null,
+        "capability_snapshot": {
+          "active_mcp_tool_count": 0,
+          "enabled_skill_count": 0,
+          "explicit_skill_available": false,
+          "mcp_tool_refs": [],
+          "model_assist": {
+            "enabled": false,
+            "reason": "rule_first_planner"
+          },
+          "ready_mcp_server_count": 0,
+          "reason_codes": [],
+          "skill_match_refs": []
+        },
+        "mcp_tool_refs": [],
+        "phase19": {
+          "candidate_id": "plancand_04947d253f2940dd94e6bc2cacab8399",
+          "capability_candidate_count": 0,
+          "fallback_used": true,
+          "model_assist_enabled": false,
+          "policy_prune_count": 0,
+          "safe_final_step_count": 1,
+          "unsafe_prune_types": [],
+          "verification_status": "passed"
+        },
+        "phase25": {
+          "candidate_count": 1,
+          "candidate_only": true,
+          "fallback_reason": "no_routable_planner_brain",
+          "fallback_used": true,
+          "generation_id": "plangen_acf0dc11754f49978962eb4c7cd0ed41",
+          "model_assist_attempted": false,
+          "model_call": {
+            "adapter": "brain_openai_compatible",
+            "fallback_reason": "no_routable_planner_brain",
+            "privacy_level": "medium",
+            "status": "fallback"
+          },
+          "quality_score": {
+            "artifact_clarity": 0.9,
+            "budget_efficiency": 1.0,
+            "candidate_id": "plancand_04947d253f2940dd94e6bc2cacab8399",
+            "capability_fit": 1.0,
+            "created_at": "2026-05-03T09:38:59.277668+00:00",
+            "goal_coverage": 0.5,
+            "missing_information_handling": 0.72,
+            "reason_codes": [
+              "quality_scored",
+              "source_deterministic_rule_surrogate"
+            ],
+            "recoverability": 0.85,
+            "safety_compliance": 1.0,
+            "score_id": "planscore_2cb0c063df6148019f0425437e6cf2c7",
+            "selected": true,
+            "step_coherence": 1.0,
+            "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+            "total_score": 0.8712
+          },
+          "selected_candidate_id": "plancand_04947d253f2940dd94e6bc2cacab8399",
+          "selected_candidate_source": "deterministic_rule_surrogate",
+          "selected_quality_score": 0.8712
+        },
+        "planner_context": {
+          "phase52": {
+            "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+            "workflow": "project_deployment"
+          }
+        },
+        "required_approvals": [],
+        "required_handles": [],
+        "skill_match_refs": []
+      },
+      "reflection_policy": {
+        "candidate_only": true,
+        "candidate_types": [
+          "memory_candidate",
+          "workflow_template_candidate",
+          "skill_candidate",
+          "failure_pattern_candidate"
+        ]
+      },
+      "required_assets": [],
+      "required_capabilities": [],
+      "risk_level": "R2",
+      "steps": [
+        {
+          "input": {},
+          "risk_level": "R1",
+          "step_key": "compose_report",
+          "step_type": "compose",
+          "title": "生成任务报告"
+        }
+      ],
+      "success_criteria": [
+        "任务产生可回放结果"
+      ],
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "title": "部署项目 https://github.com/mdn/begi"
+    },
+    "preflight": {
+      "blocked_actions": [],
+      "brain_decision_id": null,
+      "capability_snapshot": {
+        "active_mcp_tool_count": 0,
+        "enabled_skill_count": 0,
+        "explicit_skill_available": false,
+        "mcp_tool_refs": [],
+        "model_assist": {
+          "enabled": false,
+          "reason": "rule_first_planner"
+        },
+        "ready_mcp_server_count": 0,
+        "reason_codes": [],
+        "skill_match_refs": []
+      },
+      "mcp_tool_refs": [],
+      "phase19": {
+        "candidate_id": "plancand_04947d253f2940dd94e6bc2cacab8399",
+        "capability_candidate_count": 0,
+        "fallback_used": true,
+        "model_assist_enabled": false,
+        "policy_prune_count": 0,
+        "safe_final_step_count": 1,
+        "unsafe_prune_types": [],
+        "verification_status": "passed"
+      },
+      "phase25": {
+        "candidate_count": 1,
+        "candidate_only": true,
+        "fallback_reason": "no_routable_planner_brain",
+        "fallback_used": true,
+        "generation_id": "plangen_acf0dc11754f49978962eb4c7cd0ed41",
+        "model_assist_attempted": false,
+        "model_call": {
+          "adapter": "brain_openai_compatible",
+          "fallback_reason": "no_routable_planner_brain",
+          "privacy_level": "medium",
+          "status": "fallback"
+        },
+        "quality_score": {
+          "artifact_clarity": 0.9,
+          "budget_efficiency": 1.0,
+          "candidate_id": "plancand_04947d253f2940dd94e6bc2cacab8399",
+          "capability_fit": 1.0,
+          "created_at": "2026-05-03T09:38:59.277668+00:00",
+          "goal_coverage": 0.5,
+          "missing_information_handling": 0.72,
+          "reason_codes": [
+            "quality_scored",
+            "source_deterministic_rule_surrogate"
+          ],
+          "recoverability": 0.85,
+          "safety_compliance": 1.0,
+          "score_id": "planscore_2cb0c063df6148019f0425437e6cf2c7",
+          "selected": true,
+          "step_coherence": 1.0,
+          "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+          "total_score": 0.8712
+        },
+        "selected_candidate_id": "plancand_04947d253f2940dd94e6bc2cacab8399",
+        "selected_candidate_source": "deterministic_rule_surrogate",
+        "selected_quality_score": 0.8712
+      },
+      "planner_context": {
+        "phase52": {
+          "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+          "workflow": "project_deployment"
+        }
+      },
+      "required_approvals": [],
+      "required_handles": [],
+      "skill_match_refs": []
+    },
+    "progress": {
+      "completed_steps": 1,
+      "current_step_key": null,
+      "total_steps": 1
+    },
+    "result": {
+      "loop_steps": 1,
+      "stop_reason": "completed",
+      "summary": "Agent loop 已完成。",
+      "tool_calls": 0
+    },
+    "risk_level": "R2",
+    "status": "completed",
+    "success_criteria": [
+      "任务产生可回放结果"
+    ],
+    "supervisor_mode": null,
+    "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+    "title": "部署项目 https://github.com/mdn/begi",
+    "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+    "updated_at": "2026-05-03T09:38:59.593006Z"
+  },
+  "data_dir": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-03-github-project-deploy\\data",
+  "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+  "ended_at": "2026-05-03T09:39:08.504696+00:00",
+  "endpoint_url": "http://127.0.0.1:5588",
+  "evidence_dir": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-03-github-project-deploy",
+  "final_body": {
+    "backend_type": "wsl",
+    "created_at": "2026-05-03T09:38:59.317024Z",
+    "current_step_key": "health_check",
+    "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+    "endpoint": {
+      "managed_process_id": "mpr_81519791ad6648e8ad7002f02dafcf9f",
+      "port": 5588,
+      "url": "http://127.0.0.1:5588"
+    },
+    "failure_reason": null,
+    "health": {
+      "status": "stopped"
+    },
+    "managed_process": {
+      "backend_type": "wsl",
+      "command_redacted": {
+        "command": "[REDACTED_LOCAL_PATH] -m http.server 5588 --bind 127.0.0.1",
+        "cwd": "project_workspace"
+      },
+      "created_at": "2026-05-03T09:39:05.284077Z",
+      "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "endpoint_url": "http://127.0.0.1:5588",
+      "log_artifact_id": "art_8d2dfe0c4d0a45d6b58b2955116b8dc4",
+      "managed_process_id": "mpr_81519791ad6648e8ad7002f02dafcf9f",
+      "organization_id": "org_default",
+      "port": 5588,
+      "process_kind": "preview_server",
+      "started_at": "2026-05-03T09:39:05.284077Z",
+      "status": "stopped",
+      "stopped_at": "2026-05-03T09:39:05.590989Z",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_b82762978e6146b4bebd3a22165290b9",
+      "updated_at": "2026-05-03T09:39:05.590989Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "organization_id": "org_default",
+    "plan": {
+      "approval_strategy": {
+        "approval_binding_hash": "sha256:aecf9e7d30a812bebc4003a827cb563b8f888f89a1c9a6884b3c1d4eda9b5951",
+        "approval_binds": [
+          "source_uri",
+          "backend_type",
+          "workspace_root",
+          "network_policy",
+          "install_commands",
+          "port_range"
+        ],
+        "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+        "required_before_execution": true,
+        "status": "required"
+      },
+      "backend_selection": {
+        "backend_candidates": [
+          {
+            "available": false,
+            "backend_type": "container",
+            "reason": "docker"
+          },
+          {
+            "available": true,
+            "backend_type": "wsl",
+            "reason": "wsl"
+          },
+          {
+            "available": true,
+            "backend_type": "local_workspace",
+            "reason": "policy guarded fallback"
+          }
+        ],
+        "blocked_reason": null,
+        "degraded_reason": null,
+        "selected_backend": "wsl"
+      },
+      "backend_type": "wsl",
+      "degraded_isolation": false,
+      "preferred_port": 5588,
+      "risk_level": "R4",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "steps": [
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "clone",
+          "tool": "project.clone"
+        },
+        {
+          "risk_level": "R1",
+          "status": "planned",
+          "step_key": "detect_stack",
+          "tool": "project.detect_stack"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "ensure_toolchain",
+          "tool": "runtime.ensure"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "install_deps",
+          "tool": "project.install_deps"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "build",
+          "tool": "project.build"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "run",
+          "tool": "project.run"
+        },
+        {
+          "risk_level": "R2",
+          "status": "planned",
+          "step_key": "health_check",
+          "tool": "project.health_check"
+        }
+      ],
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "port_lease": {
+      "created_at": "2026-05-03T09:39:04.623486Z",
+      "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "leased_until": null,
+      "organization_id": "org_default",
+      "port": 5588,
+      "port_lease_id": "port_ef5ee0d5874846e9b99c08e37715e293",
+      "protocol": "http",
+      "status": "released",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "updated_at": "2026-05-03T09:39:05.606544Z"
+    },
+    "status": "stopped",
+    "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+    "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+    "updated_at": "2026-05-03T09:39:05.606544Z",
+    "workspace": {
+      "backend_type": "wsl",
+      "created_at": "2026-05-03T09:38:59.309116Z",
+      "organization_id": "org_default",
+      "owner_member_id": "mem_xiaoyao",
+      "policy_snapshot": {
+        "backend_selection": {
+          "backend_candidates": [
+            {
+              "available": false,
+              "backend_type": "container",
+              "reason": "docker"
+            },
+            {
+              "available": true,
+              "backend_type": "wsl",
+              "reason": "wsl"
+            },
+            {
+              "available": true,
+              "backend_type": "local_workspace",
+              "reason": "policy guarded fallback"
+            }
+          ],
+          "blocked_reason": null,
+          "degraded_reason": null,
+          "selected_backend": "wsl"
+        },
+        "constraints": {
+          "preferred_port": 5588,
+          "test_label": "github-real-deploy-20260503"
+        },
+        "filesystem_policy": "workspace_root_only",
+        "workspace_root": "data/workspaces/projects/{workspace_id}"
+      },
+      "root_uri": "workspace://projects/pws_706e1c266585426c9d1c9ca415e18353",
+      "source_type": "github",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "stack_summary": {
+        "confidence": 0.75,
+        "risky_scripts": [],
+        "run_command": "python -m http.server",
+        "stack": "static"
+      },
+      "status": "ready",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+      "updated_at": "2026-05-03T09:39:04.614630Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+  },
+  "health_body": {
+    "db": "ok",
+    "default_shell": "company",
+    "status": "ok",
+    "trace_id": "trc_d5caba2473f44b22b499fd032dff787a",
+    "version": "0.1.0"
+  },
+  "logs_body": {
+    "content_preview": "clone=completed\r\nstack=static backend=wsl\r\nprocess_pid=13348\r\nprocess_command=[REDACTED_LOCAL_PATH] -m http.server 5588 --bind 127.0.0.1\r\nprocess_endpoint=http://127.0.0.1:5588\r\ninstall_deps=skipped_static\r\nbuild=skipped\r\nrun=process_started endpoint=http://127.0.0.1:5588\r\nhealth_check=passed status=200",
+    "deployment": {
+      "backend_type": "wsl",
+      "created_at": "2026-05-03T09:38:59.317024Z",
+      "current_step_key": "health_check",
+      "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "endpoint": {
+        "managed_process_id": "mpr_81519791ad6648e8ad7002f02dafcf9f",
+        "port": 5588,
+        "url": "http://127.0.0.1:5588"
+      },
+      "failure_reason": null,
+      "health": {
+        "degraded_isolation": false,
+        "log_artifact_id": "art_8d2dfe0c4d0a45d6b58b2955116b8dc4",
+        "status": "passed"
+      },
+      "organization_id": "org_default",
+      "plan": {
+        "approval_strategy": {
+          "approval_binding_hash": "sha256:aecf9e7d30a812bebc4003a827cb563b8f888f89a1c9a6884b3c1d4eda9b5951",
+          "approval_binds": [
+            "source_uri",
+            "backend_type",
+            "workspace_root",
+            "network_policy",
+            "install_commands",
+            "port_range"
+          ],
+          "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+          "required_before_execution": true,
+          "status": "required"
+        },
+        "backend_selection": {
+          "backend_candidates": [
+            {
+              "available": false,
+              "backend_type": "container",
+              "reason": "docker"
+            },
+            {
+              "available": true,
+              "backend_type": "wsl",
+              "reason": "wsl"
+            },
+            {
+              "available": true,
+              "backend_type": "local_workspace",
+              "reason": "policy guarded fallback"
+            }
+          ],
+          "blocked_reason": null,
+          "degraded_reason": null,
+          "selected_backend": "wsl"
+        },
+        "backend_type": "wsl",
+        "degraded_isolation": false,
+        "preferred_port": 5588,
+        "risk_level": "R4",
+        "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+        "steps": [
+          {
+            "risk_level": "R3",
+            "status": "planned",
+            "step_key": "clone",
+            "tool": "project.clone"
+          },
+          {
+            "risk_level": "R1",
+            "status": "planned",
+            "step_key": "detect_stack",
+            "tool": "project.detect_stack"
+          },
+          {
+            "risk_level": "R3",
+            "status": "planned",
+            "step_key": "ensure_toolchain",
+            "tool": "runtime.ensure"
+          },
+          {
+            "risk_level": "R4",
+            "status": "planned",
+            "step_key": "install_deps",
+            "tool": "project.install_deps"
+          },
+          {
+            "risk_level": "R3",
+            "status": "planned",
+            "step_key": "build",
+            "tool": "project.build"
+          },
+          {
+            "risk_level": "R4",
+            "status": "planned",
+            "step_key": "run",
+            "tool": "project.run"
+          },
+          {
+            "risk_level": "R2",
+            "status": "planned",
+            "step_key": "health_check",
+            "tool": "project.health_check"
+          }
+        ],
+        "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+      },
+      "status": "healthy",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+      "updated_at": "2026-05-03T09:39:05.284077Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "log_artifact_id": "art_8d2dfe0c4d0a45d6b58b2955116b8dc4",
+    "next_step": null,
+    "reason_code": "deployment_log_available",
+    "recoverable": false,
+    "status": "completed"
+  },
+  "plan_body": {
+    "backend_type": "wsl",
+    "created_at": "2026-05-03T09:38:59.317024Z",
+    "current_step_key": null,
+    "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+    "endpoint": {},
+    "failure_reason": null,
+    "health": {
+      "status": "not_started"
+    },
+    "managed_process": null,
+    "organization_id": "org_default",
+    "plan": {
+      "approval_strategy": {
+        "approval_binding_hash": "sha256:aecf9e7d30a812bebc4003a827cb563b8f888f89a1c9a6884b3c1d4eda9b5951",
+        "approval_binds": [
+          "source_uri",
+          "backend_type",
+          "workspace_root",
+          "network_policy",
+          "install_commands",
+          "port_range"
+        ],
+        "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+        "required_before_execution": true,
+        "status": "required"
+      },
+      "backend_selection": {
+        "backend_candidates": [
+          {
+            "available": false,
+            "backend_type": "container",
+            "reason": "docker"
+          },
+          {
+            "available": true,
+            "backend_type": "wsl",
+            "reason": "wsl"
+          },
+          {
+            "available": true,
+            "backend_type": "local_workspace",
+            "reason": "policy guarded fallback"
+          }
+        ],
+        "blocked_reason": null,
+        "degraded_reason": null,
+        "selected_backend": "wsl"
+      },
+      "backend_type": "wsl",
+      "degraded_isolation": false,
+      "preferred_port": 5588,
+      "risk_level": "R4",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "steps": [
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "clone",
+          "tool": "project.clone"
+        },
+        {
+          "risk_level": "R1",
+          "status": "planned",
+          "step_key": "detect_stack",
+          "tool": "project.detect_stack"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "ensure_toolchain",
+          "tool": "runtime.ensure"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "install_deps",
+          "tool": "project.install_deps"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "build",
+          "tool": "project.build"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "run",
+          "tool": "project.run"
+        },
+        {
+          "risk_level": "R2",
+          "status": "planned",
+          "step_key": "health_check",
+          "tool": "project.health_check"
+        }
+      ],
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "port_lease": null,
+    "status": "waiting_approval",
+    "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+    "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+    "updated_at": "2026-05-03T09:38:59.380948Z",
+    "workspace": {
+      "backend_type": "wsl",
+      "created_at": "2026-05-03T09:38:59.309116Z",
+      "organization_id": "org_default",
+      "owner_member_id": "mem_xiaoyao",
+      "policy_snapshot": {
+        "backend_selection": {
+          "backend_candidates": [
+            {
+              "available": false,
+              "backend_type": "container",
+              "reason": "docker"
+            },
+            {
+              "available": true,
+              "backend_type": "wsl",
+              "reason": "wsl"
+            },
+            {
+              "available": true,
+              "backend_type": "local_workspace",
+              "reason": "policy guarded fallback"
+            }
+          ],
+          "blocked_reason": null,
+          "degraded_reason": null,
+          "selected_backend": "wsl"
+        },
+        "constraints": {
+          "preferred_port": 5588,
+          "test_label": "github-real-deploy-20260503"
+        },
+        "filesystem_policy": "workspace_root_only",
+        "workspace_root": "data/workspaces/projects/{workspace_id}"
+      },
+      "root_uri": "workspace://projects/pws_706e1c266585426c9d1c9ca415e18353",
+      "source_type": "github",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "stack_summary": {},
+      "status": "created",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+      "updated_at": "2026-05-03T09:38:59.309116Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+  },
+  "post_stop_probe": {
+    "client_wall_ms": 2000.69,
+    "error": "URLError(TimeoutError('timed out'))",
+    "stopped": true
+  },
+  "preferred_port": 5588,
+  "preview_http": {
+    "body_preview": "<!DOCTYPE html>\r\n<html lang=\"en\">\r\n  <head>\r\n    <meta charset=\"utf-8\">\r\n    <title>My test page</title>\r\n    <link href=\"http://fonts.googleapis.com/css?family=Open+Sans\" rel=\"stylesheet\" type=\"text/css\">\r\n    <link href=\"styles/style.css\" rel=\"stylesheet\" type=\"text/css\">\r\n  </head>\r\n  <body>\r\n    <h1>Mozilla is cool</h1>\r\n    <img src=\"images/firefox-icon.png\" alt=\"The Firefox logo: a flaming fox surrounding the Earth.\">\r\n\r\n    <p>At Mozilla, we’re a global community of</p>\r\n\r\n    <ul> <!-- c",
+    "client_wall_ms": 2.89,
+    "content_type": "text/html",
+    "ok": true,
+    "status_code": 200
+  },
+  "run_body": {
+    "backend_type": "wsl",
+    "created_at": "2026-05-03T09:38:59.317024Z",
+    "current_step_key": "health_check",
+    "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+    "endpoint": {
+      "managed_process_id": "mpr_81519791ad6648e8ad7002f02dafcf9f",
+      "port": 5588,
+      "url": "http://127.0.0.1:5588"
+    },
+    "failure_reason": null,
+    "health": {
+      "degraded_isolation": false,
+      "log_artifact_id": "art_8d2dfe0c4d0a45d6b58b2955116b8dc4",
+      "status": "passed"
+    },
+    "managed_process": {
+      "backend_type": "wsl",
+      "command_redacted": {
+        "command": "[REDACTED_LOCAL_PATH] -m http.server 5588 --bind 127.0.0.1",
+        "cwd": "project_workspace"
+      },
+      "created_at": "2026-05-03T09:39:05.284077Z",
+      "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "endpoint_url": "http://127.0.0.1:5588",
+      "log_artifact_id": "art_8d2dfe0c4d0a45d6b58b2955116b8dc4",
+      "managed_process_id": "mpr_81519791ad6648e8ad7002f02dafcf9f",
+      "organization_id": "org_default",
+      "port": 5588,
+      "process_kind": "preview_server",
+      "started_at": "2026-05-03T09:39:05.284077Z",
+      "status": "running",
+      "stopped_at": null,
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_b82762978e6146b4bebd3a22165290b9",
+      "updated_at": "2026-05-03T09:39:05.284077Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "organization_id": "org_default",
+    "plan": {
+      "approval_strategy": {
+        "approval_binding_hash": "sha256:aecf9e7d30a812bebc4003a827cb563b8f888f89a1c9a6884b3c1d4eda9b5951",
+        "approval_binds": [
+          "source_uri",
+          "backend_type",
+          "workspace_root",
+          "network_policy",
+          "install_commands",
+          "port_range"
+        ],
+        "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+        "required_before_execution": true,
+        "status": "required"
+      },
+      "backend_selection": {
+        "backend_candidates": [
+          {
+            "available": false,
+            "backend_type": "container",
+            "reason": "docker"
+          },
+          {
+            "available": true,
+            "backend_type": "wsl",
+            "reason": "wsl"
+          },
+          {
+            "available": true,
+            "backend_type": "local_workspace",
+            "reason": "policy guarded fallback"
+          }
+        ],
+        "blocked_reason": null,
+        "degraded_reason": null,
+        "selected_backend": "wsl"
+      },
+      "backend_type": "wsl",
+      "degraded_isolation": false,
+      "preferred_port": 5588,
+      "risk_level": "R4",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "steps": [
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "clone",
+          "tool": "project.clone"
+        },
+        {
+          "risk_level": "R1",
+          "status": "planned",
+          "step_key": "detect_stack",
+          "tool": "project.detect_stack"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "ensure_toolchain",
+          "tool": "runtime.ensure"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "install_deps",
+          "tool": "project.install_deps"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "build",
+          "tool": "project.build"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "run",
+          "tool": "project.run"
+        },
+        {
+          "risk_level": "R2",
+          "status": "planned",
+          "step_key": "health_check",
+          "tool": "project.health_check"
+        }
+      ],
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "port_lease": {
+      "created_at": "2026-05-03T09:39:04.623486Z",
+      "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "leased_until": null,
+      "organization_id": "org_default",
+      "port": 5588,
+      "port_lease_id": "port_ef5ee0d5874846e9b99c08e37715e293",
+      "protocol": "http",
+      "status": "active",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "updated_at": "2026-05-03T09:39:04.623486Z"
+    },
+    "status": "healthy",
+    "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+    "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+    "updated_at": "2026-05-03T09:39:05.284077Z",
+    "workspace": {
+      "backend_type": "wsl",
+      "created_at": "2026-05-03T09:38:59.309116Z",
+      "organization_id": "org_default",
+      "owner_member_id": "mem_xiaoyao",
+      "policy_snapshot": {
+        "backend_selection": {
+          "backend_candidates": [
+            {
+              "available": false,
+              "backend_type": "container",
+              "reason": "docker"
+            },
+            {
+              "available": true,
+              "backend_type": "wsl",
+              "reason": "wsl"
+            },
+            {
+              "available": true,
+              "backend_type": "local_workspace",
+              "reason": "policy guarded fallback"
+            }
+          ],
+          "blocked_reason": null,
+          "degraded_reason": null,
+          "selected_backend": "wsl"
+        },
+        "constraints": {
+          "preferred_port": 5588,
+          "test_label": "github-real-deploy-20260503"
+        },
+        "filesystem_policy": "workspace_root_only",
+        "workspace_root": "data/workspaces/projects/{workspace_id}"
+      },
+      "root_uri": "workspace://projects/pws_706e1c266585426c9d1c9ca415e18353",
+      "source_type": "github",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "stack_summary": {
+        "confidence": 0.75,
+        "risky_scripts": [],
+        "run_command": "python -m http.server",
+        "stack": "static"
+      },
+      "status": "ready",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+      "updated_at": "2026-05-03T09:39:04.614630Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+  },
+  "run_without_approval_body": {
+    "backend_type": "wsl",
+    "created_at": "2026-05-03T09:38:59.317024Z",
+    "current_step_key": null,
+    "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+    "endpoint": {},
+    "failure_reason": null,
+    "health": {
+      "status": "waiting_approval"
+    },
+    "managed_process": null,
+    "organization_id": "org_default",
+    "plan": {
+      "approval_strategy": {
+        "approval_binding_hash": "sha256:aecf9e7d30a812bebc4003a827cb563b8f888f89a1c9a6884b3c1d4eda9b5951",
+        "approval_binds": [
+          "source_uri",
+          "backend_type",
+          "workspace_root",
+          "network_policy",
+          "install_commands",
+          "port_range"
+        ],
+        "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+        "required_before_execution": true,
+        "status": "required"
+      },
+      "backend_selection": {
+        "backend_candidates": [
+          {
+            "available": false,
+            "backend_type": "container",
+            "reason": "docker"
+          },
+          {
+            "available": true,
+            "backend_type": "wsl",
+            "reason": "wsl"
+          },
+          {
+            "available": true,
+            "backend_type": "local_workspace",
+            "reason": "policy guarded fallback"
+          }
+        ],
+        "blocked_reason": null,
+        "degraded_reason": null,
+        "selected_backend": "wsl"
+      },
+      "backend_type": "wsl",
+      "degraded_isolation": false,
+      "preferred_port": 5588,
+      "risk_level": "R4",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "steps": [
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "clone",
+          "tool": "project.clone"
+        },
+        {
+          "risk_level": "R1",
+          "status": "planned",
+          "step_key": "detect_stack",
+          "tool": "project.detect_stack"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "ensure_toolchain",
+          "tool": "runtime.ensure"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "install_deps",
+          "tool": "project.install_deps"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "build",
+          "tool": "project.build"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "run",
+          "tool": "project.run"
+        },
+        {
+          "risk_level": "R2",
+          "status": "planned",
+          "step_key": "health_check",
+          "tool": "project.health_check"
+        }
+      ],
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "port_lease": null,
+    "status": "waiting_approval",
+    "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+    "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+    "updated_at": "2026-05-03T09:38:59.413749Z",
+    "workspace": {
+      "backend_type": "wsl",
+      "created_at": "2026-05-03T09:38:59.309116Z",
+      "organization_id": "org_default",
+      "owner_member_id": "mem_xiaoyao",
+      "policy_snapshot": {
+        "backend_selection": {
+          "backend_candidates": [
+            {
+              "available": false,
+              "backend_type": "container",
+              "reason": "docker"
+            },
+            {
+              "available": true,
+              "backend_type": "wsl",
+              "reason": "wsl"
+            },
+            {
+              "available": true,
+              "backend_type": "local_workspace",
+              "reason": "policy guarded fallback"
+            }
+          ],
+          "blocked_reason": null,
+          "degraded_reason": null,
+          "selected_backend": "wsl"
+        },
+        "constraints": {
+          "preferred_port": 5588,
+          "test_label": "github-real-deploy-20260503"
+        },
+        "filesystem_policy": "workspace_root_only",
+        "workspace_root": "data/workspaces/projects/{workspace_id}"
+      },
+      "root_uri": "workspace://projects/pws_706e1c266585426c9d1c9ca415e18353",
+      "source_type": "github",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "stack_summary": {},
+      "status": "created",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+      "updated_at": "2026-05-03T09:38:59.309116Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+  },
+  "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+  "stages": [
+    {
+      "client_wall_ms": 14.81,
+      "key": "api_health",
+      "label": "API 健康检查",
+      "method": "GET",
+      "note": null,
+      "path": "/health",
+      "server_trace_ms": 15,
+      "status": "ok",
+      "status_code": 200,
+      "trace_id": "trc_d5caba2473f44b22b499fd032dff787a"
+    },
+    {
+      "client_wall_ms": 136.1,
+      "key": "create_plan",
+      "label": "创建部署计划",
+      "method": "POST",
+      "note": null,
+      "path": "/api/project-deployments",
+      "server_trace_ms": 127,
+      "status": "waiting_approval",
+      "status_code": 200,
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008"
+    },
+    {
+      "client_wall_ms": 18.46,
+      "key": "run_without_approval",
+      "label": "未审批执行门禁",
+      "method": "POST",
+      "note": null,
+      "path": "/api/project-deployments/dep_3a86c349050041a9b12694c4e5cc7bc6/run",
+      "server_trace_ms": 15,
+      "status": "waiting_approval",
+      "status_code": 200,
+      "trace_id": "trc_0d2820e7994b4684bbb95be699c12ced"
+    },
+    {
+      "client_wall_ms": 12.71,
+      "key": "approval_pending",
+      "label": "读取待审批记录",
+      "method": "GET",
+      "note": null,
+      "path": "/api/approvals/apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+      "server_trace_ms": 5,
+      "status": "pending",
+      "status_code": 200,
+      "trace_id": "trc_9e2e8c8c14854992833d95de09ad82da"
+    },
+    {
+      "client_wall_ms": 180.03,
+      "key": "approve",
+      "label": "审批部署计划",
+      "method": "POST",
+      "note": null,
+      "path": "/api/approvals/apr_32c60a07b9f84952b7d73ce8ebe5d89e/approve",
+      "server_trace_ms": 161,
+      "status": "completed",
+      "status_code": 200,
+      "trace_id": "trc_99076a9ffaaa496fad108157beb2a84b"
+    },
+    {
+      "client_wall_ms": 5631.82,
+      "key": "run_deploy",
+      "label": "执行部署并健康检查",
+      "method": "POST",
+      "note": null,
+      "path": "/api/project-deployments/dep_3a86c349050041a9b12694c4e5cc7bc6/run",
+      "server_trace_ms": 5611,
+      "status": "healthy",
+      "status_code": 200,
+      "trace_id": "trc_b82762978e6146b4bebd3a22165290b9"
+    },
+    {
+      "client_wall_ms": 2.89,
+      "key": "preview_http_get",
+      "label": "访问预览页",
+      "method": null,
+      "note": "http://127.0.0.1:5588",
+      "path": null,
+      "server_trace_ms": null,
+      "status": "ok",
+      "status_code": null,
+      "trace_id": null
+    },
+    {
+      "client_wall_ms": 20.93,
+      "key": "logs",
+      "label": "读取部署日志",
+      "method": "GET",
+      "note": null,
+      "path": "/api/project-deployments/dep_3a86c349050041a9b12694c4e5cc7bc6/logs",
+      "server_trace_ms": 8,
+      "status": "completed",
+      "status_code": 200,
+      "trace_id": "trc_47e6eb89a21f47c58ff8804f0349bfc0"
+    },
+    {
+      "client_wall_ms": 255.25,
+      "key": "stop",
+      "label": "停止预览进程",
+      "method": "POST",
+      "note": null,
+      "path": "/api/project-deployments/dep_3a86c349050041a9b12694c4e5cc7bc6/stop",
+      "server_trace_ms": 233,
+      "status": "stopped",
+      "status_code": 200,
+      "trace_id": "trc_e3f71f8c5bb3452882871508e243b12b"
+    },
+    {
+      "client_wall_ms": 39.49,
+      "key": "final_detail",
+      "label": "读取停止后详情",
+      "method": "GET",
+      "note": null,
+      "path": "/api/project-deployments/dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "server_trace_ms": 0,
+      "status": "stopped",
+      "status_code": 200,
+      "trace_id": "trc_ac1a4f655dc143828371aef6f059d025"
+    },
+    {
+      "client_wall_ms": 2000.69,
+      "key": "post_stop_probe",
+      "label": "停止后端口探测",
+      "method": null,
+      "note": "http://127.0.0.1:5588",
+      "path": null,
+      "server_trace_ms": null,
+      "status": "stopped",
+      "status_code": null,
+      "trace_id": null
+    }
+  ],
+  "started_at": "2026-05-03T09:38:57.215177+00:00",
+  "status": "passed",
+  "stop_body": {
+    "backend_type": "wsl",
+    "created_at": "2026-05-03T09:38:59.317024Z",
+    "current_step_key": "health_check",
+    "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+    "endpoint": {
+      "managed_process_id": "mpr_81519791ad6648e8ad7002f02dafcf9f",
+      "port": 5588,
+      "url": "http://127.0.0.1:5588"
+    },
+    "failure_reason": null,
+    "health": {
+      "status": "stopped"
+    },
+    "managed_process": {
+      "backend_type": "wsl",
+      "command_redacted": {
+        "command": "[REDACTED_LOCAL_PATH] -m http.server 5588 --bind 127.0.0.1",
+        "cwd": "project_workspace"
+      },
+      "created_at": "2026-05-03T09:39:05.284077Z",
+      "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "endpoint_url": "http://127.0.0.1:5588",
+      "log_artifact_id": "art_8d2dfe0c4d0a45d6b58b2955116b8dc4",
+      "managed_process_id": "mpr_81519791ad6648e8ad7002f02dafcf9f",
+      "organization_id": "org_default",
+      "port": 5588,
+      "process_kind": "preview_server",
+      "started_at": "2026-05-03T09:39:05.284077Z",
+      "status": "stopped",
+      "stopped_at": "2026-05-03T09:39:05.590989Z",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_b82762978e6146b4bebd3a22165290b9",
+      "updated_at": "2026-05-03T09:39:05.590989Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "organization_id": "org_default",
+    "plan": {
+      "approval_strategy": {
+        "approval_binding_hash": "sha256:aecf9e7d30a812bebc4003a827cb563b8f888f89a1c9a6884b3c1d4eda9b5951",
+        "approval_binds": [
+          "source_uri",
+          "backend_type",
+          "workspace_root",
+          "network_policy",
+          "install_commands",
+          "port_range"
+        ],
+        "approval_id": "apr_32c60a07b9f84952b7d73ce8ebe5d89e",
+        "required_before_execution": true,
+        "status": "required"
+      },
+      "backend_selection": {
+        "backend_candidates": [
+          {
+            "available": false,
+            "backend_type": "container",
+            "reason": "docker"
+          },
+          {
+            "available": true,
+            "backend_type": "wsl",
+            "reason": "wsl"
+          },
+          {
+            "available": true,
+            "backend_type": "local_workspace",
+            "reason": "policy guarded fallback"
+          }
+        ],
+        "blocked_reason": null,
+        "degraded_reason": null,
+        "selected_backend": "wsl"
+      },
+      "backend_type": "wsl",
+      "degraded_isolation": false,
+      "preferred_port": 5588,
+      "risk_level": "R4",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "steps": [
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "clone",
+          "tool": "project.clone"
+        },
+        {
+          "risk_level": "R1",
+          "status": "planned",
+          "step_key": "detect_stack",
+          "tool": "project.detect_stack"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "ensure_toolchain",
+          "tool": "runtime.ensure"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "install_deps",
+          "tool": "project.install_deps"
+        },
+        {
+          "risk_level": "R3",
+          "status": "planned",
+          "step_key": "build",
+          "tool": "project.build"
+        },
+        {
+          "risk_level": "R4",
+          "status": "planned",
+          "step_key": "run",
+          "tool": "project.run"
+        },
+        {
+          "risk_level": "R2",
+          "status": "planned",
+          "step_key": "health_check",
+          "tool": "project.health_check"
+        }
+      ],
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "port_lease": {
+      "created_at": "2026-05-03T09:39:04.623486Z",
+      "deployment_id": "dep_3a86c349050041a9b12694c4e5cc7bc6",
+      "leased_until": null,
+      "organization_id": "org_default",
+      "port": 5588,
+      "port_lease_id": "port_ef5ee0d5874846e9b99c08e37715e293",
+      "protocol": "http",
+      "status": "released",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "updated_at": "2026-05-03T09:39:05.606544Z"
+    },
+    "status": "stopped",
+    "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+    "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+    "updated_at": "2026-05-03T09:39:05.606544Z",
+    "workspace": {
+      "backend_type": "wsl",
+      "created_at": "2026-05-03T09:38:59.309116Z",
+      "organization_id": "org_default",
+      "owner_member_id": "mem_xiaoyao",
+      "policy_snapshot": {
+        "backend_selection": {
+          "backend_candidates": [
+            {
+              "available": false,
+              "backend_type": "container",
+              "reason": "docker"
+            },
+            {
+              "available": true,
+              "backend_type": "wsl",
+              "reason": "wsl"
+            },
+            {
+              "available": true,
+              "backend_type": "local_workspace",
+              "reason": "policy guarded fallback"
+            }
+          ],
+          "blocked_reason": null,
+          "degraded_reason": null,
+          "selected_backend": "wsl"
+        },
+        "constraints": {
+          "preferred_port": 5588,
+          "test_label": "github-real-deploy-20260503"
+        },
+        "filesystem_policy": "workspace_root_only",
+        "workspace_root": "data/workspaces/projects/{workspace_id}"
+      },
+      "root_uri": "workspace://projects/pws_706e1c266585426c9d1c9ca415e18353",
+      "source_type": "github",
+      "source_uri": "https://github.com/mdn/beginner-html-site-styled.git",
+      "stack_summary": {
+        "confidence": 0.75,
+        "risky_scripts": [],
+        "run_command": "python -m http.server",
+        "stack": "static"
+      },
+      "status": "ready",
+      "task_id": "tsk_9a028e52ecbb427e8c4fe23cde43e8a3",
+      "trace_id": "trc_754bcccd141b498694bc5904fc2c7008",
+      "updated_at": "2026-05-03T09:39:04.614630Z",
+      "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+    },
+    "workspace_id": "pws_706e1c266585426c9d1c9ca415e18353"
+  },
+  "trace_ids": {
+    "api_health": "trc_d5caba2473f44b22b499fd032dff787a",
+    "approval_pending": "trc_9e2e8c8c14854992833d95de09ad82da",
+    "approve": "trc_99076a9ffaaa496fad108157beb2a84b",
+    "create_plan": "trc_754bcccd141b498694bc5904fc2c7008",
+    "final_detail": "trc_ac1a4f655dc143828371aef6f059d025",
+    "logs": "trc_47e6eb89a21f47c58ff8804f0349bfc0",
+    "run_deploy": "trc_b82762978e6146b4bebd3a22165290b9",
+    "run_without_approval": "trc_0d2820e7994b4684bbb95be699c12ced",
+    "stop": "trc_e3f71f8c5bb3452882871508e243b12b"
+  }
+}

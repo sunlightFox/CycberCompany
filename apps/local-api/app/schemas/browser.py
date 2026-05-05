@@ -5,9 +5,11 @@ from typing import Any
 from core_types import (
     ApiModel,
     BrowserEvidence,
+    BrowserPageState,
     BrowserProfile,
     BrowserProfileEvent,
     BrowserSession,
+    BrowserSessionHealthProbe,
     EntityId,
 )
 from pydantic import Field
@@ -50,6 +52,48 @@ class BrowserSessionCreateRequest(ApiModel):
     secret_ref: EntityId | None = None
     created_by_member_id: EntityId | None = "mem_xiaoyao"
     expires_at: str | None = None
+    reuse_policy: dict[str, Any] = Field(default_factory=dict)
+
+
+class BrowserSessionHealthCheckRequest(ApiModel):
+    probe_type: str = "manual"
+    provider_status: str | None = None
+    observed_status: str | None = None
+    failure_reason: str | None = None
+    recovery_hint: str | None = None
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+
+class BrowserSessionRestoreContextRequest(ApiModel):
+    task_id: EntityId | None = None
+    member_id: EntityId | None = None
+    page_key: str | None = None
+    current_url: str | None = None
+    requested_action: str | None = None
+
+
+class BrowserSessionHealthProbeResponse(BrowserSessionHealthProbe):
+    pass
+
+
+class BrowserPageStateResponse(BrowserPageState):
+    pass
+
+
+class BrowserPageStateListResponse(ApiModel):
+    items: list[BrowserPageState] = Field(default_factory=list)
+
+
+class BrowserSessionHealthCheckResponse(ApiModel):
+    browser_session: BrowserSession
+    browser_profile: BrowserProfile
+    probe: BrowserSessionHealthProbe
+
+
+class BrowserSessionRestoreContextResponse(ApiModel):
+    browser_session: BrowserSession
+    browser_profile: BrowserProfile
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 class BrowserProfileResponse(BrowserProfile):

@@ -4,7 +4,10 @@ from typing import Any
 
 from core_types import (
     ApiModel,
+    ChatContextCompaction,
     ChatEvent,
+    ChatMessageEnvelope,
+    ChatTurnQueueItem,
     ChatTurnRecoveryAttempt,
     ChatTurnRequest,
     ChatTurnResponse,
@@ -28,6 +31,11 @@ class MessageItem(ApiModel):
     content_text: str | None = None
     content: dict[str, Any]
     trace_id: str | None = None
+    voice_profile_id: str | None = None
+    voice_render_job_id: str | None = None
+    audio_uri: str | None = None
+    audio_content_type: str | None = None
+    voice_metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: str
 
 
@@ -95,6 +103,18 @@ class ChatPersistedEventsResponse(ApiModel):
 
 class ChatTurnRecoveryAttemptListResponse(ApiModel):
     items: list[ChatTurnRecoveryAttempt] = Field(default_factory=list)
+
+
+class ChatTurnEnvelopeResponse(ChatMessageEnvelope):
+    pass
+
+
+class ChatTurnQueueResponse(ApiModel):
+    item: ChatTurnQueueItem | None = None
+
+
+class ChatTurnCompactionsResponse(ApiModel):
+    items: list[ChatContextCompaction] = Field(default_factory=list)
 
 
 class ConversationWorkingStateResponse(ApiModel):
@@ -165,6 +185,9 @@ __all__ = [
     "ChatEventStreamResponse",
     "ChatPersistedEvent",
     "ChatPersistedEventsResponse",
+    "ChatTurnCompactionsResponse",
+    "ChatTurnEnvelopeResponse",
+    "ChatTurnQueueResponse",
     "ChatTurnRecoveryAttempt",
     "ChatTurnRecoveryAttemptListResponse",
     "ChatTurnDetail",

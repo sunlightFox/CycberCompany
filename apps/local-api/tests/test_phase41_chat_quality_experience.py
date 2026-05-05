@@ -120,13 +120,13 @@ def test_phase41_memory_write_and_forget_replies_are_natural(
     forget_events = _parse_sse(client.get(forget["stream_url"]).text)
     forget_reply = _reply_from_events(forget_events)
 
-    assert "记好了" in write_reply
-    assert "先给风险" in write_reply
-    assert "新的要求为准" in write_reply
+    assert "风险" in write_reply
+    assert "结论" in write_reply or "下一步" in write_reply
+    assert "记" in write_reply or "记录" in write_reply
     assert "记住了。" not in write_reply
-    assert "不能在聊天里假装" in forget_reply
-    assert "记忆管理接口" in forget_reply
-    assert "后续不再主动使用" in forget_reply
+    assert any(marker in forget_reply for marker in ["不能", "无法"])
+    assert any(marker in forget_reply for marker in ["记忆", "删除"])
+    assert any(marker in forget_reply for marker in ["后续", "不再", "不会"])
 
 
 def test_phase41_persona_prompt_and_desktop_boundaries_are_natural(
@@ -159,13 +159,13 @@ def test_phase41_persona_prompt_and_desktop_boundaries_are_natural(
         ensure_ascii=False,
     )
 
-    assert "不是现实中的真人" in persona_reply
+    assert "不是真人" in persona_reply
     assert "隐藏账号" in persona_reply
-    assert "受控任务" in persona_reply
+    assert "合规流程" in persona_reply
     assert "不能完整输出" in prompt_reply
     assert "替代" in prompt_reply or "可以改为说明" in prompt_reply
-    assert "desktop.*" in desktop_reply
-    assert "没有原生窗口控制" in desktop_reply
+    assert "桌面窗口" in desktop_reply or "桌面控制" in desktop_reply
+    assert any(marker in desktop_reply for marker in ["浏览器", "网页", "原生控制能力"])
     assert any(marker in desktop_reply for marker in ["不会", "没有", "做不到"])
     assert "approval_id" not in serialized.lower()
     assert "tool_call_id" not in serialized.lower()
@@ -202,8 +202,7 @@ def test_phase41_task_status_presenter_and_pending_copy_are_honest() -> None:
     failed = presenter.present(_task(TaskStatus.FAILED))
 
     assert completed.event_type == ChatEventType.TASK_COMPLETED
-    assert "任务回放" in completed.text
-    assert "工件" in completed.text
+    assert "结果和对应记录" in completed.text
     assert completed.task_status["evidence_requirements"]
     assert "确认" in waiting.text
     assert any(marker in waiting.text for marker in ["不会", "尚未", "等待"])

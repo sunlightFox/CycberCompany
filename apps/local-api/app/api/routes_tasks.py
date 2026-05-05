@@ -8,6 +8,12 @@ from app.schemas.tasks import (
     AgentLoopListResponse,
     AgentNextActionDecisionListResponse,
     CollaborationReplayResponse,
+    CollaborationContextBoundaryListResponse,
+    CollaborationHandoffRecordListResponse,
+    CollaborationHandoffRequest,
+    CollaborationRoutePreviewRequest,
+    CollaborationRoutePreviewResponse,
+    CollaborationRoutingDecisionListResponse,
     ParticipantRemoveRequest,
     PlanCandidateListResponse,
     PlannerCapabilityCandidateListResponse,
@@ -383,6 +389,58 @@ async def task_subtasks(
     return TaskSubtaskListResponse(items=await registry.supervisor_service.subtasks(task_id))
 
 
+@router.post("/{task_id}/supervisor/route-preview", response_model=CollaborationRoutePreviewResponse)
+async def supervisor_route_preview(
+    task_id: str,
+    payload: CollaborationRoutePreviewRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> CollaborationRoutePreviewResponse:
+    routing_decision, selected, rejected, boundaries = await registry.supervisor_service.preview_route(
+        task_id,
+        host_member_id=payload.host_member_id,
+        mode=payload.mode,
+        resource_handle_ids=payload.resource_handle_ids,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return CollaborationRoutePreviewResponse(
+        routing_decision=routing_decision,
+        selected_candidates=selected,
+        rejected_candidates=rejected,
+        context_boundaries=boundaries,
+    )
+
+
+@router.get("/{task_id}/routing-decisions", response_model=CollaborationRoutingDecisionListResponse)
+async def collaboration_routing_decisions(
+    task_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> CollaborationRoutingDecisionListResponse:
+    return CollaborationRoutingDecisionListResponse(
+        items=await registry.supervisor_service.routing_decisions(task_id)
+    )
+
+
+@router.get("/{task_id}/handoffs", response_model=CollaborationHandoffRecordListResponse)
+async def collaboration_handoffs(
+    task_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> CollaborationHandoffRecordListResponse:
+    return CollaborationHandoffRecordListResponse(
+        items=await registry.supervisor_service.handoff_records(task_id)
+    )
+
+
+@router.get("/{task_id}/context-boundaries", response_model=CollaborationContextBoundaryListResponse)
+async def collaboration_context_boundaries(
+    task_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> CollaborationContextBoundaryListResponse:
+    return CollaborationContextBoundaryListResponse(
+        items=await registry.supervisor_service.context_boundaries(task_id)
+    )
+
+
 @router.get("/{task_id}/collaboration-replay", response_model=CollaborationReplayResponse)
 async def collaboration_replay(
     task_id: str,
@@ -417,6 +475,24 @@ async def remove_participant(
         trace_id=getattr(request.state, "trace_id", None),
     )
     return TaskParticipantResponse(**participant.model_dump(mode="json"))
+
+
+@router.post("/{task_id}/subtasks/{subtask_id}/handoff", response_model=TaskSubtaskResponse)
+async def handoff_subtask(
+    task_id: str,
+    subtask_id: str,
+    payload: CollaborationHandoffRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> TaskSubtaskResponse:
+    subtask = await registry.supervisor_service.handoff_subtask(
+        task_id,
+        subtask_id,
+        to_member_id=payload.to_member_id,
+        reason=payload.reason,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return TaskSubtaskResponse(**subtask.model_dump(mode="json"))
 
 
 @router.post("/{task_id}/subtasks/{subtask_id}/retry", response_model=TaskSubtaskResponse)

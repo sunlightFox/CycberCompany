@@ -458,13 +458,35 @@ class NotificationGatewayService:
                 "created_at": utc_now_iso(),
             }
         )
-        status = "sent" if result.status == "sent" else "failed"
+        delivery_status = _delivery_status(result)
+        retryable = _delivery_retryable(result)
+        status = _message_status_for_delivery(
+            delivery_status,
+            retry_count=message.retry_count,
+            max_retries=message.max_retries,
+            retryable=retryable,
+        )
         retry_count = message.retry_count + (0 if status == "sent" else 1)
+        if status == "failed" and retryable and retry_count >= message.max_retries:
+            status = "dead_letter"
         next_retry_at = None
-        if status == "failed" and retry_count < message.max_retries:
+        if status == "failed" and retryable and retry_count < message.max_retries:
             next_retry_at = (
                 utc_now() + timedelta(seconds=min(60 * (2 ** max(retry_count - 1, 0)), 3600))
             ).isoformat()
+        failure_reason = (
+            _failure_reason(result.error_code, result.error_summary)
+            if status != "sent"
+            else None
+        )
+        metadata = _merge_delivery_metadata(
+            message.metadata,
+            delivery_status=delivery_status,
+            retryable=retryable,
+            error_code=result.error_code,
+            next_retry_at=next_retry_at,
+            attempt_status=result.status,
+        )
         await self._repo.update_message(
             notification_id,
             {
@@ -472,9 +494,18 @@ class NotificationGatewayService:
                 "provider_message_id": result.provider_message_id,
                 "retry_count": retry_count,
                 "next_retry_at": next_retry_at,
-                "failure_reason": result.error_summary if status == "failed" else None,
+                "failure_reason": failure_reason,
+                "metadata": metadata,
                 "updated_at": utc_now_iso(),
                 "sent_at": utc_now_iso() if status == "sent" else None,
+            },
+        )
+        await self._repo.update_channel(
+            channel.channel_id,
+            {
+                "last_health_status": _channel_health_for_delivery(delivery_status),
+                "last_error": failure_reason,
+                "updated_at": utc_now_iso(),
             },
         )
         return await self.get_message(notification_id)
@@ -525,6 +556,16 @@ class NotificationGatewayService:
                 "DLP 阻断的通知不能重试",
                 status_code=403,
             )
+        delivery = message.metadata.get("delivery") if isinstance(message.metadata, dict) else {}
+        if message.status in {"rejected", "dead_letter"} or (
+            isinstance(delivery, dict) and delivery.get("retryable") is False
+        ):
+            raise AppError(
+                ErrorCode.TASK_STATE_INVALID,
+                "通知失败不可重试",
+                status_code=409,
+                details={"status": message.status},
+            )
         if message.retry_count >= message.max_retries:
             raise AppError(ErrorCode.TASK_STATE_INVALID, "通知重试次数已用尽", status_code=409)
         await self._repo.update_message(
@@ -552,6 +593,14 @@ class NotificationGatewayService:
     ) -> NotificationMessage:
         attempts = await self._repo.list_attempts(message.notification_id)
         now = utc_now_iso()
+        delivery_status = _delivery_status_from_error(error_code, response_summary)
+        retryable = _response_retryable(response_summary)
+        retry_count = message.retry_count + 1
+        status = "failed"
+        if not retryable and delivery_status == "rejected":
+            status = "rejected"
+        elif retryable and retry_count >= message.max_retries:
+            status = "dead_letter"
         await self._repo.insert_attempt(
             {
                 "attempt_id": new_id("ntfat"),
@@ -560,7 +609,7 @@ class NotificationGatewayService:
                 "channel_id": channel.channel_id,
                 "provider": channel.provider,
                 "attempt_index": len(attempts) + 1,
-                "status": "failed",
+                "status": delivery_status,
                 "request_summary": {
                     "message_type": message.message_type,
                     "recipient_hash": _stable_hash(message.recipient),
@@ -574,19 +623,35 @@ class NotificationGatewayService:
                 "created_at": now,
             }
         )
-        retry_count = message.retry_count + 1
         next_retry_at = None
-        if retry_count < message.max_retries:
+        if retryable and status == "failed" and retry_count < message.max_retries:
             next_retry_at = (
                 utc_now() + timedelta(seconds=min(60 * (2 ** max(retry_count - 1, 0)), 3600))
             ).isoformat()
+        failure_reason = str(redact(error_summary))
         await self._repo.update_message(
             message.notification_id,
             {
-                "status": "failed",
+                "status": status,
                 "retry_count": retry_count,
                 "next_retry_at": next_retry_at,
-                "failure_reason": str(redact(error_summary)),
+                "failure_reason": failure_reason,
+                "metadata": _merge_delivery_metadata(
+                    message.metadata,
+                    delivery_status=delivery_status,
+                    retryable=retryable,
+                    error_code=error_code,
+                    next_retry_at=next_retry_at,
+                    attempt_status=delivery_status,
+                ),
+                "updated_at": now,
+            },
+        )
+        await self._repo.update_channel(
+            channel.channel_id,
+            {
+                "last_health_status": _channel_health_for_delivery(delivery_status),
+                "last_error": failure_reason,
                 "updated_at": now,
             },
         )
@@ -941,13 +1006,28 @@ def _redact_outbound(
 
 def _parse_inbound_intent(content: str) -> str:
     text = content.strip().lower()
-    if any(token in text for token in ["拒绝", "deny", "不允许", "取消这次"]):
+    normalized = text.strip("。.!！?？~～ ")
+    if normalized in {"拒绝", "取消", "不允许", "不执行", "停止", "不用了", "deny"} or any(
+        token in text
+        for token in ["拒绝这次", "取消这次", "取消本次", "拒绝本次", "不允许这次", "停止这次"]
+    ):
         return "approval_deny"
-    if any(token in text for token in ["始终", "always", "永久"]):
+    if any(token in text for token in ["始终", "always", "永久", "总是允许", "以后都允许"]):
         return "approval_always"
-    if any(token in text for token in ["本会话", "session"]):
+    if "本会话" in text and any(token in text for token in ["允许", "同类", "都可以"]):
         return "approval_session"
-    if any(token in text for token in ["只允许这一次", "这一次", "确认", "允许", "approve"]):
+    explicit_once = [
+        "确认下载",
+        "确认这次",
+        "确认执行",
+        "确认继续",
+        "确认操作",
+        "只允许这一次",
+        "本次允许",
+        "允许这一次",
+        "approve",
+    ]
+    if normalized in {"确认", "同意", "允许"} or any(token in text for token in explicit_once):
         return "approval_once"
     if text in {"好的", "继续", "ok", "好"}:
         return "approval_ambiguous"
@@ -987,17 +1067,124 @@ def _content_matches_approval(content: str, approval: dict[str, Any]) -> bool:
     text = content.lower()
     action = str(approval.get("requested_action") or "").lower()
     payload = approval.get("payload_redacted") or {}
-    tokens = {action, action.rsplit(".", 1)[-1]}
+    action_tokens = {action, action.rsplit(".", 1)[-1]}
     if "download" in action:
-        tokens |= {"下载", "download"}
+        action_tokens |= {"下载", "download"}
     if "delete" in action:
-        tokens |= {"删除", "delete"}
+        action_tokens |= {"删除", "delete"}
     if "login" in action:
-        tokens |= {"登录", "login"}
-    for value in payload.values() if isinstance(payload, dict) else []:
+        action_tokens |= {"登录", "login"}
+    object_tokens: set[str] = set()
+    for key, value in payload.items() if isinstance(payload, dict) else []:
+        if str(key).lower() in {"action", "requested_action"}:
+            continue
         if isinstance(value, str) and value and len(value) < 80:
-            tokens.add(value.lower())
-    return any(token and token in text for token in tokens)
+            object_tokens.add(value.lower())
+    has_action = any(token and token in text for token in action_tokens)
+    if object_tokens:
+        return has_action and any(token and token in text for token in object_tokens)
+    return has_action
+
+
+def _delivery_status(result: ProviderDeliveryResult) -> str:
+    status = str(result.status or "failed")
+    if status == "failed" and result.error_code == "provider_unavailable":
+        return "provider_unavailable"
+    if status == "failed" and result.error_code in {
+        "provider_state_missing_account",
+        "message_rejected",
+    }:
+        return "rejected"
+    if status == "failed" and _response_retryable(result.response_summary):
+        return "retryable_failure"
+    return status
+
+
+def _delivery_status_from_error(
+    error_code: str,
+    response_summary: dict[str, Any] | None,
+) -> str:
+    if error_code == "provider_unavailable":
+        return "provider_unavailable"
+    if not _response_retryable(response_summary):
+        return "rejected"
+    return "retryable_failure"
+
+
+def _delivery_retryable(result: ProviderDeliveryResult) -> bool:
+    if result.status == "sent":
+        return False
+    if result.status == "rejected":
+        return False
+    if result.error_code in {"provider_state_missing_account", "provider_disabled"}:
+        return False
+    return _response_retryable(result.response_summary)
+
+
+def _response_retryable(response_summary: dict[str, Any] | None) -> bool:
+    if isinstance(response_summary, dict) and "retryable" in response_summary:
+        return bool(response_summary.get("retryable"))
+    return True
+
+
+def _message_status_for_delivery(
+    delivery_status: str,
+    *,
+    retry_count: int,
+    max_retries: int,
+    retryable: bool,
+) -> str:
+    if delivery_status == "sent":
+        return "sent"
+    if delivery_status == "rejected":
+        return "rejected"
+    if retryable and retry_count + 1 >= max_retries:
+        return "dead_letter"
+    return "failed"
+
+
+def _failure_reason(error_code: str | None, error_summary: str | None) -> str | None:
+    if not error_code and not error_summary:
+        return None
+    summary = str(redact(error_summary)) if error_summary else None
+    return f"{error_code}: {summary}" if error_code and summary else error_code or summary
+
+
+def _merge_delivery_metadata(
+    metadata: dict[str, Any],
+    *,
+    delivery_status: str,
+    retryable: bool,
+    error_code: str | None,
+    next_retry_at: str | None,
+    attempt_status: str,
+) -> dict[str, Any]:
+    return {
+        **metadata,
+        "delivery": redact(
+            {
+                "delivery_status": delivery_status,
+                "attempt_status": attempt_status,
+                "retryable": retryable,
+                "error_code": error_code,
+                "next_retry_at": next_retry_at,
+            }
+        ),
+    }
+
+
+def _channel_health_for_delivery(delivery_status: str) -> str:
+    if delivery_status == "sent":
+        return "healthy"
+    if delivery_status == "provider_unavailable":
+        return "unreachable"
+    if delivery_status == "retryable_failure":
+        return "degraded"
+    if delivery_status == "rejected":
+        return "rejected"
+    if delivery_status == "dead_letter":
+        return "dead_letter"
+    return "unhealthy"
 
 
 def _reject_inline_secret_config(config: dict[str, Any]) -> None:

@@ -53,6 +53,29 @@ def test_phase57_router_keeps_download_topic_from_real_download() -> None:
     assert is_explicit_download_request("帮我下载 http://127.0.0.1:54069/report.csv。") is True
 
 
+@pytest.mark.parametrize(
+    ("text", "forbidden_route"),
+    [
+        ("讲一下安装包校验机制，不要安装任何软件。", "host_software_install"),
+        ("删除风险说明，不要删除文件。", "file_mutation_task"),
+        ("这是一份任务报告，不要生成 Word。", "office_document"),
+        ("整理一下汇报思路，不要做成 PPT。", "office_document"),
+        ("补一下 artifact 下载端点说明，不要真的下载。", "browser_download"),
+    ],
+)
+def test_phase57_router_respects_negative_action_constraints(
+    text: str,
+    forbidden_route: str,
+) -> None:
+    decision = ChatIntentRouter().decide(text)
+    assert decision.route_type != forbidden_route
+
+
+def test_phase57_router_does_not_treat_plain_report_as_ppt() -> None:
+    decision = ChatIntentRouter().decide("请总结这次测试汇报的重点，不要创建任务。")
+    assert decision.route_type != "office_document"
+
+
 def test_phase57_router_keeps_skill_mcp_concept_direct_when_user_says_no_task() -> None:
     decision = ChatIntentRouter().decide("解释一下 Skill 和 MCP 有什么区别，不要创建任务。")
     assert decision.route_type == "skill_mcp_concept"

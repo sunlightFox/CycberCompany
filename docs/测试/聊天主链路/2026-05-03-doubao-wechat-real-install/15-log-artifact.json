@@ -1,0 +1,22 @@
+{
+  "artifact": {
+    "artifact_id": "art_da6c9bc29b314f7ba1c3e3aa294ff7d1",
+    "artifact_type": "host_install_log",
+    "checksum": "sha256:6e2ebb129f9140a37fe227e5db340e31e9d1533fc1e750c5adaf8de407d22b80",
+    "content_type": "text/plain; charset=utf-8",
+    "created_at": "2026-05-02T18:51:13.851602Z",
+    "display_name": "host-install.log",
+    "metadata": {
+      "dry_run": false,
+      "host_install_plan_id": "hip_d80f4351cce24aaabe3ffe8580b3128d"
+    },
+    "organization_id": "org_default",
+    "sensitivity": "low",
+    "size_bytes": 3157,
+    "step_id": null,
+    "task_id": "tsk_ab4a53d7f7374e86af243c10a05b6a18",
+    "tool_call_id": null,
+    "uri": "artifact://tsk_ab4a53d7f7374e86af243c10a05b6a18/logs/host-install.log"
+  },
+  "content_preview": "host install real execution\r\nsoftware=豆包\r\nsteps=[{'action': 'install', 'args': ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', \"$ErrorActionPreference='Stop'; $progressPreference='silentlyContinue'; $work=Join-Path $env:TEMP 'cycber-host-install'; New-Item -ItemType Directory -Force -Path $work | Out-Null; $installer=Join-Path $work 'bytedance_doubao.exe'; try { Invoke-WebRequest -Uri 'https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe' -OutFile $installer -UseBasicParsing; $hash=(Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToUpperInvariant(); if ($hash -ne '8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891') { throw ('installer sha256 mismatch: ' + $hash) }; $process = Start-Process -FilePath $installer -ArgumentList '--command=quiet_install' -Wait -PassThru; exit $process.ExitCode } finally { if (Test-Path $installer) { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue } }\"], 'cwd': 'host_default', 'env_policy': 'minimal', 'executable': 'pwsh', 'fallback_for': 'package_manager_install_failed', 'official_manifest': 'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/b/ByteDance/Doubao/2.8.7/ByteDance.Doubao.installer.yaml', 'official_source': 'https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/doubao_pc/2.8.7/Doubao_installer_2.8.7.exe', 'package_manager': 'winget_manifest', 'sha256': '8DD99E28879F648ADD2FA1B2CACB7315DED4062128C2F70242569C67146C8891', 'step_key': 'official_manifest_install_bytedance_doubao', 'step_type': 'official_manifest_installer', 'target_package_id': 'ByteDance.Doubao', 'timeout_seconds': 1800}]\r\nstep[1].phase=primary\r\nstep[1].started_at=2026-05-02T18:49:42.934999+00:00\r\nstep[1].ended_at=2026-05-02T18:50:59.266906+00:00\r\nstep[1].duration_ms=76328\r\nstep[1].key=official_manifest_install_bytedance_doubao\r\nstep[1].command=['pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', \"$ErrorActionPreference='Stop'; $progr"
+}

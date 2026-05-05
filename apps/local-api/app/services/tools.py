@@ -48,6 +48,7 @@ from app.services.checkpoints import rollback_availability_for_tool
 from app.services.design_alignment import SafetyDecisionService
 from app.services.knowledge import KnowledgeService
 from app.services.memory import MemoryService
+from app.services.safety_policy import RuntimeSafetyPolicyService, classify_action_category
 
 if TYPE_CHECKING:
     from app.services.browser_sessions import BrowserSessionService
@@ -172,6 +173,7 @@ class ToolRuntime:
         trace_service: TraceService,
         audit_service: AuditEventService,
         safety_decision_service: SafetyDecisionService,
+        safety_policy_service: RuntimeSafetyPolicyService | None = None,
         execution_boundary_service: ExecutionBoundaryService | None = None,
         browser_session_service: BrowserSessionService | None = None,
         browser_executor: BrowserExecutor | None = None,
@@ -188,6 +190,7 @@ class ToolRuntime:
         self._trace = trace_service
         self._audit = audit_service
         self._safety_decisions = safety_decision_service
+        self._safety_policy = safety_policy_service
         self._boundary = execution_boundary_service
         self._browser_sessions = browser_session_service
         self._browser_executor = browser_executor or BrowserExecutor()
@@ -289,6 +292,7 @@ class ToolRuntime:
             raise
         if tool.status != "active":
             raise AppError(ErrorCode.TOOL_NOT_FOUND, "工具未启用", status_code=404)
+        request = _sanitize_tool_request_for_execution(request)
         if request.idempotency_key:
             existing = await self._repo.get_tool_call_by_idempotency(request.idempotency_key)
             if existing is not None:
@@ -301,6 +305,13 @@ class ToolRuntime:
                 return await self._response_from_existing_call(existing)
         self._validate_args(tool, request.args)
         risk_level = _risk_for(tool, request.args)
+        terminal_command_policy = (
+            self._boundary.classify_terminal_command(str(request.args.get("command") or ""))
+            if tool.tool_name == "terminal.run" and self._boundary is not None
+            else _terminal_command_policy(str(request.args.get("command") or ""))
+            if tool.tool_name == "terminal.run"
+            else None
+        )
 
         task = await self._task_for_request(request)
         organization_id = task["organization_id"] if task else "org_default"
@@ -440,6 +451,9 @@ class ToolRuntime:
                 tool_call_id=tool_call_id,
                 organization_id=organization_id,
                 risk_level=risk_level,
+                terminal_command_policy=(
+                    terminal_command_policy if terminal_command_policy is not None else None
+                ),
                 trace_id=trace_id,
             )
             if approval is not None:
@@ -581,10 +595,9 @@ class ToolRuntime:
         tool_call_id: str,
         organization_id: str,
         risk_level: RiskLevel,
+        terminal_command_policy: dict[str, Any] | None,
         trace_id: str | None,
     ) -> ApprovalDetail | None:
-        if _risk_order(risk_level) < _risk_order(RiskLevel.R3):
-            return None
         if request.approval_id:
             approval = await self._approvals.get(request.approval_id)
             if approval.status in {"approved", "edited"}:
@@ -594,6 +607,28 @@ class ToolRuntime:
             if approval.status == "denied":
                 raise AppError(ErrorCode.APPROVAL_DENIED, "审批已拒绝", status_code=409)
             raise AppError(ErrorCode.TOOL_APPROVAL_REQUIRED, "工具动作需要审批", status_code=409)
+        if _risk_order(risk_level) < _risk_order(RiskLevel.R3):
+            return None
+        if self._safety_policy is not None:
+            policy = await self._safety_policy.get_policy(organization_id=organization_id)
+            if policy.should_skip_approval(
+                action=tool.tool_name,
+                risk_level=risk_level,
+                action_category=classify_action_category(
+                    action=tool.tool_name,
+                    tool_name=tool.tool_name,
+                    destination=str(
+                        request.args.get("destination")
+                        or request.args.get("url")
+                        or request.args.get("path")
+                        or request.args.get("command")
+                        or ""
+                    ),
+                ),
+                payload=request.args,
+                terminal_command_policy=terminal_command_policy or {},
+            ):
+                return None
         task_id = request.task_id
         if task_id is None:
             raise AppError(
@@ -1184,9 +1219,12 @@ class ToolRuntime:
             MediaExtractFramesRequest,
             MediaImportArtifactRequest,
             MediaProbeRequest,
+            MediaSTTRequest,
+            MediaSummarizeRequest,
             MediaRenderEditRequest,
             MediaSceneDetectRequest,
             MediaTimelineRequest,
+            MediaTTSRequest,
             MediaTranscribeAudioRequest,
         )
 
@@ -1201,7 +1239,7 @@ class ToolRuntime:
             )
             return ToolRunOutcome(result=response.model_dump(mode="json"), artifacts=[])
         media_id = str(args.get("media_id") or "")
-        if name != "media.render_edit" and not media_id:
+        if name not in {"media.render_edit", "media.tts"} and not media_id:
             raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "media_id 必填", status_code=422)
         media_args = {
             key: value
@@ -1245,6 +1283,20 @@ class ToolRuntime:
                 result=response.model_dump(mode="json"),
                 artifacts=response.artifacts,
             )
+        if name == "media.stt":
+            response = await self._media.stt(
+                media_id,
+                MediaSTTRequest(**media_args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(result=response.model_dump(mode="json"), artifacts=response.artifacts)
+        if name == "media.summarize":
+            response = await self._media.summarize(
+                media_id,
+                MediaSummarizeRequest(**media_args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(result=response.model_dump(mode="json"), artifacts=response.artifacts)
         if name == "media.scene_detect":
             response = await self._media.scene_detect(
                 media_id,
@@ -1287,6 +1339,12 @@ class ToolRuntime:
                 trace_id=trace_id,
             )
             return ToolRunOutcome(result=response.model_dump(mode="json"), artifacts=[])
+        if name == "media.tts":
+            response = await self._media.tts(
+                MediaTTSRequest(**args),
+                trace_id=trace_id,
+            )
+            return ToolRunOutcome(result=response.model_dump(mode="json"), artifacts=response.artifacts)
         raise AppError(ErrorCode.TOOL_NOT_FOUND, "媒体工具不存在", status_code=404)
 
     async def _browser_session_context(
@@ -1324,6 +1382,10 @@ class ToolRuntime:
                 )
                 or None,
                 browser_session_id=str(config.get("browser_session_id") or "") or None,
+                member_id=request.member_id,
+                task_id=request.task_id,
+                url=str(request.args.get("url") or request.args.get("current_url") or "")
+                or None,
             )
             return _merge_browser_page_args({
                 **context,
@@ -1337,6 +1399,10 @@ class ToolRuntime:
             context = await self._browser_sessions.validate_session_context(
                 browser_profile_id=str(request.args.get("browser_profile_id") or "") or None,
                 browser_session_id=str(request.args.get("browser_session_id") or "") or None,
+                member_id=request.member_id,
+                task_id=request.task_id,
+                url=str(request.args.get("url") or request.args.get("current_url") or "")
+                or None,
             )
             return _merge_browser_page_args(context, request.args)
         return _merge_browser_page_args({}, request.args)
@@ -1514,6 +1580,46 @@ class ToolRuntime:
         )
         result["browser_evidence_id"] = evidence.browser_evidence_id
         result["browser_evidence"] = evidence.model_dump(mode="json")
+        result.setdefault("browser_page_state", {})
+        page_state = await self._browser_sessions.record_page_state(
+            task_id=request.task_id,
+            tool_call_id=tool_call_id,
+            organization_id=organization_id,
+            action=action,
+            action_status=str(result.get("action_status") or "completed"),
+            page_key=_browser_page_key(result, session_context, url),
+            current_url=str(result.get("url") or url or "") or None,
+            title=title,
+            http_status=http_status,
+            dom_summary=_browser_dom_summary(result),
+            network_summary=dict(
+                result.get("network_summary")
+                or {
+                    "request_count": 1 if url else 0,
+                    "failed_count": 1 if result.get("action_status") == "http_error" else 0,
+                    "http_status": http_status,
+                }
+            ),
+            console_summary=dict(
+                result.get("console_summary") or {"error_count": 0, "warning_count": 0}
+            ),
+            task_checkpoint=_browser_task_checkpoint(
+                request=request,
+                tool_call_id=tool_call_id,
+                evidence_id=evidence.browser_evidence_id,
+                result=result,
+            ),
+            redaction_summary={
+                "session_handle_redacted": True,
+                "storage_state_redacted": True,
+                "download_path_visible": False,
+            },
+            session_context=session_context,
+            trace_id=trace_id,
+            browser_evidence_id=evidence.browser_evidence_id,
+        )
+        result["browser_page_state"]["page_state_id"] = page_state.page_state_id
+        result["browser_page_state"]["page_key"] = page_state.page_key
 
     async def _execute_browser_tool(
         self,
@@ -2191,6 +2297,7 @@ class ToolRuntime:
         return ToolRunOutcome(
             result={
                 "exit_code": sandbox_result.exit_code,
+                "output_preview": redacted_output[:1000],
                 "log_artifact_id": artifact.artifact_id,
                 "sandbox_profile": sandbox_profile_result,
                 "policy_snapshot": terminal_policy,
@@ -2681,6 +2788,14 @@ class ToolRuntime:
 
 def _risk_for(tool: ToolDefinition, args: dict[str, Any]) -> RiskLevel:
     policy = tool.risk_policy
+    if tool.tool_name == "terminal.run":
+        command = str(args.get("command") or "")
+        terminal_policy = _terminal_command_policy(command)
+        if terminal_policy["decision"] == "deny":
+            return RiskLevel("R7")
+        if terminal_policy["reason"] == "sandboxed_terminal":
+            return RiskLevel("R2")
+        return RiskLevel("R3")
     if tool.tool_name == "file.write" and args.get("overwrite"):
         return RiskLevel(policy.get("overwrite_true", "R3"))
     if tool.tool_name == "browser.download" and args.get("workflow_low_risk_download"):
@@ -3122,6 +3237,59 @@ def _browser_artifact_metadata(execution: BrowserExecutionResult) -> dict[str, A
     }
 
 
+def _browser_page_key(
+    result: dict[str, Any],
+    session_context: dict[str, Any],
+    url: str,
+) -> str:
+    value = (
+        session_context.get("page_id")
+        or result.get("browser_page_state", {}).get("page_id")
+        or result.get("page_id")
+        or url
+        or "browser_page"
+    )
+    return str(redact(str(value)))[:200]
+
+
+def _browser_dom_summary(result: dict[str, Any]) -> dict[str, Any]:
+    snapshot = str(result.get("snapshot") or result.get("content_preview") or "")
+    payload = {
+        "has_snapshot": bool(snapshot),
+        "snapshot_preview": str(redact(snapshot))[:500] if snapshot else None,
+        "snapshot_hash": (
+            "sha256:" + hashlib.sha256(snapshot.encode("utf-8")).hexdigest()
+            if snapshot
+            else None
+        ),
+    }
+    if result.get("selector"):
+        payload["selector"] = str(redact(str(result["selector"])))
+    if result.get("interaction"):
+        payload["interaction"] = redact(result["interaction"])
+    return payload
+
+
+def _browser_task_checkpoint(
+    *,
+    request: ToolExecuteRequest,
+    tool_call_id: str,
+    evidence_id: str,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "task_id": request.task_id,
+        "tool_call_id": tool_call_id,
+        "browser_evidence_id": evidence_id,
+        "action": request.tool_name,
+        "action_status": result.get("action_status"),
+        "recoverable": bool(result.get("recoverable")),
+        "browser_backend": result.get("backend"),
+        "backend_status": result.get("backend_status"),
+        "fallback_chain": result.get("fallback_chain"),
+    }
+
+
 def _normalize_approval_args(payload: dict[str, Any]) -> dict[str, Any]:
     nested_args = payload.get("args")
     if isinstance(nested_args, dict):
@@ -3196,6 +3364,27 @@ def _public_memory_search_tool_call(record: ToolCallRecord) -> ToolCallRecord:
             "result_redacted": _strip_internal_trace_fields(record.result_redacted),
         }
     )
+
+
+def _sanitize_tool_request_for_execution(request: ToolExecuteRequest) -> ToolExecuteRequest:
+    if request.tool_name != "media.tts":
+        return request
+    text = request.args.get("text")
+    if not isinstance(text, str):
+        return request
+    redacted_text = str(redact(text))
+    if redacted_text == text:
+        return request
+    metadata = request.args.get("metadata")
+    args = {
+        **request.args,
+        "text": "[REDACTED_CONTENT]",
+        "metadata": {
+            **(metadata if isinstance(metadata, dict) else {}),
+            "source_text_redacted_before_safety": True,
+        },
+    }
+    return request.model_copy(update={"args": args})
 
 
 def _strip_internal_trace_fields(value: Any) -> Any:
@@ -3365,6 +3554,9 @@ BUILTIN_TOOLS: list[dict[str, Any]] = [
             "media.extract_frames": "R2",
             "media.extract_audio": "R2",
             "media.transcribe_audio": "R2",
+            "media.stt": "R2",
+            "media.tts": "R2",
+            "media.summarize": "R2",
             "media.scene_detect": "R2",
             "media.timeline_summarize": "R2",
             "media.plan_edit": "R2",

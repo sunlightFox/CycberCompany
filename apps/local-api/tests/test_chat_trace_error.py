@@ -33,6 +33,9 @@ def test_chat_001_no_model_turn_uses_phase_two_events_and_persists_messages(
     assert body["status"] == "created"
     assert body["stream_url"] == f"/api/chat/stream/{body['turn_id']}"
     assert [event["event"] for event in events] == [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
         "turn.started",
         "context.started",
         "context.ready",

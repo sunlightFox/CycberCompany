@@ -16,6 +16,17 @@ MEMORY_UPDATE_COLUMNS = {
     "status",
     "last_accessed_at",
     "access_count",
+    "quality_score",
+    "quality_breakdown_json",
+    "version_index",
+    "conflict_group_id",
+    "conflict_status",
+    "reuse_score",
+    "reuse_count",
+    "last_reused_at",
+    "retention_policy",
+    "retention_reason",
+    "expires_reason",
     "review_required",
     "embedding_status",
     "metadata_json",
@@ -122,11 +133,14 @@ class MemoryRepository:
               memory_id, organization_id, member_id, user_id, layer, kind, scope_type,
               scope_id, summary_text, payload_json, source_json, confidence, importance,
               sensitivity, valid_from, valid_to, supersedes, status, last_accessed_at,
-              access_count, review_required, embedding_status, metadata_json, created_at,
-              updated_at, normalized_summary, content_hash
+              access_count, quality_score, quality_breakdown_json, version_index,
+              conflict_group_id, conflict_status, reuse_score, reuse_count, last_reused_at,
+              retention_policy, retention_reason, expires_reason, review_required,
+              embedding_status, metadata_json, created_at, updated_at, normalized_summary,
+              content_hash
             ) VALUES (
               ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0,
-              ?, ?, ?, ?, ?, ?, ?
+              ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -148,6 +162,16 @@ class MemoryRepository:
                 data.get("valid_to"),
                 data.get("supersedes"),
                 data["status"],
+                data.get("quality_score", 0.5),
+                _json(data.get("quality_breakdown", {})),
+                data.get("version_index", 1),
+                data.get("conflict_group_id"),
+                data.get("conflict_status", "clear"),
+                data.get("reuse_score", 0),
+                data.get("reuse_count", 0),
+                data.get("retention_policy", "standard"),
+                data.get("retention_reason"),
+                data.get("expires_reason"),
                 1 if bool(data.get("review_required", False)) else 0,
                 data.get("embedding_status", "pending"),
                 _json(data.get("metadata", {})),
@@ -225,6 +249,8 @@ class MemoryRepository:
                 sql_fields["payload_json"] = _json(value)
             elif key == "metadata":
                 sql_fields["metadata_json"] = _json(value)
+            elif key == "quality_breakdown":
+                sql_fields["quality_breakdown_json"] = _json(value)
             elif key == "review_required":
                 sql_fields[key] = 1 if bool(value) else 0
             else:
@@ -369,11 +395,202 @@ class MemoryRepository:
             await self._db.execute(
                 """
                 UPDATE memory_items
-                SET last_accessed_at = ?, access_count = access_count + 1, updated_at = ?
+                SET last_accessed_at = ?,
+                    access_count = access_count + 1,
+                    last_reused_at = ?,
+                    reuse_count = reuse_count + 1,
+                    reuse_score = MIN(1.0, reuse_score + 0.03),
+                    updated_at = ?
                 WHERE memory_id = ?
                 """,
-                (accessed_at, accessed_at, memory_id),
+                (accessed_at, accessed_at, accessed_at, memory_id),
             )
+
+    async def insert_experience_record(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO memory_experience_records (
+              experience_id, organization_id, member_id, task_id, conversation_id,
+              memory_id, conflict_group_id, layer, kind, outcome, summary_text,
+              source_json, evidence_json, score_json, confidence_score, reuse_score,
+              decision, status, trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["experience_id"],
+                data["organization_id"],
+                data.get("member_id"),
+                data.get("task_id"),
+                data.get("conversation_id"),
+                data.get("memory_id"),
+                data.get("conflict_group_id"),
+                data["layer"],
+                data["kind"],
+                data["outcome"],
+                data["summary_text"],
+                _json(data.get("source", {})),
+                _json(data.get("evidence", {})),
+                _json(data.get("score", {})),
+                data.get("confidence_score", 0),
+                data.get("reuse_score", 0),
+                data["decision"],
+                data.get("status", "recorded"),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_experience_records(
+        self,
+        *,
+        member_id: str | None = None,
+        task_id: str | None = None,
+        outcome: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if member_id:
+            where.append("member_id = ?")
+            params.append(member_id)
+        if task_id:
+            where.append("task_id = ?")
+            params.append(task_id)
+        if outcome:
+            where.append("outcome = ?")
+            params.append(outcome)
+        if status:
+            where.append("status = ?")
+            params.append(status)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM memory_experience_records
+            {clause}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [_experience_from_row(dict(row)) for row in rows]
+
+    async def insert_conflict_record(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO memory_conflict_records (
+              conflict_id, organization_id, member_id, memory_id, related_memory_id,
+              candidate_id, conflict_group_id, conflict_type, status, resolution,
+              summary_text, source_json, evidence_json, trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["conflict_id"],
+                data["organization_id"],
+                data.get("member_id"),
+                data.get("memory_id"),
+                data.get("related_memory_id"),
+                data.get("candidate_id"),
+                data["conflict_group_id"],
+                data["conflict_type"],
+                data["status"],
+                data.get("resolution"),
+                data["summary_text"],
+                _json(data.get("source", {})),
+                _json(data.get("evidence", {})),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_conflict_records(
+        self,
+        *,
+        member_id: str | None = None,
+        status: str | None = None,
+        conflict_group_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if member_id:
+            where.append("member_id = ?")
+            params.append(member_id)
+        if status:
+            where.append("status = ?")
+            params.append(status)
+        if conflict_group_id:
+            where.append("conflict_group_id = ?")
+            params.append(conflict_group_id)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM memory_conflict_records
+            {clause}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [_conflict_from_row(dict(row)) for row in rows]
+
+    async def insert_reuse_feedback(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO memory_reuse_feedback (
+              feedback_id, organization_id, member_id, retrieval_id, memory_id,
+              task_id, feedback_type, rating, source_json, evidence_json, trace_id,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["feedback_id"],
+                data["organization_id"],
+                data.get("member_id"),
+                data["retrieval_id"],
+                data["memory_id"],
+                data.get("task_id"),
+                data["feedback_type"],
+                data.get("rating", 0),
+                _json(data.get("source", {})),
+                _json(data.get("evidence", {})),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_reuse_feedback(
+        self,
+        *,
+        retrieval_id: str | None = None,
+        memory_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if retrieval_id:
+            where.append("retrieval_id = ?")
+            params.append(retrieval_id)
+        if memory_id:
+            where.append("memory_id = ?")
+            params.append(memory_id)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM memory_reuse_feedback
+            {clause}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [_reuse_feedback_from_row(dict(row)) for row in rows]
 
     async def insert_relation(
         self,
@@ -701,7 +918,10 @@ def _memory_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["payload"] = json.loads(row.pop("payload_json") or "{}")
     row["source"] = json.loads(row.pop("source_json") or "{}")
     row["metadata"] = json.loads(row.pop("metadata_json") or "{}")
+    row["quality_breakdown"] = json.loads(row.pop("quality_breakdown_json", "{}") or "{}")
     row["review_required"] = bool(row["review_required"])
+    row["version_index"] = int(row.get("version_index") or 1)
+    row["reuse_count"] = int(row.get("reuse_count") or 0)
     if "rank_score" in row:
         try:
             row["rank_score"] = float(row["rank_score"])
@@ -716,6 +936,25 @@ def _job_from_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _relation_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    return row
+
+
+def _experience_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["source"] = json.loads(row.pop("source_json") or "{}")
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    row["score"] = json.loads(row.pop("score_json") or "{}")
+    return row
+
+
+def _conflict_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["source"] = json.loads(row.pop("source_json") or "{}")
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    return row
+
+
+def _reuse_feedback_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["source"] = json.loads(row.pop("source_json") or "{}")
     row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
     return row
 

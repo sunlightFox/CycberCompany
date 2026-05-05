@@ -1,0 +1,29 @@
+{
+  "executable_candidates": [
+    {
+      "Exists": false,
+      "Path": "C:\\Users\\Administrator\\AppData\\Local\\Doubao\\doubao.exe"
+    },
+    {
+      "Exists": false,
+      "Path": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\doubao\\Doubao.exe"
+    },
+    {
+      "Exists": false,
+      "Path": "C:\\Program Files\\Doubao\\Doubao.exe"
+    },
+    {
+      "Exists": false,
+      "Path": "C:\\Program Files (x86)\\Doubao\\Doubao.exe"
+    }
+  ],
+  "uninstall_entries": {
+    "DisplayIcon": "\"C:\\Users\\Administrator\\AppData\\Local\\Doubao\\Application\\icon.ico\"",
+    "DisplayName": "豆包",
+    "DisplayVersion": "2.8.7",
+    "InstallLocation": null,
+    "Publisher": "Beijing Chuntian Zhiyun Technology Co., Ltd.",
+    "QuietUninstallString": null,
+    "UninstallString": "\"C:\\Users\\Administrator\\AppData\\Local\\Doubao\\Application\\uninstall.exe\""
+  }
+}

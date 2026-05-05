@@ -167,6 +167,7 @@ def ensure_data_dirs(config: AppConfig) -> None:
     (config.storage.data_dir / "restore-workspaces").mkdir(parents=True, exist_ok=True)
     (config.storage.data_dir / "diagnostics").mkdir(parents=True, exist_ok=True)
     (config.storage.data_dir / "release-reports").mkdir(parents=True, exist_ok=True)
+    (config.storage.data_dir / "personas").mkdir(parents=True, exist_ok=True)
     for provider in config.channels.providers.values():
         if provider.state_dir is not None:
             provider.state_dir.mkdir(parents=True, exist_ok=True)

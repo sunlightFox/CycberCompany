@@ -25,9 +25,15 @@ from app.schemas.skills import (
     SkillCandidatePromoteResponse,
     SkillCatalogSearchResponse,
     SkillEvalResponse,
+    SkillDependencyEdgesResponse,
+    SkillGrowthCandidateConsolidateRequest,
+    SkillGrowthCandidateResponse,
     SkillListResponse,
     SkillMatchRequest,
     SkillMatchResponse,
+    SkillMarketplaceHealthRefreshResponse,
+    SkillMarketplaceInstallRecordsResponse,
+    SkillMarketplacePackageResponse,
     SkillRepositoryListResponse,
     SkillRepositoryPatchRequest,
     SkillRepositoryRefreshResponse,
@@ -155,6 +161,102 @@ async def search_skill_catalog(
             query=q,
             repository_id=repository_id,
             tag=tag,
+            limit=limit,
+    )
+    )
+
+
+@router.get("/catalog/package", response_model=SkillMarketplacePackageResponse)
+async def get_skill_marketplace_package(
+    repository_id: str,
+    package_ref: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillMarketplacePackageResponse:
+    return SkillMarketplacePackageResponse(
+        package=await registry.skill_repository_service.package_detail(
+            repository_id=repository_id,
+            package_ref=package_ref,
+        )
+    )
+
+
+@router.post(
+    "/catalog/{repository_id}/refresh-health",
+    response_model=SkillMarketplaceHealthRefreshResponse,
+)
+async def refresh_skill_marketplace_health(
+    repository_id: str,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillMarketplaceHealthRefreshResponse:
+    return SkillMarketplaceHealthRefreshResponse(
+        items=await registry.skill_repository_service.refresh_health(
+            repository_id,
+            trace_id=getattr(request.state, "trace_id", None),
+        )
+    )
+
+
+@router.get("/catalog/install-records", response_model=SkillMarketplaceInstallRecordsResponse)
+async def list_skill_marketplace_install_records(
+    repository_id: str | None = None,
+    package_ref: str | None = None,
+    limit: int = 50,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillMarketplaceInstallRecordsResponse:
+    return SkillMarketplaceInstallRecordsResponse(
+        items=await registry.skill_repository_service.list_install_records(
+            repository_id=repository_id,
+            package_ref=package_ref,
+            limit=limit,
+        )
+    )
+
+
+@router.get("/dependencies", response_model=SkillDependencyEdgesResponse)
+async def list_skill_dependencies(
+    source_type: str | None = None,
+    source_id: str | None = None,
+    status: str | None = None,
+    limit: int = 200,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillDependencyEdgesResponse:
+    return SkillDependencyEdgesResponse(
+        items=await registry.skill_repository_service.list_dependency_edges(
+            source_type=source_type,
+            source_id=source_id,
+            status=status,
+            limit=limit,
+        )
+    )
+
+
+@router.post(
+    "/growth-candidates/consolidate",
+    response_model=SkillGrowthCandidateResponse,
+)
+async def consolidate_skill_growth_candidates(
+    payload: SkillGrowthCandidateConsolidateRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillGrowthCandidateResponse:
+    return SkillGrowthCandidateResponse(
+        items=await registry.skill_repository_service.consolidate_growth_candidates(
+            payload,
+            trace_id=getattr(request.state, "trace_id", None),
+        )
+    )
+
+
+@router.get("/growth-candidates", response_model=SkillGrowthCandidateResponse)
+async def list_skill_growth_candidates(
+    candidate_id: str | None = None,
+    limit: int = 50,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillGrowthCandidateResponse:
+    return SkillGrowthCandidateResponse(
+        items=await registry.skill_repository_service.list_growth_candidates(
+            candidate_id=candidate_id,
             limit=limit,
         )
     )

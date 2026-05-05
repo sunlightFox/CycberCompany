@@ -118,6 +118,17 @@ class ChatIntentRouter:
                     "limit": host_filesystem_limit(clean),
                 },
             )
+        command = terminal_command(clean)
+        if command is not None:
+            return ChatRouteDecision(
+                route_type="terminal_readonly_command",
+                confidence=0.86,
+                reason_code="terminal_readonly_command",
+                requires_confirmation=False,
+                task_goal=clean,
+                safe_user_summary=_safe_summary(clean),
+                metadata={"command": command},
+            )
         if is_host_software_install_request(clean):
             return ChatRouteDecision(
                 route_type="host_software_install",
@@ -142,6 +153,8 @@ class ChatIntentRouter:
 def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
     clean = _clean(text)
     if _direct_only(clean):
+        return None
+    if _negative_office_generation_constraint(clean):
         return None
     document_type = office_document_type(clean)
     if document_type is None:
@@ -170,11 +183,11 @@ def office_document_type(text: str) -> str | None:
     ):
         return "excel"
     if any(marker in lowered for marker in ["ppt", "pptx", "powerpoint"]) or any(
-        marker in clean for marker in ["演示稿", "幻灯片", "汇报"]
+        marker in clean for marker in ["演示稿", "幻灯片"]
     ):
         return "ppt"
     if any(marker in lowered for marker in ["word", "docx"]) or any(
-        marker in clean for marker in ["文档", "周报", "报告"]
+        marker in clean for marker in ["文档", "周报"]
     ):
         return "word"
     return None
@@ -188,6 +201,8 @@ def is_host_software_install_request(text: str) -> bool:
     clean = _clean(text)
     lowered = clean.lower()
     if _direct_only(clean):
+        return False
+    if _negative_host_software_constraint(clean):
         return False
     if any(marker in clean or marker in lowered for marker in ["跳过确认", "免确认", "无需确认"]):
         return False
@@ -269,6 +284,8 @@ def is_explicit_download_request(text: str) -> bool:
     lowered = clean.lower()
     if _direct_only(clean):
         return False
+    if _negative_download_constraint(clean):
+        return False
     if "下载" not in clean and "download" not in lowered:
         return False
     if is_download_topic_only(clean):
@@ -303,6 +320,8 @@ def is_file_mutation_request(text: str) -> bool:
     clean = _clean(text)
     if _direct_only(clean):
         return False
+    if _negative_file_mutation_constraint(clean):
+        return False
     if is_host_filesystem_list_request(clean):
         return False
     return any(marker in clean for marker in ["删除", "删掉", "清空", "覆盖"]) and any(
@@ -313,7 +332,10 @@ def is_file_mutation_request(text: str) -> bool:
 def is_host_filesystem_list_request(text: str) -> bool:
     clean = _clean(text)
     lowered = clean.lower()
-    if any(marker in clean for marker in ["只解释", "只给方案", "不要执行", "不要调用工具"]):
+    if any(
+        marker in clean
+        for marker in ["只解释", "只给方案", "不要执行", "不要假装执行", "不要调用工具"]
+    ):
         return False
     if _has_file_mutation_marker(clean):
         return False
@@ -326,6 +348,26 @@ def is_host_filesystem_list_request(text: str) -> bool:
     if any(marker in lowered for marker in ["what files", "list files", "show files"]):
         return True
     return False
+
+
+def terminal_command(text: str) -> str | None:
+    clean = _clean(text)
+    if _direct_only(clean):
+        return None
+    if not _terminal_request_marker(clean):
+        return None
+    explicit = _quoted_terminal_command(clean)
+    command = explicit or _after_terminal_marker(clean)
+    if not command:
+        return None
+    command = command.strip().strip("。；;")
+    if not _safe_readonly_terminal_command(command):
+        return None
+    return command[:240]
+
+
+def is_terminal_command_request(text: str) -> bool:
+    return terminal_command(text) is not None
 
 
 def host_filesystem_location(text: str) -> str | None:
@@ -351,6 +393,89 @@ def host_filesystem_location(text: str) -> str | None:
     return None
 
 
+def _terminal_request_marker(text: str) -> bool:
+    lowered = text.lower()
+    return any(
+        marker in text or marker in lowered
+        for marker in [
+            "执行命令",
+            "运行命令",
+            "跑一下命令",
+            "系统命令",
+            "终端命令",
+            "terminal.run",
+            "run command",
+            "shell command",
+        ]
+    )
+
+
+def _quoted_terminal_command(text: str) -> str | None:
+    match = re.search(r"[`“\"']([^`”\"']{1,240})[`”\"']", text)
+    return match.group(1).strip() if match else None
+
+
+def _after_terminal_marker(text: str) -> str | None:
+    patterns = [
+        r"(?:执行命令|运行命令|跑一下命令|系统命令|终端命令)\s*[:：]?\s*(.+)$",
+        r"(?:terminal\.run|run command|shell command)\s*[:：]?\s*(.+)$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def _safe_readonly_terminal_command(command: str) -> bool:
+    lowered = command.lower().strip()
+    if not lowered:
+        return False
+    blocked = [
+        "rm ",
+        "del ",
+        "remove-item",
+        "move-item",
+        "copy-item",
+        "set-item",
+        "new-item",
+        "mkdir",
+        "rmdir",
+        "curl",
+        "wget",
+        "invoke-webrequest",
+        "invoke-restmethod",
+        "pip install",
+        "npm install",
+        ">",
+        ">>",
+        "|",
+        "&&",
+        ";",
+    ]
+    if any(marker in f" {lowered} " for marker in blocked):
+        return False
+    executable = lowered.split()[0].strip("\"'")
+    executable = executable.removesuffix(".exe")
+    return executable in {
+        "echo",
+        "date",
+        "time",
+        "whoami",
+        "hostname",
+        "pwd",
+        "ls",
+        "dir",
+        "ver",
+        "get-date",
+        "get-location",
+        "python",
+        "python3",
+        "py",
+        "node",
+    }
+
+
 def host_filesystem_limit(text: str) -> int | None:
     match = re.search(r"(?:前|最多|limit\s*)\s*(\d{1,3})\s*(?:个|项|条|files?)", text, re.I)
     if not match:
@@ -371,7 +496,10 @@ def is_download_topic_only(text: str) -> bool:
         "download endpoint",
         "download api",
     ]
-    return any(marker in clean or marker in lowered for marker in topic_markers)
+    return any(marker in clean or marker in lowered for marker in topic_markers) or (
+        _negative_download_constraint(clean)
+        and any(marker in clean or marker in lowered for marker in ["下载", "download"])
+    )
 
 
 def is_skill_or_mcp_concept_request(text: str) -> bool:
@@ -719,6 +847,89 @@ def _has_file_mutation_marker(text: str) -> bool:
     )
 
 
+def _negative_download_constraint(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    return any(
+        marker in clean or marker in lowered
+        for marker in [
+            "不要真的下载",
+            "不要下载",
+            "不触发下载",
+            "不会触发真实下载",
+            "只说明下载",
+            "只解释下载",
+            "下载端点说明",
+            "下载接口说明",
+            "do not download",
+            "don't download",
+        ]
+    )
+
+
+def _negative_host_software_constraint(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    return any(
+        marker in clean or marker in lowered
+        for marker in [
+            "不要安装",
+            "不要真的安装",
+            "不安装",
+            "只说明安装",
+            "只解释安装",
+            "安装包校验机制",
+            "安装流程说明",
+            "do not install",
+            "don't install",
+        ]
+    )
+
+
+def _negative_file_mutation_constraint(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    return any(
+        marker in clean or marker in lowered
+        for marker in [
+            "不要删除",
+            "不要真的删除",
+            "不删除",
+            "只说明删除",
+            "只解释删除",
+            "删除风险说明",
+            "do not delete",
+            "don't delete",
+        ]
+    )
+
+
+def _negative_office_generation_constraint(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    return any(
+        marker in clean or marker in lowered
+        for marker in [
+            "不要生成 word",
+            "不要生成word",
+            "不要生成 docx",
+            "不要生成docx",
+            "不要生成 ppt",
+            "不要生成ppt",
+            "不要做成 ppt",
+            "不要做成ppt",
+            "不要生成文档",
+            "不要真的生成",
+            "不生成 word",
+            "不生成 ppt",
+            "do not create word",
+            "do not generate word",
+            "do not create ppt",
+            "do not generate ppt",
+        ]
+    )
+
+
 def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
     return any(
         marker in clean
@@ -769,6 +980,20 @@ def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
 def _has_browser_side_effect_marker(clean: str, lowered: str) -> bool:
     clean = re.sub(r"https?://[^\s，。；;）)]+", " ", clean, flags=re.IGNORECASE)
     lowered = clean.lower() if lowered else lowered
+    if any(
+        marker in clean
+        for marker in [
+            "不能点击",
+            "不能提交",
+            "不点击",
+            "不提交",
+            "不要点击",
+            "不要提交",
+            "别点击",
+            "别提交",
+        ]
+    ):
+        return False
     return any(
         marker in clean
         for marker in [
@@ -823,13 +1048,43 @@ def _first_url(text: str) -> str | None:
 def _direct_only(text: str) -> bool:
     return any(
         marker in text
-        for marker in ["只解释", "只给方案", "不要执行", "不要创建任务", "不要调用工具"]
+        for marker in [
+            "只解释",
+            "只给方案",
+            "不要执行",
+            "不要假装执行",
+            "别假装执行",
+            "不要声称执行",
+            "不能点击",
+            "不能提交",
+            "不点击",
+            "不提交",
+            "不要点击",
+            "不要提交",
+            "不要创建任务",
+            "不要调用工具",
+        ]
     )
 
 
 def _without_direct_only_markers(text: str) -> str:
     result = text
-    for marker in ["只解释", "只给方案", "不要执行", "不要创建任务", "不要调用工具"]:
+    for marker in [
+        "只解释",
+        "只给方案",
+        "不要执行",
+        "不要假装执行",
+        "别假装执行",
+        "不要声称执行",
+        "不能点击",
+        "不能提交",
+        "不点击",
+        "不提交",
+        "不要点击",
+        "不要提交",
+        "不要创建任务",
+        "不要调用工具",
+    ]:
         result = result.replace(marker, " ")
     return _clean(result)
 

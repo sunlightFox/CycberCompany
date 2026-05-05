@@ -11,11 +11,14 @@ from typing import Any
 from brain.adapters import estimate_text_tokens
 from core_types import (
     ErrorCode,
+    MemoryConflictRecord,
     MemoryBlock,
     MemoryBlockItem,
     MemoryCandidate,
+    MemoryExperienceRecord,
     MemoryItem,
     MemoryLayer,
+    MemoryReuseFeedback,
     MemorySearchFilteredItem,
     MemorySearchHit,
     MemorySearchRankingItem,
@@ -34,8 +37,10 @@ from app.db.repositories.memory_repo import MemoryRepository
 from app.db.repositories.retrieval_repo import RetrievalRepository
 from app.db.session import Database
 from app.schemas.memory import (
+    MemoryExperienceConsolidateResponse,
     MemoryExtractResponse,
     MemoryJobItem,
+    MemoryReuseFeedbackRequest,
     MemorySearchApiRequest,
     MemorySearchApiResponse,
     MemoryUpdateRequest,
@@ -99,11 +104,14 @@ class MemoryCommandResult:
 
 class MemoryRerankService:
     scoring_policy = {
-        "semantic_score": 0.34,
-        "recency_score": 0.12,
-        "source_reliability": 0.12,
-        "explicitness": 0.12,
-        "supersede_status": 0.14,
+        "semantic_score": 0.24,
+        "recency_score": 0.1,
+        "source_reliability": 0.08,
+        "explicitness": 0.08,
+        "quality_score": 0.14,
+        "reuse_score": 0.08,
+        "version_stability": 0.09,
+        "conflict_safety": 0.08,
         "sensitivity_penalty": 0.08,
         "conversation_relevance": 0.04,
         "member_scope": 0.03,
@@ -144,7 +152,10 @@ class MemoryRerankService:
                 "recency_score": _recency_score(row),
                 "source_reliability": _source_reliability(row),
                 "explicitness": _explicitness_score(row),
-                "supersede_status": _supersede_score(row),
+                "quality_score": _quality_score(row),
+                "reuse_score": _reuse_score(row),
+                "version_stability": _version_stability_score(row),
+                "conflict_safety": _conflict_safety_score(row),
                 "sensitivity_penalty": _sensitivity_score(row),
                 "conversation_relevance": _conversation_score(row, request.conversation_id),
                 "member_scope": _member_scope_score(row, member_id),
@@ -169,6 +180,7 @@ class MemoryRerankService:
                     "selection_reason": [
                         *row.get("selection_reason", []),
                         "rerank_quality_score",
+                        "rerank_quality_reuse_version",
                     ],
                 }
             )
@@ -530,6 +542,13 @@ class MemoryService:
                         sensitivity=row["sensitivity"],
                         validity=_memory_validity(row),
                         embedding_status=row.get("embedding_status", "pending"),
+                        quality_score=float(row.get("quality_score", 0.5) or 0.5),
+                        quality_breakdown=row.get("quality_breakdown", {}),
+                        version_index=int(row.get("version_index") or 1),
+                        conflict_group_id=row.get("conflict_group_id"),
+                        conflict_status=row.get("conflict_status", "clear"),
+                        reuse_score=float(row.get("reuse_score", 0.0) or 0.0),
+                        reuse_count=int(row.get("reuse_count") or 0),
                         retrieval_source=row.get("retrieval_source", "fts_fallback"),
                         selection_reason=row.get("selection_reason", []),
                         provider=row.get("provider"),
@@ -602,6 +621,10 @@ class MemoryService:
                             "sensitivity": item.sensitivity,
                             "validity": item.validity,
                             "selection_confidence": item.selection_confidence,
+                            "quality_score": item.quality_score,
+                            "version_index": item.version_index,
+                            "reuse_score": item.reuse_score,
+                            "conflict_status": item.conflict_status,
                         },
                     )
                 )
@@ -914,6 +937,43 @@ class MemoryService:
                 status_code=500,
             ) from exc
 
+    async def record_multimodal_attachment(
+        self,
+        *,
+        summary_text: str,
+        organization_id: str,
+        member_id: str,
+        source: dict[str, Any],
+        trace_id: str | None = None,
+        root_span_id: str | None = None,
+        status: str = "understood",
+    ) -> MemoryCommandResult:
+        clean_text = str(redact(summary_text)).strip()
+        if not clean_text:
+            return MemoryCommandResult(handled=False, reason="empty_summary")
+        kind = _kind_for_summary(clean_text)
+        command = MemoryCommand(
+            kind="multimodal_attachment_fact",
+            memory_kind=kind,
+            layer=(
+                MemoryLayer.PROCEDURAL.value
+                if kind == "skill_candidate"
+                else MemoryLayer.SEMANTIC.value
+            ),
+            summary=clean_text,
+            score=0.68 if status == "understood" else 0.58,
+            explicit=False,
+        )
+        return await self._write_candidate_pipeline(
+            command=command,
+            text=clean_text,
+            organization_id=organization_id,
+            member_id=member_id,
+            source=source,
+            trace_id=trace_id,
+            root_span_id=root_span_id,
+        )
+
     async def enqueue_extract_after_turn(self, turn_id: str, *, schedule: bool = False) -> None:
         turn = await self._chat.get_turn(turn_id)
         if turn is None or turn["status"] != "completed":
@@ -940,6 +1000,53 @@ class MemoryService:
         )
         if schedule:
             self._schedule_background_jobs()
+
+    async def record_recovery_lesson_candidate(
+        self,
+        *,
+        turn_id: str,
+        stage: str,
+        failure_type: str,
+        recovery_action: str,
+        trace_id: str | None,
+    ) -> MemoryCandidate | None:
+        turn = await self._chat.get_turn(turn_id)
+        if turn is None:
+            return None
+        organization_id = await self._organization_id_for_member(turn["member_id"])
+        summary = (
+            f"聊天恢复经验：{stage} 阶段的 {failure_type} 可尝试 {recovery_action}，"
+            "但不得绕过 Safety、Approval、Capability Graph 或 Asset Broker。"
+        )
+        now = utc_now_iso()
+        return await self._insert_candidate(
+            organization_id=organization_id,
+            member_id=turn["member_id"],
+            source={
+                "type": "turn_recovery",
+                "conversation_id": turn["conversation_id"],
+                "turn_id": turn_id,
+                "message_id": turn.get("user_message_id"),
+                "trace_id": trace_id,
+            },
+            proposed_layer=MemoryLayer.PROCEDURAL.value,
+            proposed_kind="recovery_lesson",
+            proposed_scope_type="member",
+            proposed_scope_id=turn["member_id"],
+            summary_text=str(redact(summary)),
+            payload={
+                "stage": stage,
+                "failure_type": failure_type,
+                "recovery_action": recovery_action,
+                "controls": ["safety", "approval", "capability_graph", "asset_broker"],
+            },
+            score={"source": "turn_recovery", "review_required": True},
+            final_score=0.62,
+            sensitivity="low",
+            decision="pending",
+            decision_reason="recovery_lesson_review",
+            now=now,
+        )
 
     async def recover_stale_jobs(self) -> int:
         stale_before = (utc_now() - timedelta(minutes=JOB_STALE_AFTER_MINUTES)).isoformat()
@@ -1067,9 +1174,9 @@ class MemoryService:
             return MemoryCommandResult(
                 handled=True,
                 response_text=(
-                    "我不能在聊天里假装已经删除长期记忆，因为删除需要走明确的记忆管理权限和审计。"
+                    "我不能在聊天里假装已经删除长期记忆，因为删除需要明确权限和操作记录。"
                     "我现在能做的是：后续不再主动使用这条临时偏好；"
-                    "如果要真正删除，需要通过记忆管理接口处理。"
+                    "如果要真正删除，需要通过记忆管理功能处理。"
                 ),
                 reason="forget_requires_memory_management_boundary",
             )
@@ -1251,6 +1358,54 @@ class MemoryService:
             raise AppError(ErrorCode.MEMORY_NOT_FOUND, "记忆不存在", status_code=404)
         return await self._repo.list_relations(memory_id)
 
+    async def list_experience_records(
+        self,
+        *,
+        member_id: str | None = None,
+        task_id: str | None = None,
+        outcome: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[MemoryExperienceRecord]:
+        rows = await self._repo.list_experience_records(
+            member_id=member_id,
+            task_id=task_id,
+            outcome=outcome,
+            status=status,
+            limit=limit,
+        )
+        return [_experience_record(row) for row in rows]
+
+    async def list_conflicts(
+        self,
+        *,
+        member_id: str | None = None,
+        status: str | None = None,
+        conflict_group_id: str | None = None,
+        limit: int = 50,
+    ) -> list[MemoryConflictRecord]:
+        rows = await self._repo.list_conflict_records(
+            member_id=member_id,
+            status=status,
+            conflict_group_id=conflict_group_id,
+            limit=limit,
+        )
+        return [_conflict_record(row) for row in rows]
+
+    async def list_reuse_feedback(
+        self,
+        *,
+        retrieval_id: str | None = None,
+        memory_id: str | None = None,
+        limit: int = 50,
+    ) -> list[MemoryReuseFeedback]:
+        rows = await self._repo.list_reuse_feedback(
+            retrieval_id=retrieval_id,
+            memory_id=memory_id,
+            limit=limit,
+        )
+        return [_reuse_feedback(row) for row in rows]
+
     async def source_for_memory(self, memory_id: str) -> dict[str, Any]:
         memory = await self._repo.get_memory_item(memory_id)
         if memory is None:
@@ -1266,6 +1421,219 @@ class MemoryService:
             "source_message": redact(source_message),
             "trace_id": source.get("trace_id"),
         }
+
+    async def consolidate_experience(
+        self,
+        *,
+        member_id: str,
+        outcome: str,
+        summary_text: str,
+        source: dict[str, Any],
+        task_id: str | None = None,
+        conversation_id: str | None = None,
+        evidence: dict[str, Any] | None = None,
+        steps: list[dict[str, Any]] | None = None,
+        trace_id: str | None = None,
+        root_span_id: str | None = None,
+    ) -> MemoryExperienceConsolidateResponse:
+        member = await self._members.get_member(member_id)
+        if member is None:
+            raise AppError(ErrorCode.NOT_FOUND, "成员不存在", status_code=404)
+        now = utc_now_iso()
+        clean_summary = str(redact(summary_text)).strip()
+        if not clean_summary:
+            raise AppError(ErrorCode.VALIDATION_ERROR, "经验摘要不能为空", status_code=422)
+        source_payload = {
+            "type": str(source.get("type") or "task_experience"),
+            "conversation_id": conversation_id or source.get("conversation_id"),
+            "task_id": task_id or source.get("task_id"),
+            "step_id": source.get("step_id"),
+            "turn_id": source.get("turn_id"),
+            "message_id": source.get("message_id"),
+            "trace_id": trace_id or source.get("trace_id"),
+        }
+        span_id = await self._start_span(
+            trace_id,
+            TraceSpanType.MEMORY_WRITE,
+            "consolidate memory experience",
+            parent_span_id=root_span_id,
+            input_data={"task_id": task_id, "outcome": outcome},
+            metadata={"member_id": member_id},
+        )
+        quality = _experience_quality_breakdown(
+            summary_text=clean_summary,
+            outcome=outcome,
+            evidence=evidence or {},
+            steps=steps or [],
+            source=source_payload,
+        )
+        score = round(_experience_quality_score(quality), 4)
+        conflict_group_id = str(
+            source_payload.get("task_id")
+            or source_payload.get("conversation_id")
+            or new_id("memgrp")
+        )
+        base_kind = _experience_kind_for_outcome(outcome, steps or [])
+        layer = _experience_layer_for_outcome(outcome, steps or [])
+        decision = "auto_written" if score >= MIN_WRITE_SCORE and outcome != "failed" else "needs_review"
+        candidate = await self._insert_candidate(
+            organization_id=member["organization_id"],
+            member_id=member_id,
+            source=source_payload,
+            proposed_layer=layer,
+            proposed_kind=base_kind,
+            proposed_scope_type="member",
+            proposed_scope_id=member_id,
+            summary_text=clean_summary,
+            payload={
+                "outcome": outcome,
+                "task_id": task_id,
+                "conversation_id": conversation_id,
+                "steps": _redact_memory_evidence(steps or []),
+                "evidence": _redact_memory_evidence(evidence or {}),
+            },
+            score={
+                "quality_breakdown": quality,
+                "quality_score": score,
+                "experience": True,
+                "outcome": outcome,
+            },
+            final_score=score,
+            sensitivity=_experience_sensitivity(outcome, evidence or {}),
+            decision=decision,
+            decision_reason=None if decision == "auto_written" else "experience_requires_review",
+            now=now,
+        )
+        conflicts = await self._resolve_experience_conflicts(
+            organization_id=member["organization_id"],
+            member_id=member_id,
+            candidate=candidate,
+            conflict_group_id=conflict_group_id,
+            source=source_payload,
+            outcome=outcome,
+            evidence=evidence or {},
+            trace_id=trace_id,
+            now=now,
+        )
+        memories: list[MemoryItem] = []
+        if decision == "auto_written":
+            memory = await self._insert_memory_from_candidate(
+                _candidate_row(candidate),
+                decision=decision,
+                trace_id=trace_id,
+                now=now,
+                supersede_query=clean_summary,
+                quality_score=score,
+                quality_breakdown=quality,
+                conflict_group_id=conflict_group_id,
+                retention_policy=_retention_policy_for_experience(outcome, score),
+            )
+            memories.append(memory)
+        experience = await self._persist_experience_record(
+            organization_id=member["organization_id"],
+            member_id=member_id,
+            task_id=task_id,
+            conversation_id=conversation_id,
+            memory=memories[0] if memories else None,
+            conflict_group_id=conflict_group_id,
+            layer=layer,
+            kind=base_kind,
+            outcome=outcome,
+            summary_text=clean_summary,
+            source=source_payload,
+            evidence=evidence or {},
+            score={"quality_breakdown": quality, "quality_score": score},
+            confidence_score=score,
+            reuse_score=_experience_reuse_score(outcome, quality),
+            decision=decision,
+            trace_id=trace_id,
+            now=now,
+        )
+        await self._end_span(
+            span_id,
+            output_data={
+                "experience_id": experience.experience_id,
+                "candidate_id": candidate.candidate_id,
+                "memory_id": experience.memory_id,
+                "conflict_count": len(conflicts),
+                "decision": decision,
+            },
+        )
+        return MemoryExperienceConsolidateResponse(
+            experience=experience,
+            candidates=[candidate],
+            memories=memories,
+            conflicts=conflicts,
+        )
+
+    async def record_retrieval_feedback(
+        self,
+        retrieval_id: str,
+        request: MemoryReuseFeedbackRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> MemoryReuseFeedback:
+        member_id = request.member_id or "mem_xiaoyao"
+        member = await self._members.get_member(member_id)
+        if member is None:
+            raise AppError(ErrorCode.NOT_FOUND, "成员不存在", status_code=404)
+        memory = await self._repo.get_memory_item(request.memory_id)
+        if memory is None:
+            raise AppError(ErrorCode.MEMORY_NOT_FOUND, "记忆不存在", status_code=404)
+        now = utc_now_iso()
+        source = {
+            "type": str(request.source.get("type") or "retrieval_feedback"),
+            "conversation_id": request.source.get("conversation_id"),
+            "task_id": request.task_id or request.source.get("task_id"),
+            "turn_id": request.source.get("turn_id"),
+            "message_id": request.source.get("message_id"),
+            "trace_id": trace_id or request.trace_id or request.source.get("trace_id"),
+        }
+        span_id = await self._start_span(
+            trace_id or request.trace_id,
+            TraceSpanType.MEMORY_CORRECTION,
+            "record memory reuse feedback",
+            metadata={
+                "retrieval_id": retrieval_id,
+                "memory_id": request.memory_id,
+                "feedback_type": request.feedback_type,
+            },
+        )
+        feedback = await self._persist_reuse_feedback(
+            organization_id=member["organization_id"],
+            member_id=member_id,
+            retrieval_id=retrieval_id,
+            memory_id=request.memory_id,
+            task_id=request.task_id,
+            feedback_type=request.feedback_type,
+            rating=request.rating,
+            source=source,
+            evidence=request.evidence,
+            trace_id=trace_id or request.trace_id,
+            now=now,
+        )
+        reuse_delta = _reuse_feedback_delta(request.feedback_type, request.rating)
+        await self._repo.update_memory_item(
+            request.memory_id,
+            {
+                "reuse_score": max(
+                    0.0,
+                    min(1.0, float(memory.get("reuse_score", 0.0) or 0.0) + reuse_delta),
+                ),
+                "reuse_count": int(memory.get("reuse_count") or 0) + 1,
+                "last_reused_at": now,
+                "updated_at": now,
+            },
+        )
+        await self._end_span(
+            span_id,
+            output_data={
+                "feedback_id": feedback.feedback_id,
+                "memory_id": request.memory_id,
+                "rating": request.rating,
+            },
+        )
+        return feedback
 
     async def _write_candidate_pipeline(
         self,
@@ -1346,12 +1714,24 @@ class MemoryService:
             parent_span_id=root_span_id,
             metadata={"kind": command.memory_kind},
         )
-        final_score = float(command.score)
+        quality_breakdown = _memory_quality_breakdown(
+            summary_text=summary,
+            kind=command.memory_kind,
+            source=source,
+            text=text,
+            command_kind=command.kind,
+        )
+        quality_score = _memory_quality_score(quality_breakdown)
+        final_score = max(float(command.score), quality_score)
         await self._end_span(
             score_span,
-            output_data={"final_score": final_score, "threshold": MIN_WRITE_SCORE},
+            output_data={
+                "final_score": final_score,
+                "quality_score": quality_score,
+                "threshold": MIN_WRITE_SCORE,
+            },
         )
-        score = _score_decision(command)
+        score = _score_decision(command, final_score=final_score)
         decision = score.decision
         normalized = _normalize(summary)
         dedupe_span = await self._start_span(
@@ -1380,7 +1760,12 @@ class MemoryService:
                 proposed_scope_id=member_id,
                 summary_text=summary,
                 payload={"fact": summary},
-                score={"base": final_score, "duplicate_memory_id": duplicate["memory_id"]},
+                score={
+                    "base": final_score,
+                    "quality_breakdown": quality_breakdown,
+                    "quality_score": final_score,
+                    "duplicate_memory_id": duplicate["memory_id"],
+                },
                 final_score=final_score,
                 sensitivity="low",
                 decision="discarded_duplicate",
@@ -1403,6 +1788,8 @@ class MemoryService:
                 "base": final_score,
                 "explicit": command.explicit,
                 "review_required": score.review_required,
+                "quality_breakdown": quality_breakdown,
+                "quality_score": final_score,
             },
             final_score=final_score,
             sensitivity="low",
@@ -1439,6 +1826,191 @@ class MemoryService:
                 },
             )
         return MemoryCommandResult(handled=True, candidates=[candidate], memories=[memory])
+
+    async def _resolve_experience_conflicts(
+        self,
+        *,
+        organization_id: str,
+        member_id: str,
+        candidate: MemoryCandidate,
+        conflict_group_id: str,
+        source: dict[str, Any],
+        outcome: str,
+        evidence: dict[str, Any],
+        trace_id: str | None,
+        now: str,
+    ) -> list[MemoryConflictRecord]:
+        matches = await self._repo.search_memory_items(
+            organization_id=organization_id,
+            member_id=member_id,
+            query=candidate.summary_text,
+            limit=3,
+            include_archived=True,
+            include_sensitive=False,
+        )
+        conflicts: list[MemoryConflictRecord] = []
+        for match in matches:
+            if match["status"] == "deleted":
+                continue
+            normalized_match = match.get("normalized_summary") or _normalize(match["summary_text"])
+            normalized_candidate = _normalize(candidate.summary_text)
+            if normalized_match == normalized_candidate:
+                conflict_type = "duplicate_experience"
+                status = "observed"
+                resolution = "reuse_existing_memory"
+            elif outcome in {"failed", "recovery_required"}:
+                conflict_type = "failure_experience_overlap"
+                status = "needs_review"
+                resolution = None
+            else:
+                conflict_type = "related_experience"
+                status = "observed"
+                resolution = "rank_by_version_and_quality"
+            conflicts.append(
+                await self._persist_conflict_record(
+                    organization_id=organization_id,
+                    member_id=member_id,
+                    memory_id=None,
+                    related_memory_id=match["memory_id"],
+                    candidate_id=candidate.candidate_id,
+                    conflict_group_id=match.get("conflict_group_id") or conflict_group_id,
+                    conflict_type=conflict_type,
+                    status=status,
+                    resolution=resolution,
+                    summary_text=str(redact(candidate.summary_text)),
+                    source=source,
+                    evidence={
+                        "outcome": outcome,
+                        "matched_memory_id": match["memory_id"],
+                        "matched_kind": match.get("kind"),
+                        "matched_status": match.get("status"),
+                        "experience_evidence": _redact_memory_evidence(evidence),
+                    },
+                    trace_id=trace_id,
+                    now=now,
+                )
+            )
+        return conflicts
+
+    async def _persist_experience_record(
+        self,
+        *,
+        organization_id: str,
+        member_id: str,
+        task_id: str | None,
+        conversation_id: str | None,
+        memory: MemoryItem | None,
+        conflict_group_id: str,
+        layer: str,
+        kind: str,
+        outcome: str,
+        summary_text: str,
+        source: dict[str, Any],
+        evidence: dict[str, Any],
+        score: dict[str, Any],
+        confidence_score: float,
+        reuse_score: float,
+        decision: str,
+        trace_id: str | None,
+        now: str,
+    ) -> MemoryExperienceRecord:
+        data = {
+            "experience_id": new_id("memexp"),
+            "organization_id": organization_id,
+            "member_id": member_id,
+            "task_id": task_id,
+            "conversation_id": conversation_id,
+            "memory_id": memory.memory_id if memory else None,
+            "conflict_group_id": memory.conflict_group_id if memory else conflict_group_id,
+            "layer": layer,
+            "kind": kind,
+            "outcome": outcome,
+            "summary_text": str(redact(summary_text)),
+            "source": redact(source),
+            "evidence": _redact_memory_evidence(evidence),
+            "score": redact(score),
+            "confidence_score": confidence_score,
+            "reuse_score": reuse_score,
+            "decision": decision,
+            "status": "recorded",
+            "trace_id": trace_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await self._repo.insert_experience_record(data)
+        return _experience_record(data)
+
+    async def _persist_conflict_record(
+        self,
+        *,
+        organization_id: str,
+        member_id: str | None,
+        memory_id: str | None,
+        related_memory_id: str | None,
+        candidate_id: str | None,
+        conflict_group_id: str,
+        conflict_type: str,
+        status: str,
+        resolution: str | None,
+        summary_text: str,
+        source: dict[str, Any],
+        evidence: dict[str, Any],
+        trace_id: str | None,
+        now: str,
+    ) -> MemoryConflictRecord:
+        data = {
+            "conflict_id": new_id("memconf"),
+            "organization_id": organization_id,
+            "member_id": member_id,
+            "memory_id": memory_id,
+            "related_memory_id": related_memory_id,
+            "candidate_id": candidate_id,
+            "conflict_group_id": conflict_group_id,
+            "conflict_type": conflict_type,
+            "status": status,
+            "resolution": resolution,
+            "summary_text": str(redact(summary_text)),
+            "source": redact(source),
+            "evidence": redact(evidence),
+            "trace_id": trace_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await self._repo.insert_conflict_record(data)
+        return _conflict_record(data)
+
+    async def _persist_reuse_feedback(
+        self,
+        *,
+        organization_id: str,
+        member_id: str,
+        retrieval_id: str,
+        memory_id: str,
+        task_id: str | None,
+        feedback_type: str,
+        rating: float,
+        source: dict[str, Any],
+        evidence: dict[str, Any],
+        trace_id: str | None,
+        now: str,
+    ) -> MemoryReuseFeedback:
+        data = {
+            "feedback_id": new_id("memfb"),
+            "organization_id": organization_id,
+            "member_id": member_id,
+            "retrieval_id": retrieval_id,
+            "memory_id": memory_id,
+            "task_id": task_id,
+            "feedback_type": feedback_type,
+            "rating": rating,
+            "source": redact(source),
+            "evidence": _redact_memory_evidence(evidence),
+            "trace_id": trace_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await self._repo.insert_reuse_feedback(data)
+        return _reuse_feedback(data)
 
     async def _insert_candidate(
         self,
@@ -1491,6 +2063,10 @@ class MemoryService:
         trace_id: str | None,
         now: str,
         supersede_query: str | None = None,
+        quality_score: float | None = None,
+        quality_breakdown: dict[str, Any] | None = None,
+        conflict_group_id: str | None = None,
+        retention_policy: str | None = None,
     ) -> MemoryItem:
         write_span = await self._start_span(
             trace_id,
@@ -1522,6 +2098,22 @@ class MemoryService:
                 },
             )
         memory_id = new_id("mem")
+        candidate_score = candidate.get("score") if isinstance(candidate.get("score"), dict) else {}
+        breakdown = quality_breakdown or candidate_score.get("quality_breakdown") or {}
+        quality_value = float(
+            quality_score
+            if quality_score is not None
+            else candidate_score.get("quality_score", candidate["final_score"])
+        )
+        version_index = 1
+        memory_conflict_group_id = conflict_group_id
+        if old_memory is not None:
+            version_index = int(old_memory.get("version_index") or 1) + 1
+            memory_conflict_group_id = (
+                str(old_memory.get("conflict_group_id") or f"grp_{old_memory['memory_id']}")
+            )
+        elif memory_conflict_group_id is None:
+            memory_conflict_group_id = f"grp_{memory_id}"
         data = {
             "memory_id": memory_id,
             "organization_id": candidate["organization_id"],
@@ -1534,16 +2126,34 @@ class MemoryService:
             "summary_text": candidate["summary_text"],
             "payload": candidate["payload"],
             "source": candidate["source"],
-            "confidence": candidate["final_score"],
+            "confidence": quality_value,
             "importance": _importance_for_kind(candidate["proposed_kind"]),
             "sensitivity": candidate["sensitivity"],
             "valid_from": now,
             "valid_to": None,
             "supersedes": old_memory["memory_id"] if old_memory else None,
             "status": "active",
+            "quality_score": quality_value,
+            "quality_breakdown": breakdown,
+            "version_index": version_index,
+            "conflict_group_id": memory_conflict_group_id,
+            "conflict_status": "resolved" if old_memory else "clear",
+            "reuse_score": float(breakdown.get("reuse", 0.0) or 0.0),
+            "reuse_count": 0,
+            "last_reused_at": None,
+            "retention_policy": retention_policy or _retention_policy_for_kind(candidate["proposed_kind"]),
+            "retention_reason": _retention_reason_for_kind(candidate["proposed_kind"]),
+            "expires_reason": None,
             "review_required": False,
             "embedding_status": "pending",
-            "metadata": {"candidate_id": candidate["candidate_id"], "vector": "pending"},
+            "metadata": {
+                "candidate_id": candidate["candidate_id"],
+                "vector": "pending",
+                "quality_breakdown": breakdown,
+                "quality_score": quality_value,
+                "version_index": version_index,
+                "conflict_group_id": memory_conflict_group_id,
+            },
             "created_at": now,
             "updated_at": now,
             "normalized_summary": _normalize(candidate["summary_text"]),
@@ -1625,6 +2235,19 @@ class MemoryService:
                                     ),
                                 },
                             },
+                            "quality_score": quality_value,
+                            "quality_breakdown": breakdown,
+                            "version_index": version_index,
+                            "conflict_group_id": memory_conflict_group_id,
+                            "conflict_status": "resolved" if old_memory else "clear",
+                            "reuse_score": float(breakdown.get("reuse", 0.0) or 0.0),
+                            "reuse_count": 0,
+                            "last_reused_at": None,
+                            "retention_policy": retention_policy
+                            or _retention_policy_for_kind(candidate["proposed_kind"]),
+                            "retention_reason": _retention_reason_for_kind(
+                                candidate["proposed_kind"]
+                            ),
                             "updated_at": now,
                         },
                     )
@@ -1643,6 +2266,19 @@ class MemoryService:
                                     "error_code": vector_error,
                                 },
                             },
+                            "quality_score": quality_value,
+                            "quality_breakdown": breakdown,
+                            "version_index": version_index,
+                            "conflict_group_id": memory_conflict_group_id,
+                            "conflict_status": "resolved" if old_memory else "clear",
+                            "reuse_score": float(breakdown.get("reuse", 0.0) or 0.0),
+                            "reuse_count": 0,
+                            "last_reused_at": None,
+                            "retention_policy": retention_policy
+                            or _retention_policy_for_kind(candidate["proposed_kind"]),
+                            "retention_reason": _retention_reason_for_kind(
+                                candidate["proposed_kind"]
+                            ),
                             "updated_at": now,
                         },
                     )
@@ -1676,6 +2312,9 @@ class MemoryService:
                     {
                         "status": "superseded",
                         "valid_to": now,
+                        "conflict_group_id": memory_conflict_group_id,
+                        "conflict_status": "superseded",
+                        "expires_reason": "superseded_by_newer_memory",
                         "updated_at": now,
                         "metadata": {
                             **old_memory.get("metadata", {}),
@@ -1691,6 +2330,32 @@ class MemoryService:
                     relation_type="supersedes",
                     evidence={"candidate_id": candidate["candidate_id"]},
                     created_at=now,
+                )
+                await self._repo.insert_conflict_record(
+                    {
+                        "conflict_id": new_id("memconf"),
+                        "organization_id": candidate["organization_id"],
+                        "member_id": candidate.get("member_id"),
+                        "memory_id": memory_id,
+                        "related_memory_id": old_memory["memory_id"],
+                        "candidate_id": candidate["candidate_id"],
+                        "conflict_group_id": memory_conflict_group_id,
+                        "conflict_type": "superseded_by_correction"
+                        if candidate["proposed_kind"] == "correction"
+                        else "version_supersede",
+                        "status": "resolved",
+                        "resolution": "newer_memory_supersedes_old",
+                        "summary_text": str(redact(candidate["summary_text"])),
+                        "source": redact(candidate.get("source", {})),
+                        "evidence": {
+                            "superseded_memory_id": old_memory["memory_id"],
+                            "new_memory_id": memory_id,
+                            "candidate_id": candidate["candidate_id"],
+                        },
+                        "trace_id": trace_id,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
                 )
         await self._audit.write_event(
             actor_type="system",
@@ -1903,6 +2568,17 @@ def _memory_item(row: dict[str, Any]) -> MemoryItem:
         status=row["status"],
         last_accessed_at=row.get("last_accessed_at"),
         access_count=int(row.get("access_count") or 0),
+        quality_score=float(row.get("quality_score", 0.5) or 0.5),
+        quality_breakdown=row.get("quality_breakdown", {}),
+        version_index=int(row.get("version_index") or 1),
+        conflict_group_id=row.get("conflict_group_id"),
+        conflict_status=row.get("conflict_status", "clear"),
+        reuse_score=float(row.get("reuse_score", 0.0) or 0.0),
+        reuse_count=int(row.get("reuse_count") or 0),
+        last_reused_at=row.get("last_reused_at"),
+        retention_policy=row.get("retention_policy", "standard"),
+        retention_reason=row.get("retention_reason"),
+        expires_reason=row.get("expires_reason"),
         review_required=bool(row.get("review_required", False)),
         embedding_status=row.get("embedding_status", "pending"),
         metadata=row.get("metadata", {}),
@@ -2007,9 +2683,9 @@ def _source_reliability(row: dict[str, Any]) -> float:
     source_value = row.get("source")
     source = source_value if isinstance(source_value, dict) else {}
     source_type = str(source.get("type") or "")
-    if source_type in {"explicit_user", "user_confirmed", "manual"}:
+    if source_type in {"explicit_user", "user_confirmed", "manual", "task_experience"}:
         return 0.95
-    if source_type in {"chat", "message", "turn"}:
+    if source_type in {"chat", "message", "turn", "retrieval_feedback"}:
         return 0.75
     return 0.65
 
@@ -2019,10 +2695,61 @@ def _public_memory_source(source_value: Any) -> dict[str, Any]:
     return {
         "type": str(source.get("type") or "unknown"),
         "conversation_id": source.get("conversation_id"),
+        "task_id": source.get("task_id"),
+        "step_id": source.get("step_id"),
         "turn_id": None,
         "message_id": None,
         "trace_id": None,
     }
+
+
+_MEMORY_EVIDENCE_SECRET_KEYS = {
+    "api_key",
+    "authorization",
+    "cookie",
+    "cookies",
+    "local_path",
+    "localstorage",
+    "password",
+    "profile_dir",
+    "profile_path",
+    "secret",
+    "set-cookie",
+    "storage_state",
+    "token",
+}
+
+
+def _redact_memory_evidence(value: Any) -> Any:
+    redacted = redact(value)
+    return _redact_memory_paths(redacted)
+
+
+def _redact_memory_paths(value: Any) -> Any:
+    if isinstance(value, dict):
+        output: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_key = str(key).lower().replace("_", "").replace("-", "")
+            if normalized_key in {
+                item_key.replace("_", "").replace("-", "")
+                for item_key in _MEMORY_EVIDENCE_SECRET_KEYS
+            }:
+                output[key] = "[REDACTED]"
+            else:
+                output[key] = _redact_memory_paths(item)
+        return output
+    if isinstance(value, list):
+        return [_redact_memory_paths(item) for item in value]
+    if isinstance(value, str) and _looks_like_local_path(value):
+        return "[REDACTED_LOCAL_PATH]"
+    return value
+
+
+def _looks_like_local_path(value: str) -> bool:
+    return bool(
+        re.search(r"\b[A-Za-z]:[\\/]", value)
+        or re.search(r"(^|[\\/])(Users|home)[\\/][^\\/]+", value)
+    )
 
 
 def _explicitness_score(row: dict[str, Any]) -> float:
@@ -2032,7 +2759,13 @@ def _explicitness_score(row: dict[str, Any]) -> float:
     source = source_value if isinstance(source_value, dict) else {}
     if metadata.get("explicit") is True or source.get("type") in {"explicit_user", "manual"}:
         return 0.95
-    if row.get("kind") in {"preference", "project_fact", "correction"}:
+    if row.get("kind") in {
+        "preference",
+        "project_fact",
+        "correction",
+        "task_experience",
+        "procedural_experience",
+    }:
         return 0.78
     return 0.6
 
@@ -2088,6 +2821,8 @@ def _memory_conflict_notes(row: dict[str, Any]) -> list[str]:
         notes.append("superseded_by_newer_memory")
     if row.get("valid_to") and str(row["valid_to"]) <= utc_now_iso():
         notes.append("expired_memory")
+    if str(row.get("conflict_status") or "") in {"needs_review", "conflicted"}:
+        notes.append(f"conflict_{row.get('conflict_status')}")
     return notes
 
 
@@ -2111,6 +2846,11 @@ def _suppressed_item(
 def _memory_validity(row: dict[str, Any]) -> str:
     if row.get("status") == "superseded" or row.get("supersedes"):
         return "superseded" if row.get("status") == "superseded" else "current"
+    conflict_status = str(row.get("conflict_status") or "")
+    if conflict_status in {"superseded", "resolved"} and row.get("supersedes"):
+        return "superseded"
+    if conflict_status in {"conflicted", "needs_review"}:
+        return "conflicted"
     if row.get("valid_to") and str(row["valid_to"]) <= utc_now_iso():
         return "expired"
     return "current"
@@ -2134,6 +2874,71 @@ def _candidate_row(candidate: MemoryCandidate) -> dict[str, Any]:
         "sensitivity": candidate.sensitivity,
         "decision": candidate.decision,
     }
+
+
+def _experience_record(row: dict[str, Any]) -> MemoryExperienceRecord:
+    return MemoryExperienceRecord(
+        experience_id=row["experience_id"],
+        organization_id=row["organization_id"],
+        member_id=row.get("member_id"),
+        task_id=row.get("task_id"),
+        conversation_id=row.get("conversation_id"),
+        memory_id=row.get("memory_id"),
+        conflict_group_id=row.get("conflict_group_id"),
+        layer=MemoryLayer(row["layer"]),
+        kind=row["kind"],
+        outcome=row["outcome"],
+        summary_text=row["summary_text"],
+        source=row["source"],
+        evidence=row.get("evidence", {}),
+        score=row.get("score", {}),
+        confidence_score=float(row.get("confidence_score") or 0.0),
+        reuse_score=float(row.get("reuse_score") or 0.0),
+        decision=row["decision"],
+        status=row.get("status", "recorded"),
+        trace_id=row.get("trace_id"),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+def _conflict_record(row: dict[str, Any]) -> MemoryConflictRecord:
+    return MemoryConflictRecord(
+        conflict_id=row["conflict_id"],
+        organization_id=row["organization_id"],
+        member_id=row.get("member_id"),
+        memory_id=row.get("memory_id"),
+        related_memory_id=row.get("related_memory_id"),
+        candidate_id=row.get("candidate_id"),
+        conflict_group_id=row["conflict_group_id"],
+        conflict_type=row["conflict_type"],
+        status=row["status"],
+        resolution=row.get("resolution"),
+        summary_text=row["summary_text"],
+        source=row.get("source", {"type": "unknown"}),
+        evidence=row.get("evidence", {}),
+        trace_id=row.get("trace_id"),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+def _reuse_feedback(row: dict[str, Any]) -> MemoryReuseFeedback:
+    return MemoryReuseFeedback(
+        feedback_id=row["feedback_id"],
+        organization_id=row["organization_id"],
+        member_id=row.get("member_id"),
+        retrieval_id=row["retrieval_id"],
+        memory_id=row["memory_id"],
+        task_id=row.get("task_id"),
+        feedback_type=row["feedback_type"],
+        rating=float(row.get("rating") or 0.0),
+        source=row.get("source", {"type": "unknown"}),
+        evidence=row.get("evidence", {}),
+        trace_id=row.get("trace_id"),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
 
 
 def _clean_summary(text: str) -> str:
@@ -2233,21 +3038,22 @@ def _implicit_memory_command(text: str) -> MemoryCommand | None:
     return None
 
 
-def _score_decision(command: MemoryCommand) -> MemoryScore:
+def _score_decision(command: MemoryCommand, *, final_score: float | None = None) -> MemoryScore:
+    score_value = float(command.score if final_score is None else final_score)
     if command.review_required:
         return MemoryScore(
-            final_score=command.score,
+            final_score=score_value,
             decision="needs_review",
             reason="review_required",
             review_required=True,
         )
-    if command.score < MIN_WRITE_SCORE:
+    if score_value < MIN_WRITE_SCORE:
         return MemoryScore(
-            final_score=command.score,
+            final_score=score_value,
             decision="discarded_low_value",
             reason="score_below_threshold",
         )
-    return MemoryScore(final_score=command.score, decision="auto_written", reason=None)
+    return MemoryScore(final_score=score_value, decision="auto_written", reason=None)
 
 
 def _kind_for_summary(summary: str) -> str:
@@ -2284,6 +3090,223 @@ def _block_type_for_kind(kind: str) -> str:
     if kind == "skill_candidate":
         return "procedural"
     return "semantic"
+
+
+def _memory_quality_breakdown(
+    *,
+    summary_text: str,
+    kind: str,
+    source: dict[str, Any],
+    text: str,
+    command_kind: str,
+) -> dict[str, float]:
+    clean_summary = str(summary_text).strip()
+    source_type = str((source or {}).get("type") or "")
+    explicit_source = source_type in {"manual", "conversation", "task_experience"}
+    value = 0.72 if kind in {"preference", "project_fact", "correction"} else 0.58
+    if command_kind == "block":
+        value = 0.12
+    if command_kind == "correction":
+        value = max(value, 0.9)
+    clarity = 0.92 if len(clean_summary) < 120 else 0.78 if len(clean_summary) < 220 else 0.64
+    if len(clean_summary.split()) <= 3:
+        clarity = min(clarity, 0.7)
+    stability = 0.85 if kind in {"preference", "project_fact"} else 0.66
+    if kind == "skill_candidate":
+        stability = 0.58
+    if command_kind == "correction":
+        stability = max(stability, 0.82)
+    sensitivity = 0.95
+    if any(marker in text for marker in ("密码", "token", "cookie", "secret")):
+        sensitivity = 0.12
+    reuse = 0.82 if kind in {"preference", "project_fact", "correction"} else 0.62
+    if explicit_source:
+        value = min(0.98, value + 0.06)
+        reuse = min(0.95, reuse + 0.04)
+    conflict_risk = 0.05 if kind in {"preference", "project_fact"} else 0.14
+    if command_kind == "block":
+        conflict_risk = 0.02
+    if command_kind == "correction":
+        conflict_risk = 0.08
+    return {
+        "value": round(max(0.0, min(1.0, value)), 4),
+        "clarity": round(max(0.0, min(1.0, clarity)), 4),
+        "stability": round(max(0.0, min(1.0, stability)), 4),
+        "sensitivity": round(max(0.0, min(1.0, sensitivity)), 4),
+        "reuse": round(max(0.0, min(1.0, reuse)), 4),
+        "conflict_risk": round(max(0.0, min(1.0, conflict_risk)), 4),
+    }
+
+
+def _memory_quality_score(breakdown: dict[str, float]) -> float:
+    score = (
+        breakdown.get("value", 0.0) * 0.32
+        + breakdown.get("clarity", 0.0) * 0.16
+        + breakdown.get("stability", 0.0) * 0.18
+        + breakdown.get("sensitivity", 0.0) * 0.12
+        + breakdown.get("reuse", 0.0) * 0.12
+        + (1.0 - breakdown.get("conflict_risk", 0.0)) * 0.1
+    )
+    return max(0.0, min(1.0, score))
+
+
+def _quality_score(row: dict[str, Any]) -> float:
+    value = float(row.get("quality_score", row.get("importance", 0.0)) or 0.0)
+    if value > 1.0:
+        value = 1.0
+    return max(0.05, value)
+
+
+def _reuse_score(row: dict[str, Any]) -> float:
+    reuse_score = float(row.get("reuse_score", 0.0) or 0.0)
+    reuse_count = int(row.get("reuse_count") or 0)
+    if reuse_count:
+        reuse_score = max(reuse_score, min(1.0, reuse_count / 10))
+    return max(0.0, min(1.0, reuse_score))
+
+
+def _version_stability_score(row: dict[str, Any]) -> float:
+    version = int(row.get("version_index") or 1)
+    if row.get("status") == "superseded":
+        return 0.05
+    if str(row.get("conflict_status") or "") == "superseded":
+        return 0.12
+    if version <= 1:
+        return 0.78
+    if version <= 3:
+        return 0.9
+    return 0.96
+
+
+def _conflict_safety_score(row: dict[str, Any]) -> float:
+    conflict_status = str(row.get("conflict_status") or "clear")
+    if conflict_status == "clear":
+        return 0.95
+    if conflict_status in {"resolved", "observed"}:
+        return 0.72
+    if conflict_status in {"needs_review", "conflicted"}:
+        return 0.38
+    if conflict_status == "superseded":
+        return 0.08
+    return 0.52
+
+
+def _experience_kind_for_outcome(outcome: str, steps: list[dict[str, Any]]) -> str:
+    if outcome == "failed":
+        return "task_failure_experience"
+    if any("skill" in str(step.get("step_type") or "") for step in steps):
+        return "procedural_experience"
+    if any("browser" in str(step.get("step_type") or "") for step in steps):
+        return "episodic_experience"
+    return "task_experience"
+
+
+def _experience_layer_for_outcome(outcome: str, steps: list[dict[str, Any]]) -> str:
+    if outcome == "failed":
+        return MemoryLayer.EPISODIC.value
+    if any("skill" in str(step.get("step_type") or "") for step in steps):
+        return MemoryLayer.PROCEDURAL.value
+    return MemoryLayer.EPISODIC.value
+
+
+def _experience_quality_breakdown(
+    *,
+    summary_text: str,
+    outcome: str,
+    evidence: dict[str, Any],
+    steps: list[dict[str, Any]],
+    source: dict[str, Any],
+) -> dict[str, float]:
+    step_count = len(steps)
+    has_result = bool(evidence.get("result") or evidence.get("artifact_refs"))
+    value = 0.82 if outcome == "completed" else 0.58
+    if has_result:
+        value = min(0.95, value + 0.06)
+    clarity = 0.9 if 18 <= len(summary_text) <= 240 else 0.68
+    stability = 0.82 if outcome == "completed" else 0.48
+    sensitivity = 0.92
+    serialized = str(evidence)
+    if any(marker in serialized.lower() for marker in ("token", "cookie", "password", "secret")):
+        sensitivity = 0.42
+    reuse = 0.74 if outcome == "completed" else 0.36
+    if step_count >= 2:
+        reuse = min(0.96, reuse + 0.12)
+    if source.get("task_id"):
+        clarity = min(0.96, clarity + 0.04)
+    conflict_risk = 0.08 if outcome == "completed" else 0.22
+    return {
+        "value": round(value, 4),
+        "clarity": round(clarity, 4),
+        "stability": round(stability, 4),
+        "sensitivity": round(sensitivity, 4),
+        "reuse": round(reuse, 4),
+        "conflict_risk": round(conflict_risk, 4),
+        "step_count": float(step_count),
+    }
+
+
+def _experience_quality_score(breakdown: dict[str, float]) -> float:
+    return _memory_quality_score(
+        {
+            "value": breakdown.get("value", 0.0),
+            "clarity": breakdown.get("clarity", 0.0),
+            "stability": breakdown.get("stability", 0.0),
+            "sensitivity": breakdown.get("sensitivity", 0.0),
+            "reuse": breakdown.get("reuse", 0.0),
+            "conflict_risk": breakdown.get("conflict_risk", 0.0),
+        }
+    )
+
+
+def _experience_sensitivity(outcome: str, evidence: dict[str, Any]) -> str:
+    if outcome == "failed":
+        return "low"
+    serialized = str(evidence)
+    if any(marker in serialized for marker in ("secret", "token", "cookie", "password")):
+        return "medium"
+    return "low"
+
+
+def _experience_reuse_score(outcome: str, breakdown: dict[str, float]) -> float:
+    base = breakdown.get("reuse", 0.0)
+    if outcome == "failed":
+        return max(0.08, base * 0.45)
+    return max(0.15, min(1.0, base + 0.1))
+
+
+def _retention_policy_for_kind(kind: str) -> str:
+    if kind in {"preference", "project_fact", "correction"}:
+        return "persistent"
+    if kind == "skill_candidate":
+        return "review_required"
+    return "standard"
+
+
+def _retention_reason_for_kind(kind: str) -> str | None:
+    if kind == "skill_candidate":
+        return "procedural_candidate_requires_review"
+    if kind in {"preference", "project_fact"}:
+        return "user_facing_long_term_context"
+    if kind == "correction":
+        return "corrected_truth_should_replace_previous_memory"
+    return None
+
+
+def _retention_policy_for_experience(outcome: str, score: float) -> str:
+    if outcome == "failed":
+        return "review_required"
+    if score >= 0.8:
+        return "persistent"
+    return "standard"
+
+
+def _reuse_feedback_delta(feedback_type: str, rating: float) -> float:
+    normalized = max(-1.0, min(1.0, float(rating)))
+    if feedback_type in {"helpful", "corrected"}:
+        return max(0.02, 0.12 * max(0.0, normalized))
+    if feedback_type in {"irrelevant", "stale"}:
+        return -max(0.02, 0.08 * max(0.0, normalized))
+    return normalized * 0.03
 
 
 def _should_use_recent_fallback(query: str, intent: str | None) -> bool:

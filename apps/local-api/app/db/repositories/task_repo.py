@@ -105,6 +105,8 @@ PARTICIPANT_UPDATE_COLUMNS = {
 }
 
 SUBTASK_UPDATE_COLUMNS = {
+    "participant_id",
+    "assigned_member_id",
     "status",
     "context_scope_json",
     "allowed_skills_json",
@@ -1484,6 +1486,132 @@ class TaskRepository:
         )
         return [_host_decision_from_row(dict(row)) for row in rows]
 
+    async def insert_routing_decision(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO collaboration_routing_decisions (
+              routing_decision_id, organization_id, task_id, collaboration_plan_id,
+              host_member_id, mode, status, selected_member_ids_json,
+              rejected_candidates_json, routing_factors_json, risk_summary_json,
+              boundary_summary_json, trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["routing_decision_id"],
+                data["organization_id"],
+                data["task_id"],
+                data.get("collaboration_plan_id"),
+                data["host_member_id"],
+                data["mode"],
+                data["status"],
+                _json(data.get("selected_member_ids", [])),
+                _json(data.get("rejected_candidates", [])),
+                _json(data.get("routing_factors", {})),
+                _json(data.get("risk_summary", {})),
+                _json(data.get("boundary_summary", {})),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_routing_decisions(self, task_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM collaboration_routing_decisions
+            WHERE task_id = ?
+            ORDER BY created_at ASC
+            """,
+            (task_id,),
+        )
+        return [_routing_decision_from_row(dict(row)) for row in rows]
+
+    async def insert_handoff_record(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO collaboration_handoff_records (
+              handoff_id, organization_id, task_id, collaboration_plan_id, subtask_id,
+              from_participant_id, from_member_id, to_participant_id, to_member_id, reason,
+              status, context_summary_json, boundary_summary_json, source_refs_json, trace_id,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["handoff_id"],
+                data["organization_id"],
+                data["task_id"],
+                data.get("collaboration_plan_id"),
+                data["subtask_id"],
+                data.get("from_participant_id"),
+                data.get("from_member_id"),
+                data.get("to_participant_id"),
+                data["to_member_id"],
+                data["reason"],
+                data["status"],
+                _json(data.get("context_summary", {})),
+                _json(data.get("boundary_summary", {})),
+                _json(data.get("source_refs", [])),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_handoff_records(self, task_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM collaboration_handoff_records
+            WHERE task_id = ?
+            ORDER BY created_at ASC
+            """,
+            (task_id,),
+        )
+        return [_handoff_record_from_row(dict(row)) for row in rows]
+
+    async def insert_context_boundary(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO collaboration_context_boundaries (
+              boundary_id, organization_id, task_id, collaboration_plan_id, participant_id,
+              member_id, context_scope_json, allowed_context_json, excluded_context_json,
+              asset_scope_json, memory_scope, redaction_summary_json, status, trace_id,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["boundary_id"],
+                data["organization_id"],
+                data["task_id"],
+                data.get("collaboration_plan_id"),
+                data.get("participant_id"),
+                data["member_id"],
+                _json(data.get("context_scope", {})),
+                _json(data.get("allowed_context", [])),
+                _json(data.get("excluded_context", [])),
+                _json(data.get("asset_scope", [])),
+                data.get("memory_scope", "member_private_only"),
+                _json(data.get("redaction_summary", {})),
+                data["status"],
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_context_boundaries(self, task_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM collaboration_context_boundaries
+            WHERE task_id = ?
+            ORDER BY created_at ASC
+            """,
+            (task_id,),
+        )
+        return [_context_boundary_from_row(dict(row)) for row in rows]
+
     async def get_availability(self, member_id: str) -> dict[str, Any] | None:
         row = await self._db.fetch_one(
             "SELECT * FROM member_availability WHERE member_id = ?",
@@ -1827,6 +1955,31 @@ def _collaboration_output_from_row(row: dict[str, Any]) -> dict[str, Any]:
 def _host_decision_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["source_refs"] = json.loads(row.pop("source_refs_json") or "[]")
     row["payload"] = json.loads(row.pop("payload_json") or "{}")
+    return row
+
+
+def _routing_decision_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["selected_member_ids"] = json.loads(row.pop("selected_member_ids_json") or "[]")
+    row["rejected_candidates"] = json.loads(row.pop("rejected_candidates_json") or "[]")
+    row["routing_factors"] = json.loads(row.pop("routing_factors_json") or "{}")
+    row["risk_summary"] = json.loads(row.pop("risk_summary_json") or "{}")
+    row["boundary_summary"] = json.loads(row.pop("boundary_summary_json") or "{}")
+    return row
+
+
+def _handoff_record_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["context_summary"] = json.loads(row.pop("context_summary_json") or "{}")
+    row["boundary_summary"] = json.loads(row.pop("boundary_summary_json") or "{}")
+    row["source_refs"] = json.loads(row.pop("source_refs_json") or "[]")
+    return row
+
+
+def _context_boundary_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["context_scope"] = json.loads(row.pop("context_scope_json") or "{}")
+    row["allowed_context"] = json.loads(row.pop("allowed_context_json") or "[]")
+    row["excluded_context"] = json.loads(row.pop("excluded_context_json") or "[]")
+    row["asset_scope"] = json.loads(row.pop("asset_scope_json") or "[]")
+    row["redaction_summary"] = json.loads(row.pop("redaction_summary_json") or "{}")
     return row
 
 

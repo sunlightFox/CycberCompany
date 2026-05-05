@@ -180,6 +180,7 @@ def test_phase53_wechat_inbound_group_unpaired_multi_and_no_pending_fail_closed(
         client,
         binding["channel_account_id"],
         "只允许这一次下载 report.csv",
+        provider_event_id="evt-phase53-group",
         source={"chat_type": "group", "peer_ref": "room-secret-id"},
     )
     assert group.status_code == 200, group.text
@@ -191,6 +192,7 @@ def test_phase53_wechat_inbound_group_unpaired_multi_and_no_pending_fail_closed(
         client,
         binding["channel_account_id"],
         "只允许这一次下载 report.csv",
+        provider_event_id="evt-phase53-unpaired",
         source={
             "chat_type": "private",
             "peer_ref": "wxid-unpaired-secret",
@@ -212,6 +214,7 @@ def test_phase53_wechat_inbound_group_unpaired_multi_and_no_pending_fail_closed(
         client,
         binding["channel_account_id"],
         "只允许这一次下载 report.csv",
+        provider_event_id="evt-phase53-multiple",
         source={"chat_type": "private", "peer_ref": "wxid-secret-peer-2"},
     )
     assert multiple.status_code == 200, multiple.text
@@ -220,6 +223,87 @@ def test_phase53_wechat_inbound_group_unpaired_multi_and_no_pending_fail_closed(
     )
     assert client.get(f"/api/approvals/{approval['approval_id']}").json()["status"] == "pending"
     assert client.get(f"/api/approvals/{second['approval_id']}").json()["status"] == "pending"
+
+
+def test_phase54_wechat_inbound_reply_requires_object_and_can_cancel(
+    client: TestClient,
+) -> None:
+    binding = _bind_mock_channel(client)
+    approval = _create_approval(
+        client,
+        requested_action="browser.download",
+        payload={"action": "browser.download", "target": "report.csv"},
+        risk=RiskLevel.R3,
+    )
+    _create_approval_notification(client, binding["channel_id"], approval["approval_id"])
+
+    vague = _post_wechat_inbound(
+        client,
+        binding["channel_account_id"],
+        "本次允许下载",
+        provider_event_id="evt-phase54-vague-allow",
+    )
+    assert vague.status_code == 200, vague.text
+    vague_payload = vague.json()["notification_inbound"]
+    assert vague_payload["parsed_intent"] == "approval_once"
+    assert vague_payload["binding_status"] == "clarification_required"
+    assert (
+        vague_payload["action_result"]["reason"]
+        == "high_risk_requires_explicit_action_object"
+    )
+    assert client.get(f"/api/approvals/{approval['approval_id']}").json()["status"] == "pending"
+
+    cancelled = _post_wechat_inbound(
+        client,
+        binding["channel_account_id"],
+        "取消",
+        provider_event_id="evt-phase54-cancel",
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    cancelled_payload = cancelled.json()["notification_inbound"]
+    assert cancelled_payload["parsed_intent"] == "approval_deny"
+    assert cancelled_payload["binding_status"] == "matched"
+    assert cancelled_payload["action_result"]["status"] == "denied"
+    assert client.get(f"/api/approvals/{approval['approval_id']}").json()["status"] == "denied"
+
+
+def test_phase54_wechat_direct_inbound_dedupes_provider_event(
+    client: TestClient,
+) -> None:
+    binding = _bind_mock_channel(client)
+    first = _post_wechat_inbound(
+        client,
+        binding["channel_account_id"],
+        "确认",
+        provider_event_id="evt-phase54-direct-dup",
+    )
+    assert first.status_code == 200, first.text
+    first_payload = first.json()
+    assert first_payload["status"] == "received"
+    assert first_payload["notification_inbound"]["binding_status"] == "no_pending_action"
+
+    duplicate = _post_wechat_inbound(
+        client,
+        binding["channel_account_id"],
+        "确认",
+        provider_event_id="evt-phase54-direct-dup",
+    )
+    assert duplicate.status_code == 200, duplicate.text
+    duplicate_payload = duplicate.json()
+    assert duplicate_payload["status"] == "duplicate"
+    assert duplicate_payload["notification_inbound"] is None
+    provider_event_ref = first_payload["event"]["provider_event_id_redacted"]
+    events = client.get(
+        "/api/channels/events",
+        params={"provider": "wechat_mock", "limit": 20},
+    )
+    assert events.status_code == 200, events.text
+    matching = [
+        item
+        for item in events.json()["items"]
+        if item["provider_event_id_redacted"] == provider_event_ref
+    ]
+    assert len(matching) == 1
 
 
 def test_phase53_release_identity_migration_and_contracts(client: TestClient) -> None:
