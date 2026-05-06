@@ -1492,16 +1492,32 @@ class WechatClawbotConnector:
         client = await self._create_client(account_id)
         events: list[dict[str, Any]] = []
         iterator = client.poll_events(account_id).__aiter__()
-        per_tick_timeout = max(1.0, float(self._config.timeout_seconds or 10.0))
+        poll_budget_seconds = self._poll_events_budget_seconds()
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + poll_budget_seconds
         while len(events) < limit:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
             try:
-                event = await asyncio.wait_for(iterator.__anext__(), timeout=per_tick_timeout)
+                event = await asyncio.wait_for(iterator.__anext__(), timeout=remaining)
             except TimeoutError:
+                aclose = getattr(iterator, "aclose", None)
+                if aclose is not None:
+                    try:
+                        await _maybe_await(aclose())
+                    except Exception:
+                        pass
                 break
             except StopAsyncIteration:
                 break
             events.append(_object_to_dict(event))
         return events
+
+    def _poll_events_budget_seconds(self) -> float:
+        provider_timeout = max(0.5, float(self._config.timeout_seconds or 10.0))
+        poll_interval = max(0.5, float(self._config.poll_interval_seconds or 5.0))
+        return max(0.5, min(provider_timeout, poll_interval, 2.0))
 
     async def download_media(
         self,
