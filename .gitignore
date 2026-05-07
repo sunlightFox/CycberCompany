@@ -17,3 +17,5 @@ data_tmp*/
 *.network-request
 *.network-response
 *.heapsnapshot
+
+docs/**/evidence/.tmp-data/secrets/

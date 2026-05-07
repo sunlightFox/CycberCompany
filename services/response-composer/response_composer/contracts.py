@@ -115,6 +115,10 @@ class ComposeRequest(ApiModel):
     current_message_hash: str | None = None
     prompt_section_ids: list[str] = Field(default_factory=list)
     prompt_sections: list[dict[str, Any]] = Field(default_factory=list)
+    presence_runtime: dict[str, Any] = Field(default_factory=dict)
+    response_policy: dict[str, Any] = Field(default_factory=dict)
+    session_context: dict[str, Any] = Field(default_factory=dict)
+    action_dialogue: dict[str, Any] = Field(default_factory=dict)
     notices: dict[str, Any] = Field(default_factory=dict)
     trace_refs: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -274,6 +278,10 @@ class ResponseComposer:
                 "route_profile": request.route_profile,
                 "risk_level": request.risk_level,
                 "conversation_voice": conversation_voice,
+                "presence_runtime": _redact_payload(dict(request.presence_runtime or {})),
+                "response_policy": _redact_payload(dict(request.response_policy or {})),
+                "session_context": _redact_payload(dict(request.session_context or {})),
+                "action_dialogue": _redact_payload(dict(request.action_dialogue or {})),
                 **_voice_metadata_payload(
                     scenario=scenario,
                     channel_profile=request.channel_profile or request.notices.get("channel_profile"),
@@ -342,21 +350,6 @@ class ResponseComposer:
         response_plan: ResponsePlan | None = None,
     ) -> str:
         visible, _ = redact_visible_text(strip_reasoning_tags(str(text or "")))
-        strategy = {}
-        if response_plan is not None:
-            strategy = dict(response_plan.structured_payload.get("conversation_voice") or {})
-        scenario = str(strategy.get("scene") or "")
-        if scenario and not _looks_like_json_only(visible) and not _looks_like_markdown_table(visible):
-            visible, _ = apply_conversation_voice(
-                visible,
-                seed=f"{scenario}|{visible}",
-                scenario=str(response_plan.structured_payload.get("scenario") or "direct")
-                if response_plan is not None
-                else "direct",
-                persona=response_plan.tone_metadata if response_plan is not None else {},
-                heart={},
-                high_risk=bool(response_plan and response_plan.tone_mode == "safety_boundary"),
-            )
         if ui_mode == "wechat_chat":
             scenario = None
             section_count = 0
@@ -915,9 +908,7 @@ def _response_quality_guard(
     internal_terms = [
         term for term in _VISIBLE_INTERNAL_TERMS if term.lower() in lowered
     ]
-    false_done_terms = [
-        term for term in _VISIBLE_FALSE_DONE_TERMS if term in visible
-    ]
+    false_done_terms = _visible_false_done_terms(visible)
     if _has_completion_evidence(completion_evidence):
         false_done_terms = []
     strict_format_preserved = _strict_format_preserved(original_text, visible)
@@ -1006,11 +997,48 @@ def _has_completion_evidence(evidence: dict[str, Any] | None) -> bool:
 
 def _current_message_priority_ok(user_text: str, visible: str) -> bool:
     user = str(user_text or "")
+    visible_text = str(visible or "")
     if not user:
         return True
-    if not any(marker in user for marker in ["停", "停止", "改成", "换成", "只做", "不要执行"]):
+    if not any(
+        marker in user
+        for marker in ["停", "停止", "改成", "换成", "只做", "不要执行", "只讨论", "不讨论", "只回答这句", "按我最新这句"]
+    ):
         return True
-    return any(marker in visible for marker in ["当前", "新的", "改成", "先停", "前一个", "只做", "为准"])
+    target = _topic_switch_target(user)
+    if target and target in visible_text:
+        return True
+    return any(marker in visible_text for marker in ["当前", "新的", "改成", "先停", "前一个", "只做", "为准", "切到", "只讨论", "按你最新这句"])
+
+
+def _visible_false_done_terms(text: str) -> list[str]:
+    visible = str(text or "")
+    terms: list[str] = []
+    for term in _VISIBLE_FALSE_DONE_TERMS:
+        start = 0
+        while True:
+            index = visible.find(term, start)
+            if index < 0:
+                break
+            context = visible[max(0, index - 8) : min(len(visible), index + len(term) + 8)]
+            if not any(marker in context for marker in ["不该", "不要", "不能", "别", "别把", "假装", "说成"]):
+                terms.append(term)
+                break
+            start = index + len(term)
+    return terms
+
+
+def _topic_switch_target(user_text: str) -> str:
+    user = str(user_text or "")
+    patterns = [
+        r"(?:改成|换成|只讨论|不讨论|只回答这句)([^，。；\n]+)",
+        r"(?:按我最新这句)([^，。；\n]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, user)
+        if match:
+            return match.group(1).strip(" ：:")
+    return ""
 
 
 def _multimodal_grounded(user_text: str, visible: str, *, scenario: str) -> bool:
@@ -1424,6 +1452,46 @@ def _default_tone_metadata(*, scenario: str, high_risk: bool) -> dict[str, Any]:
         "safety_overrides_tone": True,
         "anthropomorphic_level": 0.1 if high_risk else 0.35,
     }
+
+
+def _apply_runtime_response_policy(
+    text: str,
+    *,
+    response_policy: dict[str, Any],
+    session_context: dict[str, Any],
+    action_dialogue: dict[str, Any],
+    scenario: str,
+    user_text: str,
+) -> str:
+    del response_policy, session_context, action_dialogue, scenario, user_text
+    return str(text or "").strip()
+
+
+def _split_sentences(text: str, *, max_sentences: int, multiline: bool) -> str:
+    stripped = str(text or "").strip()
+    if not stripped or "\n" in stripped:
+        return stripped
+    parts = [
+        item.strip()
+        for item in re.split(r"(?<=[。！？!?])\s*", stripped)
+        if item.strip()
+    ]
+    if len(parts) <= 1:
+        return stripped
+    selected = parts[:max_sentences]
+    separator = "\n" if multiline else ""
+    return separator.join(selected)
+
+
+def _ensure_result_first(text: str, *, user_text: str) -> str:
+    stripped = str(text or "").strip()
+    if not stripped:
+        return stripped
+    if any(marker in stripped[:12] for marker in ["结果", "我看完了", "我已经拿到", "我刚看了", "我查完了"]):
+        return stripped
+    if any(marker in str(user_text or "") for marker in ["网页", "命令", "目录", "文件"]):
+        return f"我先说结果。{stripped}"
+    return stripped
 
 
 def _tone_mode_from_metadata(tone_metadata: dict[str, Any]) -> str:

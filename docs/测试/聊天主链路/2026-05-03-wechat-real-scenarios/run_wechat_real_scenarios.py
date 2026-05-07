@@ -73,6 +73,12 @@ LATENCY_SLOW_THRESHOLDS_MS = {
     "tool": 3000,
     "delivery": 2000,
 }
+PROMOTION_BLOCKER_TAGS = {
+    "system_tone_detected",
+    "continuity_drop_risk",
+    "over_template_risk",
+}
+PROMOTION_ALLOWED_TARGETS = {"casual_chat_opening", "followthrough_opening"}
 
 
 @dataclass(frozen=True)
@@ -603,6 +609,7 @@ def summarize_evidences(
     assembly_versions = Counter(
         str(item.get("prompt_assembly_version") or "missing") for item in quality_rows
     )
+    shadow_policy = summarize_shadow_policy(quality_rows)
     prompt_section_content_count = sum(
         1 for item in quality_rows if item.get("prompt_sections_have_content")
     )
@@ -658,6 +665,7 @@ def summarize_evidences(
             "gate_status_counts": dict(sorted(gate_counts.items())),
             "prompt_version_coverage": prompt_version_coverage,
             "verdict_counts": verdict_counts(quality_rows),
+            "shadow_policy": shadow_policy,
         },
     }
     if baseline:
@@ -665,6 +673,108 @@ def summarize_evidences(
     if turn_inside_values:
         summary["latency"]["turn_inside_ms"]["count"] = len(turn_inside_values)
     return summary
+
+
+def summarize_shadow_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    shadow_seen_count = 0
+    gate_enabled_count = 0
+    comparison_enabled_count = 0
+    promotion_candidate_count = 0
+    safe_to_promote_hint_count = 0
+    scene_counts: Counter[str] = Counter()
+    gate_reason_counts: Counter[str] = Counter()
+    promotion_target_counts: Counter[str] = Counter()
+    policy_diff_field_counts: Counter[str] = Counter()
+    promotion_blocker_counts: Counter[str] = Counter()
+
+    for row in rows:
+        if "shadow_policy_gate_enabled" not in row:
+            continue
+        shadow_seen_count += 1
+        if row.get("shadow_policy_gate_enabled"):
+            gate_enabled_count += 1
+        if row.get("shadow_policy_comparison_enabled"):
+            comparison_enabled_count += 1
+        if row.get("shadow_policy_promotion_candidate"):
+            promotion_candidate_count += 1
+        if row.get("shadow_policy_safe_to_promote_hint"):
+            safe_to_promote_hint_count += 1
+        scene_counts[str(row.get("shadow_policy_scene") or "none")] += 1
+        gate_reason_counts[str(row.get("shadow_policy_gate_reason") or "missing")] += 1
+        promotion_target_counts[str(row.get("shadow_policy_promotion_target") or "none")] += 1
+        for field in row.get("shadow_policy_diff_fields") or []:
+            policy_diff_field_counts[str(field)] += 1
+        for blocker in row.get("shadow_policy_promotion_blockers") or []:
+            promotion_blocker_counts[str(blocker)] += 1
+
+    comparison_enabled_rate = round(
+        comparison_enabled_count / max(1, shadow_seen_count),
+        4,
+    )
+    promotion_candidate_rate = round(
+        promotion_candidate_count / max(1, comparison_enabled_count),
+        4,
+    )
+    return {
+        "shadow_seen_count": shadow_seen_count,
+        "gate_enabled_count": gate_enabled_count,
+        "comparison_enabled_count": comparison_enabled_count,
+        "promotion_candidate_count": promotion_candidate_count,
+        "safe_to_promote_hint_count": safe_to_promote_hint_count,
+        "comparison_enabled_rate": comparison_enabled_rate,
+        "promotion_candidate_rate": promotion_candidate_rate,
+        "scene_counts": dict(sorted(scene_counts.items())),
+        "gate_reason_counts": dict(sorted(gate_reason_counts.items())),
+        "promotion_target_counts": dict(sorted(promotion_target_counts.items())),
+        "policy_diff_field_counts": dict(sorted(policy_diff_field_counts.items())),
+        "promotion_blocker_counts": dict(sorted(promotion_blocker_counts.items())),
+        "promotion_readiness": promotion_readiness_summary(
+            comparison_enabled_count=comparison_enabled_count,
+            promotion_candidate_count=promotion_candidate_count,
+            promotion_candidate_rate=promotion_candidate_rate,
+            promotion_target_counts=promotion_target_counts,
+            promotion_blocker_counts=promotion_blocker_counts,
+        ),
+    }
+
+
+def promotion_readiness_summary(
+    *,
+    comparison_enabled_count: int,
+    promotion_candidate_count: int,
+    promotion_candidate_rate: float,
+    promotion_target_counts: Counter[str],
+    promotion_blocker_counts: Counter[str],
+) -> dict[str, Any]:
+    ready_targets: list[str] = []
+    blocked_targets: list[str] = []
+    readiness_reasons: dict[str, list[str]] = {}
+    for target in sorted(PROMOTION_ALLOWED_TARGETS):
+        reasons: list[str] = []
+        if comparison_enabled_count < 10:
+            reasons.append("comparison_enabled_count_below_threshold")
+        if promotion_candidate_count < 5:
+            reasons.append("promotion_candidate_count_below_threshold")
+        if promotion_candidate_rate < 0.6:
+            reasons.append("promotion_candidate_rate_below_threshold")
+        if int(promotion_target_counts.get(target, 0)) == 0:
+            reasons.append("target_not_seen")
+        blocker_hits = [
+            item
+            for item in sorted(PROMOTION_BLOCKER_TAGS)
+            if int(promotion_blocker_counts.get(item, 0)) > 0
+        ]
+        reasons.extend(f"blocker_present:{item}" for item in blocker_hits)
+        if reasons:
+            blocked_targets.append(target)
+        else:
+            ready_targets.append(target)
+        readiness_reasons[target] = reasons or ["ready_for_guarded_promotion"]
+    return {
+        "ready_targets": ready_targets,
+        "blocked_targets": blocked_targets,
+        "readiness_reasons": readiness_reasons,
+    }
 
 
 def event_markers(events: dict[str, Any] | None) -> dict[str, str]:
@@ -1048,6 +1158,7 @@ def quality_probe(
     reading_marker_count = sum(1 for marker in READING_SYMBOLS if marker in visible_reply)
     continuation = continuation_probe(response_plan)
     prompt_contract = prompt_contract_probe(response_plan)
+    shadow_policy = shadow_policy_probe(response_plan)
     residual_terms = [term for term in OLD_PROMPT_RESIDUAL_TERMS if term in visible_reply]
     probe = {
         "has_turn": bool(turn),
@@ -1070,9 +1181,43 @@ def quality_probe(
         "trace_span_count": len((trace or {}).get("spans") or []),
         **prompt_contract,
         **continuation,
+        **shadow_policy,
     }
     probe.update(judge_reply_quality(probe, visible_reply))
     return probe
+
+
+def shadow_policy_probe(response_plan: dict[str, Any] | None) -> dict[str, Any]:
+    structured = (
+        (response_plan or {}).get("structured_payload")
+        if isinstance(response_plan, dict)
+        else {}
+    )
+    if not isinstance(structured, dict):
+        structured = {}
+    shadow = structured.get("chat_quality_shadow")
+    if not isinstance(shadow, dict):
+        shadow = {}
+    gate = shadow.get("policy_advisory_gate")
+    if not isinstance(gate, dict):
+        gate = {}
+    comparison = shadow.get("response_policy_comparison")
+    if not isinstance(comparison, dict):
+        comparison = {}
+    diff_fields = [str(item) for item in comparison.get("policy_diffs") or []]
+    blockers = [str(item) for item in shadow.get("promotion_blockers") or []]
+    return {
+        "shadow_policy_gate_enabled": bool(gate.get("eligible_for_policy_advisory")),
+        "shadow_policy_gate_reason": str(gate.get("eligibility_reason") or "missing"),
+        "shadow_policy_scene": str(gate.get("eligible_scene") or "none"),
+        "shadow_policy_comparison_enabled": bool(comparison.get("comparison_enabled")),
+        "shadow_policy_diff_fields": diff_fields,
+        "shadow_policy_diff_count": len(diff_fields),
+        "shadow_policy_promotion_candidate": bool(shadow.get("promotion_candidate")),
+        "shadow_policy_promotion_target": str(shadow.get("promotion_target") or "none"),
+        "shadow_policy_promotion_blockers": blockers,
+        "shadow_policy_safe_to_promote_hint": bool(comparison.get("safe_to_promote_hint")),
+    }
 
 
 def latency_quality_flags(
@@ -1608,6 +1753,29 @@ def render_report(evidences: list[CaseEvidence], summary: dict[str, Any] | None 
         )
     lines.extend(
         [
+            "## Shadow Policy Advisory",
+            "",
+            "| Case | Gate | Scene | Compare | Diffs | Candidate | Target | Blockers |",
+            "|---|---|---|---|---|---|---|---|",
+        ]
+    )
+    for item in evidences:
+        quality = item.quality_probe
+        diff_fields = ",".join(quality.get("shadow_policy_diff_fields") or []) or "none"
+        blockers = ",".join(quality.get("shadow_policy_promotion_blockers") or []) or "none"
+        lines.append(
+            f"| {item.case_id} | "
+            f"{quality.get('shadow_policy_gate_enabled')} "
+            f"({quality.get('shadow_policy_gate_reason') or 'missing'}) | "
+            f"{quality.get('shadow_policy_scene') or 'none'} | "
+            f"{quality.get('shadow_policy_comparison_enabled')} | "
+            f"{diff_fields} | "
+            f"{quality.get('shadow_policy_promotion_candidate')} | "
+            f"{quality.get('shadow_policy_promotion_target') or 'none'} | "
+            f"{blockers} |"
+        )
+    lines.extend(
+        [
             "## 汇总",
             "",
             f"- 首 token p50/p95：{_summary_ratio(summary, 'first_token_ms')}",
@@ -1619,11 +1787,13 @@ def render_report(evidences: list[CaseEvidence], summary: dict[str, Any] | None 
             f"- 最慢 span：{_summary_value(summary, 'slowest_span')}",
             f"- 慢点分组：{_summary_value(summary, 'bottlenecks')}",
             f"- 阅读型符号命中：{_summary_value(summary, 'reading_markers')}",
-            f"- 续跑启用次数：{_summary_value(summary, 'continuation_enabled')}",
+            f"- 损坏修复触发次数：{_summary_value(summary, 'continuation_enabled')}",
             f"- prompt 版本覆盖：{_summary_value(summary, 'prompt_version_coverage')}",
             f"- 门禁分布：{_summary_value(summary, 'gate_status_counts')}",
             f"- 结果分布：{_summary_value(summary, 'result_counts')}",
             f"- 质量判定分布：{_summary_value(summary, 'verdict_counts')}",
+            f"- Shadow policy 汇总：{_summary_value(summary, 'shadow_policy')}",
+            f"- Promotion readiness：{_summary_value(summary, 'promotion_readiness')}",
             "",
             "## 延迟口径",
             "",
@@ -1698,6 +1868,24 @@ def _summary_value(summary: dict[str, Any] | None, key: str) -> str:
     if key == "verdict_counts":
         payload = summary.get("quality") or {}
         return json.dumps(payload.get("verdict_counts") or {}, ensure_ascii=False)
+    if key == "shadow_policy":
+        payload = (summary.get("quality") or {}).get("shadow_policy") or {}
+        compact = {
+            "comparison_enabled_count": payload.get("comparison_enabled_count"),
+            "promotion_candidate_count": payload.get("promotion_candidate_count"),
+            "policy_diff_field_counts": payload.get("policy_diff_field_counts") or {},
+            "promotion_target_counts": payload.get("promotion_target_counts") or {},
+            "promotion_blocker_counts": payload.get("promotion_blocker_counts") or {},
+        }
+        return json.dumps(compact, ensure_ascii=False)
+    if key == "promotion_readiness":
+        payload = (
+            ((summary.get("quality") or {}).get("shadow_policy") or {}).get(
+                "promotion_readiness"
+            )
+            or {}
+        )
+        return json.dumps(payload, ensure_ascii=False)
     if key == "bottlenecks":
         payload = (summary.get("latency") or {}).get("bottlenecks") or {}
         compact = {

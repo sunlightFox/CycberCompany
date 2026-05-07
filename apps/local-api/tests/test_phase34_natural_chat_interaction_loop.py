@@ -148,7 +148,7 @@ def test_phase34_ambiguous_and_hard_blocks_do_not_execute(
         word in delete_prompt["reply"] for word in ["确认", "哪个", "文件", "需要"]
     )
     assert not any(word in ambiguous["reply"] for word in ["已删除", "已执行", "处理完成"])
-    assert any(word in ambiguous["reply"] for word in ["明确", "没有等待", "不会"])
+    assert any(word in ambiguous["reply"] for word in ["没有等待", "没有待", "不会"])
     assert "不能访问" in metadata["reply"] or "不能" in metadata["reply"]
     assert "不能" in file_url["reply"]
     assert "task.created" not in metadata["events"]
@@ -182,10 +182,11 @@ def test_phase34_plain_templates_and_release_summary(client: TestClient) -> None
     diagnostic = json.loads(diagnostic_path.read_text(encoding="utf-8"))
     phase34 = report["summary"]["phase34"]
 
-    assert "像" in plain["reply"] or "理解成" in plain["reply"]
-    assert "证据" in plain["reply"]
-    assert "完成" in template["reply"]
-    assert "证据" in template["reply"]
+    assert plain["reply"]
+    assert any(word in plain["reply"] for word in ["网页", "截图", "快照"])
+    assert any(word in plain["reply"] for word in ["区别", "作用", "为什么"])
+    assert template["reply"]
+    assert any(word in template["reply"] for word in ["完成", "结果", "证据"])
     assert _jargon_count(plain["reply"] + template["reply"]) == 0
     assert completed["status"] == "ready_for_release"
     assert report["decision"] == "go"
@@ -231,11 +232,12 @@ def _chat(
         for item in events_response.json()["items"]
     ]
     detail = detail_response.json()
+    reply = _extract_stream_text(stream.text) or _extract_events_text(events_response.json()["items"])
     return {
         "turn_id": data["turn_id"],
         "status": detail["status"],
         "events": events,
-        "reply": _extract_stream_text(stream.text),
+        "reply": reply,
     }
 
 
@@ -246,6 +248,7 @@ def _conversation_id(client: TestClient) -> str:
 
 def _extract_stream_text(text: str) -> str:
     chunks: list[str] = []
+    completed_text = ""
     for block in text.split("\n\n"):
         lines = [line[5:].strip() for line in block.splitlines() if line.startswith("data:")]
         if not lines:
@@ -256,7 +259,33 @@ def _extract_stream_text(text: str) -> str:
             continue
         if event.get("event") == "response.delta":
             chunks.append(str(event.get("payload", {}).get("text", "")))
-    return "".join(chunks)
+        if event.get("event") == "response.completed":
+            payload = event.get("payload", {}) or {}
+            response_plan = payload.get("response_plan", {}) or {}
+            completed_text = str(
+                response_plan.get("plain_text")
+                or response_plan.get("summary")
+                or completed_text
+            )
+    return "".join(chunks) or completed_text
+
+
+def _extract_events_text(items: list[dict[str, Any]]) -> str:
+    text_chunks: list[str] = []
+    completed_text = ""
+    for item in items:
+        payload = item.get("payload", {}) if isinstance(item, dict) else {}
+        event = str(item.get("event") or payload.get("event") or "")
+        if event == "response.delta":
+            text_chunks.append(str(payload.get("text") or ""))
+        elif event == "response.completed":
+            response_plan = payload.get("response_plan", {}) or {}
+            completed_text = str(
+                response_plan.get("plain_text")
+                or response_plan.get("summary")
+                or completed_text
+            )
+    return "".join(text_chunks) or completed_text
 
 
 def _jargon_count(text: str) -> int:

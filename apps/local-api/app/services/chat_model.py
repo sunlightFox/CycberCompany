@@ -4,7 +4,12 @@ from typing import Any
 
 from brain.adapters import estimate_messages_tokens
 from core_types import ContextPacket, ErrorCode
-from response_composer.chat_voice import ChatPromptAssembler, PromptAssemblyResult, PromptMode
+from response_composer.chat_voice import (
+    ChatPromptAssembler,
+    DynamicContextMode,
+    PromptAssemblyResult,
+    PromptMode,
+)
 
 
 class ChatModelCoordinator:
@@ -23,6 +28,14 @@ class ChatModelCoordinator:
         delivery_mode: str | None = None,
         sender_label: str | None = None,
         turn_id: str | None = None,
+        include_dynamic_context: bool = False,
+        include_trusted_context: bool = True,
+        include_untrusted_context: bool = True,
+        include_history: bool = True,
+        include_session_summary: bool = False,
+        recent_history_limit: int = 6,
+        dynamic_context_mode: DynamicContextMode = "index",
+        prompt_profile: str | None = None,
     ) -> list[dict[str, str]]:
         return self._prompt_assembler.model_messages(
             context,
@@ -32,6 +45,14 @@ class ChatModelCoordinator:
             delivery_mode=delivery_mode,
             sender_label=sender_label,
             turn_id=turn_id,
+            include_dynamic_context=include_dynamic_context,
+            include_trusted_context=include_trusted_context,
+            include_untrusted_context=include_untrusted_context,
+            include_history=include_history,
+            include_session_summary=include_session_summary,
+            recent_history_limit=recent_history_limit,
+            dynamic_context_mode=dynamic_context_mode,
+            prompt_profile=prompt_profile,
         )
 
     def model_assembly(
@@ -44,6 +65,14 @@ class ChatModelCoordinator:
         delivery_mode: str | None = None,
         sender_label: str | None = None,
         turn_id: str | None = None,
+        include_dynamic_context: bool = False,
+        include_trusted_context: bool = True,
+        include_untrusted_context: bool = True,
+        include_history: bool = True,
+        include_session_summary: bool = False,
+        recent_history_limit: int = 6,
+        dynamic_context_mode: DynamicContextMode = "index",
+        prompt_profile: str | None = None,
     ) -> PromptAssemblyResult:
         return self._prompt_assembler.assemble(
             context,
@@ -53,6 +82,14 @@ class ChatModelCoordinator:
             delivery_mode=delivery_mode,
             sender_label=sender_label,
             turn_id=turn_id,
+            include_dynamic_context=include_dynamic_context,
+            include_trusted_context=include_trusted_context,
+            include_untrusted_context=include_untrusted_context,
+            include_history=include_history,
+            include_session_summary=include_session_summary,
+            recent_history_limit=recent_history_limit,
+            dynamic_context_mode=dynamic_context_mode,
+            prompt_profile=prompt_profile,
         )
 
     def prompt_metadata(
@@ -65,6 +102,14 @@ class ChatModelCoordinator:
         delivery_mode: str | None = None,
         sender_label: str | None = None,
         turn_id: str | None = None,
+        include_dynamic_context: bool = False,
+        include_trusted_context: bool = True,
+        include_untrusted_context: bool = True,
+        include_history: bool = True,
+        include_session_summary: bool = False,
+        recent_history_limit: int = 6,
+        dynamic_context_mode: DynamicContextMode = "index",
+        prompt_profile: str | None = None,
     ) -> dict[str, Any]:
         return self.model_assembly(
             context,
@@ -74,6 +119,14 @@ class ChatModelCoordinator:
             delivery_mode=delivery_mode,
             sender_label=sender_label,
             turn_id=turn_id,
+            include_dynamic_context=include_dynamic_context,
+            include_trusted_context=include_trusted_context,
+            include_untrusted_context=include_untrusted_context,
+            include_history=include_history,
+            include_session_summary=include_session_summary,
+            recent_history_limit=recent_history_limit,
+            dynamic_context_mode=dynamic_context_mode,
+            prompt_profile=prompt_profile,
         ).metadata
 
     def estimate_input_tokens(self, context: ContextPacket, user_text: str) -> int:

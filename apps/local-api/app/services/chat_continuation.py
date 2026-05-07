@@ -36,6 +36,12 @@ _BLOCKING_TAGS = {
     "false_done",
     "strict_format_polluted",
 }
+_REPAIRABLE_TAGS = {
+    "missing_reply",
+    "internal_jargon",
+    "secret_leak",
+    "strict_format_polluted",
+}
 _FACE_EMOJI_RE = re.compile(r"[\U0001f600-\U0001f64f]")
 _SECRET_RE = re.compile(
     r"(?i)\b(api[_-]?key|token|secret|cookie|password|passwd|pwd|private[_-]?key)"
@@ -313,7 +319,7 @@ class ContinuationEvaluation:
 
     @property
     def should_revise(self) -> bool:
-        return self.verdict in {"revise", "block"} and bool(self.tags)
+        return self.verdict in {"revise", "block"} and bool(set(self.tags) & _REPAIRABLE_TAGS)
 
 
 class ChatContinuationCoordinator:
@@ -337,39 +343,10 @@ class ChatContinuationCoordinator:
             return ContinuationDecision(enabled=False, reason_codes=["fixed_boundary_reply"])
         if mode not in {"direct", "direct_with_memory"}:
             return ContinuationDecision(enabled=False, reason_codes=["non_direct_mode"])
-
         experience = dict(turn.get("experience") or {})
-        complexity = _float(experience.get("complexity_score"))
-        reasons = list(experience.get("context_selection_reason") or [])
-        route_profile = str(experience.get("route_profile") or "")
-        enabled_reasons: list[str] = []
-        if complexity >= 0.48:
-            enabled_reasons.append("complexity_high")
-        if bool(experience.get("needs_strong_reasoning")) or route_profile == "deep_reasoning":
-            enabled_reasons.append("deep_reasoning")
-        if bool(experience.get("needs_long_output")) or _needs_long_output(user_text):
-            enabled_reasons.append("long_output")
-        if any("continuation" in str(item) for item in reasons):
-            enabled_reasons.append("context_continuation")
-        if _multimodal_context(user_text):
-            enabled_reasons.append("multimodal_attachment_context")
-        if _office_or_online_user_topic(user_text):
-            enabled_reasons.append("high_value_user_topic")
-
-        enabled_reasons = _dedupe(enabled_reasons)
-        if not enabled_reasons:
-            return ContinuationDecision(enabled=False, reason_codes=["plain_fast_path"])
-        if len(user_text.strip()) <= 24 and not any(
-            item
-            in {
-                "context_continuation",
-                "high_value_user_topic",
-                "multimodal_attachment_context",
-            }
-            for item in enabled_reasons
-        ):
-            return ContinuationDecision(enabled=False, reason_codes=["short_chat_fast_path"])
-        return ContinuationDecision(enabled=True, reason_codes=enabled_reasons)
+        if not bool(experience.get("force_continuation_review")):
+            return ContinuationDecision(enabled=False, reason_codes=["default_disabled"])
+        return ContinuationDecision(enabled=True, reason_codes=["forced_visible_review"])
 
     def evaluate(
         self,
@@ -379,6 +356,7 @@ class ChatContinuationCoordinator:
         decision: ContinuationDecision,
         elapsed_ms: int | None = None,
         response_quality_guard: dict[str, Any] | None = None,
+        response_policy: dict[str, Any] | None = None,
     ) -> ContinuationEvaluation:
         tags: list[str] = []
         suggestions: list[str] = []
@@ -387,25 +365,11 @@ class ChatContinuationCoordinator:
         lowered = visible.lower()
         user_lowered = str(user_text or "").lower()
         strict_requested = _strict_format_request(user_text)
-        short_answer_sufficient = _short_answer_sufficient(user_text=user_text, visible=visible)
 
         if not visible:
             _mark(diagnostics, "content", "fail")
             tags.append("missing_reply")
             suggestions.append("重新生成一个直接回答用户当前消息的回复。")
-        elif (
-            _complex_user_request(user_text)
-            and len(visible) < 90
-            and not short_answer_sufficient
-        ):
-            _mark(diagnostics, "content", "warn")
-            tags.append("too_short")
-            suggestions.append("补足判断、取舍或下一步，避免只给一句泛泛回答。")
-
-        if len(visible) > 420 and "\n" not in visible:
-            _mark(diagnostics, "structure", "warn")
-            tags.append("weak_structure")
-            suggestions.append("把长回复拆成结论、要点和下一步，方便微信阅读。")
         if strict_requested and not _strict_format_text(visible):
             _mark(diagnostics, "structure", "fail")
             tags.append("strict_format_polluted")
@@ -428,56 +392,17 @@ class ChatContinuationCoordinator:
             tags.append("face_emoji")
             suggestions.append("删除圆脸 emoji，微信长回复只允许少量阅读型符号。")
 
-        normalized_lowered = re.sub(r"^[^\w\u4e00-\u9fff]+", "", lowered)
-        if not short_answer_sufficient:
-            if any(normalized_lowered.startswith(cue.strip()) for cue in _ROBOTIC_TEMPLATE_CUES):
-                _mark(diagnostics, "voice", "warn")
-                tags.append("robotic_template")
-                suggestions.append("减少模板开头和固定套话，直接回应用户意图再展开。")
-            if any(cue in lowered for cue in _SYSTEMIC_TONE_CUES):
-                _mark(diagnostics, "voice", "warn")
-                tags.append("systemic_tone")
-                suggestions.append("把系统说明味压下去，换成微信里更自然的表达。")
-            if visible.startswith(_MECHANICAL_REPLY_STARTERS) or any(
-                pattern in lowered for pattern in _QUALITY_RISK_PATTERNS
-            ):
-                _mark(diagnostics, "voice", "warn")
-                tags.append("too_hardcoded")
-                suggestions.append("减少模板开头和空话，直接进入结论、依据和下一步。")
-            if any(cue in visible for cue in _HARD_BOUNDARY_TONE_CUES):
-                _mark(diagnostics, "voice", "warn")
-                tags.append("hard_boundary_tone")
-                suggestions.append("边界内容可以保留，但口吻再自然一点，别像系统回执。")
-            if len(visible) > 220 and not any(cue in visible for cue in _WARM_HUMOR_CUES):
-                _mark(diagnostics, "voice", "warn")
-                tags.append("too_stiff")
-                suggestions.append("安全场景外可以更像聊天，少一点说明书口吻。")
-            if len(visible) > 140 and not any(cue in visible for cue in _CONVERSATIONAL_CUES):
-                _mark(diagnostics, "voice", "warn")
-                tags.append("weak_persona")
-                suggestions.append("先回应对方这句话，再补一点自然承接。")
-
         if _action_request(user_lowered, user_text) and any(
             claim in visible for claim in _FALSE_DONE_CLAIMS
         ):
             _mark(diagnostics, "evidence", "fail")
             tags.append("false_done")
             suggestions.append("没有真实执行和确认记录时，不要声称已经执行或完成。")
-
-        if _multimodal_context(user_text):
-            if _generic_multimodal_acknowledgement(visible):
-                _mark(diagnostics, "multimodal", "warn")
-                tags.append("multimodal_generic_reply")
-                suggestions.append("围绕图片、语音或文件里已经识别到的具体内容回复，不要只说收到了。")
-            else:
-                _mark(diagnostics, "multimodal", "ok")
-        else:
-            diagnostics["multimodal"] = "skip"
+        diagnostics["multimodal"] = "skip"
 
         if elapsed_ms is not None:
             if elapsed_ms > decision.latency_budget_ms:
                 _mark(diagnostics, "latency", "warn")
-                tags.append("latency_slow")
                 suggestions.append("续跑修订超过预算，优先减少二次模型调用或缩短重写上下文。")
             else:
                 _mark(diagnostics, "latency", "ok")
@@ -490,6 +415,14 @@ class ChatContinuationCoordinator:
             suggestions,
             response_quality_guard=response_quality_guard,
         )
+        _apply_runtime_policy_diagnostics(
+            diagnostics,
+            tags,
+            suggestions,
+            text=visible,
+            user_text=user_text,
+            response_policy=response_policy,
+        )
 
         tags = _dedupe(tags)
         suggestions = _dedupe(suggestions)
@@ -497,7 +430,7 @@ class ChatContinuationCoordinator:
             verdict = "block"
         elif any(status == "fail" for status in diagnostics.values()):
             verdict = "block"
-        elif tags:
+        elif set(tags) & _REPAIRABLE_TAGS:
             verdict = "revise"
         else:
             verdict = "good"
@@ -598,6 +531,18 @@ def _mark(diagnostics: dict[str, str], key: str, status: str) -> None:
     current = diagnostics.get(key, "ok")
     if _STATUS_ORDER.get(status, 0) > _STATUS_ORDER.get(current, 0):
         diagnostics[key] = status
+
+
+def _apply_runtime_policy_diagnostics(
+    diagnostics: dict[str, str],
+    tags: list[str],
+    suggestions: list[str],
+    *,
+    text: str,
+    user_text: str,
+    response_policy: dict[str, Any] | None,
+) -> None:
+    del diagnostics, tags, suggestions, text, user_text, response_policy
 
 
 def _apply_guard_diagnostics(
@@ -746,6 +691,10 @@ def _office_or_online_user_topic(text: str) -> bool:
             "客服",
         ]
     )
+
+
+def _is_analysis_request(text: str) -> bool:
+    return any(marker in str(text or "") for marker in ["对比", "比较", "分析", "方案", "架构", "权衡", "差异", "为什么", "怎么", "讨论"])
 
 
 def _complex_user_request(text: str) -> bool:

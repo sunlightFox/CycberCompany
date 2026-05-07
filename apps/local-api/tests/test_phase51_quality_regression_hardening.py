@@ -306,8 +306,11 @@ def test_phase51_release_eval_diagnostic_and_phase23_aggregation(client: TestCli
     assert report["summary"]["phase51"]["suite_id"] == "suite_phase51_quality_regression_hardening"
     assert report["summary"]["phase51"]["known_issue_records"]["total"] == 19
     assert report["summary"]["phase51"]["known_issue_records"]["open"] == 0
+    assert "shadow_policy_readiness" in report["summary"]["phase51"]
+    assert "shadow_policy_gate_enabled_count" in report["summary"]["phase51"]
     assert report["summary"]["phase23"]["capability_scores"]["phase51"]["registered"] is True
     assert "phase51_quality_regression_hardening" in diagnostic
+    assert "shadow_policy_readiness" in diagnostic["phase51_quality_regression_hardening"]
     assert _payload_leakage_count(serialized) == 0
 
 

@@ -289,6 +289,60 @@ class ChatRepository:
         )
         return self._message_envelope_from_row(dict(row)) if row else None
 
+    async def upsert_turn_presence_state(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO turn_presence_states (
+              presence_state_id, turn_id, conversation_id, understanding_json,
+              presence_state_json, session_context_json, response_policy_json,
+              action_dialogue_json, trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(turn_id) DO UPDATE SET
+              understanding_json = excluded.understanding_json,
+              presence_state_json = excluded.presence_state_json,
+              session_context_json = excluded.session_context_json,
+              response_policy_json = excluded.response_policy_json,
+              action_dialogue_json = excluded.action_dialogue_json,
+              trace_id = excluded.trace_id,
+              updated_at = excluded.updated_at
+            """,
+            (
+                data["presence_state_id"],
+                data["turn_id"],
+                data["conversation_id"],
+                json.dumps(data.get("understanding") or {}, ensure_ascii=False),
+                json.dumps(data.get("presence_state") or {}, ensure_ascii=False),
+                json.dumps(data.get("session_context") or {}, ensure_ascii=False),
+                json.dumps(data.get("response_policy") or {}, ensure_ascii=False),
+                json.dumps(data.get("action_dialogue") or {}, ensure_ascii=False),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def get_turn_presence_state(self, turn_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM turn_presence_states WHERE turn_id = ?",
+            (turn_id,),
+        )
+        if row is None:
+            return None
+        payload = dict(row)
+        return {
+            "presence_state_id": payload["presence_state_id"],
+            "turn_id": payload["turn_id"],
+            "conversation_id": payload["conversation_id"],
+            "understanding": json.loads(payload["understanding_json"] or "{}"),
+            "presence_state": json.loads(payload["presence_state_json"] or "{}"),
+            "session_context": json.loads(payload["session_context_json"] or "{}"),
+            "response_policy": json.loads(payload["response_policy_json"] or "{}"),
+            "action_dialogue": json.loads(payload["action_dialogue_json"] or "{}"),
+            "trace_id": payload.get("trace_id"),
+            "created_at": payload["created_at"],
+            "updated_at": payload["updated_at"],
+        }
+
     async def find_recent_envelope_by_dedupe_key(
         self,
         dedupe_key: str,
@@ -376,6 +430,183 @@ class ChatRepository:
                 turn_id,
             ),
         )
+
+    async def upsert_user_profile(self, data: dict[str, Any]) -> None:
+        existing = await self._db.fetch_one(
+            """
+            SELECT profile_id
+            FROM conversation_user_profiles
+            WHERE conversation_id = ? AND status = 'active'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (data["conversation_id"],),
+        )
+        if existing is None:
+            await self._db.execute(
+                """
+                INSERT INTO conversation_user_profiles (
+                  profile_id, conversation_id, member_id, profile_type, profile_data_json,
+                  source_turn_id, trace_id, status, expires_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    data["profile_id"],
+                    data["conversation_id"],
+                    data["member_id"],
+                    data["profile_type"],
+                    json.dumps(data.get("profile_data") or {}, ensure_ascii=False),
+                    data.get("source_turn_id"),
+                    data.get("trace_id"),
+                    data.get("status") or "active",
+                    data.get("expires_at"),
+                    data["created_at"],
+                    data["updated_at"],
+                ),
+            )
+            return
+        await self._db.execute(
+            """
+            UPDATE conversation_user_profiles
+            SET member_id = ?,
+                profile_type = ?,
+                profile_data_json = ?,
+                source_turn_id = ?,
+                trace_id = ?,
+                status = ?,
+                expires_at = ?,
+                updated_at = ?
+            WHERE profile_id = ?
+            """,
+            (
+                data["member_id"],
+                data["profile_type"],
+                json.dumps(data.get("profile_data") or {}, ensure_ascii=False),
+                data.get("source_turn_id"),
+                data.get("trace_id"),
+                data.get("status") or "active",
+                data.get("expires_at"),
+                data["updated_at"],
+                existing["profile_id"],
+            ),
+        )
+
+    async def get_active_user_profile(self, conversation_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM conversation_user_profiles
+            WHERE conversation_id = ? AND status = 'active'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (conversation_id,),
+        )
+        if row is None:
+            return None
+        payload = dict(row)
+        return {
+            "profile_id": payload["profile_id"],
+            "conversation_id": payload["conversation_id"],
+            "member_id": payload["member_id"],
+            "profile_type": payload["profile_type"],
+            "profile_data": json.loads(payload["profile_data_json"] or "{}"),
+            "source_turn_id": payload.get("source_turn_id"),
+            "trace_id": payload.get("trace_id"),
+            "status": payload["status"],
+            "expires_at": payload.get("expires_at"),
+            "created_at": payload["created_at"],
+            "updated_at": payload["updated_at"],
+        }
+
+    async def insert_continuity_snapshot(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO conversation_continuity_snapshots (
+              snapshot_id, conversation_id, source_turn_id, summary_text, user_state_hint,
+              assistant_commitments_json, followup_candidates_json, topic_anchor,
+              expiry_policy_json, trace_id, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["snapshot_id"],
+                data["conversation_id"],
+                data.get("source_turn_id"),
+                data["summary_text"],
+                data.get("user_state_hint"),
+                json.dumps(data.get("assistant_commitments") or [], ensure_ascii=False),
+                json.dumps(data.get("followup_candidates") or [], ensure_ascii=False),
+                data.get("topic_anchor"),
+                json.dumps(data.get("expiry_policy") or {}, ensure_ascii=False),
+                data.get("trace_id"),
+                data.get("status") or "active",
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def get_latest_continuity_snapshot(self, conversation_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM conversation_continuity_snapshots
+            WHERE conversation_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (conversation_id,),
+        )
+        if row is None:
+            return None
+        payload = dict(row)
+        return {
+            "snapshot_id": payload["snapshot_id"],
+            "conversation_id": payload["conversation_id"],
+            "source_turn_id": payload.get("source_turn_id"),
+            "continuity_summary": payload["summary_text"],
+            "user_state_hint": payload.get("user_state_hint"),
+            "assistant_commitments": json.loads(payload["assistant_commitments_json"] or "[]"),
+            "followup_candidates": json.loads(payload["followup_candidates_json"] or "[]"),
+            "topic_anchor": payload.get("topic_anchor"),
+            "expiry_policy": json.loads(payload["expiry_policy_json"] or "{}"),
+            "trace_id": payload.get("trace_id"),
+            "status": payload["status"],
+            "created_at": payload["created_at"],
+            "updated_at": payload["updated_at"],
+        }
+
+    async def insert_assistant_commitment(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO assistant_commitments (
+              commitment_id, conversation_id, source_turn_id, commitment_text,
+              status, trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["commitment_id"],
+                data["conversation_id"],
+                data.get("source_turn_id"),
+                data["commitment_text"],
+                data.get("status") or "active",
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_active_commitments(self, conversation_id: str, limit: int = 5) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM assistant_commitments
+            WHERE conversation_id = ? AND status = 'active'
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (conversation_id, limit),
+        )
+        return [dict(row) for row in rows]
 
     async def update_user_message_content(
         self,

@@ -88,7 +88,13 @@ def test_xiaowu_prompt_carries_playful_style_and_multiturn_quality(
         conversation_id=conversation_id,
     )
     third_events = _parse_sse(client.get(third["stream_url"]).text)
+    first_plan = next(event for event in first_events if event["event"] == "response.completed")[
+        "payload"
+    ]["response_plan"]
     plan = next(event for event in second_events if event["event"] == "response.completed")[
+        "payload"
+    ]["response_plan"]
+    third_plan = next(event for event in third_events if event["event"] == "response.completed")[
         "payload"
     ]["response_plan"]
 
@@ -109,8 +115,11 @@ def test_xiaowu_prompt_carries_playful_style_and_multiturn_quality(
         set(plan["tone_metadata"]["tone_hints"])
     )
     prompt_payload = plan["structured_payload"]
-    section_ids = prompt_payload["prompt_section_ids"]
     prompt_assembly = prompt_payload["prompt_assembly"]
+    plain_section_ids = prompt_payload["prompt_section_ids"]
+    continuation_prompt_payload = third_plan["structured_payload"]
+    shadow_payload = prompt_payload["chat_quality_shadow"]
+    section_ids = continuation_prompt_payload["prompt_section_ids"]
     assert captured_systems
     assert captured_users
     assert all("你是小吴" in item for item in captured_systems)
@@ -128,7 +137,6 @@ def test_xiaowu_prompt_carries_playful_style_and_multiturn_quality(
         for item in captured_systems
     )
     assert all("先回应当前这句话" in item for item in captured_systems)
-    assert all("如果历史和当前消息冲突" in item for item in captured_systems[1:])
     assert all("# Current Message" in item for item in captured_users)
     assert all("用户改口、停止、只做、不要执行" in item for item in captured_users)
     assert section_ids[:5] == [
@@ -138,8 +146,15 @@ def test_xiaowu_prompt_carries_playful_style_and_multiturn_quality(
         "stable.safety",
         "stable.channel",
     ]
-    assert "history.recent_messages" in section_ids
+    assert any(item.startswith("history.recent_message.") for item in section_ids)
     assert section_ids[-1] == "current.user_message"
+    assert prompt_payload["prompt_mode"] in {"minimal", "full"}
+    assert prompt_payload["prompt_profile"] == "plain_chat"
+    assert prompt_payload["dynamic_context_mode"] is None
+    assert not any(item.startswith("dynamic.") for item in plain_section_ids)
+    assert continuation_prompt_payload["prompt_mode"] == "full"
+    assert continuation_prompt_payload["prompt_profile"] == "history_lookup"
+    assert continuation_prompt_payload["dynamic_context_mode"] is None
     assert prompt_payload["prompt_assembly_version"] == "chat_prompt_assembly.openclaw_hermes.v4"
     assert prompt_payload["prompt_snapshot_id"].startswith("psnap_")
     assert prompt_payload["stable_prompt_hash"].startswith("sha256:")
@@ -148,8 +163,31 @@ def test_xiaowu_prompt_carries_playful_style_and_multiturn_quality(
     assert prompt_payload["untrusted_context_hash"].startswith("sha256:")
     assert prompt_payload["history_context_hash"].startswith("sha256:")
     assert prompt_payload["current_message_hash"].startswith("sha256:")
-    assert prompt_assembly["prompt_section_ids"] == section_ids
+    assert third_plan["structured_payload"]["prompt_assembly"]["prompt_section_ids"] == section_ids
     assert all("content" not in item for item in prompt_assembly["prompt_sections"])
+    assert shadow_payload["version"] == "chat_quality_shadow.openclaw_hermes.v1"
+    assert shadow_payload["advisory_only"] is True
+    assert "deep_chat_depth" in shadow_payload["conversation_understanding"]["quality_dimensions"]
+    assert shadow_payload["response_policy"]["depth_mode"] == "deep"
+    first_shadow = first_plan["structured_payload"]["chat_quality_shadow"]
+    assert first_shadow["policy_advisory_gate"]["eligible_for_policy_advisory"] is True
+    assert first_shadow["response_policy_comparison"]["comparison_enabled"] is True
+    assert third_plan["structured_payload"]["chat_quality_shadow"]["policy_advisory_gate"][
+        "eligible_for_policy_advisory"
+    ] is True
+    assert third_plan["structured_payload"]["chat_quality_shadow"]["response_policy_comparison"][
+        "comparison_enabled"
+    ] is True
+    assert shadow_payload["response_policy_comparison"]["comparison_enabled"] is False
+    assert (
+        third_plan["structured_payload"]["chat_quality_shadow"]["conversation_understanding"][
+            "continues_previous_turn"
+        ]
+        is True
+    )
+    assert "multi_turn_continuity" in third_plan["structured_payload"]["chat_quality_shadow"][
+        "conversation_understanding"
+    ]["quality_dimensions"]
 
 
 def test_xiaowu_safety_and_privacy_scenarios_deescalate(client: TestClient) -> None:
@@ -180,6 +218,9 @@ def test_xiaowu_safety_and_privacy_scenarios_deescalate(client: TestClient) -> N
     assert "已删除" not in safety_reply
     assert "不能" in safety_reply or "不会" in safety_reply
     assert safety_plan["tone_mode"] == "safety_boundary"
+    assert safety_plan["structured_payload"]["chat_quality_shadow"]["response_policy"][
+        "boundary_mode"
+    ] == "explicit_honest"
     assert tone["tone_mode"] == "safety_boundary"
     assert _emoji_count(safety_reply) == 0
     assert "疑似敏感信息" in privacy_reply
@@ -205,6 +246,12 @@ def test_xiaowu_persona_boundary_reply_is_natural_but_honest(client: TestClient)
     assert "合规流程" in reply
     assert "确认" in reply
     assert plan["structured_payload"]["conversation_voice"]["scene"] == "boundary"
+    assert plan["structured_payload"]["chat_quality_shadow"]["response_policy"]["boundary_mode"] == (
+        "explicit_honest"
+    )
+    assert plan["structured_payload"]["chat_quality_shadow"]["response_policy_comparison"][
+        "comparison_enabled"
+    ] is False
     assert "系统状态报告" not in reply
     assert plan["style"] in {"quality_boundary", "safety_boundary"}
 

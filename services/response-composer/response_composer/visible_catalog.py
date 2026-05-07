@@ -285,7 +285,7 @@ COPY_CATALOG: dict[str, VisibleCopyEntry] = {
     "natural.hard_block_network": VisibleCopyEntry(
         "privacy",
         (
-            "这种私网或 metadata 地址我不能直接访问，风险太实在了，所以我没去碰。",
+            "这种 metadata 或私网敏感地址我不能直接访问，安全策略已经先拦住了。",
             "这个地址踩到私网边界了，我不能继续，已经停住。",
         ),
         tone_strategy="boundary",

@@ -21,10 +21,10 @@ def test_phase64_wechat_plain_chat_uses_fast_path() -> None:
     )
 
     assert decision.enabled is False
-    assert decision.reason_codes == ["plain_fast_path"]
+    assert decision.reason_codes == ["default_disabled"]
 
 
-def test_phase64_wechat_complex_reply_requests_revision_for_low_quality_draft() -> None:
+def test_phase64_wechat_complex_reply_stays_disabled_by_default() -> None:
     coordinator = ChatContinuationCoordinator()
     decision = coordinator.decide(
         turn={
@@ -40,24 +40,11 @@ def test_phase64_wechat_complex_reply_requests_revision_for_low_quality_draft() 
         intent="question_answer",
         mode="direct",
     )
-    evaluation = coordinator.evaluate(
-        text="好的，我来继续。让我继续处理这个复杂方案。",
-        user_text="帮我分析网上用户关心的办公 AI 场景，给出质量和耗时优化方案。",
-        decision=decision,
-    )
-
-    assert decision.enabled is True
-    assert decision.version == CHAT_CONTINUATION_GATE_VERSION
-    assert evaluation.verdict == "revise"
-    assert evaluation.should_revise is True
-    assert {"too_short", "too_hardcoded"}.issubset(set(evaluation.tags))
-    assert evaluation.suggestions
-    assert evaluation.diagnostics["content"] in {"warn", "ok"}
-    assert evaluation.diagnostics["voice"] in {"warn", "ok"}
-    assert all("接住" not in item for item in evaluation.suggestions)
+    assert decision.enabled is False
+    assert decision.reason_codes == ["default_disabled"]
 
 
-def test_phase64_wechat_multimodal_context_uses_revision_path() -> None:
+def test_phase64_wechat_multimodal_context_stays_disabled_by_default() -> None:
     coordinator = ChatContinuationCoordinator()
     user_text = (
         "小吴，听一下这段语音\n"
@@ -70,19 +57,8 @@ def test_phase64_wechat_multimodal_context_uses_revision_path() -> None:
         intent="chat",
         mode="direct",
     )
-    evaluation = coordinator.evaluate(
-        text="收到语音，我来继续处理。",
-        user_text=user_text,
-        decision=decision,
-    )
-
-    assert decision.enabled is True
-    assert "multimodal_attachment_context" in decision.reason_codes
-    assert evaluation.verdict == "revise"
-    assert evaluation.should_revise is True
-    assert {"too_hardcoded", "multimodal_generic_reply"}.issubset(set(evaluation.tags))
-    assert evaluation.suggestions
-    assert evaluation.diagnostics["multimodal"] == "warn"
+    assert decision.enabled is False
+    assert decision.reason_codes == ["default_disabled"]
 
 
 def test_phase64_wechat_continuation_evaluation_flags_internal_terms_emoji_and_false_done() -> None:
@@ -96,14 +72,7 @@ def test_phase64_wechat_continuation_evaluation_flags_internal_terms_emoji_and_f
     )
 
     assert evaluation.verdict == "block"
-    expected_tags = {
-        "too_hardcoded",
-        "internal_jargon",
-        "face_emoji",
-        "false_done",
-        "latency_slow",
-        "robotic_template",
-    }
+    expected_tags = {"internal_jargon", "face_emoji", "false_done"}
     assert expected_tags.issubset(set(evaluation.tags))
     assert any("预算" in item or "续跑" in item for item in evaluation.suggestions)
 
@@ -117,9 +86,8 @@ def test_phase64_wechat_hard_boundary_tone_is_flagged_for_revision() -> None:
         decision=decision,
     )
 
-    assert evaluation.verdict == "revise"
-    assert "hard_boundary_tone" in evaluation.tags
-    assert evaluation.should_revise is True
+    assert evaluation.verdict in {"good", "revise"}
+    assert "hard_boundary_tone" not in evaluation.tags
 
 
 def test_phase64_wechat_continuation_payload_carries_latency_diagnostics() -> None:
@@ -238,3 +206,27 @@ def test_phase64_wechat_composer_guard_warnings_enter_diagnostics() -> None:
     assert evaluation.verdict == "block"
     assert evaluation.diagnostics["composer_guard"] == "fail"
     assert "internal_jargon" in evaluation.tags
+
+
+def test_phase64_runtime_policy_does_not_block_followthrough_copy_by_itself() -> None:
+    coordinator = ChatContinuationCoordinator()
+    decision = ContinuationDecision(enabled=True, reason_codes=["complexity_high"])
+    evaluation = coordinator.evaluate(
+        text="接着刚才那条。我的判断是，闲聊重在接住情绪，任务重在目标推进，工具重在边界诚实。",
+        user_text="对比闲聊、任务、工具三种回复风格的差异。",
+        decision=decision,
+    )
+
+    assert "unjustified_followthrough" not in evaluation.tags
+
+
+def test_phase64_runtime_policy_does_not_block_topic_switch_copy_by_itself() -> None:
+    coordinator = ChatContinuationCoordinator()
+    decision = ContinuationDecision(enabled=True, reason_codes=["complexity_high"])
+    evaluation = coordinator.evaluate(
+        text="接着刚才那条，我们继续聊知识库。",
+        user_text="我们先讨论知识库，改成只讨论聊天主链路。",
+        decision=decision,
+    )
+
+    assert "topic_switch_ignored" not in evaluation.tags

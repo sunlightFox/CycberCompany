@@ -12,6 +12,7 @@ CHAT_VOICE_POLICY_VERSION = "chat_voice.openclaw_hermes.v4"
 CHAT_PROMPT_ASSEMBLY_VERSION = "chat_prompt_assembly.openclaw_hermes.v4"
 
 PromptMode = Literal["full", "minimal", "none"]
+DynamicContextMode = Literal["snapshot", "index"]
 DeliveryMode = Literal["final", "progress", "silent", "notification"]
 PromptLayer = Literal[
     "stable_system",
@@ -190,6 +191,14 @@ class PromptAssemblyInput:
     delivery_mode: str | None = None
     sender_label: str | None = None
     turn_id: str | None = None
+    include_dynamic_context: bool = False
+    include_trusted_context: bool = True
+    include_untrusted_context: bool = True
+    include_history: bool = True
+    include_session_summary: bool = False
+    recent_history_limit: int = 6
+    dynamic_context_mode: DynamicContextMode = "index"
+    prompt_profile: str | None = None
 
 
 @dataclass(frozen=True)
@@ -371,6 +380,14 @@ class ChatPromptAssembler:
         delivery_mode: str | None = None,
         sender_label: str | None = None,
         turn_id: str | None = None,
+        include_dynamic_context: bool = False,
+        include_trusted_context: bool = True,
+        include_untrusted_context: bool = True,
+        include_history: bool = True,
+        include_session_summary: bool = False,
+        recent_history_limit: int = 6,
+        dynamic_context_mode: DynamicContextMode = "index",
+        prompt_profile: str | None = None,
     ) -> PromptAssemblyResult:
         mode: PromptMode = prompt_mode if prompt_mode in {"full", "minimal", "none"} else "full"
         assembly_input = PromptAssemblyInput(
@@ -381,14 +398,26 @@ class ChatPromptAssembler:
             delivery_mode=delivery_mode,
             sender_label=sender_label,
             turn_id=turn_id,
+            include_dynamic_context=include_dynamic_context,
+            include_trusted_context=include_trusted_context,
+            include_untrusted_context=include_untrusted_context,
+            include_history=include_history,
+            include_session_summary=include_session_summary,
+            recent_history_limit=recent_history_limit,
+            dynamic_context_mode=dynamic_context_mode,
+            prompt_profile=prompt_profile,
         )
         sections: list[PromptSection] = []
         if mode == "full":
             sections.extend(_stable_sections(assembly_input))
-            sections.extend(_dynamic_context_sections(assembly_input))
-            sections.extend(_trusted_context_sections(assembly_input))
-            sections.extend(_untrusted_context_sections(assembly_input))
-            sections.extend(_history_sections(assembly_input))
+            if assembly_input.include_dynamic_context:
+                sections.extend(_dynamic_context_sections(assembly_input))
+            if assembly_input.include_trusted_context:
+                sections.extend(_trusted_context_sections(assembly_input))
+            if assembly_input.include_untrusted_context:
+                sections.extend(_untrusted_context_sections(assembly_input))
+            if assembly_input.include_history:
+                sections.extend(_history_sections(assembly_input))
             sections.extend(_current_message_sections(assembly_input, wrapped=True))
         elif mode == "minimal":
             sections.extend(_stable_sections(assembly_input, minimal=True))
@@ -404,6 +433,8 @@ class ChatPromptAssembler:
             prompt_mode=mode,
             channel_profile=channel_profile,
             delivery_mode=delivery_mode,
+            prompt_profile=assembly_input.prompt_profile,
+            dynamic_context_mode=assembly_input.dynamic_context_mode if assembly_input.include_dynamic_context else None,
         )
         return PromptAssemblyResult(
             messages=messages,
@@ -422,6 +453,14 @@ class ChatPromptAssembler:
         delivery_mode: str | None = None,
         sender_label: str | None = None,
         turn_id: str | None = None,
+        include_dynamic_context: bool = False,
+        include_trusted_context: bool = True,
+        include_untrusted_context: bool = True,
+        include_history: bool = True,
+        include_session_summary: bool = False,
+        recent_history_limit: int = 6,
+        dynamic_context_mode: DynamicContextMode = "index",
+        prompt_profile: str | None = None,
     ) -> list[dict[str, str]]:
         return self.assemble(
             context,
@@ -431,6 +470,14 @@ class ChatPromptAssembler:
             delivery_mode=delivery_mode,
             sender_label=sender_label,
             turn_id=turn_id,
+            include_dynamic_context=include_dynamic_context,
+            include_trusted_context=include_trusted_context,
+            include_untrusted_context=include_untrusted_context,
+            include_history=include_history,
+            include_session_summary=include_session_summary,
+            recent_history_limit=recent_history_limit,
+            dynamic_context_mode=dynamic_context_mode,
+            prompt_profile=prompt_profile,
         ).messages
 
     def assembly(
@@ -443,6 +490,14 @@ class ChatPromptAssembler:
         delivery_mode: str | None = None,
         sender_label: str | None = None,
         turn_id: str | None = None,
+        include_dynamic_context: bool = False,
+        include_trusted_context: bool = True,
+        include_untrusted_context: bool = True,
+        include_history: bool = True,
+        include_session_summary: bool = False,
+        recent_history_limit: int = 6,
+        dynamic_context_mode: DynamicContextMode = "index",
+        prompt_profile: str | None = None,
     ) -> PromptAssemblyResult:
         return self.assemble(
             context,
@@ -452,6 +507,14 @@ class ChatPromptAssembler:
             delivery_mode=delivery_mode,
             sender_label=sender_label,
             turn_id=turn_id,
+            include_dynamic_context=include_dynamic_context,
+            include_trusted_context=include_trusted_context,
+            include_untrusted_context=include_untrusted_context,
+            include_history=include_history,
+            include_session_summary=include_session_summary,
+            recent_history_limit=recent_history_limit,
+            dynamic_context_mode=dynamic_context_mode,
+            prompt_profile=prompt_profile,
         )
 
     def assembly_metadata(
@@ -462,6 +525,8 @@ class ChatPromptAssembler:
         prompt_mode: PromptMode,
         channel_profile: str | None,
         delivery_mode: str | None = None,
+        prompt_profile: str | None = None,
+        dynamic_context_mode: DynamicContextMode | None = None,
     ) -> dict[str, Any]:
         return {
             **voice_metadata_for_scenario(
@@ -475,6 +540,8 @@ class ChatPromptAssembler:
             "prompt_layers": _ordered_layers(sections),
             "message_count": len([section for section in sections if section.model_visible]),
             "section_count": len(sections),
+            "prompt_profile": prompt_profile,
+            "dynamic_context_mode": dynamic_context_mode,
             **snapshot.as_metadata(),
         }
 
@@ -554,8 +621,8 @@ def _stable_sections(
             body_kind="body_for_agent",
             content=(
                 "# 渠道\n"
-                f"channel_profile={channel_profile}。渠道只改变表达、节奏和投递方式，不改变底层组织、成员、资产、技能和任务数据。"
-                "微信类渠道优先短句、少层级、先结论后依据；长答案也要便于扫读。"
+                f"channel_profile={channel_profile}。渠道只改变投递和可读性约束，不改变底层组织、成员、资产、技能和任务数据。"
+                "微信类渠道优先清楚、短句、便于扫读。"
                 "静默、进度和通知类结果通过投递元数据表达，不混进普通最终回复。"
             ),
             redaction=True,
@@ -569,8 +636,9 @@ def _stable_sections(
 def _dynamic_context_sections(assembly_input: PromptAssemblyInput) -> list[PromptSection]:
     context = assembly_input.context
     sections: list[PromptSection] = []
+    dynamic_mode = assembly_input.dynamic_context_mode
     persona = getattr(context, "persona", None)
-    if persona is not None:
+    if persona is not None and dynamic_mode == "snapshot":
         sections.append(
             _make_section(
                 section_id="dynamic.persona_snapshot",
@@ -585,7 +653,7 @@ def _dynamic_context_sections(assembly_input: PromptAssemblyInput) -> list[Promp
             )
         )
     heart = getattr(context, "heart", None)
-    if heart is not None:
+    if heart is not None and dynamic_mode == "snapshot":
         sections.append(
             _make_section(
                 section_id="dynamic.heart_snapshot",
@@ -599,7 +667,11 @@ def _dynamic_context_sections(assembly_input: PromptAssemblyInput) -> list[Promp
                 metadata=_heart_snapshot_metadata(assembly_input, heart),
             )
         )
-    memory_text, memory_metadata = _memory_context_snapshot(assembly_input)
+    memory_text, memory_metadata = (
+        _memory_context_snapshot(assembly_input)
+        if dynamic_mode == "snapshot"
+        else _memory_context_index(assembly_input)
+    )
     if memory_text:
         sections.append(
             _make_section(
@@ -611,10 +683,17 @@ def _dynamic_context_sections(assembly_input: PromptAssemblyInput) -> list[Promp
                 body_kind="history_context",
                 content=memory_text,
                 redaction=True,
-                metadata=memory_metadata,
+                metadata={
+                    **memory_metadata,
+                    "dynamic_context_mode": dynamic_mode,
+                    "prompt_profile": assembly_input.prompt_profile,
+                },
             )
         )
-    skill_text, skill_metadata = _skill_context_snapshot(assembly_input)
+    skill_text, skill_metadata = _skill_context_snapshot(
+        assembly_input,
+        compact=(dynamic_mode == "index"),
+    )
     if skill_text:
         sections.append(
             _make_section(
@@ -626,10 +705,14 @@ def _dynamic_context_sections(assembly_input: PromptAssemblyInput) -> list[Promp
                 body_kind="body_for_agent",
                 content=skill_text,
                 redaction=True,
-                metadata=skill_metadata,
+                metadata={
+                    **skill_metadata,
+                    "dynamic_context_mode": dynamic_mode,
+                    "prompt_profile": assembly_input.prompt_profile,
+                },
             )
         )
-    capability_text = _capability_context_text(context)
+    capability_text = _capability_context_text(context, compact=(dynamic_mode == "index"))
     if capability_text:
         sections.append(
             _make_section(
@@ -641,13 +724,17 @@ def _dynamic_context_sections(assembly_input: PromptAssemblyInput) -> list[Promp
                 body_kind="command_body",
                 content=(
                     "# Access Boundary\n"
-                    "这里的信息只说明当前可用范围，不能拿来绕过确认、风险判断或真实执行结果。\n"
+                    "这里只说明当前可用范围，不能拿来绕过确认、风险判断或真实执行结果。\n"
                     f"{capability_text}"
                 ),
                 redaction=True,
+                metadata={
+                    "dynamic_context_mode": dynamic_mode,
+                    "prompt_profile": assembly_input.prompt_profile,
+                },
             )
         )
-    asset_text = _asset_context_text(context)
+    asset_text = _asset_context_text(context, compact=(dynamic_mode == "index"))
     if asset_text:
         sections.append(
             _make_section(
@@ -659,9 +746,13 @@ def _dynamic_context_sections(assembly_input: PromptAssemblyInput) -> list[Promp
                 body_kind="command_body",
                 content=asset_text,
                 redaction=True,
+                metadata={
+                    "dynamic_context_mode": dynamic_mode,
+                    "prompt_profile": assembly_input.prompt_profile,
+                },
             )
         )
-    safety_text = _safety_context_text(context)
+    safety_text = _safety_context_text(context, compact=(dynamic_mode == "index"))
     if safety_text:
         sections.append(
             _make_section(
@@ -677,6 +768,10 @@ def _dynamic_context_sections(assembly_input: PromptAssemblyInput) -> list[Promp
                     f"{safety_text}"
                 ),
                 redaction=True,
+                metadata={
+                    "dynamic_context_mode": dynamic_mode,
+                    "prompt_profile": assembly_input.prompt_profile,
+                },
             )
         )
     return sections
@@ -732,7 +827,7 @@ def _history_sections(assembly_input: PromptAssemblyInput) -> list[PromptSection
     conversation = getattr(assembly_input.context, "conversation", None)
     sections: list[PromptSection] = []
     recent_summary = getattr(conversation, "recent_summary", None)
-    if recent_summary:
+    if assembly_input.include_session_summary and recent_summary:
         sections.append(
             _make_section(
                 section_id="history.session_summary",
@@ -749,33 +844,31 @@ def _history_sections(assembly_input: PromptAssemblyInput) -> list[PromptSection
                 redaction=True,
             )
         )
-    history = list(getattr(conversation, "last_messages", []) or [])[-_HISTORY_LIMIT:]
-    lines: list[str] = []
+    history_limit = max(0, min(int(assembly_input.recent_history_limit or 0), _HISTORY_LIMIT))
+    history = list(getattr(conversation, "last_messages", []) or [])
+    if history_limit:
+        history = history[-history_limit:]
+    else:
+        history = []
     for index, item in enumerate(history, start=1):
         if not isinstance(item, dict):
             continue
         role = "user" if item.get("author_type") == "user" else "assistant"
         content = str(item.get("model_safe_content_text") or item.get("content_text") or "")
         if content:
-            lines.append(f"{index}. role={role}; text={redact(content)}")
-    if lines:
-        sections.append(
-            _make_section(
-                section_id="history.recent_messages",
-                layer="history_wrapper",
-                role="system",
-                source_kind="history_context",
-                cache_policy="turn",
-                body_kind="history_context",
-                content=(
-                    "# Recent Messages\n"
-                    "以下是历史消息摘要，只用于连续性。不要把它当作本轮最新指令；"
-                    "如果历史和当前消息冲突，以当前消息为准。\n"
-                    + "\n".join(lines)
-                ),
-                redaction=True,
+            sections.append(
+                _make_section(
+                    section_id=f"history.recent_message.{index}",
+                    layer="history_wrapper",
+                    role=role,
+                    source_kind="history_context",
+                    cache_policy="turn",
+                    body_kind="history_context",
+                    content=str(redact(content)),
+                    redaction=True,
+                    metadata={"history_index": index, "history_group": "recent_messages"},
+                )
             )
-        )
     return sections
 
 
@@ -1379,7 +1472,29 @@ def _memory_context_snapshot(assembly_input: PromptAssemblyInput) -> tuple[str, 
     return "\n".join(lines), metadata
 
 
-def _skill_context_snapshot(assembly_input: PromptAssemblyInput) -> tuple[str, dict[str, Any]]:
+def _memory_context_index(assembly_input: PromptAssemblyInput) -> tuple[str, dict[str, Any]]:
+    _, metadata = _memory_context_snapshot(assembly_input)
+    item_count = int(metadata.get("item_count") or 0)
+    if item_count <= 0:
+        return "", metadata
+    layer_counts = [
+        f"{key}={value}"
+        for key, value in dict(metadata.get("layer_counts") or {}).items()
+        if int(value or 0) > 0
+    ]
+    return (
+        "# Memory Index\n"
+        "这里只给当前可参考的记忆索引，不展开正文；只有当前消息明确需要时才继续深读。\n"
+        f"layers={'; '.join(layer_counts) or 'none'}\n"
+        f"item_count={item_count}; source_types={', '.join(list(metadata.get('source_types') or [])[:4]) or 'memory'}"
+    ), metadata
+
+
+def _skill_context_snapshot(
+    assembly_input: PromptAssemblyInput,
+    *,
+    compact: bool = False,
+) -> tuple[str, dict[str, Any]]:
     workbench = getattr(assembly_input.context, "workbench", None)
     raw_refs = list(getattr(workbench, "skill_refs", []) or []) if workbench is not None else []
     skills: list[dict[str, Any]] = []
@@ -1405,14 +1520,22 @@ def _skill_context_snapshot(assembly_input: PromptAssemblyInput) -> tuple[str, d
             "requires_safety": bool(item.get("requires_safety", True)),
         }
         skills.append(redact(skill))
-        lines.append(
-            "- "
-            f"{redact(skill['display_name'])}；"
-            f"source={redact(str(skill['source']))}；"
-            f"trust={redact(skill['trust_level'])}；"
-            f"asset_broker={'yes' if skill['requires_asset_broker'] else 'no'}；"
-            f"safety={'yes' if skill['requires_safety'] else 'no'}。"
-        )
+        if compact:
+            lines.append(
+                "- "
+                f"{redact(skill['display_name'])}；"
+                f"trust={redact(skill['trust_level'])}；"
+                f"guarded={'yes' if skill['requires_asset_broker'] or skill['requires_safety'] else 'no'}。"
+            )
+        else:
+            lines.append(
+                "- "
+                f"{redact(skill['display_name'])}；"
+                f"source={redact(str(skill['source']))}；"
+                f"trust={redact(skill['trust_level'])}；"
+                f"asset_broker={'yes' if skill['requires_asset_broker'] else 'no'}；"
+                f"safety={'yes' if skill['requires_safety'] else 'no'}。"
+            )
 
     metadata = _freeze_metadata(
         assembly_input,
@@ -1422,33 +1545,38 @@ def _skill_context_snapshot(assembly_input: PromptAssemblyInput) -> tuple[str, d
     )
     if not lines:
         return "", metadata
-    return (
-        "# Skills Index\n"
+    header = (
         "这些条目只表示可复用方法索引，不代表已经加载、执行或拿到了资源。"
         "需要资源时仍走授权句柄和真实工具结果，不能从技能名推断 secret、账号、路径或权限。"
         "真实执行仍必须经过任务、工具、安全和确认链路。\n"
+        if not compact
+        else "这里只给可用技能索引和限制，不展开方法正文；真实执行仍经过任务、工具、安全和确认链路。\n"
+    )
+    return (
+        "# Skills Index\n"
+        + header
         + "\n".join(lines)
     ), metadata
 
 
-def _capability_context_text(context: ContextPacket) -> str:
+def _capability_context_text(context: ContextPacket, *, compact: bool = False) -> str:
     lines: list[str] = []
     capabilities = list(getattr(context, "capabilities", []) or [])[:_CONTEXT_SECTION_LIMIT]
     for capability in capabilities:
         allowed = ", ".join(list(getattr(capability, "allowed_actions", []) or [])[:6])
         denied = ", ".join(list(getattr(capability, "denied_actions", []) or [])[:6])
-        lines.append(
-            f"访问范围：can={redact(allowed or 'none')}；blocked={redact(denied or 'none')}。"
-        )
+        prefix = "- " if compact else "访问范围："
+        lines.append(f"{prefix}can={redact(allowed or 'none')}；blocked={redact(denied or 'none')}。")
     return "\n".join(line for line in lines if line)
 
 
-def _asset_context_text(context: ContextPacket) -> str:
+def _asset_context_text(context: ContextPacket, *, compact: bool = False) -> str:
     lines: list[str] = []
     handles = list(getattr(context, "resource_handles", []) or [])[:_CONTEXT_SECTION_LIMIT]
     for handle in handles:
+        prefix = "- " if compact else "可用资源线索："
         lines.append(
-            "可用资源线索："
+            f"{prefix}"
             f"{redact(getattr(handle, 'asset_type', 'asset'))} / "
             f"{redact(getattr(handle, 'summary', ''))}；"
             "只能在授权动作内使用。"
@@ -1460,10 +1588,11 @@ def _asset_context_text(context: ContextPacket) -> str:
     )
 
 
-def _safety_context_text(context: ContextPacket) -> str:
+def _safety_context_text(context: ContextPacket, *, compact: bool = False) -> str:
     notes = list(getattr(context, "safety_notes", []) or [])[:_CONTEXT_SECTION_LIMIT]
+    prefix = "- " if compact else "安全提示："
     lines = [
-        f"安全提示：{redact(getattr(note, 'risk_level', ''))} / {redact(getattr(note, 'summary', ''))}"
+        f"{prefix}{redact(getattr(note, 'risk_level', ''))} / {redact(getattr(note, 'summary', ''))}"
         for note in notes
     ]
     return "\n".join(lines)

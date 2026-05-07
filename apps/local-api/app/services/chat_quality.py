@@ -57,22 +57,6 @@ class ChatQualityPolicy:
             return None
         lowered = text.lower()
 
-        if _latest_instruction_override(text):
-            return self._outcome(
-                _latest_instruction_reply(),
-                intent="quality_latest_instruction_override",
-                status="latest_instruction_priority",
-                reason_codes=[
-                    "chat_quality_policy",
-                    "stop_change_marker",
-                    "latest_instruction_priority",
-                ],
-                structured={
-                    "superseded_goal": True,
-                    "previous_goal_role": "background_only",
-                },
-            )
-
         if _desktop_native_request(text):
             boundary = _desktop_boundary_contract()
             return self._outcome(
@@ -276,16 +260,6 @@ def _quality_guard(
     }
 
 
-def _latest_instruction_override(text: str) -> bool:
-    return (
-        any(marker in text for marker in ["停", "先停", "停止", "改成", "换成"])
-        and any(marker in text for marker in ["只做", "改成", "换成"])
-        and "后端" in text
-        and "聊天链路" in text
-        and any(marker in text for marker in ["三点", "3点", "三条", "3条"])
-    )
-
-
 def _voice_scenario_for_quality_status(status: str) -> str:
     if status == "recoverable_privacy_block":
         return "privacy"
@@ -298,16 +272,6 @@ def _voice_scenario_for_quality_status(status: str) -> str:
     if status == "latest_instruction_priority":
         return "clarification"
     return "tool_boundary"
-
-
-def _latest_instruction_reply() -> str:
-    return (
-        "明白，前一个目标先停掉。按你新的要求，只看后端聊天链路验收，可以收成三点：\n\n"
-        "1. 请求处理正确：`/api/chat/turn` 能创建 turn，stream、turn detail 和 events 状态一致。\n"
-        "2. 上下文状态可靠：当前用户指令优先，历史摘要、记忆和会话状态只作辅助，"
-        "不覆盖改口后的目标。\n"
-        "3. 异常与边界可控：隐私、审批、任务状态、工具能力缺口都要给出可恢复说明，不伪装已执行。"
-    )
 
 
 def _desktop_native_request(text: str) -> bool:

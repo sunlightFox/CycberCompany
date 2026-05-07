@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.services.chat_quality_shadow import ChatQualityShadowService
 from app.services.chat_quality import ChatQualityPolicy
 from app.services.chat_safety import ChatVisibleOutputFilter
 from app.services.natural_chat import response_plan_for_pending_action
@@ -73,3 +74,39 @@ def test_phase67_pending_action_response_plan_uses_v4_natural_contract() -> None
     assert plan.summary
     assert "approval_id" not in plan.summary
     assert "approval_id" not in plan.plain_text
+
+
+def test_phase67_shadow_action_dialogue_mapping_stays_internal_and_honest() -> None:
+    service = ChatQualityShadowService()
+    shadow = service.analyze_turn(
+        user_text="下载这个 CSV，但先等我确认。",
+        recent_messages=[],
+        brain_decision=None,
+    )
+    plan = response_plan_for_pending_action(
+        action={
+            "approval_id": "apr_phase67_shadow_001",
+            "action_type": "browser.download",
+            "user_label": "下载这个 CSV",
+            "reply_options": ["只允许这一次", "拒绝", "修改目标为：..."],
+            "risk_level": "R3",
+            "payload_summary": {"url": "http://example.com/report.csv"},
+        },
+        session_id="phase67-shadow-session",
+    )
+    updated, _ = service.decorate_response_plan(
+        response_plan=plan,
+        assistant_text=plan.plain_text or plan.summary or "",
+        shadow_state=shadow,
+        privacy_level="low",
+    )
+
+    mapping = updated.structured_payload["chat_quality_shadow"]["action_dialogue_mapping"]
+    gate = updated.structured_payload["chat_quality_shadow"]["policy_advisory_gate"]
+    visible_text = updated.plain_text or updated.summary or ""
+    assert mapping["action_status"] == "pending_action"
+    assert mapping["blocked_by_approval"] is True
+    assert mapping["should_claim_completion"] is False
+    assert gate["eligible_for_policy_advisory"] is False
+    assert updated.structured_payload["chat_quality_shadow"]["promotion_candidate"] is False
+    assert "approval_id" not in visible_text

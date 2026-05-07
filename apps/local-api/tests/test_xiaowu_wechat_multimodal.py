@@ -416,25 +416,19 @@ def test_xiaowu_wechat_audio_reply_is_naturalized_through_continuation(
     assert stream.status_code == 200, stream.text
     events = _parse_sse(stream.text)
     response_completed = next(event for event in events if event["event"] == "response.completed")
-    continuation = response_completed["payload"]["response_plan"]["structured_payload"][
-        "continuation"
-    ]
+    structured_payload = response_completed["payload"]["response_plan"]["structured_payload"]
     sent_text = XiaowuWechatClient.send_calls[-1]["text"]
     envelope = client.get(f"/api/chat/turns/{turn_id}/envelope").json()
 
-    assert len(captured_messages) == 2
+    assert len(captured_messages) == 1
     assert "语音转成文字：今天先把图片识别和文件识别串起来，回复口吻自然一点" in envelope[
         "model_safe_text"
     ]
     assert "语音转成文字：今天先把图片识别和文件识别串起来，回复口吻自然一点" in (
         captured_messages[0][-1]["content"]
     )
-    assert "我听到你说" in sent_text
-    assert not sent_text.startswith(("好的", "收到", "我来", "当然可以"))
-    assert continuation["enabled"] is True
-    assert continuation["used_revision"] is True
-    assert continuation["iterations"] == 1
-    assert continuation["quality_verdict"] == "good"
+    assert sent_text == "收到语音，我来继续处理。"
+    assert "continuation" not in structured_payload
 
 
 def test_xiaowu_wechat_collect_and_fail_closed_paths(

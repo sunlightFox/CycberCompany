@@ -69,6 +69,7 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     assert "046_agent_workbench_context_files.sql" in first
     assert "047_feishu_message_channel.sql" in first
     assert "048_soul_manifests.sql" in first
+    assert "049_chat_presence_runtime.sql" in first
     for phase, contract in PHASE_MIGRATION_REQUIREMENTS.items():
         assert contract["required_migration"] in first, phase
         assert set(contract.get("tables") or ()).issubset(table_names), phase
@@ -209,6 +210,10 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "response_quality_evaluations",
         "persona_heart_replay_runs",
         "soul_manifests",
+        "conversation_user_profiles",
+        "conversation_continuity_snapshots",
+        "assistant_commitments",
+        "turn_presence_states",
         "semantic_review_requests",
         "semantic_review_suggestions",
         "semantic_review_model_calls",

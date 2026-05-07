@@ -21,6 +21,8 @@ from app.core.errors import AppError
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.chat_repo import ChatRepository
 from app.services.approvals import ApprovalService
+from app.services.action_dialogue_mapper import ActionDialogueMapperService
+from app.schemas.chat_quality import ActionDialogueFacts
 
 FORBIDDEN_MAIN_REPLY_TERMS = {
     "approval_id": "确认编号",
@@ -124,6 +126,7 @@ class NaturalChatActionGateway:
         self._task_engine = task_engine
         self._host_installs = host_install_service
         self._composer = ResponseComposer()
+        self._action_dialogue_mapper = ActionDialogueMapperService()
 
     async def handle(
         self,
@@ -132,9 +135,20 @@ class NaturalChatActionGateway:
         user_text: str,
         session_id: str | None,
         trace_id: str | None,
+        presence_runtime: dict[str, Any] | None = None,
     ) -> NaturalChatOutcome | None:
         text = user_text.strip()
         if not text:
+            return None
+        pending = await self._pending_actions(turn["conversation_id"], session_id)
+        if not pending:
+            if _is_deny(text) or _is_edit(text):
+                return _outcome(
+                    _no_pending_text(text),
+                    status="no_pending_action",
+                    reason_codes=["no_pending_action"],
+                    clear_pending=True,
+                )
             return None
         hard_block = _hard_block_reason(text)
         if hard_block:
@@ -153,7 +167,6 @@ class NaturalChatActionGateway:
                 clear_pending=False,
             )
 
-        pending = await self._pending_actions(turn["conversation_id"], session_id)
         if _asks_how_to_confirm(text):
             return _outcome(
                 _plain_next_step_text(pending),
@@ -209,6 +222,7 @@ class NaturalChatActionGateway:
                     resolution="deny",
                     trace_id=trace_id,
                     session_id=session_id,
+                    presence_runtime=presence_runtime,
                 )
             if _is_edit(text):
                 return await self._resolve_action(
@@ -216,6 +230,7 @@ class NaturalChatActionGateway:
                     resolution="edit",
                     trace_id=trace_id,
                     session_id=session_id,
+                    presence_runtime=presence_runtime,
                     edited_payload=_edit_payload_for_action(action, text),
                 )
             if _is_confirm(text) or _is_session_allow(text) or _is_ambiguous_continue(text):
@@ -224,6 +239,7 @@ class NaturalChatActionGateway:
                     resolution="session" if _is_session_allow(text) else "once",
                     trace_id=trace_id,
                     session_id=session_id,
+                    presence_runtime=presence_runtime,
                 )
         return None
 
@@ -234,6 +250,7 @@ class NaturalChatActionGateway:
         resolution: str,
         trace_id: str | None,
         session_id: str | None,
+        presence_runtime: dict[str, Any] | None = None,
         edited_payload: dict[str, Any] | None = None,
     ) -> NaturalChatOutcome:
         approval_id = str(action.get("approval_id") or "")
@@ -272,6 +289,8 @@ class NaturalChatActionGateway:
                     action=action,
                     clear_pending=True,
                     composer=self._composer,
+                    presence_runtime=presence_runtime,
+                    action_dialogue_mapper=self._action_dialogue_mapper,
                 )
             if resolution == "edit":
                 if edited_payload is None:
@@ -287,6 +306,8 @@ class NaturalChatActionGateway:
                         action=action,
                         clear_pending=False,
                         composer=self._composer,
+                        presence_runtime=presence_runtime,
+                        action_dialogue_mapper=self._action_dialogue_mapper,
                         failure_reason="请直接说清要改成什么，比如把地址、目标、标题或正文改成新的内容。",
                         block_reason="edit_missing_target",
                     )
@@ -311,6 +332,8 @@ class NaturalChatActionGateway:
                     action={**action, "edited_payload": edited_payload},
                     clear_pending=True,
                     composer=self._composer,
+                    presence_runtime=presence_runtime,
+                    action_dialogue_mapper=self._action_dialogue_mapper,
                     detail=detail,
                 )
             await self._approvals.approve(
@@ -341,6 +364,8 @@ class NaturalChatActionGateway:
                 action=action,
                 clear_pending=True,
                 composer=self._composer,
+                presence_runtime=presence_runtime,
+                action_dialogue_mapper=self._action_dialogue_mapper,
                 detail=detail,
                 session_grant=(
                     _session_grant(action, session_id)
@@ -364,6 +389,8 @@ class NaturalChatActionGateway:
                 action=action,
                 clear_pending=True,
                 composer=self._composer,
+                presence_runtime=presence_runtime,
+                action_dialogue_mapper=self._action_dialogue_mapper,
                 failure_reason=visible_text_guard(exc.message),
                 block_reason=error_code,
             )
@@ -428,14 +455,31 @@ def response_plan_for_pending_action(
     *,
     action: dict[str, Any],
     session_id: str | None,
+    presence_runtime: dict[str, Any] | None = None,
 ) -> ResponsePlan:
     composer = ResponseComposer()
+    mapper = ActionDialogueMapperService()
     facts = _action_status_facts(
         action,
         status="pending_action",
         detail=None,
         failure_reason=None,
     )
+    action_dialogue = mapper.map(
+        ActionDialogueFacts(
+            action_label=str(facts.get("action_label") or ""),
+            target=str(facts.get("target") or ""),
+            detail_status=str(facts.get("detail_status") or ""),
+            failure_reason=str(facts.get("failure_reason") or ""),
+            evidence_summary=str(facts.get("evidence_summary") or ""),
+            reply_options=list(facts.get("reply_options") or []),
+            route_semantics={"route": str(action.get("action_type") or "")},
+            natural_interaction={"status": "pending_action"},
+            task_status={"status": "waiting_approval"},
+            approval_pending=True,
+        )
+    )
+    facts["action_dialogue"] = action_dialogue.model_dump(mode="json")
     plan = composer.response_plan_for_action_status(facts=facts)
     reply_options = _reply_options_from_actions([action])
     natural = _natural_interaction_payload(
@@ -458,6 +502,7 @@ def response_plan_for_pending_action(
         **plan.structured_payload,
         "scenario": "natural_interaction",
         **voice_metadata_for_scenario("action_status"),
+        "action_dialogue": action_dialogue.model_dump(mode="json"),
         "natural_interaction": natural,
         "pending_actions": [action],
         "pending_action_binding": _pending_action_binding("pending_action", [action]),
@@ -525,6 +570,8 @@ def _outcome(
     clear_pending: bool,
     session_grant: dict[str, Any] | None = None,
     composer: ResponseComposer | None = None,
+    presence_runtime: dict[str, Any] | None = None,
+    action_dialogue_mapper: ActionDialogueMapperService | None = None,
     detail: Any | None = None,
     failure_reason: str | None = None,
     block_reason: str | None = None,
@@ -536,6 +583,22 @@ def _outcome(
             detail=detail,
             failure_reason=failure_reason,
         )
+        mapper = action_dialogue_mapper or ActionDialogueMapperService()
+        action_dialogue = mapper.map(
+            ActionDialogueFacts(
+                action_label=str(facts.get("action_label") or ""),
+                target=str(facts.get("target") or ""),
+                detail_status=str(facts.get("detail_status") or ""),
+                failure_reason=str(facts.get("failure_reason") or ""),
+                evidence_summary=str(facts.get("evidence_summary") or ""),
+                reply_options=list(facts.get("reply_options") or []),
+                route_semantics={"route": str(action.get("action_type") or "")},
+                natural_interaction={"status": status},
+                task_status=_task_status_payload(detail) or {"status": status},
+                approval_pending=status in {"pending_action", "waiting_approval"},
+            )
+        )
+        facts["action_dialogue"] = action_dialogue.model_dump(mode="json")
         plan = composer.response_plan_for_action_status(
             facts=facts,
             task_status=_task_status_payload(detail),
@@ -561,6 +624,7 @@ def _outcome(
             **plan.structured_payload,
             "scenario": "natural_interaction",
             **voice_metadata_for_scenario("action_status"),
+            "action_dialogue": action_dialogue.model_dump(mode="json"),
             "natural_interaction": natural,
             "pending_actions": pending_actions or ([action] if action else []),
             "pending_action_binding": pending_action_binding,

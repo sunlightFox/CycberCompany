@@ -61,6 +61,13 @@ from app.services.channel_connectors import (
 from app.services.channels import ChannelBindingService
 from app.services.chat import ChatService
 from app.services.chat_experience import ChatExperienceService
+from app.services.conversation_understanding_runtime import ConversationUnderstandingRuntimeService
+from app.services.presence_state import PresenceStateResolverService
+from app.services.session_context import SessionContextCuratorService
+from app.services.response_policy import ResponsePolicyService
+from app.services.action_dialogue_mapper import ActionDialogueMapperService
+from app.services.silent_continuity import SilentContinuityService
+from app.services.chat_quality_shadow import ChatQualityShadowService
 from app.services.checkpoints import CheckpointService
 from app.services.design_alignment import (
     PersonaHeartService,
@@ -570,6 +577,13 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         skill_mcp_repo=skill_mcp_repo,
         trace_service=trace_service,
     )
+    chat_quality_shadow_service = ChatQualityShadowService()
+    conversation_understanding_runtime_service = ConversationUnderstandingRuntimeService()
+    presence_state_service = PresenceStateResolverService()
+    session_context_service = SessionContextCuratorService()
+    response_policy_service = ResponsePolicyService()
+    action_dialogue_mapper_service = ActionDialogueMapperService()
+    silent_continuity_service = SilentContinuityService(chat_repo=chat_repo)
     scheduled_task_service = ScheduledTaskService(
         repo=scheduled_task_repo,
         member_repo=member_repo,
@@ -678,6 +692,13 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         tool_runtime=tool_runtime,
         voice_service=voice_service,
         safety_policy_service=safety_policy_service,
+        chat_quality_shadow_service=chat_quality_shadow_service,
+        conversation_understanding_service=conversation_understanding_runtime_service,
+        presence_state_service=presence_state_service,
+        session_context_service=session_context_service,
+        response_policy_service=response_policy_service,
+        action_dialogue_mapper_service=action_dialogue_mapper_service,
+        silent_continuity_service=silent_continuity_service,
     )
     wechat_gateway_service = WechatChannelGatewayService(
         repo=channel_repo,

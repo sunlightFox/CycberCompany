@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+from typing import Any
+
+from app.schemas.chat_quality import PresenceState
+from app.schemas.context_runtime import SessionContext
+
+
+class SessionContextCuratorService:
+    def curate(
+        self,
+        *,
+        presence_state: PresenceState,
+        user_profile: dict[str, Any],
+        latest_continuity: dict[str, Any],
+        recent_messages: list[dict[str, Any]],
+        memory_candidates: list[dict[str, Any]],
+    ) -> SessionContext:
+        identity = presence_state.identity_state
+        relationship = presence_state.relationship_state
+        conversation = presence_state.conversation_state
+        action_state = presence_state.action_state
+        override = bool(conversation.get("latest_instruction_override"))
+        summary = str(
+            conversation.get("user_goal") or conversation.get("active_topic")
+            if override
+            else (latest_continuity.get("continuity_summary") or conversation.get("active_topic") or "")
+        )
+        return SessionContext(
+            stable_identity_block=(
+                f"{identity.get('display_name','助手')}不是现实真人，不虚构隐藏账号，不把未执行动作说成完成。"
+            ),
+            stable_user_profile_block=_user_profile_block(user_profile),
+            current_conversation_summary=summary,
+            current_open_loops=_open_loops(conversation, action_state, latest_continuity),
+            current_commitments=[] if override else list(latest_continuity.get("assistant_commitments") or []),
+            relevant_recent_messages=list(recent_messages[-4:]),
+            relevant_memory_items=list(memory_candidates[:4]),
+            current_action_facts={
+                "pending_approval": bool(action_state.get("pending_approval")),
+                "running_task": bool(action_state.get("running_task")),
+                "interaction_posture": presence_state.interaction_posture,
+                "user_pressure": relationship.get("user_pressure"),
+                "continuity_mode": conversation.get("continuity_mode"),
+                "latest_topic_anchor": conversation.get("active_topic"),
+            },
+            compaction_recovery_summary=summary,
+        )
+
+
+def _user_profile_block(user_profile: dict[str, Any]) -> str:
+    if not user_profile:
+        return "当前没有稳定用户画像，优先服从这轮显式要求。"
+    parts: list[str] = []
+    if user_profile.get("reply_preference"):
+        parts.append(f"回复顺序偏好：{user_profile['reply_preference']}")
+    if user_profile.get("explanation_density"):
+        parts.append(f"解释密度：{user_profile['explanation_density']}")
+    if user_profile.get("interaction_preference"):
+        parts.append(f"互动偏好：{user_profile['interaction_preference']}")
+    if user_profile.get("style_avoidances"):
+        parts.append(f"避免风格：{'、'.join(user_profile['style_avoidances'])}")
+    return "；".join(parts) if parts else "当前没有稳定用户画像，优先服从这轮显式要求。"
+
+
+def _open_loops(
+    conversation: dict[str, Any],
+    action_state: dict[str, Any],
+    latest_continuity: dict[str, Any],
+) -> list[str]:
+    loops: list[str] = []
+    if conversation.get("latest_instruction_override"):
+        loops.append("latest_instruction_overrides_previous_goal")
+        return loops
+    if action_state.get("pending_approval"):
+        loops.append("pending_approval_not_completed")
+    loops.extend(str(item) for item in latest_continuity.get("followup_candidates") or [])
+    return list(dict.fromkeys(loops))

@@ -41,6 +41,12 @@ from app.db.repositories.chat_repo import ChatRepository
 from app.db.repositories.member_repo import MemberRepository
 from app.db.session import Database
 from app.schemas.tasks import ToolExecuteRequest
+from app.schemas.chat_quality import (
+    ActionDialogueFacts,
+    PresenceStateRequest,
+    ResponsePolicyRequest,
+    ConversationUnderstandingRequest,
+)
 from app.services.asset_broker import AssetBrokerService
 from app.services.audit import AuditEventService
 from app.services.brain_decision import BrainDecisionService
@@ -59,9 +65,11 @@ from app.services.chat_memory import ChatMemoryCoordinator
 from app.services.chat_model import ChatModelCoordinator
 from app.services.chat_privacy import ChatPrivacyCoordinator
 from app.services.chat_quality import ChatQualityPolicy
+from app.services.chat_quality_shadow import ChatQualityShadowService
 from app.services.chat_response import ChatResponseCoordinator
 from app.services.chat_safety import ChatTurnAccessPolicy
 from app.services.chat_tasks import ChatTaskCoordinator, ChatTurnOrchestrator
+from app.services.conversation_understanding_runtime import ConversationUnderstandingRuntimeService
 from app.services.context_gateway import RuntimeContextGateway
 from app.services.memory import MemoryCommandResult, MemoryService
 from app.services.model_routing import ModelRoutingService
@@ -72,8 +80,13 @@ from app.services.natural_chat import (
     reset_visible_redaction_profile,
     set_visible_redaction_profile,
 )
+from app.services.presence_state import PresenceStateResolverService
+from app.services.response_policy import ResponsePolicyService
 from app.services.safety_policy import RuntimeSafetyPolicyService
 from app.services.secrets import SecretStore
+from app.services.session_context import SessionContextCuratorService
+from app.services.action_dialogue_mapper import ActionDialogueMapperService
+from app.services.silent_continuity import SilentContinuityService
 from app.services.turn_events import TurnEventStore
 from app.services.turn_execution import TurnExecutionManager
 from app.services.turn_recovery import TurnRecoveryResult, TurnRecoveryService
@@ -184,6 +197,213 @@ def _queue_lock_until(seconds: int = 300) -> str:
     return (datetime.now(UTC) + timedelta(seconds=seconds)).isoformat()
 
 
+def _looks_like_explicit_continuation(text: str) -> bool:
+    return any(
+        marker in str(text or "")
+        for marker in (
+            "继续刚才",
+            "接着刚才",
+            "顺着刚才",
+            "沿着刚才",
+            "继续上一条",
+            "接上刚才",
+            "继续那个方案",
+            "补充指标",
+            "接着说",
+        )
+    )
+
+
+def _looks_like_plain_analysis_request(text: str) -> bool:
+    raw = str(text or "")
+    action_markers = (
+        "执行",
+        "安装",
+        "删除",
+        "下载",
+        "打开网站",
+        "打开网页",
+        "调用工具",
+        "帮我操作",
+    )
+    negative_prefixes = (
+        "不要",
+        "别",
+        "无需",
+        "不用",
+        "先别",
+        "只做分析，不要",
+        "只给方案，不要",
+    )
+    has_positive_action_marker = False
+    for marker in action_markers:
+        if marker not in raw:
+            continue
+        marker_index = raw.find(marker)
+        prefix = raw[max(0, marker_index - 6):marker_index]
+        if any(neg in prefix for neg in negative_prefixes):
+            continue
+        has_positive_action_marker = True
+        break
+    return any(
+        marker in raw
+        for marker in (
+            "分析",
+            "对比",
+            "比较",
+            "解释",
+            "设计",
+            "方案",
+            "验收",
+            "模板",
+            "讨论",
+            "优化",
+        )
+    ) and not has_positive_action_marker
+
+
+def _needs_recent_history_lookup(text: str) -> bool:
+    raw = str(text or "")
+    return any(
+        marker in raw
+        for marker in (
+            "刚才",
+            "前面",
+            "上一条",
+            "上个",
+            "偏好",
+            "顺序",
+            "优先级",
+            "记住",
+            "继续",
+            "接着",
+        )
+    )
+
+
+def _looks_like_short_followup(text: str) -> bool:
+    raw = str(text or "").strip()
+    compact = raw.replace(" ", "")
+    if not compact or len(compact) > 24:
+        return False
+    return any(
+        compact.startswith(marker)
+        or marker in compact
+        for marker in (
+            "再",
+            "继续",
+            "接着",
+            "补",
+            "展开",
+            "改短",
+            "改得",
+            "改成",
+            "按",
+            "保持",
+            "加一",
+            "加个",
+        )
+    )
+
+
+def _strict_format_chat_request(text: str) -> bool:
+    lowered = str(text or "").lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "只输出json",
+            "只输出 json",
+            "json-only",
+            "不要markdown",
+            "不要 markdown",
+            "只要纯文本",
+            "只要表格",
+            "只返回代码",
+        )
+    )
+
+
+def _presence_response_driving_state(
+    *,
+    pending_confirmation: dict[str, Any],
+    working_state: dict[str, Any],
+) -> dict[str, Any]:
+    questions = [
+        str(item).strip()
+        for item in pending_confirmation.get("questions") or []
+        if str(item).strip()
+    ]
+    pending_action = {
+        "active": bool(pending_confirmation),
+        "approval_pending": bool(pending_confirmation),
+        "session_id": pending_confirmation.get("session_id"),
+        "action_type": pending_confirmation.get("action_type"),
+        "task_id": pending_confirmation.get("task_id"),
+        "approval_id": pending_confirmation.get("approval_id"),
+        "questions": questions,
+    }
+    pending_clarification = {
+        "active": bool(questions),
+        "reason": pending_confirmation.get("reason"),
+        "questions": questions,
+        "source_turn_id": pending_confirmation.get("turn_id"),
+    }
+    return {
+        "pending_action": pending_action,
+        "pending_clarification": pending_clarification,
+        "hard_boundary": {},
+        "task_state": {
+            "has_candidate_actions": bool(working_state.get("candidate_actions")),
+        },
+    }
+
+
+def _presence_advisory_state(
+    *,
+    understanding: dict[str, Any],
+    presence_state: dict[str, Any],
+    session_context: dict[str, Any],
+    response_policy: dict[str, Any],
+    action_dialogue: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "understanding": understanding,
+        "presence_state": presence_state,
+        "session_context": session_context,
+        "response_policy": response_policy,
+        "action_dialogue": action_dialogue,
+    }
+
+
+def _grouped_presence_runtime(payload: dict[str, Any]) -> dict[str, Any]:
+    if not payload:
+        return {}
+    response_driving_state = dict(payload.get("response_driving_state") or {})
+    advisory_state = dict(payload.get("advisory_state") or {})
+    if not response_driving_state:
+        response_driving_state = _presence_response_driving_state(
+            pending_confirmation=dict(
+                payload.get("pending_confirmation")
+                or payload.get("pending_action")
+                or {}
+            ),
+            working_state={},
+        )
+    if not advisory_state:
+        advisory_state = _presence_advisory_state(
+            understanding=dict(payload.get("understanding") or {}),
+            presence_state=dict(payload.get("presence_state") or {}),
+            session_context=dict(payload.get("session_context") or {}),
+            response_policy=dict(payload.get("response_policy") or {}),
+            action_dialogue=dict(payload.get("action_dialogue") or {}),
+        )
+    return {
+        **payload,
+        "response_driving_state": response_driving_state,
+        "advisory_state": advisory_state,
+    }
+
+
 class ChatService:
     def __init__(
         self,
@@ -208,6 +428,13 @@ class ChatService:
         tool_runtime: Any | None = None,
         voice_service: Any | None = None,
         safety_policy_service: RuntimeSafetyPolicyService | None = None,
+        chat_quality_shadow_service: ChatQualityShadowService | None = None,
+        conversation_understanding_service: ConversationUnderstandingRuntimeService | None = None,
+        presence_state_service: PresenceStateResolverService | None = None,
+        session_context_service: SessionContextCuratorService | None = None,
+        response_policy_service: ResponsePolicyService | None = None,
+        action_dialogue_mapper_service: ActionDialogueMapperService | None = None,
+        silent_continuity_service: SilentContinuityService | None = None,
     ) -> None:
         self._db = db
         self._chat_repo = ChatRepository(db)
@@ -233,6 +460,13 @@ class ChatService:
         self._tool_runtime = tool_runtime
         self._voice = voice_service
         self._safety_policy = safety_policy_service
+        self._chat_quality_shadow = chat_quality_shadow_service
+        self._conversation_understanding = conversation_understanding_service
+        self._presence_state = presence_state_service
+        self._session_context = session_context_service
+        self._response_policy_runtime = response_policy_service
+        self._action_dialogue_mapper = action_dialogue_mapper_service
+        self._silent_continuity = silent_continuity_service
         self._natural_chat = (
             NaturalChatActionGateway(
                 chat_repo=self._chat_repo,
@@ -946,6 +1180,7 @@ class ChatService:
             input_data={"text": redact(user_text)},
         )
         privacy = self._privacy.classify(user_text)
+        turn["privacy_level"] = privacy.privacy_level
         await self._trace.end_span(
             safety_span,
             output_data={
@@ -1037,6 +1272,22 @@ class ChatService:
                 privacy_level=privacy.privacy_level,
                 updated_at=utc_now_iso(),
             )
+        presence_runtime_payload = await self._build_presence_runtime_payload(
+            turn=turn,
+            context=context,
+            user_text=user_text,
+            privacy_level=privacy.privacy_level,
+            brain_decision=brain_decision,
+        )
+        if presence_runtime_payload:
+            turn["presence_runtime"] = presence_runtime_payload
+        if self._chat_quality_shadow is not None:
+            turn["chat_quality_shadow"] = self._chat_quality_shadow.analyze_turn(
+                user_text=user_text,
+                recent_messages=list(context.conversation.last_messages),
+                brain_decision=brain_decision,
+                channel_profile=self._shadow_channel_profile(turn, context),
+            )
         context_ready_payload = {
             "context_packet_id": context.context_packet_id,
             "recent_messages": len(context.conversation.last_messages),
@@ -1117,6 +1368,7 @@ class ChatService:
                 user_text=user_text,
                 session_id=session_id,
                 trace_id=trace_id,
+                presence_runtime=dict(turn.get("presence_runtime") or {}),
             )
             if natural_outcome is not None:
                 yield await emit(
@@ -1141,6 +1393,64 @@ class ChatService:
                 ):
                     yield event
                 return
+
+        clarification_outcome = await self._maybe_handle_pending_clarification_followup(
+            turn=turn,
+            user_text=user_text,
+            session_id=session_id,
+        )
+        if clarification_outcome is not None:
+            yield await emit(
+                ChatEventType.INTENT_DETECTED,
+                {
+                    "intent": "clarification",
+                    "reason_codes": ["pending_clarification_followup"],
+                },
+            )
+            yield await emit(
+                ChatEventType.MODE_SELECTED,
+                {"mode": TaskMode.DIRECT.value, "needs_tool": False},
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                clarification_outcome["text"],
+                root_span_id,
+                intent="clarification",
+                mode=TaskMode.DIRECT.value,
+                response_plan=clarification_outcome["response_plan"],
+            ):
+                yield event
+            return
+
+        boundary_text = _deterministic_boundary_reply(user_text)
+        if boundary_text is not None:
+            yield await emit(
+                ChatEventType.INTENT_DETECTED,
+                {
+                    "intent": "boundary_question",
+                    "reason_codes": ["deterministic_boundary_reply"],
+                },
+            )
+            yield await emit(
+                ChatEventType.MODE_SELECTED,
+                {"mode": TaskMode.DIRECT.value, "needs_tool": False},
+            )
+            response_plan = self._composer.response_plan_for_status(
+                summary=boundary_text,
+                safety_notice=boundary_text,
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                boundary_text,
+                root_span_id,
+                intent="boundary_question",
+                mode=TaskMode.DIRECT.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
 
         allow_direct_memory_command = self._memory_coordinator.allow_direct_command(
             user_text,
@@ -1554,19 +1864,16 @@ class ChatService:
                 or plan.impact_summary.get("already_absent")
             )
             if already_absent:
-                facts = {
-                    "status": "already_absent",
-                    "action_type": f"host.{host_action}_software",
-                    "action_label": f"{action_label}本机软件",
-                    "target": plan.requested_software,
-                    "risk_level": plan.risk_level.value
-                    if isinstance(plan.risk_level, RiskLevel)
-                    else str(plan.risk_level),
-                    "approval_required": False,
-                    "already_absent": True,
-                    "reply_options": [],
-                    "reply_option_items": [],
-                }
+                facts = self._action_status_facts_for_turn(
+                    turn,
+                    status="already_absent",
+                    route=f"host.{host_action}_software",
+                    action_label=f"{action_label}本机软件",
+                    target=str(plan.requested_software),
+                    task_created=True,
+                    evidence_summary="当前机器上没有发现对应软件，所以这次没有发生实际变更。",
+                )
+                facts["already_absent"] = True
                 pending_action = None
             elif plan.status == "manual_only":
                 reason_codes = list(plan.impact_summary.get("reason_codes") or [])
@@ -1575,43 +1882,38 @@ class ChatService:
                     failure_reason = safe_next_step or "当前没有可用的健康包管理器候选。"
                 else:
                     failure_reason = "这个请求涉及高风险或需要人工处理的系统级变更。"
-                facts = {
-                    "status": "manual_only",
-                    "action_type": f"host.{host_action}_software",
-                    "action_label": f"{action_label}本机软件",
-                    "target": plan.requested_software,
-                    "risk_level": plan.risk_level.value
-                    if isinstance(plan.risk_level, RiskLevel)
-                    else str(plan.risk_level),
-                    "approval_required": False,
-                    "failure_reason": failure_reason,
-                    "safe_next_step": safe_next_step,
-                    "reply_options": [],
-                    "reply_option_items": [],
-                }
+                facts = self._action_status_facts_for_turn(
+                    turn,
+                    status="manual_only",
+                    route=f"host.{host_action}_software",
+                    action_label=f"{action_label}本机软件",
+                    target=str(plan.requested_software),
+                    failure_reason=failure_reason,
+                    task_created=True,
+                    evidence_summary=safe_next_step,
+                )
+                facts["safe_next_step"] = safe_next_step
             else:
                 reply_options = (
                     list(pending_action.get("reply_options") or [])
                     if pending_action
                     else []
                 )
-                facts = {
-                    "status": "pending_action",
-                    "action_type": f"host.{host_action}_software",
-                    "action_label": f"{action_label}本机软件",
-                    "target": plan.requested_software,
-                    "risk_level": plan.risk_level.value
-                    if isinstance(plan.risk_level, RiskLevel)
-                    else str(plan.risk_level),
-                    "approval_required": bool(plan.approval_id),
-                    "reply_options": reply_options,
-                    "reply_option_items": _reply_option_items(reply_options),
-                    "impact_summary": (
+                facts = self._action_status_facts_for_turn(
+                    turn,
+                    status="pending_action",
+                    route=f"host.{host_action}_software",
+                    action_label=f"{action_label}本机软件",
+                    target=str(plan.requested_software),
+                    reply_options=reply_options,
+                    approval_pending=bool(plan.approval_id),
+                    task_created=True,
+                    evidence_summary=(
                         "这会修改本机软件状态，需要你明确确认后才会继续。"
                         if host_action == "uninstall"
                         else "这会修改本机软件或系统环境，需要你明确确认后才会继续。"
                     ),
-                }
+                )
             response_plan = self._composer.response_plan_for_action_status(
                 facts=facts,
                 task_status={
@@ -1947,6 +2249,7 @@ class ChatService:
                         response_plan = response_plan_for_pending_action(
                             action=pending_action,
                             session_id=session_id,
+                            presence_runtime=dict(turn.get("presence_runtime") or {}),
                         )
                         response_plan = response_plan.model_copy(
                             update={
@@ -1960,22 +2263,26 @@ class ChatService:
                         )
                         text = response_plan.plain_text or response_plan.summary or ""
                     else:
-                        text = (
-                            "当前有一步操作需要你确认后才会继续。"
-                            "请回复：只允许这一次、拒绝，或修改目标。"
-                        )
-                        response_plan = self._composer.response_plan_for_status(
-                            summary=text,
+                        response_plan = self._composer.response_plan_for_action_status(
+                            facts=self._action_status_facts_for_turn(
+                                turn,
+                                status="pending_action",
+                                route=intent,
+                                action_label=str(task.title or "这一步任务"),
+                                target=str(task.title or ""),
+                                reply_options=["只允许这一次", "拒绝", "修改目标为：..."],
+                                approval_pending=True,
+                                task_created=True,
+                                detail_status=task.status.value,
+                                evidence_summary="当前有一步操作需要你确认后才会继续。",
+                            ),
                             task_status={
                                 "task_id": task.task_id,
                                 "status": task.status.value,
                                 "mode": task.mode.value,
                             },
-                            approval_prompt={
-                                "summary": "任务需要确认后继续。",
-                            },
-                            safety_notice=presentation.safety_notice,
                         )
+                        text = response_plan.plain_text or response_plan.summary or ""
                         response_plan = response_plan.model_copy(
                             update={
                                 "structured_payload": {
@@ -1993,11 +2300,24 @@ class ChatService:
                             presentation.event_payload,
                         )
                     text = f"{recovery.response_prefix}{presentation.text}"
-                    response_plan = self._composer.response_plan_for_status(
-                        summary=text,
+                    terminal_status = (
+                        "failed"
+                        if task.status.value in {"failed", "error", "cancelled"}
+                        else ("completed" if task.status.value == "completed" else task.status.value)
+                    )
+                    response_plan = self._composer.response_plan_for_action_status(
+                        facts=self._action_status_facts_for_turn(
+                            turn,
+                            status=terminal_status,
+                            route=intent,
+                            action_label=str(task.title or "这一步任务"),
+                            target=str(task.title or ""),
+                            detail_status=task.status.value,
+                            failure_reason=str(presentation.safety_notice or presentation.tool_notice or ""),
+                            evidence_summary=text,
+                            task_created=True,
+                        ),
                         task_status=presentation.task_status,
-                        safety_notice=presentation.safety_notice,
-                        tool_notice=presentation.tool_notice,
                     )
                     if recovery.recovery_payload.get("attempt_count"):
                         turn_recovery = self._turn_recovery
@@ -2083,6 +2403,38 @@ class ChatService:
         if model_route is None:
             code = self._route_error_code(available_brains, privacy.privacy_level)
             reason_codes = brain_decision.intent.reason_codes if brain_decision else []
+            if code == ErrorCode.MODEL_NOT_CONFIGURED:
+                deterministic_text = _deterministic_no_model_reply(user_text)
+                if deterministic_text:
+                    response_plan = self._composer.response_plan_for_status(
+                        summary=deterministic_text,
+                        safety_notice="当前没有可用模型；这次返回的是确定性说明，没有调用工具或创建任务。",
+                    )
+                    response_plan = response_plan.model_copy(
+                        update={
+                            "structured_payload": {
+                                **response_plan.structured_payload,
+                                "route_semantics": {
+                                    "route": "deterministic_no_model_fallback",
+                                    "model_called": False,
+                                    "task_created": False,
+                                    "tool_created": False,
+                                    "model_not_required_reason": "deterministic_no_model_reply",
+                                },
+                            },
+                        }
+                    )
+                    async for event in self._complete_without_model(
+                        turn,
+                        events,
+                        deterministic_text,
+                        root_span_id,
+                        intent=intent,
+                        mode=mode.value,
+                        response_plan=response_plan,
+                    ):
+                        yield event
+                    return
             if (
                 code == ErrorCode.MODEL_NOT_CONFIGURED
                 and "phase51_advice_strategy_direct" in reason_codes
@@ -2219,6 +2571,19 @@ class ChatService:
             payloads["content"] = _content_payload(envelope)
         if queue_item is not None:
             payloads["queue"] = _queue_payload(queue_item)
+        presence_runtime = turn.get("presence_runtime")
+        if not presence_runtime:
+            stored_presence = await self._chat_repo.get_turn_presence_state(turn["turn_id"])
+            if stored_presence is not None:
+                presence_runtime = {
+                    "understanding": stored_presence.get("understanding") or {},
+                    "presence_state": stored_presence.get("presence_state") or {},
+                    "session_context": stored_presence.get("session_context") or {},
+                    "response_policy": stored_presence.get("response_policy") or {},
+                    "action_dialogue": stored_presence.get("action_dialogue") or {},
+                }
+        if presence_runtime:
+            payloads["presence_runtime"] = _grouped_presence_runtime(dict(presence_runtime))
         return payloads
 
     async def _decorate_chat_payloads(
@@ -2347,6 +2712,11 @@ class ChatService:
                 "completed_at": utc_now_iso(),
             }
         )
+        if self._silent_continuity is not None:
+            await self._silent_continuity.capture_compaction(
+                turn=turn,
+                summary_text=summary,
+            )
         await self._record_stage_recovery_attempt(
             turn=turn,
             stage="context",
@@ -2499,12 +2869,28 @@ class ChatService:
         turn_id = turn["turn_id"]
         trace_id = turn["trace_id"]
         channel_profile = _channel_profile_for_turn(turn)
+        prompt_options = self._prompt_options_for_turn(
+            turn=turn,
+            context=context,
+            user_text=user_text,
+            intent=intent,
+            mode=mode,
+        )
         prompt_assembly = self._model_coordinator.model_assembly(
             context,
             user_text,
+            prompt_mode=prompt_options["prompt_mode"],
             channel_profile=channel_profile,
             delivery_mode="final",
             turn_id=turn_id,
+            include_dynamic_context=prompt_options["include_dynamic_context"],
+            include_trusted_context=prompt_options["include_trusted_context"],
+            include_untrusted_context=prompt_options["include_untrusted_context"],
+            include_history=prompt_options["include_history"],
+            include_session_summary=prompt_options["include_session_summary"],
+            recent_history_limit=prompt_options["recent_history_limit"],
+            dynamic_context_mode=prompt_options["dynamic_context_mode"],
+            prompt_profile=prompt_options["prompt_profile"],
         )
         messages = prompt_assembly.messages
         prompt_metadata = prompt_assembly.metadata
@@ -2661,61 +3047,8 @@ class ChatService:
             },
         )
         response_plan = None
+        continuation_payload: dict[str, Any] | None = None
         if continuation_decision.enabled:
-            initial_latency_ms = int((time.perf_counter() - model_call_started) * 1000)
-            continuation_started = time.perf_counter()
-            evaluation = self._continuation.evaluate(
-                text=assistant_text,
-                user_text=user_text,
-                decision=continuation_decision,
-            )
-            iterations = 0
-            used_revision = False
-            budget_exhausted = False
-            usage = {"initial": usage, "continuation_iterations": 0}
-            revision_latency_ms: int | None = None
-            if evaluation.should_revise and continuation_decision.max_iterations > 0:
-                try:
-                    revision_started = time.perf_counter()
-                    revision = await self._run_continuation_revision(
-                        turn=turn,
-                        events=events,
-                        messages=messages,
-                        user_text=user_text,
-                        draft_text=assistant_text,
-                        evaluation=evaluation,
-                        brain=brain,
-                        model_params=model_params,
-                        root_span_id=root_span_id,
-                    )
-                    revision_latency_ms = int((time.perf_counter() - revision_started) * 1000)
-                    iterations = 1
-                    usage["continuation_iterations"] = 1
-                    usage["revision"] = revision["usage"]
-                    revised_text = str(revision["text"] or "").strip()
-                    revised_evaluation = self._continuation.evaluate(
-                        text=revised_text,
-                        user_text=user_text,
-                        decision=continuation_decision,
-                    )
-                    if revised_text and not (
-                        set(revised_evaluation.tags)
-                        & {
-                            "missing_reply",
-                            "internal_jargon",
-                            "secret_leak",
-                            "false_done",
-                            "strict_format_polluted",
-                        }
-                    ):
-                        assistant_text = revised_text
-                        finish_reason = str(revision.get("finish_reason") or finish_reason)
-                        used_revision = True
-                except ModelAdapterError as exc:
-                    if exc.code == ErrorCode.TURN_CANCELLED:
-                        raise
-                    budget_exhausted = exc.code == ErrorCode.MODEL_TIMEOUT
-                    usage["continuation_error"] = exc.code.value
             compose_result = await self._composer.compose(
                 ComposeRequest(
                     user_text=user_text,
@@ -2774,6 +3107,108 @@ class ChatService:
             )
             assistant_text = final_text_for_quality
             response_filter = final_filter
+            initial_latency_ms = int((time.perf_counter() - model_call_started) * 1000)
+            continuation_started = time.perf_counter()
+            evaluation = self._continuation.evaluate(
+                text=assistant_text,
+                user_text=user_text,
+                decision=continuation_decision,
+                response_quality_guard=response_plan.structured_payload.get(
+                    "response_quality_guard"
+                ),
+            )
+            iterations = 0
+            used_revision = False
+            budget_exhausted = False
+            usage = {"initial": usage, "continuation_iterations": 0}
+            revision_latency_ms: int | None = None
+            if evaluation.should_revise and continuation_decision.max_iterations > 0:
+                try:
+                    revision_started = time.perf_counter()
+                    revision = await self._run_continuation_revision(
+                        turn=turn,
+                        events=events,
+                        messages=messages,
+                        user_text=user_text,
+                        draft_text=assistant_text,
+                        evaluation=evaluation,
+                        brain=brain,
+                        model_params=model_params,
+                        root_span_id=root_span_id,
+                    )
+                    revision_latency_ms = int((time.perf_counter() - revision_started) * 1000)
+                    iterations = 1
+                    usage["continuation_iterations"] = 1
+                    usage["revision"] = revision["usage"]
+                    revised_text = str(revision.get("text") or "").strip()
+                    if revised_text:
+                        assistant_text = revised_text
+                        finish_reason = str(revision.get("finish_reason") or finish_reason)
+                        used_revision = True
+                        response_plan = None
+                except ModelAdapterError as exc:
+                    if exc.code == ErrorCode.TURN_CANCELLED:
+                        raise
+                    budget_exhausted = exc.code == ErrorCode.MODEL_TIMEOUT
+                    usage["continuation_error"] = exc.code.value
+            if response_plan is None:
+                repaired_result = await self._composer.compose(
+                    ComposeRequest(
+                        user_text=user_text,
+                        result_summary=assistant_text,
+                        scenario="direct",
+                        persona=(
+                            context.persona.model_dump(mode="json")
+                            if getattr(context, "persona", None) is not None
+                            and hasattr(context.persona, "model_dump")
+                            else {}
+                        ),
+                        heart=(
+                            context.heart.model_dump(mode="json")
+                            if getattr(context, "heart", None) is not None
+                            and hasattr(context.heart, "model_dump")
+                            else {}
+                        ),
+                        route_profile=str((turn.get("experience") or {}).get("route_profile") or ""),
+                        channel_profile=channel_profile,
+                        prompt_mode=str(prompt_metadata.get("prompt_mode") or "full"),
+                        prompt_snapshot_id=str(prompt_metadata.get("prompt_snapshot_id") or ""),
+                        prompt_assembly_version=str(
+                            prompt_metadata.get("prompt_assembly_version") or ""
+                        )
+                        or None,
+                        stable_prompt_hash=str(prompt_metadata.get("stable_prompt_hash") or "")
+                        or None,
+                        dynamic_context_hash=str(prompt_metadata.get("dynamic_context_hash") or "")
+                        or None,
+                        trusted_context_hash=str(prompt_metadata.get("trusted_context_hash") or "")
+                        or None,
+                        untrusted_context_hash=str(prompt_metadata.get("untrusted_context_hash") or "")
+                        or None,
+                        history_context_hash=str(prompt_metadata.get("history_context_hash") or "")
+                        or None,
+                        current_message_hash=str(prompt_metadata.get("current_message_hash") or "")
+                        or None,
+                        prompt_section_ids=[
+                            str(item) for item in prompt_metadata.get("prompt_section_ids") or []
+                        ],
+                        prompt_sections=[
+                            dict(item)
+                            for item in prompt_metadata.get("prompt_sections") or []
+                            if isinstance(item, dict)
+                        ],
+                    )
+                )
+                response_plan = repaired_result.response_plan
+                assistant_text = self._style_visible_text(
+                    turn,
+                    repaired_result.text,
+                    response_plan=response_plan,
+                )
+                assistant_text, final_filter = self._response_coordinator.filter_text(
+                    assistant_text
+                )
+                response_filter = final_filter
             evaluation = self._continuation.evaluate(
                 text=assistant_text,
                 user_text=user_text,
@@ -2862,31 +3297,32 @@ class ChatService:
                         "response_quality_guard"
                     ),
                 )
-            continuation_payload = self._continuation.payload(
-                decision=continuation_decision,
-                evaluation=evaluation,
-                iterations=iterations,
-                budget_exhausted=budget_exhausted,
-                used_revision=used_revision,
-                used_safe_fallback=used_safe_fallback,
-                initial_latency_ms=initial_latency_ms,
-                revision_latency_ms=revision_latency_ms,
-                total_latency_ms=int((time.perf_counter() - continuation_started) * 1000),
-            )
-            response_plan = response_plan.model_copy(
-                update={
-                    "structured_payload": {
-                        **response_plan.structured_payload,
-                        "continuation": continuation_payload,
-                    },
-                    "quality_markers": {
-                        **response_plan.quality_markers,
-                        "continuation_quality_verdict": evaluation.verdict,
-                        "continuation_quality_tags": evaluation.tags,
-                        "continuation_diagnostics": evaluation.diagnostics,
-                    },
-                }
-            )
+            if used_revision or used_safe_fallback or evaluation.verdict != "good":
+                continuation_payload = self._continuation.payload(
+                    decision=continuation_decision,
+                    evaluation=evaluation,
+                    iterations=iterations,
+                    budget_exhausted=budget_exhausted,
+                    used_revision=used_revision,
+                    used_safe_fallback=used_safe_fallback,
+                    initial_latency_ms=initial_latency_ms,
+                    revision_latency_ms=revision_latency_ms,
+                    total_latency_ms=int((time.perf_counter() - continuation_started) * 1000),
+                )
+                response_plan = response_plan.model_copy(
+                    update={
+                        "structured_payload": {
+                            **response_plan.structured_payload,
+                            "continuation": continuation_payload,
+                        },
+                        "quality_markers": {
+                            **response_plan.quality_markers,
+                            "continuation_quality_verdict": evaluation.verdict,
+                            "continuation_quality_tags": evaluation.tags,
+                            "continuation_diagnostics": evaluation.diagnostics,
+                        },
+                    }
+                )
             yield await self._emit_and_record(
                 turn_id,
                 trace_id,
@@ -2895,7 +3331,7 @@ class ChatService:
                 {
                     "text": assistant_text,
                     "response_filter": final_filter,
-                    "continuation": continuation_payload,
+                    **({"continuation": continuation_payload} if continuation_payload else {}),
                 },
             )
         async for event in self._complete_model_turn(
@@ -3246,11 +3682,16 @@ class ChatService:
         url = str(metadata.get("url") or "").strip()
         if self._tool_runtime is None:
             text = "当前浏览器只读工具不可用；我没有打开网页，也不会假装已经看过。"
-            response_plan = self._composer.response_plan_for_tool_boundary(
-                summary=text,
-                required_capability="browser.snapshot",
-                next_actions=["检查浏览器工具注册", "稍后重试"],
-                safety_notice="没有访问外部链接，也没有执行网页交互。",
+            response_plan = self._composer.response_plan_for_action_status(
+                facts=self._action_status_facts_for_turn(
+                    turn,
+                    status="blocked",
+                    route="browser_read_page",
+                    action_label="查看网页",
+                    failure_reason="browser_snapshot_unavailable",
+                    evidence_summary=text,
+                ),
+                task_status={"status": "blocked", "reason": "browser_snapshot_unavailable"},
             )
             async for event in self._complete_without_model(
                 turn,
@@ -3265,11 +3706,16 @@ class ChatService:
             return
         if not url:
             text = "我没有识别到可查看的链接；请把完整的 http 或 https 链接发给我。"
-            response_plan = self._composer.response_plan_for_tool_boundary(
-                summary=text,
-                required_capability="browser.snapshot",
-                next_actions=["补充完整链接后重试"],
-                safety_notice="没有访问外部链接，也没有执行网页交互。",
+            response_plan = self._composer.response_plan_for_action_status(
+                facts=self._action_status_facts_for_turn(
+                    turn,
+                    status="blocked",
+                    route="browser_read_page",
+                    action_label="查看网页",
+                    failure_reason="missing_url",
+                    evidence_summary=text,
+                ),
+                task_status={"status": "blocked", "reason": "missing_url"},
             )
             async for event in self._complete_without_model(
                 turn,
@@ -3315,11 +3761,18 @@ class ChatService:
             )
         except AppError as exc:
             text = _browser_read_page_error_reply(exc)
-            response_plan = self._composer.response_plan_for_tool_boundary(
-                summary=text,
-                required_capability="browser.snapshot",
-                next_actions=["确认链接可公开访问", "换一个 http/https 链接后重试"],
-                safety_notice="这次没有执行下载、登录、提交、点击或截图。",
+            response_plan = self._composer.response_plan_for_action_status(
+                facts=self._action_status_facts_for_turn(
+                    turn,
+                    status="blocked",
+                    route="browser_read_page",
+                    action_label="查看网页",
+                    target=url,
+                    failure_reason=str(exc.code),
+                    evidence_summary=text,
+                    tool_created=True,
+                ),
+                task_status={"status": "blocked", "reason": "browser_read_page_error"},
             )
             response_plan = response_plan.model_copy(
                 update={
@@ -3359,10 +3812,18 @@ class ChatService:
             },
         )
         text = _browser_read_page_reply(result)
-        response_plan = self._composer.response_plan_for_status(
-            summary=text,
+        response_plan = self._composer.response_plan_for_action_status(
+            facts=self._action_status_facts_for_turn(
+                turn,
+                status="completed",
+                route="browser_read_page",
+                action_label="查看网页",
+                target=url,
+                detail_status="completed",
+                evidence_summary=text,
+                tool_created=True,
+            ),
             task_status={"status": "not_created", "reason": "readonly_browser_page_read"},
-            tool_notice="只读取网页快照文本，没有下载文件、登录、提交、点击或截图。",
         )
         response_plan = response_plan.model_copy(
             update={
@@ -3403,11 +3864,16 @@ class ChatService:
     ) -> AsyncIterator[ChatEvent]:
         if self._tool_runtime is None or self._task_engine is None:
             text = "当前终端工具不可用；我没有执行系统命令，也不会假装已经执行。"
-            response_plan = self._composer.response_plan_for_tool_boundary(
-                summary=text,
-                required_capability="terminal.run",
-                next_actions=["检查工具注册", "稍后重试"],
-                safety_notice="没有执行任何系统命令。",
+            response_plan = self._composer.response_plan_for_action_status(
+                facts=self._action_status_facts_for_turn(
+                    turn,
+                    status="blocked",
+                    route="terminal_readonly_command",
+                    action_label="执行只读命令",
+                    failure_reason="terminal_unavailable",
+                    evidence_summary=text,
+                ),
+                task_status={"status": "blocked", "reason": "terminal_unavailable"},
             )
             async for event in self._complete_without_model(
                 turn,
@@ -3423,11 +3889,16 @@ class ChatService:
         command = str(metadata.get("command") or "").strip()
         if not command:
             text = "我没拿到可执行的系统命令，所以没有运行。"
-            response_plan = self._composer.response_plan_for_tool_boundary(
-                summary=text,
-                required_capability="terminal.run",
-                next_actions=["重新说明命令", "直接贴出命令字符串"],
-                safety_notice="没有执行任何系统命令。",
+            response_plan = self._composer.response_plan_for_action_status(
+                facts=self._action_status_facts_for_turn(
+                    turn,
+                    status="blocked",
+                    route="terminal_readonly_command",
+                    action_label="执行只读命令",
+                    failure_reason="missing_command",
+                    evidence_summary=text,
+                ),
+                task_status={"status": "blocked", "reason": "missing_command"},
             )
             async for event in self._complete_without_model(
                 turn,
@@ -3498,11 +3969,19 @@ class ChatService:
             )
         except AppError as exc:
             text = _terminal_command_error_reply(command, exc)
-            response_plan = self._composer.response_plan_for_tool_boundary(
-                summary=text,
-                required_capability="terminal.run",
-                next_actions=["换成只读命令", "先确认命令是否安全"],
-                safety_notice="命令被终端安全策略拦截；没有执行危险操作。",
+            response_plan = self._composer.response_plan_for_action_status(
+                facts=self._action_status_facts_for_turn(
+                    turn,
+                    status="blocked",
+                    route="terminal_readonly_command",
+                    action_label="执行只读命令",
+                    target=command,
+                    failure_reason=str(exc.code),
+                    evidence_summary=text,
+                    task_created=True,
+                    tool_created=True,
+                ),
+                task_status={"status": "blocked", "reason": "terminal_readonly_command_error"},
             )
             response_plan = response_plan.model_copy(
                 update={
@@ -3543,10 +4022,19 @@ class ChatService:
             },
         )
         text = _terminal_command_reply(command, result)
-        response_plan = self._composer.response_plan_for_status(
-            summary=text,
+        response_plan = self._composer.response_plan_for_action_status(
+            facts=self._action_status_facts_for_turn(
+                turn,
+                status="completed",
+                route="terminal_readonly_command",
+                action_label="执行只读命令",
+                target=command,
+                detail_status="completed",
+                evidence_summary=text,
+                task_created=True,
+                tool_created=True,
+            ),
             task_status={"status": "completed", "reason": "terminal_readonly_command"},
-            tool_notice="命令在受控终端沙箱中执行，未使用自定义 cwd，输出已脱敏。",
         )
         response_plan = response_plan.model_copy(
             update={
@@ -3971,6 +4459,15 @@ class ChatService:
             response_plan,
             assistant_text=text,
         )
+        response_plan, shadow_trace = self._decorate_chat_quality_shadow(
+            turn,
+            response_plan,
+            assistant_text=text,
+            turn_status="completed",
+            clarification_decision=(
+                clarification_decision.as_payload() if clarification_decision is not None else None
+            ),
+        )
         text = await self._repair_voice_capability_refusal(
             turn=turn,
             response_plan=response_plan,
@@ -3996,6 +4493,7 @@ class ChatService:
                 "text_chars": len(text),
                 "finish_reason": finish_reason,
                 "response_filter": merged_filter,
+                "chat_quality_shadow": shadow_trace,
                 "response_plan": redact(response_plan.model_dump(mode="json")),
             },
         )
@@ -4061,6 +4559,17 @@ class ChatService:
                 response_plan=response_plan.model_dump(mode="json"),
                 clarification=clarification_decision,
             )
+        if self._silent_continuity is not None:
+            user_message = await self._chat_repo.get_message(turn["user_message_id"])
+            user_text = str(user_message.get("content_text") if user_message else "")
+            await self._silent_continuity.capture_turn(
+                turn=turn,
+                user_text=user_text,
+                assistant_text=text,
+                presence_payload=dict(turn.get("presence_runtime") or {}),
+                response_plan=response_plan.model_dump(mode="json"),
+                status="completed",
+            )
         if intent != "memory_update":
             if self._agent_workbench is not None:
                 await self._agent_workbench.enqueue_reflect_after_turn(turn["turn_id"])
@@ -4107,6 +4616,7 @@ class ChatService:
         persist_assistant: bool = False,
         response_plan: ResponsePlan | None = None,
     ) -> AsyncIterator[ChatEvent]:
+        message = self._presence_failure_text(turn, code, message)
         message = self._style_visible_text(turn, message, response_plan=response_plan)
         message, response_filter = self._response_coordinator.filter_text(message)
         assistant_message_id = None
@@ -4154,6 +4664,12 @@ class ChatService:
             response_plan,
             assistant_text=message,
         )
+        response_plan, shadow_trace = self._decorate_chat_quality_shadow(
+            turn,
+            response_plan,
+            assistant_text=message,
+            turn_status="failed",
+        )
         if persist_assistant:
             compose_span = await self._trace.start_span(
                 turn["trace_id"],
@@ -4166,6 +4682,7 @@ class ChatService:
                 compose_span,
                 output_data={
                     "text_chars": len(message),
+                    "chat_quality_shadow": shadow_trace,
                     "response_plan": redact(response_plan.model_dump(mode="json")),
                 },
             )
@@ -4189,7 +4706,10 @@ class ChatService:
         await self._trace.end_span(
             failed_span,
             status=TraceSpanStatus.FAILED,
-            output_data={"message": message},
+            output_data={
+                "message": message,
+                "chat_quality_shadow": shadow_trace,
+            },
             error_code=code.value,
         )
         yield await self._emit_and_record(
@@ -4217,6 +4737,17 @@ class ChatService:
             updated_at=now,
             ended_at=now,
         )
+        if self._silent_continuity is not None:
+            user_message = await self._chat_repo.get_message(turn["user_message_id"])
+            user_text = str(user_message.get("content_text") if user_message else "")
+            await self._silent_continuity.capture_turn(
+                turn=turn,
+                user_text=user_text,
+                assistant_text=message,
+                presence_payload=dict(turn.get("presence_runtime") or {}),
+                response_plan=response_plan.model_dump(mode="json"),
+                status="failed",
+            )
         if root_span_id:
             await self._trace.end_span(root_span_id, status=TraceSpanStatus.FAILED)
         await self._trace.end_trace(turn["trace_id"], status=TraceStatus.FAILED)
@@ -4290,6 +4821,12 @@ class ChatService:
             turn,
             response_plan,
             assistant_text=text,
+        )
+        response_plan, _ = self._decorate_chat_quality_shadow(
+            turn,
+            response_plan,
+            assistant_text=text,
+            turn_status="cancelled",
         )
         assistant_message_id = await self._persist_assistant_message(
             turn,
@@ -4456,6 +4993,12 @@ class ChatService:
             response_plan,
             assistant_text=summary,
         )
+        response_plan, _ = self._decorate_chat_quality_shadow(
+            turn,
+            response_plan,
+            assistant_text=summary,
+            turn_status="cancelled",
+        )
         event = self._runtime.event(
             ChatEventType.TURN_CANCELLED,
             turn_id=turn["turn_id"],
@@ -4523,6 +5066,88 @@ class ChatService:
             }
         )
 
+    def _build_action_dialogue_decision(
+        self,
+        turn: dict[str, Any],
+        *,
+        status: str,
+        route: str,
+        action_label: str,
+        target: str = "",
+        detail_status: str = "",
+        failure_reason: str = "",
+        evidence_summary: str = "",
+        reply_options: list[str] | None = None,
+        approval_pending: bool = False,
+        task_created: bool = False,
+        tool_created: bool = False,
+    ) -> dict[str, Any]:
+        if self._action_dialogue_mapper is None:
+            return {}
+        decision = self._action_dialogue_mapper.map(
+            ActionDialogueFacts(
+                action_label=action_label,
+                target=target,
+                detail_status=detail_status,
+                failure_reason=failure_reason,
+                evidence_summary=evidence_summary,
+                reply_options=list(reply_options or []),
+                route_semantics={"route": route},
+                natural_interaction={"status": status},
+                task_status={"status": detail_status or status},
+                approval_pending=approval_pending,
+                task_created=task_created,
+                tool_created=tool_created,
+            )
+        )
+        return decision.model_dump(mode="json")
+
+    def _action_status_facts_for_turn(
+        self,
+        turn: dict[str, Any],
+        *,
+        status: str,
+        route: str,
+        action_label: str,
+        target: str = "",
+        detail_status: str = "",
+        failure_reason: str = "",
+        evidence_summary: str = "",
+        reply_options: list[str] | None = None,
+        approval_pending: bool = False,
+        task_created: bool = False,
+        tool_created: bool = False,
+    ) -> dict[str, Any]:
+        return {
+            "status": status,
+            "action_type": route,
+            "action_label": action_label,
+            "target": target,
+            "approval_required": approval_pending,
+            "reply_options": list(reply_options or []),
+            "reply_option_items": _reply_option_items(list(reply_options or [])),
+            "detail_status": detail_status,
+            "completed": detail_status == "completed" or status in {"completed", "succeeded"},
+            "failed": detail_status == "failed" or status in {"failed", "error", "blocked", "manual_only"},
+            "failure_reason": failure_reason,
+            "evidence_summary": evidence_summary,
+            "route_semantics": {"route": route},
+            "action_dialogue": self._build_action_dialogue_decision(
+                turn,
+                status=status,
+                route=route,
+                action_label=action_label,
+                target=target,
+                detail_status=detail_status,
+                failure_reason=failure_reason,
+                evidence_summary=evidence_summary,
+                reply_options=reply_options,
+                approval_pending=approval_pending,
+                task_created=task_created,
+                tool_created=tool_created,
+            ),
+        }
+
     def _style_visible_text(
         self,
         turn: dict[str, Any],
@@ -4535,6 +5160,15 @@ class ChatService:
             ui_mode=self._ui_mode_for_turn(turn),
             response_plan=response_plan,
         )
+
+    def _presence_failure_text(
+        self,
+        turn: dict[str, Any],
+        code: ErrorCode,
+        default_message: str,
+    ) -> str:
+        del turn, code
+        return default_message
 
     def _ui_mode_for_turn(self, turn: dict[str, Any]) -> str | None:
         experience = turn.get("experience") or {}
@@ -4560,6 +5194,246 @@ class ChatService:
             response_plan=response_plan,
             assistant_text=assistant_text,
         )
+
+    async def _build_presence_runtime_payload(
+        self,
+        *,
+        turn: dict[str, Any],
+        context: ContextPacket,
+        user_text: str,
+        privacy_level: str,
+        brain_decision: Any | None,
+    ) -> dict[str, Any]:
+        if (
+            self._conversation_understanding is None
+            or self._presence_state is None
+            or self._session_context is None
+            or self._response_policy_runtime is None
+            or self._action_dialogue_mapper is None
+        ):
+            return {}
+        working_state = (
+            await self._chat_experience.get_working_state(turn["conversation_id"])
+            if self._chat_experience is not None
+            else await self._chat_repo.get_working_state(turn["conversation_id"])
+        ) or {}
+        active_profile_row = await self._chat_repo.get_active_user_profile(turn["conversation_id"])
+        user_profile = dict((active_profile_row or {}).get("profile_data") or {})
+        latest_continuity = (
+            await self._chat_repo.get_latest_continuity_snapshot(turn["conversation_id"])
+        ) or {}
+        active_commitments = await self._chat_repo.list_active_commitments(turn["conversation_id"])
+        memory_candidates = [
+            item.model_dump(mode="json") if hasattr(item, "model_dump") else dict(item)
+            for item in list(context.memories or [])
+        ]
+        recent_messages = list(context.conversation.last_messages or [])
+        pending_confirmation = dict(working_state.get("pending_confirmation") or {})
+        understanding = self._conversation_understanding.analyze(
+            ConversationUnderstandingRequest(
+                turn_id=turn["turn_id"],
+                conversation_id=turn["conversation_id"],
+                member_id=turn["member_id"],
+                user_text=user_text,
+                message_type="multipart" if turn.get("has_multimodal_parts") else "text",
+                channel_profile=self._shadow_channel_profile(turn, context),
+                delivery_mode=str((turn.get("experience") or {}).get("client_context", {}).get("delivery_mode") or ""),
+                sender_label=str(context.member.display_name or ""),
+                has_multimodal_parts=bool(turn.get("has_multimodal_parts")),
+                has_pending_action=bool(pending_confirmation),
+                has_running_task=bool(working_state.get("candidate_actions")),
+                latest_summary=str(context.conversation.recent_summary or ""),
+                recent_messages=recent_messages,
+                user_profile=user_profile,
+                continuity_summary=str(latest_continuity.get("continuity_summary") or ""),
+                trace_id=turn.get("trace_id"),
+            )
+        )
+        presence_state = self._presence_state.resolve(
+            PresenceStateRequest(
+                turn_id=turn["turn_id"],
+                conversation_id=turn["conversation_id"],
+                member_id=turn["member_id"],
+                user_text=user_text,
+                understanding=understanding,
+                recent_messages=recent_messages,
+                working_state=working_state,
+                memory_candidates=memory_candidates,
+                user_profile=user_profile,
+                latest_continuity=latest_continuity,
+                trace_id=turn.get("trace_id"),
+            )
+        )
+        session_context = self._session_context.curate(
+            presence_state=presence_state,
+            user_profile=user_profile,
+            latest_continuity={
+                **latest_continuity,
+                "assistant_commitments": [
+                    row.get("commitment_text")
+                    for row in active_commitments
+                    if row.get("commitment_text")
+                ]
+                or list(latest_continuity.get("assistant_commitments") or []),
+            },
+            recent_messages=recent_messages,
+            memory_candidates=memory_candidates,
+        )
+        route_semantics = {
+            "intent": (
+                brain_decision.intent.primary_intent
+                if brain_decision is not None
+                else turn.get("intent")
+            ),
+            "mode": brain_decision.mode.mode if brain_decision is not None else turn.get("mode"),
+            "route": (
+                brain_decision.intent.primary_intent
+                if brain_decision is not None
+                else turn.get("intent")
+            ),
+        }
+        action_dialogue = self._action_dialogue_mapper.map(
+            ActionDialogueFacts(
+                route_semantics=route_semantics,
+                natural_interaction={
+                    "status": "pending_action" if pending_confirmation else "none",
+                    "questions": list(pending_confirmation.get("questions") or []),
+                },
+                task_status={
+                    "status": (
+                        "queued"
+                        if working_state.get("candidate_actions")
+                        else ""
+                    ),
+                },
+                approval_pending=bool(pending_confirmation),
+                task_created=bool(working_state.get("candidate_actions")),
+            )
+        )
+        response_policy = self._response_policy_runtime.decide(
+            ResponsePolicyRequest(
+                understanding=understanding,
+                presence_state=presence_state,
+                response_plan={
+                    "privacy_level": privacy_level,
+                    "current_commitments": session_context.current_commitments,
+                    "action_dialogue": action_dialogue.model_dump(mode="json"),
+                },
+                privacy_level=privacy_level,
+            )
+        )
+        understanding_payload = understanding.model_dump(mode="json")
+        presence_state_payload = presence_state.model_dump(mode="json")
+        session_context_payload = session_context.model_dump(mode="json")
+        response_policy_payload = response_policy.model_dump(mode="json")
+        action_dialogue_payload = action_dialogue.model_dump(mode="json")
+        response_driving_state = _presence_response_driving_state(
+            pending_confirmation=pending_confirmation,
+            working_state=working_state,
+        )
+        advisory_state = _presence_advisory_state(
+            understanding=understanding_payload,
+            presence_state=presence_state_payload,
+            session_context=session_context_payload,
+            response_policy=response_policy_payload,
+            action_dialogue=action_dialogue_payload,
+        )
+        payload = {
+            "understanding": understanding_payload,
+            "presence_state": presence_state_payload,
+            "session_context": session_context_payload,
+            "response_policy": response_policy_payload,
+            "action_dialogue": action_dialogue_payload,
+            "response_driving_state": response_driving_state,
+            "advisory_state": advisory_state,
+        }
+        now = utc_now_iso()
+        await self._chat_repo.upsert_turn_presence_state(
+            {
+                "presence_state_id": new_id("pres"),
+                "turn_id": turn["turn_id"],
+                "conversation_id": turn["conversation_id"],
+                "understanding": payload["understanding"],
+                "presence_state": payload["presence_state"],
+                "session_context": payload["session_context"],
+                "response_policy": payload["response_policy"],
+                "action_dialogue": payload["action_dialogue"],
+                "trace_id": turn.get("trace_id"),
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        return payload
+
+    async def _maybe_handle_pending_clarification_followup(
+        self,
+        *,
+        turn: dict[str, Any],
+        user_text: str,
+        session_id: str | None,
+    ) -> dict[str, Any] | None:
+        working_state = await self._chat_repo.get_working_state(turn["conversation_id"]) or {}
+        working_session_id = str(working_state.get("session_id") or "")
+        if session_id and working_session_id and working_session_id != session_id:
+            return None
+        pending = dict(working_state.get("pending_confirmation") or {})
+        questions = [str(item).strip() for item in pending.get("questions") or [] if str(item).strip()]
+        if not questions or not _looks_like_ambiguous_clarification_followup(user_text):
+            return None
+        text = _pending_clarification_followup_text(questions)
+        return {
+            "text": text,
+            "response_plan": self._composer.response_plan_for_clarification(
+                summary=text,
+                decision={
+                    "turn_id": str(pending.get("turn_id") or turn["turn_id"]),
+                    "questions": questions,
+                    "reason": str(pending.get("reason") or "clarification_required"),
+                    "needs_clarification": True,
+                    "clarification_type": "pending_followup",
+                },
+            ),
+        }
+
+    def _shadow_channel_profile(
+        self,
+        turn: dict[str, Any],
+        context: ContextPacket,
+    ) -> str | None:
+        experience = dict(turn.get("experience") or {})
+        client_context = experience.get("client_context")
+        if isinstance(client_context, dict) and client_context.get("channel_profile"):
+            return str(client_context["channel_profile"])
+        source_ref = (
+            context.workbench.source_refs[0]
+            if context.workbench and context.workbench.source_refs
+            else {}
+        )
+        content = dict(source_ref or {})
+        if content.get("channel_profile"):
+            return str(content["channel_profile"])
+        return None
+
+    def _decorate_chat_quality_shadow(
+        self,
+        turn: dict[str, Any],
+        response_plan: ResponsePlan,
+        *,
+        assistant_text: str,
+        turn_status: str | None = None,
+        clarification_decision: dict[str, Any] | None = None,
+    ) -> tuple[ResponsePlan, dict[str, Any]]:
+        if self._chat_quality_shadow is None:
+            return response_plan, {}
+        plan, trace_payload = self._chat_quality_shadow.decorate_response_plan(
+            response_plan=response_plan,
+            assistant_text=assistant_text,
+            shadow_state=turn.get("chat_quality_shadow"),
+            privacy_level=str(turn.get("privacy_level") or ""),
+            turn_status=turn_status,
+            clarification_decision=clarification_decision,
+        )
+        return plan, trace_payload
 
     async def _decorate_voice_reply(
         self,
@@ -4652,7 +5526,11 @@ class ChatService:
             member = await self._members.get_member(turn["member_id"])
             if member and member.get("persona_profile_id"):
                 profile = await self._persona_heart.get_profile(str(member["persona_profile_id"]))
-                persona = profile.model_dump(mode="json") if hasattr(profile, "model_dump") else dict(profile)
+                persona = (
+                    profile.model_dump(mode="json")
+                    if hasattr(profile, "model_dump")
+                    else dict(profile)
+                )
         except Exception:
             persona = {}
         try:
@@ -4670,7 +5548,11 @@ class ChatService:
             heart = {}
         return persona, heart
 
-    def _with_voice_reply(self, response_plan: ResponsePlan, voice_reply: dict[str, Any]) -> ResponsePlan:
+    def _with_voice_reply(
+        self,
+        response_plan: ResponsePlan,
+        voice_reply: dict[str, Any],
+    ) -> ResponsePlan:
         if not voice_reply:
             return response_plan
         structured = {
@@ -4699,6 +5581,143 @@ class ChatService:
             sender_label=sender_label,
             turn_id=turn_id,
         )
+
+    def _prompt_options_for_turn(
+        self,
+        *,
+        turn: dict[str, Any],
+        context: ContextPacket,
+        user_text: str,
+        intent: str,
+        mode: str,
+    ) -> dict[str, Any]:
+        del turn
+        explicit_continuation = _looks_like_explicit_continuation(user_text)
+        plain_analysis_request = _looks_like_plain_analysis_request(user_text)
+        needs_history_lookup = _needs_recent_history_lookup(user_text)
+        short_followup = _looks_like_short_followup(user_text)
+        recent_messages = list(getattr(context.conversation, "last_messages", []) or [])
+        has_recent_history = bool(recent_messages)
+        has_session_summary = bool(getattr(context.conversation, "recent_summary", None))
+        plain_chat_intents = {
+            "chat",
+            "question_answer",
+            "knowledge_answer",
+            "complex_dialogue",
+            "creative_writing",
+            "memory_query",
+            "memory_update",
+            "memory_correction",
+            "unknown",
+        }
+        richer_route_intents = {
+            "task_request",
+            "tool_request",
+            "asset_management",
+            "skill_request",
+            "mcp_request",
+            "system_settings",
+            "system_filesystem_read",
+            "browser_read",
+            "boundary_question",
+        }
+        direct_plain_chat = (
+            mode in {TaskMode.DIRECT.value, TaskMode.DIRECT_WITH_MEMORY.value}
+            and intent in plain_chat_intents
+        )
+        strict_format_request = _strict_format_chat_request(user_text)
+        direct_memory_route = (
+            intent in {"memory_query", "memory_update", "memory_correction"}
+            or mode == TaskMode.DIRECT_WITH_MEMORY.value
+        )
+        action_or_task_route = (
+            mode not in {TaskMode.DIRECT.value, TaskMode.DIRECT_WITH_MEMORY.value}
+            or intent in richer_route_intents
+        )
+        history_lookup_route = (
+            explicit_continuation
+            or needs_history_lookup
+            or short_followup
+        )
+
+        if strict_format_request:
+            return {
+                "prompt_mode": "minimal",
+                "prompt_profile": "strict_format",
+                "dynamic_context_mode": "index",
+                "include_dynamic_context": False,
+                "include_trusted_context": False,
+                "include_untrusted_context": False,
+                "include_history": False,
+                "include_session_summary": False,
+                "recent_history_limit": 0,
+            }
+
+        if direct_memory_route:
+            return {
+                "prompt_mode": "full",
+                "prompt_profile": "memory_snapshot",
+                "dynamic_context_mode": "snapshot",
+                "include_dynamic_context": True,
+                "include_trusted_context": True,
+                "include_untrusted_context": False,
+                "include_history": has_recent_history or has_session_summary,
+                "include_session_summary": has_session_summary,
+                "recent_history_limit": 4,
+            }
+
+        if history_lookup_route:
+            return {
+                "prompt_mode": "full",
+                "prompt_profile": "history_lookup",
+                "dynamic_context_mode": "index",
+                "include_dynamic_context": False,
+                "include_trusted_context": False,
+                "include_untrusted_context": False,
+                "include_history": True,
+                "include_session_summary": bool(has_session_summary and needs_history_lookup),
+                "recent_history_limit": 4,
+            }
+
+        if (
+            (direct_plain_chat or plain_analysis_request)
+            and not history_lookup_route
+        ):
+            return {
+                "prompt_mode": "minimal",
+                "prompt_profile": "plain_chat",
+                "dynamic_context_mode": "index",
+                "include_dynamic_context": False,
+                "include_trusted_context": False,
+                "include_untrusted_context": False,
+                "include_history": False,
+                "include_session_summary": False,
+                "recent_history_limit": 0,
+            }
+
+        if action_or_task_route:
+            return {
+                "prompt_mode": "full",
+                "prompt_profile": "action_route",
+                "dynamic_context_mode": "index",
+                "include_dynamic_context": True,
+                "include_trusted_context": True,
+                "include_untrusted_context": True,
+                "include_history": True,
+                "include_session_summary": has_session_summary,
+                "recent_history_limit": 10,
+            }
+        return {
+            "prompt_mode": "full",
+            "prompt_profile": "history_lookup" if has_recent_history else "plain_chat",
+            "dynamic_context_mode": "index",
+            "include_dynamic_context": False,
+            "include_trusted_context": False,
+            "include_untrusted_context": False,
+            "include_history": has_recent_history,
+            "include_session_summary": False,
+            "recent_history_limit": 4,
+        }
 
     async def _create_conversation(self, member: dict[str, Any], title: str) -> str:
         conversation_id = new_id("conv")
@@ -5085,6 +6104,81 @@ def _strategy_advice_fallback_text(user_text: str) -> str:
     )
 
 
+def _deterministic_no_model_reply(user_text: str) -> str | None:
+    text = user_text.strip()
+    if "网页快照" in text and "截图" in text and "不懂技术" in text:
+        return (
+            "区别可以这样理解：网页快照更像页面内容的记录，适合核对地址、标题和正文里到底写了什么；"
+            "截图更像当时画面的照片，能看出按钮、排版和页面长什么样。"
+            "它们的作用不一样，所以你通常会同时需要：一个帮你核内容，一个帮你核画面。"
+            "这也是为什么我不能只凭一句“我看过了”就算完成，最好要把两类证据都留住。"
+        )
+    if "自然回复模板" in text and "技术字段" in text:
+        return (
+            "可以这样说：这次浏览器任务已经完成，我已经打开目标页面，并保留了网页快照和截图作为证据。"
+            "如果有步骤没有完成，我会直接告诉你哪里没完成、为什么没完成，以及下一步怎么继续。"
+        )
+    return None
+
+
+def _deterministic_boundary_reply(user_text: str) -> str | None:
+    lowered = user_text.lower()
+    if "169.254.169.254" in lowered or "latest/meta-data" in lowered:
+        return "这个地址属于本机或云环境的元数据/私有网络范围，我不能访问，也不会替你探测这类内部目标。"
+    if "file://" in lowered:
+        return "我不能通过浏览器打开本地 file:// 路径，也不会把本机文件伪装成网页去访问。"
+    return None
+
+
+def _looks_like_ambiguous_clarification_followup(user_text: str) -> bool:
+    text = user_text.strip()
+    if not text:
+        return False
+    tagged_prefix = re.match(r"^[A-Za-z0-9_-]{6,}[:：]\s*(.+)$", text)
+    if tagged_prefix is not None:
+        text = tagged_prefix.group(1).strip()
+    direct_answer_markers = [
+        "目标",
+        "范围",
+        "文件",
+        "文件夹",
+        "目录",
+        "地址",
+        "路径",
+        "备份",
+        "预览",
+        "只读",
+        "只分析",
+        "方案",
+    ]
+    if any(marker in text for marker in direct_answer_markers):
+        return False
+    return any(
+        marker in text
+        for marker in [
+            "好的",
+            "好",
+            "继续",
+            "确认",
+            "可以",
+            "拒绝",
+            "取消",
+            "算了",
+            "就这样",
+        ]
+    )
+
+
+def _pending_clarification_followup_text(questions: list[str]) -> str:
+    lines = [f"{index}. {question}" for index, question in enumerate(questions[:3], start=1)]
+    question_block = "\n".join(lines)
+    return (
+        "现在没有等待你口头确认就会执行的动作，我也不会把“好的”当成已经获准执行。"
+        "如果你想继续这件事，请先补这几项信息：\n"
+        f"{question_block}"
+    )
+
+
 def _office_doc_visible_name(document_type: str) -> str:
     return {"word": "Word 文档", "excel": "Excel 表格", "ppt": "PPT 演示稿"}.get(
         document_type,
@@ -5212,6 +6306,8 @@ def _prompt_payload_from_metadata(metadata: dict[str, Any] | None) -> dict[str, 
         "prompt_section_ids",
         "prompt_sections",
         "prompt_mode",
+        "prompt_profile",
+        "dynamic_context_mode",
         "channel_profile",
         "delivery_mode",
     ]

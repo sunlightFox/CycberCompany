@@ -8143,6 +8143,7 @@ class ReleaseGateService:
             "CHAT-E2E-QUALITY-FIX-009": "desktop_native_boundary_contract",
             "CHAT-E2E-QUALITY-FIX-010": "recoverable_privacy_block_reply",
         }
+        shadow_policy_readiness = self._shadow_policy_readiness_summary()
         return {
             "suite_id": "suite_phase41_chat_quality_experience",
             "migration_contract": await self._phase_migration_contract("phase41"),
@@ -8185,6 +8186,20 @@ class ReleaseGateService:
                 == 1,
                 "desktop_boundary": contract_counts["DesktopCapabilityBoundary"] == 1,
             },
+            "shadow_policy_gate_enabled_count": shadow_policy_readiness[
+                "shadow_policy_gate_enabled_count"
+            ],
+            "shadow_policy_comparison_enabled_count": shadow_policy_readiness[
+                "shadow_policy_comparison_enabled_count"
+            ],
+            "shadow_policy_promotion_candidate_count": shadow_policy_readiness[
+                "shadow_policy_promotion_candidate_count"
+            ],
+            "shadow_policy_target_counts": shadow_policy_readiness["shadow_policy_target_counts"],
+            "shadow_policy_blocker_counts": shadow_policy_readiness[
+                "shadow_policy_blocker_counts"
+            ],
+            "shadow_policy_readiness": shadow_policy_readiness,
             "release_evidence_records": evidence_records,
             "contracts": contract_counts,
             "leakage_count": leakage_count,
@@ -9561,6 +9576,7 @@ class ReleaseGateService:
             "high_risk_advice_quality": "closed",
         }
         blocker_count = failed_results + leakage_count
+        shadow_policy_readiness = self._shadow_policy_readiness_summary()
         return {
             "suite_id": "suite_phase51_quality_regression_hardening",
             "migration_contract": await self._phase_migration_contract("phase51"),
@@ -9589,6 +9605,20 @@ class ReleaseGateService:
             },
             "quality_matrix": quality_matrix,
             "issue_matrix": issue_matrix,
+            "shadow_policy_gate_enabled_count": shadow_policy_readiness[
+                "shadow_policy_gate_enabled_count"
+            ],
+            "shadow_policy_comparison_enabled_count": shadow_policy_readiness[
+                "shadow_policy_comparison_enabled_count"
+            ],
+            "shadow_policy_promotion_candidate_count": shadow_policy_readiness[
+                "shadow_policy_promotion_candidate_count"
+            ],
+            "shadow_policy_target_counts": shadow_policy_readiness["shadow_policy_target_counts"],
+            "shadow_policy_blocker_counts": shadow_policy_readiness[
+                "shadow_policy_blocker_counts"
+            ],
+            "shadow_policy_readiness": shadow_policy_readiness,
             "model_route_repairs": {
                 "advice_strategy_direct_model": True,
                 "deterministic_boundary_route_semantics": True,
@@ -9624,6 +9654,27 @@ class ReleaseGateService:
             "full_pass": blocker_count == 0
             and all(quality_matrix.values())
             and all(value == 1 for value in contract_counts.values()),
+        }
+
+    def _shadow_policy_readiness_summary(self) -> dict[str, Any]:
+        return {
+            "source": "release_summary_placeholder_until_eval_ingestion",
+            "shadow_policy_gate_enabled_count": 0,
+            "shadow_policy_comparison_enabled_count": 0,
+            "shadow_policy_promotion_candidate_count": 0,
+            "shadow_policy_target_counts": {},
+            "shadow_policy_blocker_counts": {},
+            "promotion_readiness": {
+                "ready_targets": [],
+                "blocked_targets": [
+                    "casual_chat_opening",
+                    "followthrough_opening",
+                ],
+                "readiness_reasons": {
+                    "casual_chat_opening": ["shadow_policy_eval_report_not_ingested"],
+                    "followthrough_opening": ["shadow_policy_eval_report_not_ingested"],
+                },
+            },
         }
 
     async def _phase52_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
