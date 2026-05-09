@@ -38,6 +38,9 @@ from app.services.mcp_runtime import (
     filter_valid_resources,
     filter_valid_tools,
 )
+from app.services.mcp_call_runtime import MCPCallRuntime
+from app.services.mcp_connection_runtime import MCPConnectionRuntime
+from app.services.mcp_policy_runtime import MCPPolicyRuntime
 
 
 class MCPTransport(Protocol):
@@ -179,6 +182,9 @@ class MCPService:
         self._protocol = MCPProtocolValidator(repo)
         self._sanitizer = MCPContentSanitizer(repo)
         self._taint_guard = MCPOutputActionGuard(repo)
+        self._connection_runtime = MCPConnectionRuntime(self)
+        self._policy_runtime = MCPPolicyRuntime()
+        self._call_runtime = MCPCallRuntime()
 
     def set_transport_factory(self, factory: Callable[[dict[str, Any]], MCPTransport]) -> None:
         self._transport_factory = factory
@@ -258,6 +264,16 @@ class MCPService:
         if row is None:
             raise AppError(ErrorCode.MCP_SERVER_NOT_FOUND, "MCP 服务不存在", status_code=404)
         return MCPServerRecord(**row)
+
+    async def runtime_diagnostic(self) -> dict[str, Any]:
+        return {
+            "runtime": "mcp_runtime",
+            "connection": await self._connection_runtime.diagnostic(),
+            "policy": self._policy_runtime.diagnostic(),
+            "call": self._call_runtime.diagnostic(),
+            "approval_gate_required": True,
+            "capability_graph_required": True,
+        }
 
     async def runtime_profile(self, server_id: str) -> Any:
         await self.get_server(server_id)

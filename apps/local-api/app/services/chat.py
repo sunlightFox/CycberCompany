@@ -78,11 +78,17 @@ from app.services.chat_response import ChatResponseCoordinator
 from app.services.chat_route_resolution import ChatRouteResolutionService
 from app.services.chat_safety import ChatTurnAccessPolicy
 from app.services.chat_tasks import ChatTaskCoordinator, ChatTurnOrchestrator
+from app.services.chat_context_assembly import ChatContextAssembly
+from app.services.chat_model_orchestration import ChatModelOrchestration
+from app.services.chat_response_finalize import ChatResponseFinalize
+from app.services.chat_task_handoff import ChatTaskHandoff
+from app.services.chat_turn_facade import ChatTurnFacade
 from app.services.chat_turn_execution import ChatTurnExecutionOrchestrator
 from app.services.chat_turn_finalize import ChatTurnFinalizeService
 from app.services.context_gateway import RuntimeContextGateway
 from app.services.conversation_understanding_runtime import ConversationUnderstandingRuntimeService
 from app.services.memory import MemoryCommandResult, MemoryService
+from app.services.model_fallback_runtime import ModelFallbackRuntime
 from app.services.model_gateway import ModelProtocolGateway
 from app.services.model_routing import ModelRoutingService
 from app.services.natural_chat import (
@@ -545,6 +551,7 @@ class ChatService:
             secret_store=secret_store,
             client_cls=OpenAICompatibleClient,
         )
+        self._model_fallback_runtime = ModelFallbackRuntime()
         self._privacy = ChatPrivacyCoordinator(model_coordinator=self._model_coordinator)
         self._composer = ResponseComposer()
         self._quality = ChatQualityPolicy(composer=self._composer)
@@ -591,9 +598,25 @@ class ChatService:
             chat_experience_service=chat_experience_service,
             agent_workbench_service=agent_workbench_service,
         )
+        self._turn_facade = ChatTurnFacade(self)
+        self._context_assembly = ChatContextAssembly(self)
+        self._model_orchestration = ChatModelOrchestration(self)
+        self._task_handoff = ChatTaskHandoff(self)
+        self._response_finalize = ChatResponseFinalize(self)
         self._execution = TurnExecutionManager(self.run_turn)
 
     async def create_turn(
+        self,
+        request: ChatTurnRequest,
+        *,
+        retry_of_turn_id: str | None = None,
+    ) -> ChatTurnResponse:
+        return await self._turn_facade.create_turn(
+            request,
+            retry_of_turn_id=retry_of_turn_id,
+        )
+
+    async def _create_turn_impl(
         self,
         request: ChatTurnRequest,
         *,
@@ -832,6 +855,10 @@ class ChatService:
         )
 
     async def stream_turn_events(self, turn_id: str) -> AsyncIterator[ChatEvent]:
+        async for event in self._turn_facade.stream_turn_events(turn_id):
+            yield event
+
+    async def _stream_turn_events_impl(self, turn_id: str) -> AsyncIterator[ChatEvent]:
         turn = await self._chat_repo.get_turn(turn_id)
         if turn is None:
             raise AppError(ErrorCode.NOT_FOUND, "turn 不存在", status_code=404)
@@ -850,6 +877,9 @@ class ChatService:
             yield event
 
     async def run_turn(self, turn_id: str) -> None:
+        await self._turn_facade.run_turn(turn_id)
+
+    async def _run_turn_impl(self, turn_id: str) -> None:
         turn = await self._chat_repo.get_turn(turn_id)
         if turn is None or turn["status"] in {"completed", "failed", "cancelled", "retried"}:
             await self._events.mark_completed(turn_id)
@@ -949,6 +979,9 @@ class ChatService:
                 reset_visible_redaction_profile(visible_profile_token)
 
     async def recover_incomplete_turns(self) -> int:
+        return await self._turn_facade.recover_incomplete_turns()
+
+    async def _recover_incomplete_turns_impl(self) -> int:
         running_turns = await self._chat_repo.list_running_turns()
         now = utc_now_iso()
         count = await self._chat_repo.mark_running_turns_failed(now)
@@ -989,6 +1022,9 @@ class ChatService:
         return count
 
     async def cancel_turn(self, turn_id: str) -> ChatTurnResponse:
+        return await self._turn_facade.cancel_turn(turn_id)
+
+    async def _cancel_turn_impl(self, turn_id: str) -> ChatTurnResponse:
         turn = await self._chat_repo.get_turn(turn_id)
         if turn is None:
             raise AppError(ErrorCode.NOT_FOUND, "turn 不存在", status_code=404)
@@ -1078,6 +1114,9 @@ class ChatService:
         )
 
     async def retry_turn(self, turn_id: str) -> ChatTurnResponse:
+        return await self._turn_facade.retry_turn(turn_id)
+
+    async def _retry_turn_impl(self, turn_id: str) -> ChatTurnResponse:
         turn = await self._chat_repo.get_turn(turn_id)
         if turn is None:
             raise AppError(ErrorCode.NOT_FOUND, "turn 不存在", status_code=404)
@@ -1196,6 +1235,14 @@ class ChatService:
         turn: dict[str, Any],
         events: list[dict[str, Any]],
     ) -> AsyncIterator[ChatEvent]:
+        async for event in self._task_handoff.execute_turn(turn, events):
+            yield event
+
+    async def _execute_turn_impl(
+        self,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+    ) -> AsyncIterator[ChatEvent]:
         async for event in self._turn_execution_orchestrator.execute_turn(
             self,
             turn,
@@ -1289,6 +1336,23 @@ class ChatService:
                 return
 
     async def _maybe_record_context_compaction(
+        self,
+        turn: dict[str, Any],
+        context: ContextPacket,
+        context_filter_summary: dict[str, Any],
+        root_span_id: str | None,
+        emit: Any,
+    ) -> AsyncIterator[ChatEvent]:
+        async for event in self._context_assembly.maybe_record_context_compaction(
+            turn,
+            context,
+            context_filter_summary,
+            root_span_id,
+            emit,
+        ):
+            yield event
+
+    async def _maybe_record_context_compaction_impl(
         self,
         turn: dict[str, Any],
         context: ContextPacket,
@@ -1399,10 +1463,45 @@ class ChatService:
         response_plan: ResponsePlan | None = None,
         clarification_decision: ClarificationDecision | None = None,
     ) -> AsyncIterator[ChatEvent]:
+        async for event in self._model_orchestration.run_model_path(
+            turn,
+            events,
+            context,
+            user_text,
+            primary_brain_id,
+            fallback_brain_ids,
+            model_params,
+            root_span_id,
+            intent=intent,
+            mode=mode,
+            response_plan=response_plan,
+            clarification_decision=clarification_decision,
+        ):
+            yield event
+
+    async def _run_model_path_impl(
+        self,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+        context: ContextPacket,
+        user_text: str,
+        primary_brain_id: str,
+        fallback_brain_ids: list[str],
+        model_params: dict[str, Any],
+        root_span_id: str | None,
+        *,
+        intent: str,
+        mode: str,
+        response_plan: ResponsePlan | None = None,
+        clarification_decision: ClarificationDecision | None = None,
+    ) -> AsyncIterator[ChatEvent]:
         turn_id = turn["turn_id"]
         trace_id = turn["trace_id"]
         token = self._events.token_for(turn_id)
-        candidate_ids = [primary_brain_id, *fallback_brain_ids]
+        candidate_ids = self._model_fallback_runtime.candidate_chain(
+            primary_brain_id=primary_brain_id,
+            fallback_brain_ids=fallback_brain_ids,
+        )
         last_error: ModelAdapterError | None = None
         for index, brain_id in enumerate(candidate_ids):
             brain = await self._brains.get_brain(brain_id)
@@ -1665,6 +1764,30 @@ class ChatService:
         return {"text": text, "usage": usage, "finish_reason": finish_reason}
 
     async def _complete_without_model(
+        self,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+        text: str,
+        root_span_id: str | None,
+        *,
+        intent: str,
+        mode: str,
+        response_plan: ResponsePlan | None = None,
+        clarification_decision: ClarificationDecision | None = None,
+    ) -> AsyncIterator[ChatEvent]:
+        async for event in self._response_finalize.complete_without_model(
+            turn,
+            events,
+            text,
+            root_span_id,
+            intent=intent,
+            mode=mode,
+            response_plan=response_plan,
+            clarification_decision=clarification_decision,
+        ):
+            yield event
+
+    async def _complete_without_model_impl(
         self,
         turn: dict[str, Any],
         events: list[dict[str, Any]],

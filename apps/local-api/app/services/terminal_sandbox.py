@@ -16,11 +16,10 @@ from app.core.errors import AppError
 
 SANDBOX_BACKENDS = [
     "windows_job_object",
-    "windows_low_integrity",
     "container",
     "policy_guard",
-    "disabled",
 ]
+LEGACY_SANDBOX_BACKENDS = {"windows_low_integrity", "disabled"}
 SAFE_ENV_KEYS = {
     "COMSPEC",
     "PATH",
@@ -128,7 +127,7 @@ class TerminalSandboxRunner:
         self._backend_override: str | None = None
 
     def set_backend_override(self, backend: str | None) -> None:
-        if backend is not None and backend not in SANDBOX_BACKENDS:
+        if backend is not None and backend not in SANDBOX_BACKENDS and backend not in LEGACY_SANDBOX_BACKENDS:
             raise ValueError(f"Unsupported sandbox backend: {backend}")
         self._backend_override = backend
 
@@ -148,6 +147,7 @@ class TerminalSandboxRunner:
                 "active_process_limit": 16,
                 "memory_limit_bytes": 512 * 1024 * 1024,
             },
+            "degraded_backend": selected == "policy_guard",
             "low_integrity_status": "degraded_not_enabled",
         }
 
@@ -165,12 +165,6 @@ class TerminalSandboxRunner:
                     preflight,
                     fallback_chain,
                     degraded_reason,
-                )
-            if selected == "disabled":
-                raise AppError(
-                    ErrorCode.TOOL_PERMISSION_DENIED,
-                    "终端沙箱 backend 已禁用",
-                    status_code=403,
                 )
             return await asyncio.to_thread(
                 _run_policy_guard_sync,
@@ -195,10 +189,17 @@ class TerminalSandboxRunner:
 
     def _requested_backend(self, profile: TerminalSandboxProfile | None) -> str:
         if self._backend_override is not None:
-            return self._backend_override
+            return self._normalize_backend(self._backend_override)
         if profile is not None and profile.os_sandbox_backend:
-            return profile.os_sandbox_backend
-        return default_os_sandbox_backend()
+            return self._normalize_backend(profile.os_sandbox_backend)
+        return self._normalize_backend(default_os_sandbox_backend())
+
+    def _normalize_backend(self, backend: str) -> str:
+        if backend == "disabled":
+            return "policy_guard"
+        if backend == "windows_low_integrity":
+            return "container"
+        return backend
 
     def _select_backend(self, requested: str) -> tuple[str, str | None, list[str]]:
         if requested == "windows_job_object":
@@ -209,14 +210,12 @@ class TerminalSandboxRunner:
                 "windows_job_object_unavailable_on_non_windows",
                 ["windows_job_object", "policy_guard"],
             )
-        if requested in {"windows_low_integrity", "container"}:
+        if requested == "container":
             return (
                 "policy_guard",
-                f"{requested}_not_enabled",
-                [requested, "policy_guard"],
+                "container_not_enabled",
+                ["container", "policy_guard"],
             )
-        if requested == "disabled":
-            return "disabled", "terminal_sandbox_disabled", ["disabled"]
         return "policy_guard", "os_sandbox_fallback_policy_guard", ["policy_guard"]
 
     def _available_backends(self) -> list[dict[str, Any]]:
@@ -226,14 +225,8 @@ class TerminalSandboxRunner:
                 "available": os.name == "nt",
                 "status": "available" if os.name == "nt" else "degraded",
             },
-            {
-                "backend": "windows_low_integrity",
-                "available": False,
-                "status": "degraded_not_enabled",
-            },
             {"backend": "container", "available": False, "status": "degraded_not_enabled"},
             {"backend": "policy_guard", "available": True, "status": "available"},
-            {"backend": "disabled", "available": True, "status": "available"},
         ]
 
 

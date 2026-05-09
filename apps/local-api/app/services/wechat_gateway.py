@@ -124,6 +124,10 @@ class WechatChannelGatewayService:
         self._delivery_watch_tasks: set[asyncio.Task[None]] = set()
         self._delivery_watch_timeout_seconds = 120.0
         self._delivery_watch_poll_seconds = 0.25
+        self._channel_ingress_runtime: Any | None = None
+
+    def set_channel_ingress_runtime(self, runtime: Any) -> None:
+        self._channel_ingress_runtime = runtime
 
     async def poll_once(
         self,
@@ -1015,26 +1019,36 @@ class WechatChannelGatewayService:
                 },
             )
         try:
-            response = await self._chat.create_turn(
-                ChatTurnRequest(
-                    session_id=session["session_id"],
-                    conversation_id=session.get("conversation_id"),
-                    member_id=session["member_id"],
-                    input=ChatInput(
-                        type="multi_part" if content_parts else "text",
-                        text=text,
-                        content_parts=content_parts,
-                    ),
-                    attachments=attachments,
-                    context_refs=context_refs,
-                    ingress_metadata=ingress_metadata,
-                    client_context=ClientContext(
-                        timezone="Asia/Shanghai",
-                        locale="zh-CN",
-                        ui_mode="wechat_chat",
-                    ),
+            if self._channel_ingress_runtime is not None and not attachments and not context_refs:
+                response = await self._channel_ingress_runtime.submit_channel_turn(
+                    provider="wechat",
+                    session=session,
+                    channel_message_id=normalized["provider_event_id"],
+                    text=text,
+                    raw_payload=dict(ingress_metadata.raw_payload or {}),
+                    ui_mode="wechat_chat",
                 )
-            )
+            else:
+                response = await self._chat.create_turn(
+                    ChatTurnRequest(
+                        session_id=session["session_id"],
+                        conversation_id=session.get("conversation_id"),
+                        member_id=session["member_id"],
+                        input=ChatInput(
+                            type="multi_part" if content_parts else "text",
+                            text=text,
+                            content_parts=content_parts,
+                        ),
+                        attachments=attachments,
+                        context_refs=context_refs,
+                        ingress_metadata=ingress_metadata,
+                        client_context=ClientContext(
+                            timezone="Asia/Shanghai",
+                            locale="zh-CN",
+                            ui_mode="wechat_chat",
+                        ),
+                    )
+                )
         except Exception as exc:
             if gateway_span_id is not None:
                 await self._trace.end_span(

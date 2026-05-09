@@ -68,6 +68,15 @@ from app.services.model_planner import (
     ToolFailureRecoveryPlanner,
 )
 from app.services.task_state import ensure_task_transition
+from app.services.task_agent_loop import TaskAgentLoopFacade
+from app.services.task_agent_runtime import TaskAgentRuntime
+from app.services.task_planner import TaskPlannerFacade
+from app.services.task_planning_runtime import TaskPlanningRuntime
+from app.services.task_recovery import TaskRecoveryFacade
+from app.services.task_replay import TaskReplayFacade
+from app.services.task_resume_runtime import TaskResumeRuntime
+from app.services.task_workflow_runner import TaskWorkflowRunner
+from app.services.task_workflow_runtime import TaskWorkflowRuntime
 from app.services.tools import ToolRuntime
 
 if TYPE_CHECKING:
@@ -126,6 +135,15 @@ class TaskEngine:
         self._next_action_selector = AgentNextActionSelector()
         self._replanner = ObservationAwareReplanner()
         self._failure_recovery = ToolFailureRecoveryPlanner()
+        self._planner_facade = TaskPlannerFacade(self)
+        self._workflow_runner = TaskWorkflowRunner(self)
+        self._agent_loop_facade = TaskAgentLoopFacade(self)
+        self._recovery_facade = TaskRecoveryFacade(self)
+        self._replay_facade = TaskReplayFacade(self)
+        self._planning_runtime = TaskPlanningRuntime(self)
+        self._workflow_runtime = TaskWorkflowRuntime(self)
+        self._agent_runtime = TaskAgentRuntime(self)
+        self._resume_runtime = TaskResumeRuntime(self)
 
     def set_extension_services(
         self,
@@ -163,7 +181,25 @@ class TaskEngine:
     def set_model_planner_adapter(self, adapter: Any | None) -> None:
         self._model_planner.set_adapter(adapter)
 
+    def runtime_diagnostic(self) -> dict[str, Any]:
+        return {
+            "runtime": "task_runtime",
+            "workflow": self._workflow_runtime.diagnostic(),
+            "agent": self._agent_runtime.diagnostic(),
+            "resume": self._resume_runtime.diagnostic(),
+            "planning": self._planning_runtime.diagnostic(),
+            "supervisor_integrated": self._supervisor is not None,
+        }
+
     async def create_task(
+        self,
+        request: TaskCreateRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> TaskDetail:
+        return await self._planning_runtime.create_task(request, trace_id=trace_id)
+
+    async def _create_task_impl(
         self,
         request: TaskCreateRequest,
         *,
@@ -522,6 +558,9 @@ class TaskEngine:
         return await self.detail(task_id)
 
     async def retry_task(self, task_id: str, *, trace_id: str | None = None) -> TaskDetail:
+        return await self._resume_runtime.retry_task(task_id, trace_id=trace_id)
+
+    async def _retry_task_impl(self, task_id: str, *, trace_id: str | None = None) -> TaskDetail:
         task = await self._get_task(task_id)
         if task["status"] not in {TaskStatus.FAILED.value, TaskStatus.PAUSED.value}:
             raise AppError(
@@ -551,6 +590,17 @@ class TaskEngine:
         return await self.detail(task_id)
 
     async def handle_approval_resolved(
+        self,
+        approval_id: str,
+        *,
+        trace_id: str | None = None,
+    ) -> TaskDetail:
+        return await self._resume_runtime.handle_approval_resolved(
+            approval_id,
+            trace_id=trace_id,
+        )
+
+    async def _handle_approval_resolved_impl(
         self,
         approval_id: str,
         *,
@@ -722,6 +772,9 @@ class TaskEngine:
         return [TaskArtifact(**row) for row in await self._repo.list_artifacts(task_id)]
 
     async def replay(self, task_id: str, *, trace_id: str | None = None) -> TaskReplay:
+        return await self._replay_facade.replay(task_id, trace_id=trace_id)
+
+    async def _replay_impl(self, task_id: str, *, trace_id: str | None = None) -> TaskReplay:
         span_id = await self._start_span(
             trace_id,
             TraceSpanType.TASK_REPLAY,
@@ -866,6 +919,9 @@ class TaskEngine:
             raise
 
     async def recover_stale_jobs(self) -> None:
+        await self._resume_runtime.recover_stale_jobs()
+
+    async def _recover_stale_jobs_impl(self) -> None:
         for job in await self._repo.list_recoverable_jobs():
             task = await self._repo.get_task(job["task_id"])
             if task is not None and task["status"] == TaskStatus.RUNNING.value:
@@ -915,6 +971,9 @@ class TaskEngine:
             )
 
     async def _run_task(self, task_id: str, *, trace_id: str | None) -> None:
+        await self._workflow_runtime.run_task(task_id, trace_id=trace_id)
+
+    async def _run_task_impl(self, task_id: str, *, trace_id: str | None) -> None:
         task = await self._get_task(task_id)
         if task["mode"] == TaskMode.SUPERVISOR.value:
             if self._supervisor is None:
@@ -1169,6 +1228,9 @@ class TaskEngine:
         return failed[-1] if failed else None
 
     async def _run_agent_loop(self, task_id: str, *, trace_id: str | None) -> None:
+        await self._agent_runtime.run_agent_loop(task_id, trace_id=trace_id)
+
+    async def _run_agent_loop_impl(self, task_id: str, *, trace_id: str | None) -> None:
         task = await self._get_task(task_id)
         span_id = await self._start_span(
             trace_id,

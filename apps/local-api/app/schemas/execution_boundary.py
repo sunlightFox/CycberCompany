@@ -18,5 +18,6 @@ class ExecutionBoundarySandboxStatusResponse(ApiModel):
     profile: dict[str, Any] | None = None
     profile_id: str
     limits: dict[str, Any]
+    degraded_backend: bool = False
     low_integrity_status: str
     last_diagnostic_summary: dict[str, Any] | None = None

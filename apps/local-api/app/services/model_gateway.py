@@ -5,27 +5,22 @@ from typing import Any
 
 from brain.adapters import CancelToken, ModelChatRequest, ModelChatResult, ModelStreamEvent
 
+from app.services.model_provider_registry import ModelProviderRegistry
 from app.services.secrets import SecretStore
 
 
 class ModelProtocolGateway:
     def __init__(self, *, secret_store: SecretStore, client_cls: type[Any]) -> None:
-        self._secrets = secret_store
-        self._client_cls = client_cls
+        self._providers = ModelProviderRegistry(
+            secret_store=secret_store,
+            client_cls=client_cls,
+        )
 
     def build_client(self, brain: dict[str, Any]) -> Any:
-        endpoint = str(brain["endpoint"])
-        api_key = self._secrets.get_secret(brain.get("api_key_ref"))
-        kwargs = {
-            "protocol_family": str(brain.get("protocol_family") or ""),
-            "request_format": str(brain.get("request_format") or ""),
-            "response_format": str(brain.get("response_format") or ""),
-            "supports_stream": brain.get("supports_stream"),
-        }
-        try:
-            return self._client_cls(endpoint, api_key, **kwargs)
-        except TypeError:
-            return self._client_cls(endpoint, api_key)
+        return self._providers.build_client(brain)
+
+    def capability_summary(self, brain: dict[str, Any]) -> dict[str, Any]:
+        return self._providers.capability_summary(brain)
 
     async def complete_chat(
         self,

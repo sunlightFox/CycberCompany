@@ -80,6 +80,10 @@ class FeishuChannelGatewayService:
         self._audit = audit_service
         self._config = config
         self._last_poll_result: dict[str, Any] = {}
+        self._channel_ingress_runtime: Any | None = None
+
+    def set_channel_ingress_runtime(self, runtime: Any) -> None:
+        self._channel_ingress_runtime = runtime
 
     async def poll_once(
         self,
@@ -457,34 +461,45 @@ class FeishuChannelGatewayService:
                 },
             )
         try:
-            response = await self._chat.create_turn(
-                ChatTurnRequest(
-                    session_id=session["session_id"],
-                    conversation_id=session.get("conversation_id"),
-                    member_id=session["member_id"],
-                    input=ChatInput(type="text", text=text),
-                    ingress_metadata=ChatIngressMetadata(
-                        channel="feishu",
-                        channel_message_id=normalized["provider_event_id"],
-                        queue_policy="immediate",
-                        raw_payload={
-                            "provider": "feishu",
-                            "channel_event_id": channel_event_id,
-                            "channel_account_id": account["channel_account_id"],
-                            "channel_peer_session_id": session["channel_peer_session_id"],
-                            "message_type": normalized["message_type"],
-                            "message_id_redacted": _hash_value(normalized["message_id"]) if normalized["message_id"] else None,
-                            "mentions": normalized["mentions"],
-                            "attachment_count": len(normalized["attachments"]),
-                        },
-                    ),
-                    client_context=ClientContext(
-                        timezone="Asia/Shanghai",
-                        locale="zh-CN",
-                        ui_mode="feishu_chat",
-                    ),
+            raw_payload = {
+                "provider": "feishu",
+                "channel_event_id": channel_event_id,
+                "channel_account_id": account["channel_account_id"],
+                "channel_peer_session_id": session["channel_peer_session_id"],
+                "message_type": normalized["message_type"],
+                "message_id_redacted": _hash_value(normalized["message_id"]) if normalized["message_id"] else None,
+                "mentions": normalized["mentions"],
+                "attachment_count": len(normalized["attachments"]),
+            }
+            if self._channel_ingress_runtime is not None and not normalized["attachments"]:
+                response = await self._channel_ingress_runtime.submit_channel_turn(
+                    provider="feishu",
+                    session=session,
+                    channel_message_id=normalized["provider_event_id"],
+                    text=text,
+                    raw_payload=raw_payload,
+                    ui_mode="feishu_chat",
                 )
-            )
+            else:
+                response = await self._chat.create_turn(
+                    ChatTurnRequest(
+                        session_id=session["session_id"],
+                        conversation_id=session.get("conversation_id"),
+                        member_id=session["member_id"],
+                        input=ChatInput(type="text", text=text),
+                        ingress_metadata=ChatIngressMetadata(
+                            channel="feishu",
+                            channel_message_id=normalized["provider_event_id"],
+                            queue_policy="immediate",
+                            raw_payload=raw_payload,
+                        ),
+                        client_context=ClientContext(
+                            timezone="Asia/Shanghai",
+                            locale="zh-CN",
+                            ui_mode="feishu_chat",
+                        ),
+                    )
+                )
         except Exception as exc:
             if span_id:
                 await self._trace.end_span(

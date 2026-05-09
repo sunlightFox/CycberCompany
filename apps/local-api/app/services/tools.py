@@ -56,8 +56,17 @@ if TYPE_CHECKING:
     from app.services.execution_boundary import ExecutionBoundaryService
     from app.services.mcp import MCPService
     from app.services.media import MediaService
-    from app.services.office_tools import OfficeToolService
     from app.services.skill_plugin import SkillPluginService
+
+from app.services.office_tools import OfficeToolService
+from app.services.tool_asset_runtime import ToolAssetRuntime
+from app.services.tool_browser_runtime import ToolBrowserRuntime
+from app.services.tool_builtin_runtime import ToolBuiltinRuntime
+from app.services.tool_dispatcher import ToolDispatcher
+from app.services.tool_memory_runtime import ToolMemoryRuntime
+from app.services.tool_mcp_runtime import ToolMcpRuntime
+from app.services.tool_safety_bridge import ToolSafetyBridge
+from app.services.tool_terminal_runtime import ToolTerminalRuntime
 
 
 @dataclass(frozen=True)
@@ -199,6 +208,14 @@ class ToolRuntime:
         self._office = office_tool_service
         self._skill_plugin: SkillPluginService | None = None
         self._mcp: MCPService | None = None
+        self._dispatcher = ToolDispatcher(self)
+        self._safety_bridge = ToolSafetyBridge(self)
+        self._terminal_runtime = ToolTerminalRuntime(self)
+        self._mcp_runtime = ToolMcpRuntime(self)
+        self._builtin_runtime = ToolBuiltinRuntime(self)
+        self._browser_runtime = ToolBrowserRuntime()
+        self._asset_runtime = ToolAssetRuntime()
+        self._memory_runtime = ToolMemoryRuntime()
 
     def set_extension_services(
         self,
@@ -269,323 +286,35 @@ class ToolRuntime:
         *,
         trace_id: str | None = None,
     ) -> ToolExecuteResponse:
-        try:
-            tool = await self.get_tool(request.tool_name)
-        except AppError as exc:
-            if exc.code == ErrorCode.TOOL_NOT_FOUND.value and self._boundary is not None:
-                await self._boundary.decide_tool_action(
-                    organization_id="org_default",
-                    tool_name=request.tool_name,
-                    source="unknown",
-                    requested_risk_level=RiskLevel.R7,
-                    args=request.args,
-                    task_id=request.task_id,
-                    member_id=request.member_id,
-                    tool_call_id=None,
-                    trace_id=trace_id,
-                )
-                raise AppError(
-                    ErrorCode.TOOL_PERMISSION_DENIED,
-                    "未知工具默认拒绝执行",
-                    status_code=403,
-                ) from exc
-            raise
-        if tool.status != "active":
-            raise AppError(ErrorCode.TOOL_NOT_FOUND, "工具未启用", status_code=404)
-        request = _sanitize_tool_request_for_execution(request)
-        if request.idempotency_key:
-            existing = await self._repo.get_tool_call_by_idempotency(request.idempotency_key)
-            if existing is not None:
-                if existing["tool_name"] != request.tool_name:
-                    raise AppError(
-                        ErrorCode.CONFLICT,
-                        "idempotency_key 已被其他工具调用使用",
-                        status_code=409,
-                    )
-                return await self._response_from_existing_call(existing)
-        self._validate_args(tool, request.args)
-        risk_level = _risk_for(tool, request.args)
-        terminal_command_policy = (
-            self._boundary.classify_terminal_command(str(request.args.get("command") or ""))
-            if tool.tool_name == "terminal.run" and self._boundary is not None
-            else _terminal_command_policy(str(request.args.get("command") or ""))
-            if tool.tool_name == "terminal.run"
-            else None
-        )
+        return await self._dispatcher.execute(request, trace_id=trace_id)
 
-        task = await self._task_for_request(request)
-        organization_id = task["organization_id"] if task else "org_default"
-        tool_call_id = new_id("call")
-        now = utc_now_iso()
-        handle_ids = _handle_ids_from_args(request.args)
-        span_id = await self._start_span(
-            trace_id,
-            TraceSpanType.TOOL_CALL,
-            "execute tool",
-            metadata={
-                "tool_call_id": tool_call_id,
-                "tool_name": request.tool_name,
-                "task_id": request.task_id,
+    async def diagnostic(self) -> dict[str, Any]:
+        sandbox_status = (
+            await self._boundary.sandbox_status() if self._boundary is not None else None
+        )
+        mcp_runtime = await self._mcp.runtime_diagnostic() if self._mcp is not None else None
+        return {
+            "runtime": "tool_runtime",
+            "dispatcher": "tool_dispatcher",
+            "safety_bridge": "tool_safety_bridge",
+            "builtin": {"runtime": "tool_builtin_runtime"},
+            "browser": self._browser_runtime.diagnostic(),
+            "asset": self._asset_runtime.diagnostic(),
+            "memory": self._memory_runtime.diagnostic(),
+            "terminal": {
+                "runtime": "tool_terminal_runtime",
+                "backend_profile": sandbox_status,
+                "approval_required_for_high_risk": True,
             },
-        )
-        try:
-            await self._repo.insert_tool_call(
-                {
-                    "tool_call_id": tool_call_id,
-                    "organization_id": organization_id,
-                    "task_id": request.task_id,
-                    "step_id": request.step_id,
-                    "tool_name": tool.tool_name,
-                    "source": tool.source,
-                    "status": "running",
-                    "idempotency_key": request.idempotency_key,
-                    "args_redacted": redact(request.args),
-                    "handle_ids": handle_ids,
-                    "risk_level": risk_level.value,
-                    "trace_id": trace_id,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            )
-            boundary_decision = None
-            if self._boundary is not None:
-                boundary_decision = await self._boundary.decide_tool_action(
-                    organization_id=organization_id,
-                    tool_name=tool.tool_name,
-                    source=tool.source,
-                    requested_risk_level=risk_level,
-                    args=request.args,
-                    task_id=request.task_id,
-                    member_id=request.member_id,
-                    tool_call_id=tool_call_id,
-                    trace_id=trace_id,
-                )
-                risk_level = _max_risk(risk_level, boundary_decision.effective_risk_level)
-                boundary_snapshot = {
-                    **boundary_decision.policy_snapshot,
-                    "boundary_decision_id": boundary_decision.decision_id,
-                    "boundary_decision": boundary_decision.decision,
-                    "boundary_reason_codes": boundary_decision.reason_codes,
-                    "required_controls": boundary_decision.required_controls,
-                }
-                await self._repo.update_tool_call(
-                    tool_call_id,
-                    {
-                        "policy_snapshot": boundary_snapshot,
-                        "risk_level": risk_level.value,
-                        "updated_at": utc_now_iso(),
-                    },
-                )
-                if boundary_decision.decision == "deny" and not _should_defer_to_safety(
-                    tool.tool_name,
-                    boundary_decision.reason_codes,
-                ):
-                    raise AppError(
-                        ErrorCode.TOOL_PERMISSION_DENIED,
-                        "执行边界策略拒绝该工具动作",
-                        status_code=403,
-                        details={
-                            "decision_id": boundary_decision.decision_id,
-                            "reason_codes": boundary_decision.reason_codes,
-                        },
-                    )
-            safety_decision = await self._safety_decisions.evaluate(
-                _safety_request_for_tool(
-                    request=request,
-                    tool=tool,
-                    risk_level=risk_level,
-                    organization_id=organization_id,
-                    handle_ids=handle_ids,
-                ),
-                trace_id=trace_id,
-            )
-            risk_level = _max_risk(risk_level, safety_decision.risk_level)
-            policy_snapshot = {
-                **(
-                    {
-                        **boundary_decision.policy_snapshot,
-                        "boundary_decision_id": boundary_decision.decision_id,
-                        "boundary_decision": boundary_decision.decision,
-                        "boundary_reason_codes": boundary_decision.reason_codes,
-                    }
-                    if boundary_decision is not None
-                    else {}
-                ),
-                "risk_level": risk_level.value,
-                "required_controls": safety_decision.required_controls,
-                "policy_sources": safety_decision.policy_sources,
-                "decision": safety_decision.decision,
-                "rollback_availability": rollback_availability_for_tool(
-                    tool.tool_name,
-                    request.args,
-                ),
-            }
-            safety_decision_payload = redact(safety_decision.model_dump(mode="json"))
-            await self._repo.update_tool_call(
-                tool_call_id,
-                {
-                    "safety_decision_id": safety_decision.safety_decision_id,
-                    "safety_decision": (
-                        safety_decision_payload
-                        if isinstance(safety_decision_payload, dict)
-                        else {}
-                    ),
-                    "policy_snapshot": policy_snapshot,
-                    "risk_level": risk_level.value,
-                    "updated_at": utc_now_iso(),
-                },
-            )
-            if not safety_decision.allowed:
-                raise AppError(
-                    ErrorCode.SAFETY_BLOCKED,
-                    "安全策略阻断了该工具动作",
-                    status_code=403,
-                    details={
-                        "safety_decision_id": safety_decision.safety_decision_id,
-                        "reason": safety_decision.reason,
-                    },
-                )
-            approval = await self._approval_if_required(
-                request=request,
-                tool=tool,
-                tool_call_id=tool_call_id,
-                organization_id=organization_id,
-                risk_level=risk_level,
-                terminal_command_policy=(
-                    terminal_command_policy if terminal_command_policy is not None else None
-                ),
-                trace_id=trace_id,
-            )
-            if approval is not None:
-                await self._repo.update_tool_call(
-                    tool_call_id,
-                    {
-                        "status": "approval_required",
-                        "approval_id": approval.approval_id,
-                        "updated_at": utc_now_iso(),
-                    },
-                )
-                record = await self._tool_call_record(tool_call_id, request.task_id)
-                await self._end_span(
-                    span_id,
-                    output_data={
-                        "status": "approval_required",
-                        "approval_id": approval.approval_id,
-                    },
-                )
-                return ToolExecuteResponse(tool_call=record, approval=approval)
+            "mcp": mcp_runtime,
+            "extensions": {
+                "skill_plugin_configured": self._skill_plugin is not None,
+                "mcp_configured": self._mcp is not None,
+            },
+        }
 
-            resolved_asset_refs = await self._resolve_handles_for_tool(request, trace_id=trace_id)
-            await self._repo.update_tool_call(
-                tool_call_id,
-                {"resolved_asset_refs": resolved_asset_refs, "updated_at": utc_now_iso()},
-            )
-            if tool.source == "mcp":
-                outcome = await self._execute_mcp_tool(
-                    request,
-                    tool=tool,
-                    tool_call_id=tool_call_id,
-                    organization_id=organization_id,
-                    safety_decision_id=safety_decision.safety_decision_id,
-                    policy_snapshot=policy_snapshot,
-                    resolved_asset_refs=resolved_asset_refs,
-                    trace_id=trace_id,
-                )
-            elif tool.source == "skill":
-                outcome = await self._execute_skill_tool(
-                    request,
-                    tool=tool,
-                    tool_call_id=tool_call_id,
-                    organization_id=organization_id,
-                    trace_id=trace_id,
-                )
-            else:
-                outcome = await self._execute_builtin(
-                    request,
-                    tool_call_id=tool_call_id,
-                    organization_id=organization_id,
-                    trace_id=trace_id,
-                )
-            artifact_ids = [artifact.artifact_id for artifact in outcome.artifacts]
-            redacted_result: dict[str, Any] = dict(redact(outcome.result))
-            if self._boundary is not None:
-                dlp = await self._boundary.scan_output(
-                    organization_id=organization_id,
-                    source_type="tool_result",
-                    source_id=tool_call_id,
-                    scan_target="result",
-                    value=outcome.result,
-                    tool_call_id=tool_call_id,
-                    task_id=request.task_id,
-                    trace_id=trace_id,
-                )
-                redacted_result = dict(redact(dlp.redacted_value))
-            if request.tool_name == "memory.search":
-                redacted_result = _strip_internal_trace_fields(redacted_result)
-            await self._repo.update_tool_call(
-                tool_call_id,
-                {
-                    "status": "completed",
-                    "result_redacted": redacted_result,
-                    "artifact_ids": artifact_ids,
-                    "updated_at": utc_now_iso(),
-                },
-            )
-            await self._audit.write_event(
-                actor_type="system",
-                action="tool.called",
-                object_type="tool_call",
-                object_id=tool_call_id,
-                summary="工具调用完成",
-                risk_level=risk_level,
-                payload={
-                    "tool_name": tool.tool_name,
-                    "task_id": request.task_id,
-                    "artifact_ids": artifact_ids,
-                },
-                trace_id=trace_id,
-            )
-            await self._end_span(
-                span_id,
-                output_data={"status": "completed", "artifact_count": len(outcome.artifacts)},
-            )
-            record = await self._tool_call_record(tool_call_id, request.task_id)
-            if request.tool_name == "memory.search":
-                record = _public_memory_search_tool_call(record)
-            return ToolExecuteResponse(
-                tool_call=record,
-                artifacts=outcome.artifacts,
-                result=redacted_result,
-            )
-        except Exception as exc:
-            await self._repo.update_tool_call(
-                tool_call_id,
-                {
-                    "status": "failed",
-                    "error_code": getattr(exc, "code", ErrorCode.TOOL_EXECUTION_FAILED.value),
-                    "error_summary": str(redact(str(exc))),
-                    "updated_at": utc_now_iso(),
-                },
-            )
-            await self._audit.write_event(
-                actor_type="system",
-                action="tool.blocked" if isinstance(exc, AppError) else "tool.failed",
-                object_type="tool_call",
-                object_id=tool_call_id,
-                summary="工具调用失败",
-                risk_level=risk_level,
-                payload={
-                    "tool_name": tool.tool_name,
-                    "error": str(redact(str(exc))),
-                },
-                trace_id=trace_id,
-            )
-            await self._end_span(
-                span_id,
-                status=TraceSpanStatus.FAILED,
-                output_data={"error_code": getattr(exc, "code", ErrorCode.TOOL_EXECUTION_FAILED)},
-            )
-            raise
+    def _redact_payload(self, value: Any) -> Any:
+        return redact(value)
 
     async def _approval_if_required(
         self,
@@ -598,63 +327,32 @@ class ToolRuntime:
         terminal_command_policy: dict[str, Any] | None,
         trace_id: str | None,
     ) -> ApprovalDetail | None:
-        if request.approval_id:
-            approval = await self._approvals.get(request.approval_id)
-            if approval.status in {"approved", "edited"}:
-                if approval.edited_payload:
-                    request.args.update(_normalize_approval_args(approval.edited_payload))
-                return None
-            if approval.status == "denied":
-                raise AppError(ErrorCode.APPROVAL_DENIED, "审批已拒绝", status_code=409)
-            raise AppError(ErrorCode.TOOL_APPROVAL_REQUIRED, "工具动作需要审批", status_code=409)
-        if _risk_order(risk_level) < _risk_order(RiskLevel.R3):
-            return None
-        if self._safety_policy is not None:
-            policy = await self._safety_policy.get_policy(organization_id=organization_id)
-            if policy.should_skip_approval(
-                action=tool.tool_name,
-                risk_level=risk_level,
-                action_category=classify_action_category(
-                    action=tool.tool_name,
-                    tool_name=tool.tool_name,
-                    destination=str(
-                        request.args.get("destination")
-                        or request.args.get("url")
-                        or request.args.get("path")
-                        or request.args.get("command")
-                        or ""
-                    ),
-                ),
-                payload=request.args,
-                terminal_command_policy=terminal_command_policy or {},
-            ):
-                return None
-        task_id = request.task_id
-        if task_id is None:
-            raise AppError(
-                ErrorCode.TOOL_APPROVAL_REQUIRED,
-                "高风险工具必须绑定任务并创建审批",
-                status_code=409,
-            )
-        rollback = rollback_availability_for_tool(tool.tool_name, request.args)
-        summary_suffix = (
-            "；本地 checkpoint 可用于回滚受控任务工件"
-            if rollback.get("rollback_available")
-            else "；该动作无法由本地 checkpoint 自动撤销"
-        )
-        return await self._approvals.create_approval(
-            task_id=task_id,
-            organization_id=organization_id,
-            step_id=request.step_id,
+        return await self._safety_bridge.approval_if_required(
+            request=request,
+            tool=tool,
             tool_call_id=tool_call_id,
-            requested_action=tool.tool_name,
+            organization_id=organization_id,
             risk_level=risk_level,
-            summary=f"需要确认执行 {tool.tool_name}{summary_suffix}",
-            payload=redact({**request.args, "rollback_availability": rollback}),
+            terminal_command_policy=terminal_command_policy,
             trace_id=trace_id,
         )
 
     async def _execute_builtin(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        return await self._execute_builtin_impl(
+            request,
+            tool_call_id=tool_call_id,
+            organization_id=organization_id,
+            trace_id=trace_id,
+        )
+
+    async def _execute_builtin_impl(
         self,
         request: ToolExecuteRequest,
         *,
@@ -747,6 +445,7 @@ class ToolRuntime:
             resolved_asset_refs=resolved_asset_refs,
             trace_id=trace_id,
         )
+        result = self._mcp_runtime.normalize_result(result)
         return ToolRunOutcome(result=result, artifacts=[])
 
     async def _execute_skill_tool(
@@ -2251,6 +1950,7 @@ class ToolRuntime:
                 **sandbox_profile_result,
                 "cwd": "task_artifact_sandbox",
             },
+            "selected_backend": sandbox_result.backend,
             "backend_status": sandbox_result.backend_status,
             "fallback_chain": sandbox_result.fallback_chain,
             "degraded_reason": sandbox_result.degraded_reason,
@@ -2301,6 +2001,7 @@ class ToolRuntime:
                 "log_artifact_id": artifact.artifact_id,
                 "sandbox_profile": sandbox_profile_result,
                 "policy_snapshot": terminal_policy,
+                "selected_backend": sandbox_result.backend,
                 "backend_status": sandbox_result.backend_status,
                 "fallback_chain": sandbox_result.fallback_chain,
                 "degraded_reason": sandbox_result.degraded_reason,
@@ -2324,19 +2025,13 @@ class ToolRuntime:
         row = await self._repo.get_tool_call(tool_call_id)
         if row is None:
             return
-        snapshot = dict(row.get("policy_snapshot") or {})
-        snapshot["terminal_sandbox_result"] = {
-            "backend": sandbox_result.backend,
-            "backend_status": sandbox_result.backend_status,
-            "fallback_chain": sandbox_result.fallback_chain,
-            "degraded_reason": sandbox_result.degraded_reason,
-            "timed_out": sandbox_result.timed_out,
-            "output_truncated": sandbox_result.output_truncated,
-            "resource_usage": sandbox_result.resource_usage,
-            "cleanup": sandbox_result.cleanup,
-            "log_artifact_id": log_artifact_id,
-            "dlp_report_id": dlp_report_id,
-        }
+        snapshot = self._terminal_runtime.enrich_policy_snapshot(
+            dict(row.get("policy_snapshot") or {}),
+            sandbox_result=sandbox_result,
+            log_artifact_id=log_artifact_id,
+            dlp_report_id=dlp_report_id,
+            approval_id=row.get("approval_id"),
+        )
         await self._repo.update_tool_call(
             tool_call_id,
             {"policy_snapshot": redact(snapshot), "updated_at": utc_now_iso()},

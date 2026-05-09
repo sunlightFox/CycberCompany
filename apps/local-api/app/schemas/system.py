@@ -53,3 +53,36 @@ class DesignGap(ApiModel):
 
 class DesignGapsResponse(ApiModel):
     items: list[DesignGap] = Field(default_factory=list)
+
+
+class RuntimeTopologyComponent(ApiModel):
+    name: str
+    runtime: str
+    dependencies: list[str] = Field(default_factory=list)
+    status: str = "implemented_with_fallback"
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class RuntimeTopologyResponse(ApiModel):
+    items: list[RuntimeTopologyComponent] = Field(default_factory=list)
+
+
+class SessionRuntimeResponse(ApiModel):
+    runtime: str
+    executor: str
+    ingress: str
+    route_selectors: list[str] = Field(default_factory=list)
+    running_turn_count: int = 0
+
+
+class ToolRuntimeResponse(ApiModel):
+    runtime: str
+    dispatcher: str
+    safety_bridge: str
+    builtin: dict[str, Any] = Field(default_factory=dict)
+    browser: dict[str, Any] = Field(default_factory=dict)
+    asset: dict[str, Any] = Field(default_factory=dict)
+    memory: dict[str, Any] = Field(default_factory=dict)
+    terminal: dict[str, Any] = Field(default_factory=dict)
+    mcp: dict[str, Any] | None = None
+    extensions: dict[str, Any] = Field(default_factory=dict)

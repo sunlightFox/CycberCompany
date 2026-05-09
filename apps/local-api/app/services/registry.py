@@ -61,6 +61,7 @@ from app.services.channel_connectors import (
 from app.services.channels import ChannelBindingService
 from app.services.chat import ChatService
 from app.services.chat_experience import ChatExperienceService
+from app.services.channel_ingress_runtime import ChannelIngressRuntime
 from app.services.conversation_understanding_runtime import ConversationUnderstandingRuntimeService
 from app.services.presence_state import PresenceStateResolverService
 from app.services.session_context import SessionContextCuratorService
@@ -94,6 +95,8 @@ from app.services.project_deployments import (
     ToolchainService,
 )
 from app.services.release import ReleaseGateService
+from app.services.release_gate_runtime import ReleaseGateRuntime
+from app.services.release_report_builder import ReleaseReportBuilder
 from app.services.retrieval import RetrievalDiagnosticsService
 from app.services.scheduled_tasks import ScheduledTaskService
 from app.services.secrets import SecretStore
@@ -101,10 +104,13 @@ from app.services.safety_policy import RuntimeSafetyPolicyService
 from app.services.settings import SettingsService
 from app.services.shell_switch import ShellSwitchService
 from app.services.skill_governance import SkillGovernanceService
+from app.services.skill_candidate_extractor import SkillCandidateExtractor
 from app.services.skill_plugin import SkillPluginService
+from app.services.skill_promotion_runtime import SkillPromotionRuntime
 from app.services.skill_repositories import SkillRepositoryService
 from app.services.skill_source_resolver import SkillSourceResolver
 from app.services.supervisor import SupervisorService
+from app.services.session_runtime import SessionRuntime
 from app.services.tasks import TaskEngine
 from app.services.tools import ToolRuntime
 from app.services.voice import VoiceService
@@ -120,6 +126,8 @@ class ServiceRegistry:
     audit_service: AuditEventService
     bootstrap_service: BootstrapService
     chat_service: ChatService
+    session_runtime: SessionRuntime
+    channel_ingress_runtime: ChannelIngressRuntime
     chat_experience_service: ChatExperienceService
     agent_workbench_service: AgentWorkbenchService
     memory_service: MemoryService
@@ -152,6 +160,8 @@ class ServiceRegistry:
     supervisor_service: SupervisorService
     shell_switch_service: ShellSwitchService
     release_gate_service: ReleaseGateService
+    release_gate_runtime: ReleaseGateRuntime
+    release_report_builder: ReleaseReportBuilder
     runtime_contract_service: RuntimeContractService
     safety_policy_service: RuntimeSafetyPolicyService
     safety_decision_service: SafetyDecisionService
@@ -162,6 +172,8 @@ class ServiceRegistry:
     settings_service: SettingsService
     voice_service: VoiceService
     approval_service: ApprovalService
+    skill_candidate_extractor: SkillCandidateExtractor
+    skill_promotion_runtime: SkillPromotionRuntime
     artifact_store: ArtifactStore
     brain_service: BrainService
     brain_decision_service: BrainDecisionService
@@ -558,6 +570,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
     )
+    release_gate_runtime = ReleaseGateRuntime()
+    release_report_builder = ReleaseReportBuilder()
     runtime_contract_service = RuntimeContractService(
         repo=design_alignment_repo,
         data_dir=config.storage.data_dir,
@@ -706,6 +720,13 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         action_dialogue_mapper_service=action_dialogue_mapper_service,
         silent_continuity_service=silent_continuity_service,
     )
+    session_runtime = SessionRuntime(chat_service=chat_service)
+    channel_ingress_runtime = ChannelIngressRuntime(
+        chat_service=chat_service,
+        session_runtime=session_runtime,
+    )
+    skill_candidate_extractor = SkillCandidateExtractor()
+    skill_promotion_runtime = SkillPromotionRuntime()
     wechat_gateway_service = WechatChannelGatewayService(
         repo=channel_repo,
         chat_repo=chat_repo,
@@ -732,6 +753,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         audit_service=audit_service,
         config=feishu_config,
     )
+    wechat_gateway_service.set_channel_ingress_runtime(channel_ingress_runtime)
+    feishu_gateway_service.set_channel_ingress_runtime(channel_ingress_runtime)
     background_worker_service.set_wechat_gateway(wechat_gateway_service)
     background_worker_service.set_feishu_gateway(feishu_gateway_service)
     return ServiceRegistry(
@@ -747,6 +770,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
             persona_heart_service,
         ),
         chat_service=chat_service,
+        session_runtime=session_runtime,
+        channel_ingress_runtime=channel_ingress_runtime,
         chat_experience_service=chat_experience_service,
         agent_workbench_service=agent_workbench_service,
         memory_service=memory_service,
@@ -779,6 +804,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         supervisor_service=supervisor_service,
         shell_switch_service=shell_switch_service,
         release_gate_service=release_gate_service,
+        release_gate_runtime=release_gate_runtime,
+        release_report_builder=release_report_builder,
         runtime_contract_service=runtime_contract_service,
         safety_policy_service=safety_policy_service,
         safety_decision_service=safety_decision_service,
@@ -789,6 +816,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         settings_service=settings_service,
         voice_service=voice_service,
         approval_service=approval_service,
+        skill_candidate_extractor=skill_candidate_extractor,
+        skill_promotion_runtime=skill_promotion_runtime,
         artifact_store=artifact_store,
         brain_service=BrainService(brain_repo, secret_store, audit_service),
         brain_decision_service=brain_decision_service,
