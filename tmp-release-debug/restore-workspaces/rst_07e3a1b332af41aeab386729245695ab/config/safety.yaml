@@ -1,0 +1,60 @@
+risk:
+  require_confirmation:
+    - file_delete
+    - file_overwrite
+    - external_post
+    - payment
+    - wallet_sign
+    - system_setting_change
+    - install_program
+    - send_sensitive_data
+  deny_paths:
+    - ~/.ssh/**
+    - ~/.gnupg/**
+    - ~/.config/*/secrets/**
+    - browser_profile://default/**
+  approval_profile: strict
+  chat_visible_redaction: strict
+  approval_policy:
+    balanced_personal:
+      auto_approve_max_risk: R3
+      auto_approve_sandboxed_terminal: true
+      auto_approve_actions:
+        - browser.download
+        - browser.screenshot
+        - browser.vision_snapshot
+        - file.write
+        - file.copy
+        - file.move
+        - project.clone
+        - project.build
+        - project.test
+        - runtime.ensure
+      auto_approve_categories:
+        - browser_download
+        - browser_read
+        - file_write
+        - project_clone
+      require_approval_actions:
+        - file.delete
+        - browser.submit
+        - browser.upload
+        - account.publish_post
+        - host.install_software
+        - host.uninstall_software
+        - project.deployment.run
+        - project.run
+        - project.install_deps
+      require_approval_categories:
+        - browser_submit
+        - browser_upload
+        - payment
+        - network_write
+        - account_external_post
+        - host_install
+        - managed_process
+        - project_dependency_install
+        - project_deployment
+        - file_delete
+  sandbox:
+    high_risk_tools: docker
