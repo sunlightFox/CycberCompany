@@ -73,6 +73,95 @@ def test_phase59_browser_read_page_blocks_metadata_url(client: TestClient) -> No
     assert "安全策略已拒绝访问" in reply or "metadata 或私网敏感地址" in reply
 
 
+def test_phase59_browser_search_with_citation_executes_without_task(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    async def fake_execute(request, trace_id=None):  # noqa: ANN001,ANN202
+        del trace_id
+        if request.tool_name == "browser.search":
+            return type(
+                "ToolResponse",
+                (),
+                {
+                    "result": {
+                        "title": "Search Results",
+                        "url": "https://example.test/search?q=chat+quality",
+                        "http_status": 200,
+                        "browser_evidence_id": "bev_test",
+                        "content_preview": (
+                            "<html><body><li>Chat quality regression report</li>"
+                            "<li>Browser evidence summary</li></body></html>"
+                        ),
+                    },
+                    "tool_call": type(
+                        "ToolCall",
+                        (),
+                        {
+                            "tool_call_id": "call_search",
+                            "risk_level": type("Risk", (), {"value": "R2"})(),
+                        },
+                    )(),
+                },
+            )()
+        raise AssertionError(f"unexpected tool {request.tool_name}")
+
+    monkeypatch.setattr(client.app.state.registry.tool_runtime, "execute", fake_execute)
+    conversation = client.get("/api/chat/conversations").json()["items"][0]
+    turn = client.post(
+        "/api/chat/turn",
+        json={
+            "session_id": "phase59-browser-search",
+            "conversation_id": conversation["conversation_id"],
+            "member_id": "mem_xiaoyao",
+            "input": {
+                "type": "text",
+                "text": "请用浏览器搜索 chat quality，并总结结果，必须说明证据来源。",
+            },
+        },
+    ).json()
+    events = _parse_sse(client.get(turn["stream_url"]).text)
+    reply = "".join(
+        event["payload"].get("text", "") for event in events if event["event"] == "response.delta"
+    )
+    completed = next(event for event in events if event["event"] == "response.completed")
+    payload = completed["payload"]["response_plan"]["structured_payload"]
+
+    assert "task.created" not in {event["event"] for event in events}
+    assert "证据来源" in reply
+    assert payload["route_semantics"]["route"] == "browser_search_with_citation"
+    assert payload["browser_workflow_result"]["status"] == "completed"
+    assert payload["evidence_refs"][0]["browser_evidence_id"] == "bev_test"
+
+
+def test_phase59_desktop_native_request_returns_structured_boundary(client: TestClient) -> None:
+    conversation = client.get("/api/chat/conversations").json()["items"][0]
+    turn = client.post(
+        "/api/chat/turn",
+        json={
+            "session_id": "phase59-desktop-boundary",
+            "conversation_id": conversation["conversation_id"],
+            "member_id": "mem_xiaoyao",
+            "input": {
+                "type": "text",
+                "text": "请帮我操作桌面窗口，把当前桌面上的记事本窗口最小化，然后告诉我结果。",
+            },
+        },
+    ).json()
+    events = _parse_sse(client.get(turn["stream_url"]).text)
+    reply = "".join(
+        event["payload"].get("text", "") for event in events if event["event"] == "response.delta"
+    )
+    completed = next(event for event in events if event["event"] == "response.completed")
+    payload = completed["payload"]["response_plan"]["structured_payload"]
+
+    assert "没有执行" in reply
+    assert "desktop.*" in reply
+    assert payload["capability_boundary"]["status"] == "capability_not_supported"
+    assert payload["capability_boundary"]["executed"] is False
+    assert payload["route_semantics"]["route"] == "desktop_native_request"
+
+
 class _TestSite:
     def __init__(self) -> None:
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), _TestHandler)

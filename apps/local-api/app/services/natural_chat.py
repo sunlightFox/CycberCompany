@@ -10,19 +10,27 @@ from core_types import ApprovalDetail, ResponsePlan, RiskLevel
 from response_composer import ResponseComposer
 from response_composer.chat_voice import voice_metadata_for_scenario
 from response_composer.opening_copy import opening_copy
-from app.services.chat_visible_guard import (
-    reset_visible_redaction_profile as _reset_visible_redaction_profile,
-    set_visible_redaction_profile as _set_visible_redaction_profile,
-    visible_text_guard as _visible_text_guard,
-)
 from trace_service import redact
 
 from app.core.errors import AppError
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.chat_repo import ChatRepository
-from app.services.approvals import ApprovalService
-from app.services.action_dialogue_mapper import ActionDialogueMapperService
 from app.schemas.chat_quality import ActionDialogueFacts
+from app.services.action_dialogue_mapper import ActionDialogueMapperService
+from app.services.approvals import ApprovalService
+from app.services.chat_pending_state import (
+    active_pending_approval_actions,
+    explicit_pending_approval_actions,
+)
+from app.services.chat_visible_guard import (
+    reset_visible_redaction_profile as _reset_visible_redaction_profile,
+)
+from app.services.chat_visible_guard import (
+    set_visible_redaction_profile as _set_visible_redaction_profile,
+)
+from app.services.chat_visible_guard import (
+    visible_text_guard as _visible_text_guard,
+)
 
 FORBIDDEN_MAIN_REPLY_TERMS = {
     "approval_id": "确认编号",
@@ -140,15 +148,33 @@ class NaturalChatActionGateway:
         text = user_text.strip()
         if not text:
             return None
-        pending = await self._pending_actions(turn["conversation_id"], session_id)
+        text_is_new_action = _looks_like_new_action_request(text)
+        pending = await self._pending_actions(
+            turn["conversation_id"],
+            session_id,
+            user_text=text,
+        )
         if not pending:
-            if _is_deny(text) or _is_edit(text):
+            if text_is_new_action:
+                return None
+            if any(
+                matcher(text)
+                for matcher in (
+                    _is_confirm,
+                    _is_deny,
+                    _is_edit,
+                    _is_session_allow,
+                    _is_always_allow,
+                )
+            ):
                 return _outcome(
                     _no_pending_text(text),
                     status="no_pending_action",
                     reason_codes=["no_pending_action"],
                     clear_pending=True,
                 )
+            return None
+        if text_is_new_action and not _looks_like_resolution(text):
             return None
         hard_block = _hard_block_reason(text)
         if hard_block:
@@ -399,21 +425,15 @@ class NaturalChatActionGateway:
         self,
         conversation_id: str,
         session_id: str | None,
+        user_text: str | None = None,
     ) -> list[dict[str, Any]]:
         state = await self._chat_repo.get_working_state(conversation_id)
-        pending = dict((state or {}).get("pending_confirmation") or {})
-        actions = [
-            dict(item)
-            for item in pending.get("actions", [])
-            if isinstance(item, dict) and item.get("approval_id")
-        ]
-        if session_id:
-            same_session = [
-                item for item in actions if str(item.get("session_id") or "") == str(session_id)
-            ]
-            if same_session:
-                return same_session
-        return actions
+        pending = active_pending_approval_actions(state, session_id=session_id)
+        if pending:
+            return pending
+        if user_text:
+            return explicit_pending_approval_actions(state, user_text=user_text)
+        return []
 
 
 def pending_action_from_approval(
@@ -1026,14 +1046,16 @@ def _hard_block_reason(text: str) -> str | None:
 
 def _hard_block_text(reason: str) -> str:
     if reason == "browser_file_url_denied":
-        return _natural_copy("hard_block_file", seed=reason)
+        return "不能直接打开本机 file:// 路径；这会越过受控边界，也可能暴露本地敏感文件。"
     if reason == "metadata_or_private_network_target":
-        return _natural_copy("hard_block_network", seed=reason)
-    return _natural_copy("hard_block_secret", seed=reason)
+        return "不能访问这类元数据或私有网络地址；安全策略已拒绝，我也不会替你探测内部目标。"
+    return "不能处理这类私钥、助记词或系统密钥请求；我不会读取、复述或外发敏感凭据。"
 
 
 def _looks_like_resolution(text: str) -> bool:
     text = _control_text(text)
+    if _looks_like_new_action_request(text):
+        return False
     return (
         _is_confirm(text)
         or _is_deny(text)
@@ -1135,6 +1157,54 @@ def _control_text(text: str) -> str:
 def _asks_how_to_confirm(text: str) -> bool:
     markers = ["不懂什么是审批", "不想复制", "怎么回复", "告诉我应该怎么回复"]
     return any(marker in text for marker in markers)
+
+
+def _looks_like_new_action_request(text: str) -> bool:
+    text = _control_text(text)
+    lowered = text.lower()
+    standalone_resolution = (
+        (_is_confirm(text) or _is_deny(text) or _is_edit(text) or _is_session_allow(text) or _is_always_allow(text))
+        and "http://" not in lowered
+        and "https://" not in lowered
+        and not any(marker in text for marker in ["请下载", "帮我下载", "请打开", "帮我打开", "截图留证", "下载完告诉我结果"])
+    )
+    if standalone_resolution:
+        return False
+    if "http://" in lowered or "https://" in lowered:
+        return any(
+            marker in text or marker in lowered
+            for marker in [
+                "请下载",
+                "帮我下载",
+                "下载完告诉我结果",
+                "请打开",
+                "帮我看一下",
+                "帮我看看",
+                "截图留证",
+                "保存页面截图",
+                "登录",
+            ]
+        )
+    if any(marker in text for marker in ["登录", "截图", "截屏", "下载", "请打开", "帮我打开"]):
+        request_markers = ["请", "帮我", "然后", "留证", "执行", "打开", "下载", "登录", "截图"]
+        explanation_markers = ["不要伪称完成", "不要说已完成", "还没真正执行", "等什么证据"]
+        if any(marker in text for marker in request_markers):
+            return True
+        if any(marker in text for marker in explanation_markers) and any(
+            marker in text for marker in ["登录", "截图", "下载"]
+        ):
+            return True
+    return any(
+        marker in text or marker in lowered
+        for marker in [
+            "帮我下载",
+            "请下载",
+            "下载完告诉我结果",
+            "帮我安装",
+            "请安装",
+            "请打开",
+        ]
+    )
 
 
 def _first_url(text: str) -> str | None:
@@ -1258,11 +1328,20 @@ def _impact_for_action(action_type: str) -> str:
     if action_type == "account.publish_post":
         return "这会向外部平台发布内容，所以需要你确认；确认前尚未发布。"
     if action_type == "browser.download":
-        return "这会在本机生成下载文件，所以需要你确认；确认前尚未下载。"
+        return (
+            "这会在本机生成下载文件，所以需要你确认；确认前尚未下载，"
+            "我也不会把这步说成已经完成。"
+        )
     if action_type in {"browser.submit", "browser.fill", "browser.type", "browser.click"}:
-        return "这可能改变页面状态或账号状态，所以需要你确认；确认前尚未提交。"
+        return (
+            "这可能改变页面状态或账号状态，所以需要你确认；确认前尚未提交，"
+            "我也不会把这步说成已经完成。"
+        )
     if action_type == "browser.screenshot":
-        return "这会保存截图结果，所以需要你确认；确认前尚未保存。"
+        return (
+            "这会保存截图结果，所以需要你确认；确认前尚未保存，"
+            "我也不会把这步说成已经完成。"
+        )
     if action_type == "file.delete":
         return "删除后可能无法从任务结果里直接恢复，所以需要你明确确认。"
     if action_type == "terminal.run":

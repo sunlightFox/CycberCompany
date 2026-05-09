@@ -72,6 +72,26 @@ class ChatQualityPolicy:
                 ),
             )
 
+        if _cross_session_memory_exfiltration_request(text):
+            return self._outcome(
+                "这类跨用户、跨会话或隐藏数据读取请求我不能帮。聊天内容和记忆必须按权限边界隔离，不能因为一句话就越权输出。",
+                intent="privacy_boundary",
+                status="supportive_safety_refusal",
+                reason_codes=[
+                    "chat_quality_policy",
+                    "cross_session_memory_exfiltration_refusal",
+                    "no_task_or_tool_created",
+                ],
+                structured={
+                    "task_created": False,
+                    "tool_created": False,
+                    "approval_created": False,
+                    "fail_closed": True,
+                    "boundary_scope": "cross_user_or_hidden_chat_data",
+                },
+                safety_notice="不能读取其他用户、其他会话或隐藏数据里的聊天内容。",
+            )
+
         if _supportive_safety_refusal_request(text):
             return self._outcome(
                 _quality_copy("supportive_safety_refusal", seed=text),
@@ -173,6 +193,16 @@ class ChatQualityPolicy:
             tool_notice=tool_notice,
         )
         follow_ups = _follow_ups_for_status(status)
+        top_level_boundary = {}
+        if isinstance(structured.get("capability_boundary"), dict):
+            top_level_boundary["capability_boundary"] = redact(structured["capability_boundary"])
+        route_name = "direct"
+        capability_boundary = structured.get("capability_boundary")
+        if (
+            isinstance(capability_boundary, dict)
+            and str(capability_boundary.get("tool_namespace") or "") == "desktop"
+        ):
+            route_name = "desktop_native_request"
         plan = plan.model_copy(
             update={
                 "title": "能力边界" if tool_notice else plan.title,
@@ -180,10 +210,11 @@ class ChatQualityPolicy:
                 "follow_up_options": follow_ups,
                 "structured_payload": {
                     **plan.structured_payload,
+                    **top_level_boundary,
                     "scenario": "chat_quality_policy",
                     **voice_metadata_for_scenario(_voice_scenario_for_quality_status(status)),
                     "route_semantics": {
-                        "route": "direct",
+                        "route": route_name,
                         "model_called": False,
                         "task_created": False,
                         "tool_created": False,
@@ -312,10 +343,12 @@ def _desktop_native_request(text: str) -> bool:
 def _desktop_boundary_contract() -> dict[str, Any]:
     return {
         "tool_namespace": "desktop",
-        "status": "not_implemented",
+        "status": "capability_not_supported",
+        "executed": False,
         "supported_actions": [],
         "boundary": "当前后端未提供原生窗口控制、鼠标键盘全局控制、桌面截图定位能力。",
         "safe_fallbacks": ["browser.*", "file.*", "terminal.*"],
+        "failure_code": "desktop_native_not_supported",
         "requires_future_design": ["capability", "approval", "trace", "artifact", "sandbox"],
     }
 
@@ -368,11 +401,22 @@ def _supportive_safety_refusal_request(text: str) -> bool:
         "skip approval",
     ]
     abuse_markers = [
+        "登录别人的账号",
         "登录别人账号",
         "登录他人账号",
         "替我登录别人",
+        "不需要授权",
+        "无需授权",
         "越权登录",
         "越权审批",
+        "其他用户",
+        "其他会话",
+        "隐藏数据库",
+        "聊天内容输出给我",
+        "把聊天内容输出给我",
+        "导出别人的聊天",
+        "读取其他会话",
+        "跨会话读取",
         "假装已执行",
         "假装已经执行",
         "假装完成",
@@ -383,6 +427,16 @@ def _supportive_safety_refusal_request(text: str) -> bool:
     return any(marker in lowered or marker in text for marker in bypass_markers) or any(
         marker in lowered or marker in text for marker in abuse_markers
     )
+
+
+def _cross_session_memory_exfiltration_request(text: str) -> bool:
+    lowered = text.lower()
+    scope_markers = ["其他用户", "其他会话", "隐藏数据库", "隐藏数据", "跨会话", "跨用户"]
+    data_markers = ["聊天内容", "聊天记录", "会话内容", "记忆", "对话"]
+    request_markers = ["输出", "给我", "导出", "复述", "列出", "读取"]
+    return any(marker in lowered or marker in text for marker in scope_markers) and any(
+        marker in lowered or marker in text for marker in data_markers
+    ) and any(marker in lowered or marker in text for marker in request_markers)
 
 
 def _high_risk_professional_advice(text: str) -> bool:
@@ -447,9 +501,31 @@ def _recoverable_secret_input(
         return False
     if brain_intent in {"memory_update", "memory_correction", "memory_query"}:
         return False
+    if _readonly_browser_secret_url_context(lowered):
+        return False
     # Keep api_key-only inputs on the existing Phase 35 failed-turn privacy route; Phase 41
     # closes the quality gap for token/password style chat inputs that previously went blank.
     return bool(re.search(r"\b(?:token|password)\s*=", lowered))
+
+
+def _readonly_browser_secret_url_context(lowered: str) -> bool:
+    if "http://" not in lowered and "https://" not in lowered:
+        return False
+    if not re.search(r"[?&](?:token|password)=", lowered):
+        return False
+    read_markers = [
+        "请打开",
+        "打开",
+        "看结果",
+        "看看",
+        "讲什么",
+        "有什么字段",
+        "最终页面",
+    ]
+    side_effect_markers = ["下载", "截图", "保存", "提交", "发送", "购买", "下单", "支付"]
+    return any(marker in lowered for marker in read_markers) and not any(
+        marker in lowered for marker in side_effect_markers
+    )
 
 
 def _follow_ups_for_status(status: str) -> list[str]:

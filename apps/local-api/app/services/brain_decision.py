@@ -1092,7 +1092,27 @@ def _memory_correction(text: str) -> bool:
 def _system_settings(text: str) -> bool:
     if _office_document_request(text):
         return False
-    return any(marker in text for marker in ["配置", "设置", "模型", "大脑"])
+    action_markers = ["设置", "配置", "切换", "修改", "调整", "启用", "关闭", "禁用"]
+    target_markers = [
+        "模型设置",
+        "模型配置",
+        "切换模型",
+        "修改模型",
+        "大脑设置",
+        "大脑配置",
+        "记忆设置",
+        "安全策略",
+        "mcp",
+        "插件",
+        "技能包",
+        "开发者设置",
+        "日志与审计",
+        "备份恢复",
+        "壳与外观",
+    ]
+    return any(marker in text for marker in action_markers) and any(
+        marker in text.lower() for marker in target_markers
+    )
 
 
 def _approval_response(text: str) -> bool:
@@ -1150,7 +1170,6 @@ def _persona_boundary_question(text: str) -> bool:
         "隐藏账户",
         "能直接帮我登录",
         "直接帮我登录",
-        "帮我登录",
         "直接替我登录",
         "替我登录",
         "绕过系统",

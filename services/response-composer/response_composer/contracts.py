@@ -1676,6 +1676,12 @@ def _compose_action_status_text(facts: dict[str, Any]) -> str:
                 reason=reason or "你可以换个目标或来源，我再试一轮。",
             )
         return opening_copy("action.approved_progress", seed, label=label)
+    if status == "completed":
+        evidence = str(facts.get("evidence_summary") or "").strip()
+        return opening_copy("task.completed", seed, title=label) + _friendly_evidence_text(
+            evidence,
+            seed=seed,
+        )
     if status == "denied":
         return opening_copy("action.denied", seed, label=label)
     if status == "edited":

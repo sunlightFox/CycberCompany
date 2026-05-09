@@ -517,6 +517,12 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     approval_service.set_notification_callback(
         notification_gateway_service.notify_approval_required
     )
+    approval_service.set_resolution_callback(
+        lambda approval, trace_id: task_engine.handle_approval_resolved(
+            approval.approval_id,
+            trace_id=trace_id,
+        )
+    )
     checkpoint_service.set_rollback_notification_callback(
         notification_gateway_service.notify_checkpoint_rollback
     )

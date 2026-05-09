@@ -39,6 +39,11 @@ class BrainCreateRequest(ApiModel):
     allow_fallback: bool = True
     allow_cloud: bool = False
     streaming_supported: bool = True
+    protocol_family: str = "auto"
+    request_format: str = "chat_completions"
+    response_format: str = "auto"
+    supports_stream: bool = True
+    verify_capabilities: dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
 
     @field_validator("endpoint")
@@ -73,6 +78,11 @@ class BrainUpdateRequest(ApiModel):
     allow_fallback: bool | None = None
     allow_cloud: bool | None = None
     streaming_supported: bool | None = None
+    protocol_family: str | None = None
+    request_format: str | None = None
+    response_format: str | None = None
+    supports_stream: bool | None = None
+    verify_capabilities: dict[str, Any] | None = None
     enabled: bool | None = None
 
     @field_validator("endpoint")
@@ -109,6 +119,11 @@ class BrainResponse(ApiModel):
     allow_fallback: bool
     allow_cloud: bool
     streaming_supported: bool
+    protocol_family: str = "auto"
+    request_format: str = "chat_completions"
+    response_format: str = "auto"
+    supports_stream: bool = True
+    verify_capabilities: dict[str, Any] = Field(default_factory=dict)
     last_verified_at: str | None = None
     last_error_code: str | None = None
     last_error_message: str | None = None
@@ -127,6 +142,7 @@ class BrainVerifyResponse(ApiModel):
     latency_ms: int | None = None
     error_code: str | None = None
     message: str
+    verify_capabilities: dict[str, Any] = Field(default_factory=dict)
 
 
 class BrainDecisionPreviewRequest(ApiModel):

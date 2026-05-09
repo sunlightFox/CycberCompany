@@ -11,6 +11,8 @@ from response_composer.chat_voice import (
     PromptMode,
 )
 
+from app.schemas.chat_routes import ModelRouteResolution
+
 
 class ChatModelCoordinator:
     """Builds model-safe chat inputs and owns model-route failure semantics."""
@@ -137,10 +139,49 @@ class ChatModelCoordinator:
         available_brains: list[dict[str, Any]],
         privacy_level: str,
     ) -> ErrorCode:
+        resolution = self.route_resolution(available_brains, privacy_level)
+        return ErrorCode(
+            resolution.failure_code or ErrorCode.MODEL_ROUTE_NOT_FOUND.value
+        )
+
+    def route_resolution(
+        self,
+        available_brains: list[dict[str, Any]],
+        privacy_level: str,
+    ) -> ModelRouteResolution:
+        brain_ids = [
+            str(item.get("brain_id") or "")
+            for item in available_brains
+            if str(item.get("brain_id") or "").strip()
+        ]
         if privacy_level == "high" and not any(
             bool(brain.get("is_local")) for brain in available_brains
         ):
-            return ErrorCode.MODEL_ROUTE_BLOCKED_BY_PRIVACY
+            return ModelRouteResolution(
+                route_status="blocked_by_privacy",
+                failure_code=ErrorCode.MODEL_ROUTE_BLOCKED_BY_PRIVACY.value,
+                retryable=False,
+                degrade_allowed=True,
+                privacy_level=privacy_level,
+                available_brain_ids=brain_ids,
+                reason="high_privacy_requires_local_brain",
+            )
         if not available_brains:
-            return ErrorCode.MODEL_NOT_CONFIGURED
-        return ErrorCode.MODEL_ROUTE_NOT_FOUND
+            return ModelRouteResolution(
+                route_status="not_configured",
+                failure_code=ErrorCode.MODEL_NOT_CONFIGURED.value,
+                retryable=False,
+                degrade_allowed=True,
+                privacy_level=privacy_level,
+                available_brain_ids=[],
+                reason="no_routable_brains",
+            )
+        return ModelRouteResolution(
+            route_status="route_not_found",
+            failure_code=ErrorCode.MODEL_ROUTE_NOT_FOUND.value,
+            retryable=False,
+            degrade_allowed=True,
+            privacy_level=privacy_level,
+            available_brain_ids=brain_ids,
+            reason="brains_available_but_no_route_selected",
+        )

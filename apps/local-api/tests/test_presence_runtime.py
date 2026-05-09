@@ -175,6 +175,35 @@ def test_presence_state_does_not_treat_commitments_as_completed_action() -> None
     assert state.interaction_posture == "steady"
 
 
+def test_presence_state_followup_candidates_do_not_turn_plain_explanation_into_action() -> None:
+    understanding = ConversationUnderstanding(
+        conversation_mode="deep_talk",
+        user_goal="解释聊天主链为什么要保持当前消息优先",
+        relationship_expectation="explanation",
+        current_turn_priority="reply_first",
+        emotional_state="neutral",
+    )
+
+    state = PresenceStateResolverService().resolve(
+        PresenceStateRequest(
+            turn_id="turn_followup_plain_chat",
+            conversation_id="conv_1",
+            member_id="mem_xiaowu",
+            user_text="解释一下为什么 latest instruction override 很重要。",
+            understanding=understanding,
+            latest_continuity={
+                "assistant_commitments": ["后面继续展开"],
+                "followup_candidates": ["继续往下推一步"],
+            },
+        )
+    )
+
+    assert state.action_state["pending_approval"] is False
+    assert state.action_state["recently_finished_action"] is False
+    assert state.session_state["followup_candidates"] == ["继续往下推一步"]
+    assert state.interaction_posture == "steady"
+
+
 def test_response_policy_override_prefers_reorient_over_contextual() -> None:
     understanding = ConversationUnderstanding(
         conversation_mode="deep_talk",

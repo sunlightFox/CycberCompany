@@ -2385,15 +2385,35 @@ class ToolRuntime:
             next_step = "先执行 terminal.run 并通过审批；执行完成后再读取日志。"
             task = await self._repo.get_task(request.task_id)
             task_status = str((task or {}).get("status") or "")
+            steps = await self._repo.list_steps(request.task_id)
+            terminal_steps = [
+                step
+                for step in steps
+                if str((step.get("input") or {}).get("tool_name") or "") == "terminal.run"
+            ]
+            latest_terminal_step = terminal_steps[-1] if terminal_steps else None
+            approval_status = ""
+            if latest_terminal_step and latest_terminal_step.get("approval_id"):
+                approval = await self._repo.get_approval(str(latest_terminal_step["approval_id"]))
+                approval_status = str((approval or {}).get("status") or "")
             if task_status == "waiting_approval":
                 reason = "waiting_approval"
                 next_step = "先确认终端命令；确认前不会产生终端日志。"
+                if approval_status in {"approved", "edited"}:
+                    reason = "approval_resolved_pending_resume"
+                    next_step = "审批已通过，终端命令正在恢复执行；稍后再读取日志。"
+            elif latest_terminal_step and str(latest_terminal_step.get("status") or "") == "running":
+                reason = "executing_after_approval"
+                next_step = "终端命令正在执行；执行完成后再读取日志。"
             elif task_status in {"planned", "pending"}:
                 reason = "terminal_not_executed"
                 next_step = "先启动任务或执行 terminal.run。"
             elif task_status in {"failed", "cancelled", "paused"}:
                 reason = f"task_{task_status}"
                 next_step = "查看任务回放了解失败/暂停原因，或重新发起命令。"
+            elif latest_terminal_step and str(latest_terminal_step.get("status") or "") == "completed":
+                reason = "completed_but_log_missing"
+                next_step = "终端命令已结束，但日志工件缺失；请查看任务回放和 tool_call 输出。"
             return ToolRunOutcome(
                 result={
                     "status": "unavailable",
@@ -2403,6 +2423,12 @@ class ToolRuntime:
                     "recoverable": True,
                     "next_step": next_step,
                     "task_status": task_status or None,
+                    "step_status": (
+                        str(latest_terminal_step.get("status") or "")
+                        if latest_terminal_step
+                        else None
+                    ),
+                    "approval_status": approval_status or None,
                 },
                 artifacts=[],
             )
@@ -3530,6 +3556,10 @@ BUILTIN_TOOLS: list[dict[str, Any]] = [
             "browser.extract": "R2",
             "browser.console": "R2",
             "browser.network_summary": "R2",
+            "desktop.window.list": "R1",
+            "desktop.window.focus": "R4",
+            "desktop.window.minimize": "R4",
+            "desktop.window.maximize": "R4",
             "terminal.run": "R5",
             "terminal.stop": "R2",
             "terminal.read_log": "R1",

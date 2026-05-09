@@ -5,6 +5,7 @@ from typing import Any
 from core_types import ErrorCode
 from safety_service import PrivacyClassification, SafetyService
 
+from app.schemas.chat_routes import ModelRouteResolution
 from app.services.chat_model import ChatModelCoordinator
 from app.services.chat_safety import planner_privacy_context
 
@@ -43,3 +44,10 @@ class ChatPrivacyCoordinator:
         privacy_level: str,
     ) -> ErrorCode:
         return self._model.route_error_code(available_brains, privacy_level)
+
+    def model_route_resolution(
+        self,
+        available_brains: list[dict[str, Any]],
+        privacy_level: str,
+    ) -> ModelRouteResolution:
+        return self._model.route_resolution(available_brains, privacy_level)

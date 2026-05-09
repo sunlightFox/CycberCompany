@@ -117,6 +117,8 @@ def test_response_composer_clarification_and_boundary_copy_sound_more_natural() 
     assert "只读方式" in clarification
     assert "我先问清楚这几件事" not in clarification
     assert "方案铺开" in boundary
+    assert "不能" in boundary
+    assert "安全边界" in boundary
     assert "绕过去" not in boundary
 
 

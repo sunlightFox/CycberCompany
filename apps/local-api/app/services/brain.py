@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+from dataclasses import replace
 from time import perf_counter
+from urllib.parse import urlparse
 
 from brain.adapters import CancelToken, ModelAdapterError, ModelChatRequest, OpenAICompatibleClient
 from core_types import ErrorCode, RiskLevel
@@ -15,6 +18,7 @@ from app.schemas.brain import (
     BrainVerifyResponse,
 )
 from app.services.audit import AuditEventService
+from app.services.model_gateway import ModelProtocolGateway
 from app.services.secrets import SecretStore
 
 
@@ -28,6 +32,10 @@ class BrainService:
         self._repo = repo
         self._secrets = secret_store
         self._audit = audit
+        self._gateway = ModelProtocolGateway(
+            secret_store=secret_store,
+            client_cls=OpenAICompatibleClient,
+        )
 
     async def list_brains(self) -> list[BrainResponse]:
         return [BrainResponse(**row) for row in await self._repo.list_brains()]
@@ -220,14 +228,11 @@ class BrainService:
                 error_code=ErrorCode.MODEL_NOT_CONFIGURED.value,
                 message="endpoint 未配置",
                 latency_ms=None,
+                verify_capabilities={},
                 trace_id=trace_id,
             )
 
         started = perf_counter()
-        client = OpenAICompatibleClient(
-            str(brain["endpoint"]),
-            self._secrets.get_secret(brain.get("api_key_ref")),
-        )
         request = ModelChatRequest(
             model=str(brain["model_name"]),
             messages=[{"role": "user", "content": "ping"}],
@@ -242,9 +247,92 @@ class BrainService:
             privacy_level="low",
             retry_count=0,
         )
+        verify_capabilities = {
+            "configured_protocol_family": str(brain.get("protocol_family") or "auto"),
+            "protocol_family": str(brain.get("protocol_family") or "auto"),
+            "request_format": str(brain.get("request_format") or "chat_completions"),
+            "response_format": str(brain.get("response_format") or "auto"),
+            "supports_stream": bool(
+                brain.get("supports_stream", brain.get("streaming_supported", True))
+            ),
+            "candidate_protocol_families": [],
+            "selected_protocol_family": None,
+            "tcp_reachable": False,
+            "endpoint_reachable": False,
+            "auth_valid": False,
+            "non_stream_valid": False,
+            "stream_valid": False,
+            "error_stage": None,
+        }
         try:
-            await client.complete_chat(request, CancelToken())
+            verify_capabilities["tcp_reachable"] = await _probe_tcp_reachability(
+                str(brain["endpoint"]),
+            )
+            candidates = _protocol_candidates(brain)
+            verify_capabilities["candidate_protocol_families"] = [
+                str(candidate.get("protocol_family") or "chat_completions")
+                for candidate in candidates
+            ]
+            last_error: ModelAdapterError | None = None
+            for candidate in candidates:
+                candidate_family = str(candidate.get("protocol_family") or "chat_completions")
+                verify_capabilities.update(
+                    {
+                        "protocol_family": candidate_family,
+                        "request_format": str(
+                            candidate.get("request_format") or verify_capabilities["request_format"]
+                        ),
+                        "response_format": str(
+                            candidate.get("response_format") or verify_capabilities["response_format"]
+                        ),
+                        "selected_protocol_family": candidate_family,
+                        "endpoint_reachable": False,
+                        "auth_valid": False,
+                        "non_stream_valid": False,
+                        "stream_valid": False,
+                        "error_stage": None,
+                    }
+                )
+                try:
+                    await self._gateway.complete_chat(candidate, request, CancelToken())
+                    verify_capabilities.update(
+                        {
+                            "endpoint_reachable": True,
+                            "auth_valid": True,
+                            "non_stream_valid": True,
+                            "error_stage": None,
+                        }
+                    )
+                    if verify_capabilities["supports_stream"]:
+                        stream_started = False
+                        async for event in self._gateway.stream_chat(
+                            candidate,
+                            replace(request, stream=True),
+                            CancelToken(),
+                        ):
+                            if event.event == "started":
+                                stream_started = True
+                            elif event.event in {"delta", "completed"}:
+                                verify_capabilities["stream_valid"] = True
+                                break
+                        if not stream_started:
+                            verify_capabilities["stream_valid"] = False
+                    break
+                except ModelAdapterError as exc:
+                    last_error = exc
+                    verify_capabilities["error_stage"] = _verify_error_stage(
+                        exc.code.value,
+                        verify_capabilities,
+                    )
+                    continue
+            else:
+                assert last_error is not None
+                raise last_error
         except ModelAdapterError as exc:
+            verify_capabilities["error_stage"] = _verify_error_stage(
+                exc.code.value,
+                verify_capabilities,
+            )
             latency_ms = int((perf_counter() - started) * 1000)
             return await self._write_verify_result(
                 brain_id,
@@ -252,6 +340,7 @@ class BrainService:
                 error_code=exc.code.value,
                 message=exc.message,
                 latency_ms=latency_ms,
+                verify_capabilities=verify_capabilities,
                 trace_id=trace_id,
             )
         latency_ms = int((perf_counter() - started) * 1000)
@@ -261,6 +350,7 @@ class BrainService:
             error_code=None,
             message="模型连接验证成功",
             latency_ms=latency_ms,
+            verify_capabilities=verify_capabilities,
             trace_id=trace_id,
         )
 
@@ -272,6 +362,7 @@ class BrainService:
         error_code: str | None,
         message: str,
         latency_ms: int | None,
+        verify_capabilities: dict[str, object],
         trace_id: str | None,
     ) -> BrainVerifyResponse:
         now = utc_now_iso()
@@ -283,6 +374,7 @@ class BrainService:
                 "last_error_code": error_code,
                 "last_error_message": None if status == "healthy" else message,
                 "latency_ms": latency_ms,
+                "verify_capabilities": verify_capabilities,
                 "updated_at": now,
             },
         )
@@ -293,7 +385,12 @@ class BrainService:
             object_id=brain_id,
             summary=message,
             risk_level=RiskLevel.R1,
-            payload={"brain_id": brain_id, "status": status, "error_code": error_code},
+            payload={
+                "brain_id": brain_id,
+                "status": status,
+                "error_code": error_code,
+                "verify_capabilities": verify_capabilities,
+            },
             trace_id=trace_id,
         )
         return BrainVerifyResponse(
@@ -302,6 +399,7 @@ class BrainService:
             latency_ms=latency_ms,
             error_code=error_code,
             message=message,
+            verify_capabilities=verify_capabilities,
         )
 
     def _validate_brain_payload(
@@ -331,3 +429,67 @@ class BrainService:
                 "云端或远程大脑必须提供 api_key 或 api_key_ref",
                 status_code=422,
             )
+
+
+async def _probe_tcp_reachability(endpoint: str) -> bool:
+    parsed = urlparse(endpoint)
+    host = parsed.hostname
+    if not host:
+        return False
+    port = parsed.port
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port),
+            timeout=5.0,
+        )
+        writer.close()
+        await writer.wait_closed()
+        del reader
+        return True
+    except Exception:
+        return False
+
+
+def _verify_error_stage(error_code: str, verify_capabilities: dict[str, object]) -> str:
+    if error_code == ErrorCode.MODEL_UNAVAILABLE.value:
+        return "tcp_connect" if not verify_capabilities.get("tcp_reachable") else "http_connect"
+    if error_code == ErrorCode.MODEL_TIMEOUT.value:
+        if not verify_capabilities.get("non_stream_valid"):
+            return "non_stream_timeout"
+        return "stream_timeout"
+    if error_code == ErrorCode.MODEL_PROTOCOL_ERROR.value:
+        if not verify_capabilities.get("non_stream_valid"):
+            return "non_stream_protocol"
+        return "stream_protocol"
+    return "unknown"
+
+
+def _protocol_candidates(brain: dict[str, object]) -> list[dict[str, object]]:
+    configured_family = str(brain.get("protocol_family") or "auto").strip().lower()
+    request_format = str(brain.get("request_format") or "chat_completions").strip().lower()
+    response_format = str(brain.get("response_format") or "auto").strip().lower()
+    privacy_policy = brain.get("privacy_policy")
+    codex_wire_api = None
+    if isinstance(privacy_policy, dict):
+        value = privacy_policy.get("codex_wire_api")
+        if isinstance(value, str) and value.strip().lower() in {"responses", "chat_completions"}:
+            codex_wire_api = value.strip().lower()
+
+    def candidate(family: str) -> dict[str, object]:
+        return {
+            **brain,
+            "protocol_family": family,
+            "request_format": family,
+            "response_format": "responses" if family == "responses" else response_format,
+        }
+
+    if configured_family in {"responses", "chat_completions"}:
+        return [candidate(configured_family)]
+
+    ordered: list[str] = []
+    for family in [codex_wire_api, request_format, "chat_completions", "responses"]:
+        if family in {"responses", "chat_completions"} and family not in ordered:
+            ordered.append(str(family))
+    return [candidate(family) for family in ordered] or [candidate("chat_completions")]

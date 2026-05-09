@@ -8,6 +8,12 @@ from trace_service import TraceService, redact
 
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.chat_repo import ChatRepository
+from app.services.chat_pending_state import (
+    active_pending_clarification,
+    build_typed_pending_state,
+    clear_pending_state,
+    project_legacy_pending_confirmation,
+)
 
 
 @dataclass(frozen=True)
@@ -181,6 +187,8 @@ class ChatExperienceService:
         user_message = await self._chat_repo.get_message(turn["user_message_id"])
         session_id = _session_id_from_message(user_message)
         current_for_session = _same_session_state(current, session_id)
+        if current_for_session is None and _looks_like_cross_session_continuation(user_text):
+            current_for_session = current
         topic = _active_topic(user_text, current_for_session)
         constraints = _merge_limited(
             current_for_session.get("known_constraints", []) if current_for_session else [],
@@ -202,30 +210,40 @@ class ChatExperienceService:
             if clarification and clarification.needs_clarification
             else []
         )
-        if (
-            not questions
-            and current_for_session
-            and not current_for_session.get("pending_confirmation")
-        ):
+        pending_snapshot = project_legacy_pending_confirmation(current_for_session or {})
+        if not questions and current_for_session and not pending_snapshot:
             questions = current_for_session.get("open_questions", [])
-        pending = (
-            current_for_session.get("pending_confirmation", {})
-            if current_for_session
-            else {}
-        )
+        pending = pending_snapshot
         response_pending = _pending_from_response_plan(response_plan or {})
         if response_pending is not None:
             pending = response_pending
             questions = list(response_pending.get("questions") or [])
+            typed_pending = build_typed_pending_state(
+                conversation_id=turn["conversation_id"],
+                session_id=session_id,
+                source_turn_id=turn["turn_id"],
+                source_text=user_text,
+                approval_action=response_pending,
+            )
         elif clarification and clarification.needs_clarification:
             pending = {
                 "turn_id": turn["turn_id"],
                 "questions": clarification.questions,
                 "reason": clarification.reason,
             }
+            typed_pending = build_typed_pending_state(
+                conversation_id=turn["conversation_id"],
+                session_id=session_id,
+                source_turn_id=turn["turn_id"],
+                source_text=user_text,
+                clarification=pending,
+            )
         elif pending and _looks_like_pending_answer(user_text):
             pending = {}
             questions = []
+            typed_pending = clear_pending_state(current_for_session)
+        else:
+            typed_pending = clear_pending_state(current_for_session)
         state = {
             "conversation_id": turn["conversation_id"],
             "organization_id": "org_default",
@@ -239,7 +257,15 @@ class ChatExperienceService:
             "referenced_artifacts": _referenced_artifacts(response_plan or {}),
             "last_response_summary": _truncate(str(redact(assistant_text)), 360),
             "pending_confirmation": pending,
+            "pending_clarification": typed_pending.get("pending_clarification", {}),
+            "pending_approval_action": typed_pending.get("pending_approval_action", {}),
+            "pending_execution_resume": typed_pending.get("pending_execution_resume", {}),
             "source_turn_id": turn["turn_id"],
+            "source_message_fingerprint": typed_pending.get("pending_clarification", {}).get(
+                "source_message_fingerprint"
+            )
+            or typed_pending.get("pending_approval_action", {}).get("source_message_fingerprint")
+            or typed_pending.get("pending_execution_resume", {}).get("source_message_fingerprint"),
             "confidence": _state_confidence(topic, constraints, decisions),
             "status": status,
             "created_at": current.get("created_at") if current else now,
@@ -506,6 +532,10 @@ def _same_session_state(
     return None
 
 
+def _looks_like_cross_session_continuation(text: str) -> bool:
+    return any(word in text for word in ["继续", "刚才", "上一版", "接着", "顺着刚才"])
+
+
 def _filesystem_scope_is_ambiguous(text: str) -> bool:
     if any(marker in text for marker in ["那个", "这个", "一些", "某个"]):
         return True
@@ -669,6 +699,12 @@ def _state_confidence(topic: str, constraints: list[str], decisions: list[str]) 
 def _suggested_next_actions(code: str) -> list[str]:
     if code == "MODEL_NOT_CONFIGURED":
         return ["配置可用大脑后重试", "改为只创建任务草案", "保留本轮输入稍后继续"]
+    if code in {
+        "MODEL_ENDPOINT_MISMATCH",
+        "MODEL_RESPONSE_SCHEMA_ERROR",
+        "MODEL_STREAM_SCHEMA_ERROR",
+    }:
+        return ["检查模型 endpoint / 协议配置", "改用可兼容 provider", "查看 turn 事件和 trace"]
     if code == "MODEL_ROUTE_BLOCKED_BY_PRIVACY":
         return ["改用本地大脑", "移除敏感信息后重试"]
     return ["重试本轮", "换一种更短的提问方式", "查看 turn 事件和 trace"]

@@ -27,12 +27,21 @@ class ApprovalService:
         self._notification_callback: (
             Callable[[ApprovalDetail], Awaitable[Any]] | None
         ) = None
+        self._resolution_callback: (
+            Callable[[ApprovalDetail, str | None], Awaitable[Any]] | None
+        ) = None
 
     def set_notification_callback(
         self,
         callback: Callable[[ApprovalDetail], Awaitable[Any]],
     ) -> None:
         self._notification_callback = callback
+
+    def set_resolution_callback(
+        self,
+        callback: Callable[[ApprovalDetail, str | None], Awaitable[Any]],
+    ) -> None:
+        self._resolution_callback = callback
 
     async def create_approval(
         self,
@@ -287,7 +296,10 @@ class ApprovalService:
             trace_id=trace_id,
         )
         await self._end_span(span_id, output_data={"approval_id": approval_id, "status": status})
-        return await self.get(approval_id)
+        resolved = await self.get(approval_id)
+        if self._resolution_callback is not None:
+            await self._resolution_callback(resolved, trace_id)
+        return resolved
 
     async def _start_span(
         self,

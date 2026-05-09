@@ -7,9 +7,13 @@ from typing import Any, cast
 import pytest
 from app.services.chat_intent_router import (
     ChatIntentRouter,
+    browser_search_query,
+    browser_search_requires_citation,
     extract_host_software_name,
     host_filesystem_location,
     host_software_action,
+    is_browser_search_request,
+    is_desktop_native_request,
     is_explicit_download_request,
     is_host_filesystem_list_request,
     is_webpage_read_request,
@@ -153,6 +157,24 @@ def test_phase57_router_detects_readonly_webpage_read(text: str) -> None:
     assert extracted_url.startswith("https://example.com")
 
 
+def test_phase57_router_detects_browser_search_with_citation() -> None:
+    text = "请用浏览器搜索 chat main chain regression，并总结结果，必须说明证据来源。"
+    decision = ChatIntentRouter().decide(text)
+    assert decision.route_type == "browser_search_with_citation"
+    assert decision.requires_confirmation is False
+    assert is_browser_search_request(text) is True
+    assert browser_search_requires_citation(text) is True
+    assert "chat main chain regression" in browser_search_query(text)
+
+
+def test_phase57_router_detects_desktop_native_request() -> None:
+    text = "请帮我操作桌面窗口，把当前桌面上的记事本窗口最小化。"
+    decision = ChatIntentRouter().decide(text)
+    assert decision.route_type == "desktop_native_request"
+    assert decision.metadata["capability_namespace"] == "desktop"
+    assert is_desktop_native_request(text) is True
+
+
 @pytest.mark.parametrize(
     "text",
     [
@@ -263,7 +285,11 @@ def test_phase57_chat_office_missing_skill_does_not_fake_file(client: TestClient
 
     assert "task.created" not in names
     assert payload["office_route"]["missing_reason"] == "missing_enabled_skill"
-    assert "没有假装生成文件" in reply or "没有生成文件" in reply
+    assert (
+        "没有假装生成文件" in reply
+        or "没有生成文件" in reply
+        or "没有假装已经生成" in reply
+    )
 
 
 @pytest.mark.skipif(
@@ -389,7 +415,10 @@ def test_phase57_direct_routes_do_not_fail_without_model(client: TestClient) -> 
     assert concept["status"] == "completed"
     assert download_topic["status"] == "completed"
     assert strategy["status"] == "completed"
-    assert "Skill" in _reply_from_events(_events(client, concept["turn_id"]))
+    assert any(
+        marker in _reply_from_events(_events(client, concept["turn_id"]))
+        for marker in ("Skill", "方法包")
+    )
     assert "不会触发真实下载" in _reply_from_events(_events(client, download_topic["turn_id"]))
     assert "真实模型" in _reply_from_events(_events(client, strategy["turn_id"]))
 

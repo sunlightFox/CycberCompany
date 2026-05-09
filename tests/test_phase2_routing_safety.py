@@ -148,6 +148,70 @@ async def test_openai_adapter_stream_interruption_is_normalized() -> None:
     assert exc_info.value.code == ErrorCode.MODEL_STREAM_INTERRUPTED
 
 
+@pytest.mark.asyncio
+async def test_openai_adapter_supports_response_style_completion() -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "id": "resp_1",
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {"type": "output_text", "text": "hello"},
+                            {"type": "output_text", "text": " world"},
+                        ],
+                    }
+                ],
+                "usage": {"total_tokens": 7},
+            },
+        )
+
+    client = OpenAICompatibleClient(
+        "https://example.test/responses",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await client.complete_chat(_request(), CancelToken())
+
+    assert result.text == "hello world"
+    assert result.finish_reason == "completed"
+
+
+@pytest.mark.asyncio
+async def test_openai_adapter_stream_schema_error_is_explicit() -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"event: message\ndata: {}\n\n")
+
+    client = OpenAICompatibleClient(
+        "https://example.test/v1",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ModelAdapterError) as exc_info:
+        async for _event in client.stream_chat(_request(retry_count=0), CancelToken()):
+            pass
+
+    assert exc_info.value.code == ErrorCode.MODEL_STREAM_SCHEMA_ERROR
+
+
+@pytest.mark.asyncio
+async def test_openai_adapter_404_maps_to_endpoint_mismatch() -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"error": "not found"})
+
+    client = OpenAICompatibleClient(
+        "https://example.test/openai",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ModelAdapterError) as exc_info:
+        await client.complete_chat(_request(), CancelToken())
+
+    assert exc_info.value.code == ErrorCode.MODEL_ENDPOINT_MISMATCH
+
+
 def _brain(brain_id: str, *, is_local: bool, allow_cloud: bool = False) -> dict:
     return {
         "brain_id": brain_id,

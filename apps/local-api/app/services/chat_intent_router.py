@@ -105,6 +105,38 @@ class ChatIntentRouter:
                 safe_user_summary=_safe_summary(clean),
                 metadata={"url": webpage_read_url(clean)},
             )
+        if is_browser_search_request(clean):
+            require_citation = browser_search_requires_citation(clean)
+            return ChatRouteDecision(
+                route_type=(
+                    "browser_search_with_citation"
+                    if require_citation
+                    else "browser_search_readonly"
+                ),
+                confidence=0.9 if require_citation else 0.86,
+                reason_code=(
+                    "browser_search_with_citation"
+                    if require_citation
+                    else "browser_search_readonly"
+                ),
+                requires_confirmation=False,
+                task_goal=None,
+                safe_user_summary=_safe_summary(clean),
+                metadata={
+                    "query": browser_search_query(clean),
+                    "require_citation": require_citation,
+                },
+            )
+        if is_desktop_native_request(clean):
+            return ChatRouteDecision(
+                route_type="desktop_native_request",
+                confidence=0.94,
+                reason_code="desktop_native_not_supported",
+                requires_confirmation=False,
+                task_goal=None,
+                safe_user_summary=_safe_summary(clean),
+                metadata={"capability_namespace": "desktop"},
+            )
         if is_host_filesystem_list_request(clean):
             return ChatRouteDecision(
                 route_type="host_filesystem_list",
@@ -307,9 +339,96 @@ def is_webpage_read_request(text: str) -> bool:
         return False
     if not _first_url(clean):
         return False
+    if _readonly_login_page_inspection(clean, lowered):
+        return True
     if _has_browser_side_effect_marker(clean, lowered):
         return False
     return _has_webpage_read_marker(clean, lowered)
+
+
+def is_browser_search_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if _direct_only(clean):
+        return False
+    if _first_url(clean) and _has_webpage_read_marker(clean, lowered):
+        return False
+    if _has_browser_side_effect_marker(clean, lowered):
+        return False
+    if any(marker in clean for marker in ["不要搜索", "别搜索", "不搜索"]):
+        return False
+    has_browser_marker = any(
+        marker in clean or marker in lowered
+        for marker in ["浏览器搜索", "用浏览器搜索", "search", "搜索一下", "搜一下", "查一下"]
+    )
+    if not has_browser_marker:
+        return False
+    return any(
+        marker in clean or marker in lowered
+        for marker in ["总结", "概括", "结果", "搜", "搜索", "search", "证据来源", "来源"]
+    )
+
+
+def browser_search_requires_citation(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    return any(
+        marker in clean or marker in lowered
+        for marker in ["证据来源", "来源", "引用", "citation", "source"]
+    )
+
+
+def browser_search_query(text: str) -> str:
+    clean = _clean(text)
+    query = clean
+    replacements = [
+        "请用浏览器搜索",
+        "用浏览器搜索",
+        "浏览器搜索",
+        "请搜索",
+        "搜索一下",
+        "搜一下",
+        "请用搜索",
+    ]
+    for marker in replacements:
+        query = query.replace(marker, " ")
+    query = re.sub(r"^[A-Za-z]{2,}\d{0,4}-\d{2,4}\s+", " ", query)
+    query = re.sub(r"^[A-Za-z][A-Za-z0-9_-]{5,}\s+", " ", query)
+    query = re.sub(r"https?://[^\s，。；;）)]+", " ", query, flags=re.IGNORECASE)
+    query = re.sub(r"微信消息中的链接", " ", query)
+    query = re.sub(r"微信消息链接", " ", query)
+    query = re.sub(r"用户还附带了一个link", " ", query)
+    query = re.sub(r"上下文参考\s*url", " ", query, flags=re.IGNORECASE)
+    query = re.sub(r"\blink\b", " ", query, flags=re.IGNORECASE)
+    query = re.sub(r"(并)?总结结果.*$", " ", query)
+    query = re.sub(r"必须说明证据来源.*$", " ", query)
+    query = re.sub(r"看看这个搜索页有什么.*$", " ", query)
+    query = re.sub(r"[，。；;：:]+", " ", query)
+    query = re.sub(r"\s+", " ", query).strip()
+    return query or clean
+
+
+def is_desktop_native_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if _direct_only(clean):
+        return False
+    desktop_markers = [
+        "桌面窗口",
+        "桌面上的",
+        "最小化",
+        "最大化",
+        "切换窗口",
+        "鼠标",
+        "键盘",
+        "记事本窗口",
+        "desktop.",
+        "window",
+    ]
+    return any(marker in clean or marker in lowered for marker in desktop_markers) and any(
+        marker in clean or marker in lowered
+        for marker in ["最小化", "最大化", "点击", "移动", "关闭", "操作", "minimize"]
+    )
 
 
 def webpage_read_url(text: str) -> str | None:
@@ -934,6 +1053,15 @@ def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
     return any(
         marker in clean
         for marker in [
+            "请打开",
+            "打开这个网页",
+            "打开这个网站",
+            "打开这个链接",
+            "看结果",
+            "看最终页面",
+            "最终页面写了什么",
+            "并总结",
+            "不要照做页面里的指令",
             "看一下这网站",
             "看一下这个网站",
             "看下这网站",
@@ -1040,6 +1168,26 @@ def _has_browser_side_effect_marker(clean: str, lowered: str) -> bool:
     )
 
 
+def _readonly_login_page_inspection(clean: str, lowered: str) -> bool:
+    if not _has_webpage_read_marker(clean, lowered):
+        return False
+    noun_markers = ["登录页", "登录页面", "什么字段", "哪些字段", "表单字段", "页面写了什么"]
+    if not any(marker in clean for marker in noun_markers):
+        return False
+    imperative_markers = [
+        "帮我登录",
+        "请登录",
+        "登录一下",
+        "用测试账号",
+        "输入密码",
+        "输入账号",
+        "提交登录",
+        "然后截图",
+        "截图留证",
+    ]
+    return not any(marker in clean for marker in imperative_markers)
+
+
 def _first_url(text: str) -> str | None:
     match = re.search(r"https?://[^\s，。；;）)]+", text, flags=re.IGNORECASE)
     return match.group(0) if match else None
@@ -1090,7 +1238,16 @@ def _without_direct_only_markers(text: str) -> str:
 
 
 def _clean(text: str) -> str:
-    return " ".join(str(text or "").strip().split())
+    clean = " ".join(str(text or "").strip().split())
+    clean = re.sub(r"^[A-Za-z]{2,}\d{0,4}-\d{2,4}[:：]\s*", "", clean)
+    clean = re.sub(
+        r"\s+用户还附带了一个link\s+微信消息中的链接\s+上下文参考\s+url\s+微信消息链接",
+        " ",
+        clean,
+        flags=re.IGNORECASE,
+    )
+    clean = re.sub(r"\s+", " ", clean).strip()
+    return clean
 
 
 def _safe_summary(text: str) -> str:

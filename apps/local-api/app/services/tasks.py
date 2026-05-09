@@ -560,7 +560,13 @@ class TaskEngine:
         if approval is None:
             raise AppError(ErrorCode.NOT_FOUND, "审批不存在", status_code=404)
         task_id = approval["task_id"]
+        task = await self._get_task(task_id)
         if approval["status"] == "denied":
+            if (
+                task.get("current_approval_id") != approval_id
+                and task["status"] != TaskStatus.WAITING_APPROVAL.value
+            ):
+                return await self.detail(task_id)
             if approval.get("step_id"):
                 await self._repo.update_step(
                     approval["step_id"],
@@ -579,25 +585,55 @@ class TaskEngine:
             )
             return await self.detail(task_id)
         if approval["status"] in {"approved", "edited"}:
-            if approval.get("step_id") and approval.get("edited_payload"):
-                step = await self._repo.get_step(approval["step_id"])
-                if step is not None:
-                    updated_input = _merge_edited_step_input(
-                        step["input"],
-                        approval["edited_payload"],
-                    )
-                    await self._repo.update_step(
-                        approval["step_id"],
-                        {
-                            "input": updated_input,
-                            "status": "pending",
-                            "updated_at": utc_now_iso(),
-                        },
-                    )
+            step = (
+                await self._repo.get_step(approval["step_id"])
+                if approval.get("step_id")
+                else None
+            )
+            if (
+                task.get("current_approval_id") != approval_id
+                and task["status"] != TaskStatus.WAITING_APPROVAL.value
+                and (
+                    step is None
+                    or step["status"] in {"completed", "running", "failed", "cancelled"}
+                )
+            ):
+                return await self.detail(task_id)
+            await self._event(
+                task_id,
+                "approval.resume.started",
+                {"approval_id": approval_id, "step_id": approval.get("step_id")},
+                step_id=approval.get("step_id"),
+                trace_id=trace_id,
+            )
+            if approval.get("step_id"):
+                if step is not None and step["status"] not in {"completed", "running"}:
+                    next_fields = {
+                        "status": "pending",
+                        "updated_at": utc_now_iso(),
+                    }
+                    if approval.get("edited_payload"):
+                        next_fields["input"] = _merge_edited_step_input(
+                            step["input"],
+                            approval["edited_payload"],
+                        )
+                    await self._repo.update_step(approval["step_id"], next_fields)
             await self._mark_run_job(task_id, "running")
-            await self._transition_task(task_id, TaskStatus.RUNNING.value, trace_id=trace_id)
+            await self._transition_task(
+                task_id,
+                TaskStatus.RUNNING.value,
+                trace_id=trace_id,
+                extra={"current_approval_id": None},
+            )
             await self._run_task(task_id, trace_id=trace_id)
             await self._sync_run_job_to_task(task_id)
+            await self._event(
+                task_id,
+                "approval.resume.completed",
+                {"approval_id": approval_id, "step_id": approval.get("step_id")},
+                step_id=approval.get("step_id"),
+                trace_id=trace_id,
+            )
         return await self.detail(task_id)
 
     async def events(self, task_id: str) -> list[TaskEvent]:
@@ -2411,6 +2447,7 @@ class TaskEngine:
         skill_match_refs: list[dict[str, Any]] = []
         mcp_tool_refs: list[dict[str, Any]] = []
         explicit_skill_available = False
+        explicit_skill_state = "missing"
         enabled_skill_count = 0
         ready_mcp_server_count = 0
         active_mcp_tool_count = 0
@@ -2427,8 +2464,37 @@ class TaskEngine:
                     item.skill_id == explicit_skill_id and item.status == "enabled"
                     for item in enabled_skills
                 )
+                if explicit_skill_available:
+                    explicit_skill_state = "enabled"
                 if explicit_skill_id and not explicit_skill_available:
-                    reason_codes.append("skill_no_enabled_skill")
+                    try:
+                        explicit_skill = await self._skills.get_skill(str(explicit_skill_id))
+                        explicit_bundle = await self._skills.get_bundle(explicit_skill.bundle_id)
+                        explicit_skill_available = (
+                            explicit_skill.status == "enabled"
+                            and explicit_bundle.status == "enabled"
+                        )
+                        if explicit_skill_available:
+                            explicit_skill_state = "enabled"
+                            enabled_skill_count = max(enabled_skill_count, 1)
+                        elif explicit_skill.status != "enabled":
+                            explicit_skill_state = "skill_disabled"
+                        elif explicit_bundle.status != "enabled":
+                            explicit_skill_state = "bundle_disabled"
+                        else:
+                            explicit_skill_state = "not_listed"
+                    except Exception:
+                        explicit_skill_available = False
+                        explicit_skill_state = "missing"
+                if explicit_skill_id and not explicit_skill_available:
+                    reason_codes.append(
+                        {
+                            "skill_disabled": "skill_explicit_skill_disabled",
+                            "bundle_disabled": "skill_explicit_bundle_disabled",
+                            "missing": "skill_explicit_missing",
+                            "not_listed": "skill_explicit_not_listed",
+                        }.get(explicit_skill_state, "skill_no_enabled_skill")
+                    )
                 matches = await self._skills.match_skills(
                     SkillMatchRequest(
                         owner_member_id=request.owner_member_id,
@@ -2497,6 +2563,7 @@ class TaskEngine:
             "ready_mcp_server_count": ready_mcp_server_count,
             "active_mcp_tool_count": active_mcp_tool_count,
             "explicit_skill_available": explicit_skill_available,
+            "explicit_skill_state": explicit_skill_state,
             "skill_match_refs": skill_match_refs,
             "mcp_tool_refs": mcp_tool_refs,
             "reason_codes": sorted(set(reason_codes)),

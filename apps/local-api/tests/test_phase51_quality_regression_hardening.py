@@ -113,6 +113,100 @@ def test_phase51_pending_action_binding_no_pending_and_edit_keeps_download_actio
     assert "browser.screenshot" not in serialized
 
 
+def test_phase51_explicit_file_mutation_route_dispatch_creates_task(
+    client: TestClient,
+) -> None:
+    created = _create_turn(
+        client,
+        "phase51-file-route",
+        "请删除下载目录里的旧截图文件，然后告诉我结果。",
+    )
+    events = _events(client, created["turn_id"])
+    route_selected = next(item for item in events if item["event_type"] == "route.selected")
+    task_created = next(item for item in events if item["event_type"] == "task.created")
+    payload = route_selected["payload"]["payload"]
+    task_payload = task_created["payload"]["payload"]
+
+    assert payload["route_type"] == "file_mutation_task"
+    assert payload["route_semantics"]["route_dispatch_stage"] == "started"
+    assert payload["route_semantics"]["reason_code"] == "explicit_file_mutation_requires_confirmation"
+    assert task_payload["task_id"]
+
+
+def test_phase51_project_deploy_route_dispatch_keeps_workflow_bridge(
+    client: TestClient,
+) -> None:
+    created = _create_turn(
+        client,
+        "phase51-deploy-route",
+        "帮我部署 fixture://node-static 这个 GitHub 项目，跑起来给我地址。",
+    )
+    events = _events(client, created["turn_id"])
+    route_selected = next(item for item in events if item["event_type"] == "route.selected")
+    task_created = next(item for item in events if item["event_type"] == "task.created")
+    completed = next(item for item in events if item["event_type"] == "response.completed")
+    route_payload = route_selected["payload"]["payload"]
+    task_payload = task_created["payload"]["payload"]
+    response_payload = completed["payload"]["payload"]["response_plan"]["structured_payload"]
+
+    assert route_payload["route_type"] == "project_deploy_request"
+    assert route_payload["reason_code"] == "phase52_project_deploy_text_request"
+    assert route_payload["route_semantics"]["route_dispatch_stage"] == "started"
+    assert task_payload["task_id"]
+    assert response_payload["route_semantics"]["task_created"] is True
+    assert response_payload["route_semantics"]["model_called"] is False
+
+
+def test_phase51_media_route_dispatch_keeps_workflow_bridge(
+    client: TestClient,
+) -> None:
+    created = _create_turn(
+        client,
+        "phase51-media-route",
+        "帮我分析这个 mp4 并生成字幕。",
+    )
+    events = _events(client, created["turn_id"])
+    route_selected = next(item for item in events if item["event_type"] == "route.selected")
+    task_created = next(item for item in events if item["event_type"] == "task.created")
+    completed = next(item for item in events if item["event_type"] == "response.completed")
+    route_payload = route_selected["payload"]["payload"]
+    task_payload = task_created["payload"]["payload"]
+    response_payload = completed["payload"]["payload"]["response_plan"]["structured_payload"]
+
+    assert route_payload["route_type"] == "media_runtime_request"
+    assert route_payload["reason_code"] == "phase43_media_text_request"
+    assert route_payload["route_semantics"]["route_dispatch_stage"] == "started"
+    assert task_payload["task_id"]
+    assert response_payload["route_semantics"]["task_created"] is True
+    assert response_payload["route_semantics"]["model_called"] is False
+
+
+def test_phase51_host_install_route_dispatch_keeps_pending_action_shape(
+    client: TestClient,
+) -> None:
+    created = _create_turn(
+        client,
+        "phase51-host-route",
+        "帮我安装 VS Code 到这台电脑。",
+    )
+    events = _events(client, created["turn_id"])
+    route_selected = next(item for item in events if item["event_type"] == "route.selected")
+    task_created = next(item for item in events if item["event_type"] == "task.created")
+    completed = next(item for item in events if item["event_type"] == "response.completed")
+    route_payload = route_selected["payload"]["payload"]
+    task_payload = task_created["payload"]["payload"]
+    response_payload = completed["payload"]["payload"]["response_plan"]["structured_payload"]
+    natural = response_payload["natural_interaction"]
+
+    assert route_payload["route_type"] == "host_software_install_request"
+    assert route_payload["reason_code"] == "phase52_host_install_text_request"
+    assert route_payload["route_semantics"]["route_dispatch_stage"] == "started"
+    assert task_payload["task_id"]
+    assert response_payload["route_semantics"]["task_created"] is True
+    assert response_payload["route_semantics"]["approval_pending"] is True
+    assert natural["pending_confirmation"]["actions"][0]["action_type"] == "host.install_software"
+
+
 def test_phase51_ambiguous_continue_and_task_status_do_not_fake_done(
     client: TestClient,
 ) -> None:

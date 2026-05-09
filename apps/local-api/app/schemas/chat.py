@@ -129,6 +129,11 @@ class ConversationWorkingStateResponse(ApiModel):
     referenced_artifacts: list[dict[str, Any]] = Field(default_factory=list)
     last_response_summary: str | None = None
     pending_confirmation: dict[str, Any] = Field(default_factory=dict)
+    pending_clarification: dict[str, Any] = Field(default_factory=dict)
+    pending_approval_action: dict[str, Any] = Field(default_factory=dict)
+    pending_execution_resume: dict[str, Any] = Field(default_factory=dict)
+    session_id: str | None = None
+    source_message_fingerprint: str | None = None
     source_turn_id: str | None = None
     confidence: float
     status: str

@@ -114,6 +114,28 @@ def test_phase34_download_pending_confirm_edit_and_noise_filter(
     assert _jargon_count(no_pending["reply"]) == 0
 
 
+def test_phase34_explicit_confirm_can_bind_unique_pending_across_session(
+    client: TestClient,
+) -> None:
+    conversation_id = _conversation_id(client)
+    _chat(
+        client,
+        conversation_id,
+        "phase34-cross-session-a",
+        "帮我下载 http://127.0.0.1:54069/download/report.csv，下载完告诉我结果。",
+    )
+    confirmed = _chat(
+        client,
+        conversation_id,
+        "phase34-cross-session-b",
+        "确认下载这个 CSV。",
+    )
+
+    assert confirmed["status"] == "completed"
+    assert any(word in confirmed["reply"] for word in ["已确认", "继续", "没有完成"])
+    assert _jargon_count(confirmed["reply"]) == 0
+
+
 def test_phase34_ambiguous_and_hard_blocks_do_not_execute(
     client: TestClient,
 ) -> None:

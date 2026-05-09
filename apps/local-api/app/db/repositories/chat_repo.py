@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from app.db.session import Database
+from app.services.chat_pending_state import project_legacy_pending_confirmation
 
 TURN_UPDATE_COLUMNS = {
     "assistant_message_id",
@@ -1534,11 +1535,24 @@ class ChatRepository:
             "candidate_actions": "candidate_actions_json",
             "referenced_artifacts": "referenced_artifacts_json",
             "pending_confirmation": "pending_confirmation_json",
+            "pending_clarification": "pending_clarification_json",
+            "pending_approval_action": "pending_approval_action_json",
+            "pending_execution_resume": "pending_execution_resume_json",
         }
         values = dict(state)
         for key, column in json_columns.items():
             default: list[Any] | dict[str, Any]
-            default = {} if key == "pending_confirmation" else []
+            default = (
+                {}
+                if key
+                in {
+                    "pending_confirmation",
+                    "pending_clarification",
+                    "pending_approval_action",
+                    "pending_execution_resume",
+                }
+                else []
+            )
             values[column] = json.dumps(
                 values.pop(key, default),
                 ensure_ascii=False,
@@ -1549,9 +1563,11 @@ class ChatRepository:
               conversation_id, organization_id, active_topic, user_goal,
               known_constraints_json, decisions_made_json, open_questions_json,
               candidate_actions_json, referenced_artifacts_json, last_response_summary,
-              pending_confirmation_json, source_turn_id, confidence, status,
+              pending_confirmation_json, pending_clarification_json,
+              pending_approval_action_json, pending_execution_resume_json,
+              session_id, source_turn_id, source_message_fingerprint, confidence, status,
               created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(conversation_id) DO UPDATE SET
               organization_id = excluded.organization_id,
               active_topic = excluded.active_topic,
@@ -1563,7 +1579,12 @@ class ChatRepository:
               referenced_artifacts_json = excluded.referenced_artifacts_json,
               last_response_summary = excluded.last_response_summary,
               pending_confirmation_json = excluded.pending_confirmation_json,
+              pending_clarification_json = excluded.pending_clarification_json,
+              pending_approval_action_json = excluded.pending_approval_action_json,
+              pending_execution_resume_json = excluded.pending_execution_resume_json,
+              session_id = excluded.session_id,
               source_turn_id = excluded.source_turn_id,
+              source_message_fingerprint = excluded.source_message_fingerprint,
               confidence = excluded.confidence,
               status = excluded.status,
               updated_at = excluded.updated_at
@@ -1580,7 +1601,12 @@ class ChatRepository:
                 values["referenced_artifacts_json"],
                 values.get("last_response_summary"),
                 values["pending_confirmation_json"],
+                values["pending_clarification_json"],
+                values["pending_approval_action_json"],
+                values["pending_execution_resume_json"],
+                values.get("session_id"),
                 values.get("source_turn_id"),
+                values.get("source_message_fingerprint"),
                 float(values.get("confidence") or 0.5),
                 values.get("status") or "active",
                 values["created_at"],
@@ -1734,6 +1760,17 @@ class ChatRepository:
         row["candidate_actions"] = json.loads(row.pop("candidate_actions_json") or "[]")
         row["referenced_artifacts"] = json.loads(row.pop("referenced_artifacts_json") or "[]")
         row["pending_confirmation"] = json.loads(row.pop("pending_confirmation_json") or "{}")
+        row["pending_clarification"] = json.loads(
+            row.pop("pending_clarification_json", None) or "{}"
+        )
+        row["pending_approval_action"] = json.loads(
+            row.pop("pending_approval_action_json", None) or "{}"
+        )
+        row["pending_execution_resume"] = json.loads(
+            row.pop("pending_execution_resume_json", None) or "{}"
+        )
+        if not row["pending_confirmation"]:
+            row["pending_confirmation"] = project_legacy_pending_confirmation(row)
         return row
 
     def _dialogue_state_from_row(self, row: dict[str, Any]) -> dict[str, Any]:

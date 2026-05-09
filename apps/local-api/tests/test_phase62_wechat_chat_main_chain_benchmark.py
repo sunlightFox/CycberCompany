@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import hashlib
 import importlib.util
 import threading
@@ -216,6 +217,75 @@ def test_phase62_wechat_complex_model_reply_delivers_single_revised_message(
         assert continuation == {}
 
 
+def test_phase62_local_and_wechat_plain_chat_keep_same_boundary_stance(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    _install_fake_wechat(client, Phase62WechatClient)
+    _bind_real_wechat(client)
+    _pair_peer(client, "wxid-phase62-equivalence-peer")
+    brain_id = _create_local_brain(client)
+    bound = client.patch("/api/members/mem_xiaoyao/default-brain", json={"brain_id": brain_id})
+    assert bound.status_code == 200, bound.text
+
+    async def fake_stream_chat(
+        self: Any,
+        request: ModelChatRequest,
+        cancel_token: CancelToken,
+    ):
+        del self, cancel_token
+        user_text = request.messages[-1]["content"]
+        if "不要调用工具" in user_text:
+            text = (
+                "结论先说：普通聊天主链要让当前消息优先，"
+                "不要把审批口吻、任务状态和系统腔混进正文。"
+            )
+        else:
+            text = "先按当前问题直接回答，再按需要补最近上下文。"
+        yield ModelStreamEvent(event="started")
+        yield ModelStreamEvent(event="delta", text=text)
+        yield ModelStreamEvent(event="completed", usage={"output_tokens": len(text)})
+
+    monkeypatch.setattr(chat_module.OpenAICompatibleClient, "stream_chat", fake_stream_chat)
+
+    local_turn = client.post(
+        "/api/chat/turn",
+        json={
+            "member_id": "mem_xiaoyao",
+            "session_id": "phase62-local-equivalence",
+            "input": {
+                "type": "text",
+                "text": "解释普通聊天主链为什么要更干净，不要调用工具，也不要执行操作。",
+            },
+        },
+    )
+    assert local_turn.status_code == 200, local_turn.text
+    local_stream = client.get(local_turn.json()["stream_url"])
+    local_reply = _parse_local_sse(local_stream.text)
+
+    previous_send_count = len(Phase62WechatClient.send_calls)
+    Phase62WechatClient.events = [
+        _text_event(
+            "evt-phase62-equivalence",
+            "wxid-phase62-equivalence-peer",
+            "解释普通聊天主链为什么要更干净，不要调用工具，也不要执行操作。",
+        )
+    ]
+    routed = client.post("/api/channels/providers/wechat/poll-once")
+    assert routed.status_code == 200, routed.text
+    client.post("/api/channels/providers/wechat/deliver-due")
+    _wait_for_new_send(previous_send_count)
+    wechat_reply = Phase62WechatClient.send_calls[-1]["text"]
+
+    for reply in (local_reply, wechat_reply):
+        assert "当前消息优先" in reply
+        assert "审批口吻" in reply
+        assert "任务状态" in reply
+        assert "没有待确认" not in reply
+        assert "需要审批" not in reply
+        assert "已执行" not in reply
+
+
 def _install_fake_wechat(client: TestClient, factory: type[Phase62WechatClient]) -> None:
     factory.reset()
     registry = cast(Any, client.app).state.registry
@@ -324,6 +394,18 @@ def _latest_reply(client: TestClient, turn_id: str) -> str:
         for item in events
         if item["event_type"] == "response.delta"
     )
+
+
+def _parse_local_sse(raw: str) -> str:
+    chunks: list[str] = []
+    for block in raw.strip().split("\n\n"):
+        for line in block.splitlines():
+            if not line.startswith("data: "):
+                continue
+            payload = cast(dict[str, Any], json.loads(line[6:]))
+            if payload.get("event") == "response.delta":
+                chunks.append(str(payload.get("payload", {}).get("text", "")))
+    return "".join(chunks)
 
 
 def _text_event(event_id: str, peer_ref: str, text: str) -> dict[str, Any]:

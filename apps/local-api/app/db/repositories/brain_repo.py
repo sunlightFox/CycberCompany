@@ -5,7 +5,7 @@ from typing import Any
 
 from app.db.session import Database
 
-JSON_COLUMNS = {"cost_policy_json", "privacy_policy_json"}
+JSON_COLUMNS = {"cost_policy_json", "privacy_policy_json", "verify_capabilities_json"}
 BOOL_COLUMNS = {
     "is_local",
     "supports_tools",
@@ -14,6 +14,7 @@ BOOL_COLUMNS = {
     "allow_fallback",
     "allow_cloud",
     "streaming_supported",
+    "supports_stream",
 }
 UPDATE_COLUMNS = {
     "display_name",
@@ -37,6 +38,11 @@ UPDATE_COLUMNS = {
     "allow_fallback",
     "allow_cloud",
     "streaming_supported",
+    "protocol_family",
+    "request_format",
+    "response_format",
+    "supports_stream",
+    "verify_capabilities_json",
     "last_verified_at",
     "last_error_code",
     "last_error_message",
@@ -84,8 +90,9 @@ class BrainRepository:
               context_window, supports_tools, supports_vision, supports_audio, cost_policy_json,
               privacy_policy_json, status, default_temperature, default_top_p,
               default_max_output_tokens, timeout_seconds, retry_count, allow_fallback,
-              allow_cloud, streaming_supported, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              allow_cloud, streaming_supported, protocol_family, request_format,
+              response_format, supports_stream, verify_capabilities_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["brain_id"],
@@ -110,6 +117,11 @@ class BrainRepository:
                 _bool(data.get("allow_fallback", True)),
                 _bool(data.get("allow_cloud", False)),
                 _bool(data.get("streaming_supported", True)),
+                data.get("protocol_family", "auto"),
+                data.get("request_format", "chat_completions"),
+                data.get("response_format", "auto"),
+                _bool(data.get("supports_stream", data.get("streaming_supported", True))),
+                json.dumps(data.get("verify_capabilities", {}), ensure_ascii=False),
                 data["created_at"],
                 data["updated_at"],
             ),
@@ -124,6 +136,8 @@ class BrainRepository:
                 sql_fields["cost_policy_json"] = json.dumps(value, ensure_ascii=False)
             elif key == "privacy_policy":
                 sql_fields["privacy_policy_json"] = json.dumps(value, ensure_ascii=False)
+            elif key == "verify_capabilities":
+                sql_fields["verify_capabilities_json"] = json.dumps(value, ensure_ascii=False)
             elif key in BOOL_COLUMNS:
                 sql_fields[key] = _bool(value)
             else:
@@ -167,9 +181,14 @@ class BrainRepository:
 def _brain_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["cost_policy"] = json.loads(row.pop("cost_policy_json") or "{}")
     row["privacy_policy"] = json.loads(row.pop("privacy_policy_json") or "{}")
+    row["verify_capabilities"] = json.loads(row.pop("verify_capabilities_json", None) or "{}")
     for column in BOOL_COLUMNS:
         if column in row:
             row[column] = bool(row[column])
+    row.setdefault("protocol_family", "auto")
+    row.setdefault("request_format", "chat_completions")
+    row.setdefault("response_format", "auto")
+    row.setdefault("supports_stream", row.get("streaming_supported", True))
     row["has_api_key"] = bool(row.get("api_key_ref"))
     return row
 

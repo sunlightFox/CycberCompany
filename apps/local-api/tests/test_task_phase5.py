@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import anyio
 import pytest
 from app.services.tools import _browser_launch_options, _redact_browser_failure
 from fastapi.testclient import TestClient
@@ -88,6 +89,44 @@ def test_task_003_terminal_approval_executes_and_logs_are_artifacts(client: Test
     assert any(item["artifact_type"] == "terminal_log" for item in replay["artifacts"])
     assert any(call["tool_name"] == "terminal.run" for call in replay["tool_calls"])
     assert "approval.approved" in audit_text
+
+
+def test_task_003a_direct_approval_service_approve_also_resumes_task(
+    client: TestClient,
+) -> None:
+    task = client.post(
+        "/api/tasks",
+        json={
+            "goal": "执行终端命令",
+            "constraints": {"command": "echo phase5-direct-approve"},
+            "auto_start": True,
+        },
+    ).json()
+    approval_id = task["current_approval_id"]
+    registry = client.app.state.registry
+
+    async def approve_directly() -> None:
+        await registry.approval_service.approve(
+            approval_id,
+            actor_type="user",
+            actor_id="user_local_owner",
+            reason="直接走 approval service",
+            trace_id=None,
+        )
+
+    anyio.run(approve_directly)
+    detail = client.get(f"/api/tasks/{task['task_id']}").json()
+    read_log = client.post(
+        "/api/tools/execute",
+        json={
+            "task_id": task["task_id"],
+            "tool_name": "terminal.read_log",
+            "args": {},
+        },
+    ).json()
+
+    assert detail["status"] == "completed"
+    assert "phase5-direct-approve" in read_log["result"]["content_preview"]
 
 
 def test_task_003b_approval_edit_replans_args_and_terminal_log_is_readable(

@@ -208,6 +208,50 @@ def test_phase64_wechat_composer_guard_warnings_enter_diagnostics() -> None:
     assert "internal_jargon" in evaluation.tags
 
 
+def test_phase64_secret_leak_triggers_blocking_repair() -> None:
+    coordinator = ChatContinuationCoordinator()
+    decision = ContinuationDecision(enabled=True, reason_codes=["forced_visible_review"])
+    evaluation = coordinator.evaluate(
+        text="这是调试结果，token=sk-phase64-secret-value。",
+        user_text="把这段结果转述给我，但不要泄漏敏感值。",
+        decision=decision,
+    )
+
+    assert evaluation.verdict == "block"
+    assert "secret_leak" in evaluation.tags
+    assert evaluation.should_revise is True
+
+
+def test_phase64_strict_format_pollution_is_repairable() -> None:
+    coordinator = ChatContinuationCoordinator()
+    decision = ContinuationDecision(enabled=True, reason_codes=["forced_visible_review"])
+    evaluation = coordinator.evaluate(
+        text='先解释一下：{"summary":"ok","risks":["a","b"]}',
+        user_text='只输出 JSON：{"summary":"ok","risks":["a","b"]}',
+        decision=decision,
+    )
+
+    assert evaluation.verdict == "block"
+    assert "strict_format_polluted" in evaluation.tags
+    assert evaluation.should_revise is True
+
+
+def test_phase64_plain_but_direct_reply_does_not_trigger_repair() -> None:
+    coordinator = ChatContinuationCoordinator()
+    decision = ContinuationDecision(enabled=True, reason_codes=["forced_visible_review"])
+    evaluation = coordinator.evaluate(
+        text="结论先说：普通聊天主链要保持当前消息优先，其次才是最近历史。",
+        user_text="总结一下普通聊天主链最重要的原则。",
+        decision=decision,
+    )
+
+    assert evaluation.verdict == "good"
+    assert evaluation.should_revise is False
+    assert not {"missing_reply", "strict_format_polluted", "secret_leak", "internal_jargon"} & set(
+        evaluation.tags
+    )
+
+
 def test_phase64_runtime_policy_does_not_block_followthrough_copy_by_itself() -> None:
     coordinator = ChatContinuationCoordinator()
     decision = ContinuationDecision(enabled=True, reason_codes=["complexity_high"])
