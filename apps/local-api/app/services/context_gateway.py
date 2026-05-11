@@ -157,15 +157,27 @@ class RuntimeContextGateway:
             summary_text=summary["summary_text"] if summary else None,
         )
         memory_blocks = []
+        memory_search_summary: dict[str, Any] = {}
         if include_memory:
+            latest_override = bool(
+                session_context.get("latest_instruction_override")
+                if isinstance(session_context, dict)
+                else getattr(session_context, "latest_instruction_override", False)
+            )
             memory_search = await self._memory.search(
                 MemorySearchApiRequest(
                     query=query_text or "current conversation",
                     member_id=turn["member_id"],
                     conversation_id=turn["conversation_id"],
+                    exclude_conversation_id=turn["conversation_id"],
                     intent=turn.get("intent"),
                     layers=_memory_layers(context_decision),
                     limit=_memory_limit(context_decision),
+                    recall_scope="member_cross_session",
+                    include_cross_session=True,
+                    memory_classes=["preference", "fact", "experience"],
+                    durability_filter=["durable", "session"],
+                    freshness_policy="prefer_fresh" if latest_override else "exclude_stale",
                 ),
                 trace_id=turn["trace_id"],
                 turn_id=turn["turn_id"],
@@ -175,6 +187,20 @@ class RuntimeContextGateway:
                 token_budget=max(300, int(layer_budget["allocations"]["memory"])),
                 trace_id=turn["trace_id"],
             )
+            memory_search_summary = {
+                "retrieval_id": memory_search.retrieval_id,
+                "recall_scope_applied": memory_search.recall_scope_applied,
+                "selected_memory_ids": list(memory_search.selected_memory_ids),
+                "item_count": len(memory_search.items),
+                "cross_session_selected_count": sum(
+                    1 for item in memory_search.items if item.cross_session
+                ),
+                "freshness_states": sorted(
+                    {item.freshness_state for item in memory_search.items}
+                ),
+                "memory_classes": sorted({item.memory_class for item in memory_search.items}),
+                "freshness_policy": "prefer_fresh" if latest_override else "exclude_stale",
+            }
         resource_handles, handle_summary = (
             await self._resource_handles(
                 member_id=turn["member_id"],
@@ -277,6 +303,7 @@ class RuntimeContextGateway:
                 "reasons": [str(item.reason or "") for item in capabilities if getattr(item, "reason", None)],
             },
             "resource_handle_summary": handle_summary,
+            "memory_recall": memory_search_summary,
         }
         return ContextPacket(
             context_packet_id=new_id("ctx"),

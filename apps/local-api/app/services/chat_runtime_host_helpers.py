@@ -356,6 +356,11 @@ def browser_read_page_error_reply(exc: AppError) -> str:
 
 
 def browser_read_page_payload(result: dict[str, Any]) -> dict[str, Any]:
+    page_state = (
+        result.get("browser_page_state")
+        if isinstance(result.get("browser_page_state"), dict)
+        else {}
+    )
     return {
         "title": result.get("title"),
         "url": result.get("url"),
@@ -363,7 +368,9 @@ def browser_read_page_payload(result: dict[str, Any]) -> dict[str, Any]:
             clean_browser_text(str(result.get("visible_text") or "")),
             1200,
         ),
-        "evidence_refs": result.get("evidence_refs") or [],
+        "evidence_refs": result.get("evidence_refs")
+        or page_state.get("evidence_refs")
+        or [],
     }
 
 

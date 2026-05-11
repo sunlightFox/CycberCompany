@@ -24,6 +24,10 @@ def test_memory_001_explicit_remember_writes_active_memory(client: TestClient) -
     assert body["candidates"][0]["decision"] == "auto_written"
     assert memory["status"] == "active"
     assert memory["kind"] == "preference"
+    assert memory["memory_class"] == "preference"
+    assert memory["scope_policy"] == "member_cross_session"
+    assert memory["durability"] == "durable"
+    assert memory["freshness_state"] == "fresh"
     assert memory["source"]["type"] == "external_ingest"
     assert memory["source"]["conversation_id"]
     assert memory["source"]["captured_at"]
@@ -34,7 +38,10 @@ def test_memory_001_explicit_remember_writes_active_memory(client: TestClient) -
         json={"member_id": "mem_xiaoyao", "query": "开发计划 详细"},
     ).json()
     assert search["degraded"] is False
+    assert search["recall_scope_applied"] == "member_cross_session"
     assert search["items"][0]["memory_id"] == memory["memory_id"]
+    assert search["items"][0]["memory_class"] == "preference"
+    assert search["items"][0]["durability"] == "durable"
     assert search["items"][0]["retrieval_source"] == "semantic_vector"
     assert search["items"][0]["embedding_status"] == "indexed"
 
@@ -86,7 +93,10 @@ def test_memory_004_correction_supersedes_old_memory(client: TestClient) -> None
 
     assert correction["kind"] == "correction"
     assert correction["supersedes"] == old["memory_id"]
+    assert correction["memory_class"] == "preference"
     assert old_after["status"] == "superseded"
+    assert old_after["freshness_state"] == "superseded"
+    assert old_after["superseded_by"] == correction["memory_id"]
     assert old_after["valid_to"] is not None
     assert relations[0]["relation_type"] == "supersedes"
 
@@ -260,6 +270,7 @@ def test_memory_009_search_response_explains_ranking_and_filters(
     assert active["memory_id"] in search["selected_memory_ids"]
     assert search["ranking"]
     assert filtered[archived["memory_id"]] == "status_archived"
+    assert search["items"][0]["freshness_state"] == "fresh"
 
 
 def test_memory_010_asset_scoped_memory_requires_asset_broker_filter(

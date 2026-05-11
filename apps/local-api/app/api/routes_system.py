@@ -125,6 +125,7 @@ async def runtime_topology(
     session_runtime = await registry.session_runtime.diagnostic()
     task_runtime = registry.task_engine.runtime_diagnostic()
     tool_runtime = await registry.tool_runtime.diagnostic()
+    memory_runtime = registry.memory_service.runtime_diagnostic()
     chat_runtime = registry.chat_runtime.diagnostic()
     channel_runtime = await registry.channel_ingress_runtime.diagnostic()
     channel_session_semantics = registry.channel_session_semantics_runtime.runtime_diagnostic()
@@ -364,6 +365,22 @@ async def runtime_topology(
                         host_files=["chat_run_ledger.py"],
                         delegates_to=["chat_runtime"],
                         notes=["authoritative turn execution ledger for replay and diagnostics"],
+                    ),
+                },
+            ),
+            RuntimeTopologyComponent(
+                name="memory_service",
+                runtime="memory_service",
+                dependencies=["context_gateway", "chat_run_ledger", "/api/memory/search"],
+                status="runtime_native",
+                details={
+                    **memory_runtime,
+                    "cleanup": _cleanup_details(
+                        role="runtime_native",
+                        allowed_to_grow=True,
+                        host_files=["memory.py"],
+                        delegates_to=["context_gateway", "chat_run_ledger"],
+                        notes=["phase92 canonical long-term memory recall owner"],
                     ),
                 },
             ),

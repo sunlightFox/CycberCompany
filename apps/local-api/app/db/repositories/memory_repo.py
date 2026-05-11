@@ -149,8 +149,8 @@ class MemoryRepository:
               embedding_status, metadata_json, created_at, updated_at, normalized_summary,
               content_hash
             ) VALUES (
-              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0,
-              ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -177,6 +177,8 @@ class MemoryRepository:
                 data.get("supersedes"),
                 data.get("superseded_by"),
                 data["status"],
+                data.get("last_accessed_at"),
+                data.get("access_count", 0),
                 data.get("quality_score", 0.5),
                 _json(data.get("quality_breakdown", {})),
                 data.get("version_index", 1),
@@ -184,6 +186,7 @@ class MemoryRepository:
                 data.get("conflict_status", "clear"),
                 data.get("reuse_score", 0),
                 data.get("reuse_count", 0),
+                data.get("last_reused_at"),
                 data.get("retention_policy", "standard"),
                 data.get("retention_reason"),
                 data.get("expires_reason"),
@@ -346,10 +349,10 @@ class MemoryRepository:
         )
         cross_session_clause = ""
         if not include_cross_session and exclude_conversation_id:
-            cross_session_clause = "AND json_extract(mi.source_json, '$.conversation_id') != ?"
-        elif not include_cross_session:
-            cross_session_clause = "AND (json_extract(mi.source_json, '$.conversation_id') = ? OR json_extract(mi.source_json, '$.conversation_id') IS NULL)"
-            exclude_conversation_id = query
+            cross_session_clause = (
+                "AND (json_extract(mi.source_json, '$.conversation_id') = ? "
+                "OR json_extract(mi.source_json, '$.conversation_id') IS NULL)"
+            )
         class_clause, class_params = _in_clause("mi.memory_class", memory_classes or [])
         durability_clause, durability_params = _in_clause("mi.durability", durability_filter or [])
         base_params: tuple[Any, ...] = (organization_id, member_id, member_id)

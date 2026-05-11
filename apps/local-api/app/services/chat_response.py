@@ -161,6 +161,7 @@ class ChatResponseCoordinator:
             or structured_payload.get("memory_write_hints")
             or {}
         )
+        memory_recall_summary = dict(structured_payload.get("memory_recall_summary") or {})
         prompt_contract_metadata = self._prompt_contract_metadata(plan)
         visible_status_hint = (
             plan.visible_status_hint
@@ -185,6 +186,7 @@ class ChatResponseCoordinator:
         structured_payload["task_status_semantics"] = task_status_semantics
         structured_payload["tool_status_semantics"] = tool_status_semantics
         structured_payload["memory_write_hints"] = memory_write_hints
+        structured_payload["memory_recall_summary"] = memory_recall_summary
         structured_payload["prompt_contract_metadata"] = prompt_contract_metadata
         structured_payload["response_contract"] = {
             "visible_authority": "response_plan_plain_text",
@@ -205,6 +207,7 @@ class ChatResponseCoordinator:
             "task_status_semantics": task_status_semantics,
             "tool_status_semantics": tool_status_semantics,
             "memory_write_hints": memory_write_hints,
+            "memory_recall_summary": memory_recall_summary,
             "prompt_contract_metadata": prompt_contract_metadata,
             "structured_payload": structured_payload,
         }

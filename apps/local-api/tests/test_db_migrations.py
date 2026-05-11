@@ -71,6 +71,7 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     assert "048_soul_manifests.sql" in first
     assert "049_chat_presence_runtime.sql" in first
     assert "051_chat_ledger_memory_unification.sql" in first
+    assert "052_phase92_memory_recall_governance.sql" in first
     for phase, contract in PHASE_MIGRATION_REQUIREMENTS.items():
         assert contract["required_migration"] in first, phase
         assert set(contract.get("tables") or ()).issubset(table_names), phase
@@ -305,6 +306,10 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         memory_columns = {
             row["name"]
             for row in await db.fetch_all("PRAGMA table_info(memory_items)")
+        }
+        memory_retrieval_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(memory_retrieval_logs)")
         }
         job_columns = {
             row["name"]
@@ -730,7 +735,19 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     finally:
         await db.close()
 
-    assert {"normalized_summary", "content_hash"}.issubset(memory_columns)
+    assert {
+        "normalized_summary",
+        "content_hash",
+        "memory_class",
+        "scope_policy",
+        "durability",
+        "freshness_state",
+        "superseded_by",
+        "expires_at",
+        "stale_after",
+        "evidence_strength",
+    }.issubset(memory_columns)
+    assert {"recall_scope_applied", "request_filters_json"}.issubset(memory_retrieval_columns)
     assert {"max_attempts", "next_run_at", "locked_by", "locked_at"}.issubset(job_columns)
     assert {
         "secret_ref",

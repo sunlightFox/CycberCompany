@@ -225,6 +225,27 @@ class MemoryService:
         self._safety = SafetyService()
         self._background_tasks: set[asyncio.Task[int]] = set()
 
+    def runtime_diagnostic(self) -> dict[str, Any]:
+        return {
+            "runtime": "memory_service",
+            "memory_contract_version": "phase92.long_term_memory_recall.v1",
+            "cross_session_recall_enabled": True,
+            "canonical_memory_classes": [
+                "preference",
+                "fact",
+                "experience",
+                "transient_working_state",
+            ],
+            "freshness_policy": [
+                "exclude_stale",
+                "prefer_fresh",
+                "allow_superseded",
+                "allow_expired",
+            ],
+            "supersede_policy": "latest_correction_wins",
+            "recall_api": "/api/memory/search",
+        }
+
     async def list_memories(
         self,
         *,
@@ -2956,6 +2977,8 @@ def _suppression_reason_for_memory(
 ) -> str | None:
     status = str(row.get("status") or "")
     if status in {"superseded", "deleted", "archived"} and not request.include_archived:
+        if status == "superseded":
+            return "superseded"
         return f"status_{status}"
     freshness_state = _freshness_state_for_row(row)
     if freshness_state == "expired" and request.freshness_policy != "allow_expired":
@@ -3490,13 +3513,15 @@ def _scope_policy_for_memory(*, scope_type: str) -> str:
 
 
 def _durability_for_kind(kind: str, *, layer: str, retention_policy: str) -> str:
+    if kind == "correction":
+        return "durable"
     if layer in {
         MemoryLayer.WORKING.value,
         MemoryLayer.SESSION.value,
         MemoryLayer.TEMPORAL.value,
     }:
         return "transient"
-    if retention_policy in {"persistent", "review_required"} or kind == "correction":
+    if retention_policy in {"persistent", "review_required"}:
         return "durable"
     if retention_policy == "standard":
         return "session"
@@ -3504,6 +3529,8 @@ def _durability_for_kind(kind: str, *, layer: str, retention_policy: str) -> str
 
 
 def _stale_after_for_kind(kind: str, *, layer: str, now: str) -> str | None:
+    if kind == "correction":
+        return None
     if layer in {
         MemoryLayer.WORKING.value,
         MemoryLayer.SESSION.value,
@@ -3876,6 +3903,8 @@ def _filter_reason(
     asset_scope_ids: list[str],
 ) -> str | None:
     if memory["status"] != "active":
+        if memory["status"] == "superseded":
+            return "superseded"
         return f"status_{memory['status']}"
     freshness_state = _freshness_state_for_row(memory)
     if freshness_state == "expired" and request.freshness_policy != "allow_expired":

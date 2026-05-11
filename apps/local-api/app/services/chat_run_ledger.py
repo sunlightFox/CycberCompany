@@ -281,6 +281,8 @@ class ChatRunLedgerService:
         ref_type: str | None = None,
         trace_span_id: str | None = None,
     ) -> None:
+        if not await self._ensure_turn_ledger_exists(turn_id=turn_id, trace_id=trace_id):
+            return
         await self._chat_repo.insert_run_ledger(
             {
                 "run_id": new_id("runlg"),
@@ -297,6 +299,41 @@ class ChatRunLedgerService:
                 "created_at": utc_now_iso(),
             }
         )
+
+    async def _ensure_turn_ledger_exists(
+        self,
+        *,
+        turn_id: str,
+        trace_id: str | None,
+    ) -> bool:
+        existing = await self._chat_repo.get_turn_ledger(turn_id)
+        if existing is not None:
+            return True
+        turn = await self._chat_repo.get_turn(turn_id)
+        if turn is None:
+            return False
+        now = utc_now_iso()
+        await self._chat_repo.upsert_turn_ledger(
+            {
+                "turn_id": turn_id,
+                "conversation_id": turn["conversation_id"],
+                "session_id": turn.get("session_id"),
+                "member_id": turn["member_id"],
+                "trace_id": trace_id or turn.get("trace_id"),
+                "status": turn.get("status") or "created",
+                "route_type": None,
+                "mode": None,
+                "started_at": None,
+                "ended_at": None,
+                "retry_of_turn_id": turn.get("retry_of_turn_id"),
+                "recovered_from_turn_id": turn.get("recovered_from_turn_id"),
+                "channel": turn.get("channel"),
+                "source_message_id": turn.get("user_message_id"),
+                "created_at": turn.get("created_at") or now,
+                "updated_at": turn.get("updated_at") or turn.get("created_at") or now,
+            }
+        )
+        return True
 
     async def timeline(self, turn_id: str) -> dict[str, Any]:
         turn = await self._chat_repo.get_turn_ledger(turn_id)

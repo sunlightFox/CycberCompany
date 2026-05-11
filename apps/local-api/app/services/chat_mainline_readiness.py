@@ -274,6 +274,7 @@ class ChatMainlineReadinessService:
         "phase89_false_interception_governance": "docs/开发计划/89-第八十九阶段-聊天质量误拦截治理与规则减法.md",
         "phase90_compat_cleanup_release_gate": "docs/开发计划/90-第九十阶段-主链路兼容逻辑删除窗口与封版门禁收尾.md",
         "phase91_host_decomposition_governance": "docs/开发计划/91-第九十一阶段-ChatRuntime物理拆分与宿主瘦身收尾.md",
+        "phase92_long_term_memory_recall_governance": "docs/开发计划/92-第九十二阶段-长期记忆检索成熟化与跨会话召回闭环.md",
         "phase78_session_channel_semantics": "docs/开发计划/78-第七十八阶段-会话与渠道语义统一.md",
         "phase79_context_gateway_enhancement": "docs/开发计划/79-第七十九阶段-ContextGateway能力化增强.md",
         "phase80_tool_loop": "docs/开发计划/80-第八十阶段-聊天内工具调用闭环.md",
@@ -297,6 +298,7 @@ class ChatMainlineReadinessService:
         "phase89_false_interception_governance": "apps/local-api/tests/test_phase89_false_interception_governance.py",
         "phase90_compat_cleanup_release_gate": "apps/local-api/tests/test_phase90_compat_cleanup_release_gate.py",
         "phase91_host_decomposition_governance": "apps/local-api/tests/test_phase91_host_decomposition_governance.py",
+        "phase92_long_term_memory_recall_governance": "apps/local-api/tests/test_phase92_long_term_memory_recall_governance.py",
         "phase78_session_channel_semantics": "apps/local-api/tests/test_phase78_session_channel_semantics.py",
         "phase79_context_gateway_enhancement": "apps/local-api/tests/test_phase79_context_gateway_enhancement.py",
         "phase80_chat_tool_loop": "apps/local-api/tests/test_phase80_chat_tool_loop.py",
@@ -452,6 +454,8 @@ class ChatMainlineReadinessService:
         phase_readiness["phase90_compat_cleanup_release_gate"] = phase90
         phase91 = self._phase91()
         phase_readiness["phase91_host_decomposition_governance"] = phase91
+        phase92 = self._phase92()
+        phase_readiness["phase92_long_term_memory_recall_governance"] = phase92
         blocking_gaps = [
             {
                 "phase": phase,
@@ -515,6 +519,7 @@ class ChatMainlineReadinessService:
                     )(),
                 },
                 "phase91_host_governance": dict(phase91.get("details") or {}),
+                "phase92_memory_governance": dict(phase92.get("details") or {}),
                 "phase_docs_present": phase_docs_present,
                 "phase_tests_present": phase_tests_present,
             },
@@ -1198,6 +1203,84 @@ class ChatMainlineReadinessService:
                     "brain_decision.py decision orchestrator only",
                     "gateway main files provider shell only",
                     "size budgets enforced by readiness and release",
+                ],
+            },
+        )
+
+    def _phase92(self) -> dict[str, Any]:
+        blockers: list[str] = []
+        memory_text = self._read_text("packages/core-types/core_types/memory.py")
+        schema_text = self._read_text("apps/local-api/app/schemas/memory.py")
+        context_text = self._read_text("apps/local-api/app/services/context_gateway.py")
+        session_text = self._read_text("apps/local-api/app/services/session_context.py")
+        release_text = self._read_text("apps/local-api/app/services/release.py")
+        required_memory_tokens = [
+            "memory_class",
+            "scope_policy",
+            "durability",
+            "freshness_state",
+            "evidence_strength",
+            "recall_scope_applied",
+        ]
+        if not all(token in memory_text for token in required_memory_tokens):
+            blockers.append("phase92_memory_contract_missing")
+        required_request_tokens = [
+            "recall_scope",
+            "exclude_conversation_id",
+            "include_cross_session",
+            "memory_classes",
+            "durability_filter",
+            "freshness_policy",
+        ]
+        if not all(token in schema_text for token in required_request_tokens):
+            blockers.append("phase92_search_request_contract_missing")
+        if "MemorySearchApiRequest(" not in context_text or "exclude_conversation_id=turn[\"conversation_id\"]" not in context_text:
+            blockers.append("context_gateway_not_sole_recall_caller")
+        if "_canonical_memory_items" not in session_text:
+            blockers.append("session_context_not_consuming_canonical_memory")
+        if "phase92_long_term_memory_recall_governance" not in release_text:
+            blockers.append("phase92_release_gate_missing")
+        if not self._relative_exists("apps/local-api/app/db/migrations/052_phase92_memory_recall_governance.sql"):
+            blockers.append("phase92_migration_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase92_long_term_memory_recall_governance"]):
+            blockers.append("phase92_test_missing")
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase92_long_term_memory_recall_governance"],
+                "packages/core-types/core_types/memory.py",
+                "apps/local-api/app/schemas/memory.py",
+                "apps/local-api/app/services/memory.py",
+                "apps/local-api/app/services/context_gateway.py",
+                "apps/local-api/app/services/session_context.py",
+                self._PHASE_TESTS["phase92_long_term_memory_recall_governance"],
+            ],
+            blockers=blockers,
+            next_owner="apps/local-api/app/services/memory.py",
+            details={
+                "phase92_contract_version": "phase92.long_term_memory_recall.v1",
+                "cross_session_scoped_recall_contract": True,
+                "canonical_memory_classes": [
+                    "preference",
+                    "fact",
+                    "experience",
+                    "transient_working_state",
+                ],
+                "freshness_policy": [
+                    "exclude_stale",
+                    "prefer_fresh",
+                    "allow_superseded",
+                    "allow_expired",
+                ],
+                "supersede_policy": "latest_correction_wins",
+                "context_gateway_memory_owner": "apps/local-api/app/services/context_gateway.py",
+                "ready_conditions": [
+                    "cross-session scoped recall contract present",
+                    "canonical memory classification present",
+                    "supersede and stale suppression present",
+                    "ContextGateway is sole recall caller",
+                    "phase92 regression coverage present",
                 ],
             },
         )

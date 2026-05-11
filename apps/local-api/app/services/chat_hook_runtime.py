@@ -423,9 +423,13 @@ class ChatHookRuntime:
     async def _builtin_before_memory_write(self, hook_input: dict[str, Any]) -> dict[str, Any]:
         payload = dict(hook_input.get("payload") or {})
         source = dict(payload.get("source") or {})
+        source_type = str(source.get("type") or "").strip().lower()
+        required_fields = ["type", "captured_at"]
+        if source_type != "external_ingest":
+            required_fields.append("conversation_id")
         missing = [
             key
-            for key in ("type", "conversation_id", "captured_at")
+            for key in required_fields
             if not source.get(key)
         ]
         if missing:
