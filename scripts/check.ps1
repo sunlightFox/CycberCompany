@@ -335,6 +335,108 @@ function Invoke-QualityChatIssueGate {
   }
 }
 
+function Invoke-Phase68PromptResidualGate {
+  $logPath = Join-Path $reportRoot "$runId-phase68_prompt_residual_gate.log"
+  $started = (Get-Date).ToUniversalTime()
+  $targets = @(
+    (Join-Path $root "apps\local-api\app"),
+    (Join-Path $root "services")
+  )
+  $patterns = @(
+    "openclaw_hermes.v3",
+    "好的，我来",
+    "我来继续",
+    "记住了。",
+    "处理结果如下",
+    "作为 AI"
+  )
+  $hits = @()
+  foreach ($target in $targets) {
+    if (-not (Test-Path $target)) {
+      continue
+    }
+    $matches = Get-ChildItem -Path $target -Recurse -File -Include *.py |
+      Select-String -Pattern $patterns -SimpleMatch
+    foreach ($match in $matches) {
+      $hits += [ordered]@{
+        path = $match.Path
+        line = $match.LineNumber
+        text = $match.Line.Trim()
+      }
+    }
+  }
+  $completed = (Get-Date).ToUniversalTime()
+  $status = if ($hits.Count -eq 0) { "passed" } else { "failed" }
+  ([ordered]@{
+    status = $status
+    hit_count = $hits.Count
+    hits = $hits
+  } | ConvertTo-Json -Depth 8) | Set-Content -Path $logPath -Encoding UTF8
+  $script:checkResults += [ordered]@{
+    name = "phase68_prompt_residual_gate"
+    args = $patterns
+    status = $status
+    exit_code = if ($hits.Count -eq 0) { 0 } else { 1 }
+    started_at = $started.ToString("o")
+    completed_at = $completed.ToString("o")
+    duration_seconds = [Math]::Round(($completed - $started).TotalSeconds, 3)
+    log_path = $logPath
+  }
+  if ($hits.Count -gt 0) {
+    Write-Host "Phase68 prompt residual gate failed. See: $logPath"
+    Write-CheckReport -OverallStatus "failed"
+    exit 1
+  }
+}
+
+function Invoke-Phase68VisibleLeakageGate {
+  $logPath = Join-Path $reportRoot "$runId-phase68_visible_leakage_gate.log"
+  $started = (Get-Date).ToUniversalTime()
+  $targets = @()
+  $targets += @(Get-ChildItem -Path (Join-Path $reportRoot "wechat-50-quality-*") -Directory -ErrorAction SilentlyContinue | ForEach-Object { Join-Path $_.FullName "02-summary.json" })
+  $targets += @(Get-ChildItem -Path (Join-Path $reportRoot "wechat-real-quality-*") -Directory -ErrorAction SilentlyContinue | ForEach-Object { Join-Path $_.FullName "02-summary.json" })
+  $hits = @()
+  foreach ($target in $targets | Select-Object -Unique) {
+    if (-not (Test-Path $target)) {
+      continue
+    }
+    $json = Get-Content -Path $target -Raw -Encoding UTF8 | ConvertFrom-Json
+    $visibleLeakageCount = 0
+    if ($null -ne $json.quality -and $null -ne $json.quality.with_internal_visible_terms) {
+      $visibleLeakageCount = [int]$json.quality.with_internal_visible_terms
+    }
+    if ($visibleLeakageCount -gt 0) {
+      $hits += [ordered]@{
+        path = $target
+        visible_leakage_count = $visibleLeakageCount
+      }
+    }
+  }
+  $completed = (Get-Date).ToUniversalTime()
+  $status = if ($hits.Count -eq 0) { "passed" } else { "failed" }
+  ([ordered]@{
+    status = $status
+    scanned_targets = $targets | Select-Object -Unique
+    hit_count = $hits.Count
+    hits = $hits
+  } | ConvertTo-Json -Depth 8) | Set-Content -Path $logPath -Encoding UTF8
+  $script:checkResults += [ordered]@{
+    name = "phase68_visible_leakage_gate"
+    args = $targets | Select-Object -Unique
+    status = $status
+    exit_code = if ($hits.Count -eq 0) { 0 } else { 1 }
+    started_at = $started.ToString("o")
+    completed_at = $completed.ToString("o")
+    duration_seconds = [Math]::Round(($completed - $started).TotalSeconds, 3)
+    log_path = $logPath
+  }
+  if ($hits.Count -gt 0) {
+    Write-Host "Phase68 visible leakage gate failed. See: $logPath"
+    Write-CheckReport -OverallStatus "failed"
+    exit 1
+  }
+}
+
 Invoke-PythonModule -Name "ruff" -ModuleArgs @("ruff", "check", ".")
 Invoke-PythonModule -Name "mypy" -ModuleArgs @("mypy", ".")
 switch ($Profile) {
@@ -429,6 +531,8 @@ switch ($Profile) {
     Invoke-PythonScript -Name "chat_e2e_wechat_50_quality" -ScriptPath (Join-Path $wechat50Root "run_wechat_50_quality_latency.py") -Arguments @("--api", "http://127.0.0.1:8765", "--output", (Join-Path $reportRoot "wechat-50-quality-$runId"))
     $wechatRealRoot = Join-Path $root "docs\测试\聊天主链路\2026-05-03-wechat-real-scenarios"
     Invoke-PythonScript -Name "chat_e2e_wechat_real_quality" -ScriptPath (Join-Path $wechatRealRoot "run_wechat_real_scenarios.py") -Arguments @("--api", "http://127.0.0.1:8765", "--output", (Join-Path $reportRoot "wechat-real-quality-$runId"))
+    Invoke-Phase68PromptResidualGate
+    Invoke-Phase68VisibleLeakageGate
   }
   default {
     Invoke-PythonModule -Name "pytest" -ModuleArgs @("pytest", "--durations=20")

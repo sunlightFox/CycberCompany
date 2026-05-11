@@ -67,6 +67,30 @@ class ChatModelExecutionService:
         )
         messages = prompt_assembly.messages
         prompt_metadata = prompt_assembly.metadata
+        if getattr(facade, "_chat_hook_runtime", None) is not None:
+            hook_result = await facade._chat_hook_runtime.run_before_model_call(
+                {
+                    "trace_id": trace_id,
+                    "conversation_id": turn.get("conversation_id"),
+                    "turn_id": turn_id,
+                    "member_id": turn.get("member_id"),
+                    "session_id": turn.get("session_id"),
+                    "channel": "local",
+                    "payload": {
+                        "message_count": len(messages),
+                        "prompt_metadata": prompt_metadata,
+                        "intent": intent,
+                        "mode": mode,
+                    },
+                }
+            )
+            prompt_metadata = {
+                **prompt_metadata,
+                "hook_runtime": {
+                    **dict(prompt_metadata.get("hook_runtime") or {}),
+                    "before_model_call": hook_result,
+                },
+            }
         continuation_decision = facade._continuation.decide(
             turn=turn,
             user_text=user_text,
@@ -342,6 +366,7 @@ class ChatModelExecutionService:
             used_safe_fallback = True
             fallback_text = facade._continuation.safe_fallback_text(user_text=user_text, evaluation=evaluation)
             fallback_scenario = "tool_boundary" if set(evaluation.tags) & {"internal_jargon", "secret_leak", "false_done"} else "direct"
+            presence_runtime = dict(turn.get("presence_runtime") or {})
             fallback_result = await facade._composer.compose(
                 ComposeRequest(
                     user_text=user_text,
@@ -362,6 +387,10 @@ class ChatModelExecutionService:
                     current_message_hash=str(prompt_metadata.get("current_message_hash") or "") or None,
                     prompt_section_ids=[str(item) for item in prompt_metadata.get("prompt_section_ids") or []],
                     prompt_sections=[dict(item) for item in prompt_metadata.get("prompt_sections") or [] if isinstance(item, dict)],
+                    presence_runtime=presence_runtime,
+                    response_policy=dict(presence_runtime.get("response_policy") or {}),
+                    session_context=dict(presence_runtime.get("session_context") or {}),
+                    action_dialogue=dict(presence_runtime.get("action_dialogue") or {}),
                 )
             )
             response_plan = fallback_result.response_plan
@@ -405,6 +434,7 @@ class ChatModelExecutionService:
         return response_plan, assistant_text, response_filter, continuation_payload, finish_reason, usage
 
     async def _compose_response_plan(self, facade: Any, turn: dict[str, Any], context: Any, user_text: str, assistant_text: str, prompt_metadata: dict[str, Any]):
+        presence_runtime = dict(turn.get("presence_runtime") or {})
         compose_result = await facade._composer.compose(
             ComposeRequest(
                 user_text=user_text,
@@ -425,6 +455,10 @@ class ChatModelExecutionService:
                 current_message_hash=str(prompt_metadata.get("current_message_hash") or "") or None,
                 prompt_section_ids=[str(item) for item in prompt_metadata.get("prompt_section_ids") or []],
                 prompt_sections=[dict(item) for item in prompt_metadata.get("prompt_sections") or [] if isinstance(item, dict)],
+                presence_runtime=presence_runtime,
+                response_policy=dict(presence_runtime.get("response_policy") or {}),
+                session_context=dict(presence_runtime.get("session_context") or {}),
+                action_dialogue=dict(presence_runtime.get("action_dialogue") or {}),
             )
         )
         return compose_result.response_plan

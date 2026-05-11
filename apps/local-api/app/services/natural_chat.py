@@ -8,6 +8,7 @@ from typing import Any
 
 from core_types import ApprovalDetail, ResponsePlan, RiskLevel
 from response_composer import ResponseComposer
+from response_composer import canonical_action_status, normalize_action_status_semantics
 from response_composer.chat_voice import voice_metadata_for_scenario
 from response_composer.opening_copy import opening_copy
 from trace_service import redact
@@ -30,6 +31,22 @@ from app.services.chat_visible_guard import (
 )
 from app.services.chat_visible_guard import (
     visible_text_guard as _visible_text_guard,
+)
+from app.services.action_resolution_copy import hard_block_text as _hard_block_text
+from app.services.natural_chat_surface import deterministic_plain_reply as _deterministic_plain_reply
+from app.services.pending_action_resolution import (
+    asks_how_to_confirm as _asks_how_to_confirm,
+    control_text as _control_text,
+    edit_payload_for_action as _edit_payload_for_action,
+    hard_block_reason as _hard_block_reason,
+    is_always_allow as _is_always_allow,
+    is_ambiguous_continue as _is_ambiguous_continue,
+    is_confirm as _is_confirm,
+    is_deny as _is_deny,
+    is_edit as _is_edit,
+    is_session_allow as _is_session_allow,
+    looks_like_new_action_request as _looks_like_new_action_request,
+    looks_like_resolution as _looks_like_resolution,
 )
 
 FORBIDDEN_MAIN_REPLY_TERMS = {
@@ -155,24 +172,6 @@ class NaturalChatActionGateway:
             user_text=text,
         )
         if not pending:
-            if text_is_new_action:
-                return None
-            if any(
-                matcher(text)
-                for matcher in (
-                    _is_confirm,
-                    _is_deny,
-                    _is_edit,
-                    _is_session_allow,
-                    _is_always_allow,
-                )
-            ):
-                return _outcome(
-                    _no_pending_text(text),
-                    status="no_pending_action",
-                    reason_codes=["no_pending_action"],
-                    clear_pending=True,
-                )
             return None
         if text_is_new_action and not _looks_like_resolution(text):
             return None
@@ -184,15 +183,6 @@ class NaturalChatActionGateway:
                 reason_codes=[hard_block],
                 clear_pending=False,
             )
-        deterministic = _deterministic_plain_reply(text)
-        if deterministic is not None:
-            return _outcome(
-                deterministic,
-                status="direct_plain_reply",
-                reason_codes=["natural_plain_reply"],
-                clear_pending=False,
-            )
-
         if _asks_how_to_confirm(text):
             return _outcome(
                 _plain_next_step_text(pending),
@@ -481,7 +471,7 @@ def response_plan_for_pending_action(
     mapper = ActionDialogueMapperService()
     facts = _action_status_facts(
         action,
-        status="pending_action",
+        status="waiting_for_approval",
         detail=None,
         failure_reason=None,
     )
@@ -494,21 +484,25 @@ def response_plan_for_pending_action(
             evidence_summary=str(facts.get("evidence_summary") or ""),
             reply_options=list(facts.get("reply_options") or []),
             route_semantics={"route": str(action.get("action_type") or "")},
-            natural_interaction={"status": "pending_action"},
-            task_status={"status": "waiting_approval"},
+            natural_interaction={"status": "waiting_for_approval"},
+            task_status={"status": "waiting_for_approval"},
             approval_pending=True,
         )
     )
     facts["action_dialogue"] = action_dialogue.model_dump(mode="json")
-    plan = composer.response_plan_for_action_status(facts=facts)
+    plan = composer.response_plan_for_action_status(
+        facts=facts,
+        response_policy=dict((presence_runtime or {}).get("response_policy") or {}),
+        session_context=dict((presence_runtime or {}).get("session_context") or {}),
+    )
     reply_options = _reply_options_from_actions([action])
     natural = _natural_interaction_payload(
-        status="pending_action",
+        status="waiting_for_approval",
         reason_codes=["approval_required", "natural_pending_action"],
         pending_actions=[action],
         reply_options=reply_options,
         clear_pending=False,
-        action_result={"status": "pending_action", **_technical_detail(action)},
+        action_result={"status": "waiting_for_approval", **_technical_detail(action)},
     )
     natural["natural_reply_options"] = reply_options
     natural["pending_confirmation"] = {
@@ -525,11 +519,11 @@ def response_plan_for_pending_action(
         "action_dialogue": action_dialogue.model_dump(mode="json"),
         "natural_interaction": natural,
         "pending_actions": [action],
-        "pending_action_binding": _pending_action_binding("pending_action", [action]),
+        "pending_action_binding": _pending_action_binding("waiting_for_approval", [action]),
         "response_quality_guard": _natural_quality_guard(
             plan.structured_payload.get("response_quality_guard"),
             visible_text_guard(plan.plain_text or plan.summary or ""),
-            status="pending_action",
+            status="waiting_for_approval",
             state_disclosed=True,
             boundary_disclosed=True,
             next_step_provided=bool(reply_options),
@@ -615,13 +609,15 @@ def _outcome(
                 route_semantics={"route": str(action.get("action_type") or "")},
                 natural_interaction={"status": status},
                 task_status=_task_status_payload(detail) or {"status": status},
-                approval_pending=status in {"pending_action", "waiting_approval"},
+                approval_pending=canonical_action_status(status) == "waiting_for_approval",
             )
         )
         facts["action_dialogue"] = action_dialogue.model_dump(mode="json")
         plan = composer.response_plan_for_action_status(
             facts=facts,
             task_status=_task_status_payload(detail),
+            response_policy=dict((presence_runtime or {}).get("response_policy") or {}),
+            session_context=dict((presence_runtime or {}).get("session_context") or {}),
         )
         reply_options = _reply_options_from_actions(pending_actions or ([action] if action else []))
         natural = _natural_interaction_payload(
@@ -903,22 +899,39 @@ def _action_status_facts(
         or (action.get("payload_summary") or {}).get("path")
         or ""
     )
-    detail_status = str(getattr(detail, "status", "") or "")
+    canonical_status = canonical_action_status(status, default="requested")
+    detail_status = canonical_action_status(getattr(detail, "status", "") or canonical_status)
+    semantics = normalize_action_status_semantics(
+        {
+            "status": canonical_status,
+            "scope": "workflow_summary",
+            "evidence_summary": "结果可以通过任务记录、结果记录或过程记录复核。",
+            "failure_reason": failure_reason,
+            "approval_state": {
+                "status": "required" if canonical_status == "waiting_for_approval" else "not_required",
+                "approval_id": str(action.get("approval_id") or "") or None,
+            },
+            "task_ref": {"task_id": str(action.get("task_id") or ""), "status": detail_status},
+        },
+        default_status=canonical_status,
+        scope="workflow_summary",
+    )
     return {
-        "status": status,
+        "status": canonical_status,
         "action_type": action_type,
         "action_label": label,
         "target": target,
         "risk_level": str(action.get("risk_level") or ""),
-        "approval_required": status in {"pending_action", "waiting_approval"},
+        "approval_required": canonical_status == "waiting_for_approval",
         "reply_options": list(action.get("reply_options") or []),
         "reply_option_items": _reply_option_items(list(action.get("reply_options") or [])),
         "impact_summary": str(action.get("impact_summary") or ""),
         "detail_status": detail_status,
-        "completed": detail_status == "completed",
-        "failed": detail_status == "failed",
+        "completed": detail_status == "completed_with_evidence",
+        "failed": detail_status == "failed_with_reason",
         "failure_reason": failure_reason,
         "evidence_summary": "结果可以通过任务记录、结果记录或过程记录复核。",
+        "action_status_semantics": semantics,
     }
 
 
@@ -926,7 +939,7 @@ def _task_status_payload(detail: Any | None) -> dict[str, Any] | None:
     if detail is None:
         return None
     task_id = str(getattr(detail, "task_id", "") or "")
-    status = str(getattr(detail, "status", "") or "")
+    status = canonical_action_status(getattr(detail, "status", "") or "")
     if not task_id and not status:
         return None
     return {"task_id": task_id, "status": status, "mode": "workflow"}
@@ -978,7 +991,7 @@ def _multiple_pending_text(pending: list[dict[str, Any]]) -> str:
 
 
 def _after_resolution_text(label: str, resolution: str, *, detail: Any | None) -> str:
-    status = str(getattr(detail, "status", "") or "")
+    status = canonical_action_status(getattr(detail, "status", "") or "")
     if resolution == "edited":
         prefix = _natural_copy("after_edited", seed=label, label=label)
     elif resolution == "session":
@@ -987,280 +1000,13 @@ def _after_resolution_text(label: str, resolution: str, *, detail: Any | None) -
         prefix = _natural_copy("after_once", seed=label, label=label)
     if not status:
         return _natural_copy("after_no_status", seed=label, prefix=prefix)
-    if status == "completed":
+    if status == "completed_with_evidence":
         return _natural_copy("after_completed", seed=label, prefix=prefix)
-    if status in {"paused", "waiting_approval"}:
+    if status in {"partially_completed", "waiting_for_approval", "planned"}:
         return _natural_copy("after_waiting", seed=label, prefix=prefix)
-    if status == "failed":
+    if status in {"failed_with_reason", "blocked_by_boundary"}:
         return _natural_copy("after_failed", seed=label, prefix=prefix)
     return f"{prefix} 当前状态是 {status}，下一步我会按实际结果说。"
-
-
-def _deterministic_plain_reply(text: str) -> str | None:
-    if "网页快照" in text and "截图" in text and "不懂技术" in text:
-        return (
-            "可以把网页快照理解成“页面内容清单”：它记录页面地址、标题和能读到的文字，"
-            "适合证明我看到了哪些信息。截图更像“当时拍下的照片”，适合证明页面长什么样。"
-            "两者都是证据：一个方便核对内容，一个方便核对画面。没有这些证据时，我不能说自己真的打开过网页。"
-        )
-    if "5 条测试点" in text or "5条测试点" in text:
-        return (
-            "1. 动作请求要说明是否已经执行，还是正在等待确认。\n"
-            "2. 删除、下载、登录这类操作必须先让用户明确确认。\n"
-            "3. 用户说“不要执行”时，只能给方案，不能创建任务。\n"
-            "4. 回复里不要要求用户复制内部编号。\n"
-            "5. 结果反馈要说明证据、状态和下一步。"
-        )
-    if "给一段" in text and "怎么问我的示例" in text:
-        return (
-            "我会这样问：\n"
-            "我准备下载这个文件，并保存到当前任务结果里。下载会在本机生成文件，所以需要你确认。\n\n"
-            "你可以直接回复：\n"
-            "- 只允许这一次\n"
-            "- 本会话内同类下载都允许\n"
-            "- 拒绝\n"
-            "- 把下载地址改成：..."
-        )
-    if "自然回复模板" in text and "技术字段" in text:
-        return (
-            "可以这样说：\n"
-            "这次浏览器任务已经完成。我打开了目标页面，并保存了页面快照和截图作为证据。"
-            "如果页面没有完成登录或下载，我会明确说“没有完成”，再告诉你失败原因和下一步，"
-            "例如重新提供地址、换账号，或取消这次操作。"
-        )
-    return None
-
-
-def _hard_block_reason(text: str) -> str | None:
-    lowered = text.lower()
-    if "169.254.169.254" in lowered or "metadata" in lowered:
-        return "metadata_or_private_network_target"
-    if "file://" in lowered:
-        return "browser_file_url_denied"
-    if any(marker in lowered for marker in ["private key", "private_key", "mnemonic"]):
-        return "secret_or_key_request"
-    if any(marker in text for marker in ["私钥", "助记词", "系统密钥"]):
-        return "secret_or_key_request"
-    return None
-
-
-def _hard_block_text(reason: str) -> str:
-    if reason == "browser_file_url_denied":
-        return "不能直接打开本机 file:// 路径；这会越过受控边界，也可能暴露本地敏感文件。"
-    if reason == "metadata_or_private_network_target":
-        return "不能访问这类元数据或私有网络地址；安全策略已拒绝，我也不会替你探测内部目标。"
-    return "不能处理这类私钥、助记词或系统密钥请求；我不会读取、复述或外发敏感凭据。"
-
-
-def _looks_like_resolution(text: str) -> bool:
-    text = _control_text(text)
-    if _looks_like_new_action_request(text):
-        return False
-    return (
-        _is_confirm(text)
-        or _is_deny(text)
-        or _is_edit(text)
-        or _is_session_allow(text)
-        or _is_always_allow(text)
-    )
-
-
-def _is_confirm(text: str) -> bool:
-    text = _control_text(text)
-    normalized = text.strip().strip("。.!！?？~～ ")
-    explicit_markers = [
-        "确认下载",
-        "确认这次",
-        "确认执行",
-        "确认继续",
-        "确认操作",
-        "只允许这一次",
-        "本次允许",
-        "允许这一次",
-    ]
-    return normalized in {"确认", "同意", "允许"} or any(
-        marker in text for marker in explicit_markers
-    )
-
-
-def _is_session_allow(text: str) -> bool:
-    text = _control_text(text)
-    return "本会话" in text and any(marker in text for marker in ["允许", "同类", "都可以"])
-
-
-def _is_always_allow(text: str) -> bool:
-    text = _control_text(text)
-    return any(marker in text for marker in ["总是允许", "以后都允许", "永久允许"])
-
-
-def _is_deny(text: str) -> bool:
-    text = _control_text(text)
-    normalized = text.strip().strip("。.!！?？~～ ")
-    exact = {"拒绝", "取消", "不允许", "不删除", "不要执行", "停止", "不用了"}
-    contextual = [
-        "拒绝这次",
-        "取消这次",
-        "取消本次",
-        "拒绝本次",
-        "不允许这次",
-        "停止这次",
-    ]
-    return normalized in exact or any(marker in text for marker in contextual)
-
-
-def _is_edit(text: str) -> bool:
-    text = _control_text(text)
-    return any(marker in text for marker in ["改成", "修改", "换成"]) and any(
-        marker in text
-        for marker in ["地址", "目标", "参数", "url", "URL", "标题", "正文", "内容"]
-    )
-
-
-def _is_ambiguous_continue(text: str) -> bool:
-    text = _control_text(text)
-    normalized = text.strip().strip("。.!！?？~～ ")
-    return normalized in {"好的", "好", "嗯", "继续", "可以", "行", "走吧", "ok", "OK"}
-
-
-def _control_text(text: str) -> str:
-    stripped = text.strip()
-    if "：" not in stripped:
-        return stripped
-    prefix, suffix = stripped.split("：", 1)
-    normalized_prefix = prefix.strip().upper()
-    if normalized_prefix.startswith(
-        ("CHAT-E2E-", "PHASE34-", "NAT-", "WECHAT-REAL-")
-    ):
-        return suffix.strip()
-    suffix_normalized = suffix.strip().strip("。.!！?？~～ ")
-    if suffix_normalized in {
-        "好的",
-        "好",
-        "嗯",
-        "继续",
-        "可以",
-        "行",
-        "走吧",
-        "OK",
-        "ok",
-        "确认",
-        "同意",
-        "允许",
-        "拒绝",
-        "取消",
-        "不用了",
-    }:
-        return suffix.strip()
-    return stripped
-
-
-def _asks_how_to_confirm(text: str) -> bool:
-    markers = ["不懂什么是审批", "不想复制", "怎么回复", "告诉我应该怎么回复"]
-    return any(marker in text for marker in markers)
-
-
-def _looks_like_new_action_request(text: str) -> bool:
-    text = _control_text(text)
-    lowered = text.lower()
-    standalone_resolution = (
-        (_is_confirm(text) or _is_deny(text) or _is_edit(text) or _is_session_allow(text) or _is_always_allow(text))
-        and "http://" not in lowered
-        and "https://" not in lowered
-        and not any(marker in text for marker in ["请下载", "帮我下载", "请打开", "帮我打开", "截图留证", "下载完告诉我结果"])
-    )
-    if standalone_resolution:
-        return False
-    if "http://" in lowered or "https://" in lowered:
-        return any(
-            marker in text or marker in lowered
-            for marker in [
-                "请下载",
-                "帮我下载",
-                "下载完告诉我结果",
-                "请打开",
-                "帮我看一下",
-                "帮我看看",
-                "截图留证",
-                "保存页面截图",
-                "登录",
-            ]
-        )
-    if any(marker in text for marker in ["登录", "截图", "截屏", "下载", "请打开", "帮我打开"]):
-        request_markers = ["请", "帮我", "然后", "留证", "执行", "打开", "下载", "登录", "截图"]
-        explanation_markers = ["不要伪称完成", "不要说已完成", "还没真正执行", "等什么证据"]
-        if any(marker in text for marker in request_markers):
-            return True
-        if any(marker in text for marker in explanation_markers) and any(
-            marker in text for marker in ["登录", "截图", "下载"]
-        ):
-            return True
-    return any(
-        marker in text or marker in lowered
-        for marker in [
-            "帮我下载",
-            "请下载",
-            "下载完告诉我结果",
-            "帮我安装",
-            "请安装",
-            "请打开",
-        ]
-    )
-
-
-def _first_url(text: str) -> str | None:
-    match = _URL_RE.search(text)
-    return match.group(0) if match else None
-
-
-def _edit_payload_for_action(action: dict[str, Any], text: str) -> dict[str, Any] | None:
-    action_type = str(action.get("action_type") or "")
-    if action_type == "account.publish_post":
-        args: dict[str, str] = {}
-        title = _extract_edited_title(text)
-        body = _extract_edited_body(text)
-        if title:
-            args["title"] = title
-        if body:
-            args["body"] = body
-        return {"args": args} if args else None
-    url = _first_url(text)
-    if action_type == "browser.download":
-        return {"args": {"url": url}, "action_type": action_type} if url else None
-    if action_type in {"browser.open", "browser.snapshot", "browser.screenshot"}:
-        return {"args": {"url": url}, "action_type": action_type} if url else None
-    if action_type.startswith("browser."):
-        return None
-    return {"args": {"url": url}, "action_type": action_type} if url else None
-
-
-def _extract_edited_title(text: str) -> str | None:
-    patterns = [
-        r"标题\s*(?:改成|修改为|换成|为|是|[:：])\s*[《「“\"]?(?P<title>[^》」”\"\n，。；;]{1,120})",
-        r"[《「“\"](?P<title>[^》」”\"]{1,120})[》」”\"]",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            return match.group("title").strip().strip("《》「」“”\"' ")
-    return None
-
-
-def _extract_edited_body(text: str) -> str | None:
-    match = re.search(r"(?:正文|内容)\s*(?:改成|修改为|换成|为|是|[:：])\s*(?P<body>.+)$", text)
-    if not match:
-        return None
-    return match.group("body").strip().strip("。；;，, \n\r\t\"“”'")
-
-
-def _max_risk(actions: list[dict[str, Any]]) -> int:
-    return max((_risk_order(str(item.get("risk_level") or "R1")) for item in actions), default=0)
-
-
-def _risk_order(value: str) -> int:
-    try:
-        return int(str(value).removeprefix("R"))
-    except ValueError:
-        return 0
 
 
 def _label_for_action(action_type: str, payload: dict[str, Any]) -> str:

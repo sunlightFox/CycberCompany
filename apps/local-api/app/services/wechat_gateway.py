@@ -45,6 +45,21 @@ from app.services.audit import AuditEventService
 from app.services.channel_connectors import (
     ChannelConnectorRegistry,
 )
+from app.services.channel_approval_bridge import ChannelApprovalBridge
+from app.services.channel_reliability import (
+    PHASE88_CHANNEL_RELIABILITY_VERSION,
+    build_correlation,
+    duplicate_turn_payload,
+    no_turn_payload,
+    orphan_turn_payload,
+    runtime_contract_details,
+    success_payload,
+    summarize_records,
+    wrong_reuse_payload,
+)
+from app.services.channel_session_context import ChannelSessionContext
+from app.services.channel_session_semantics import ChannelSessionSemanticsRuntime
+from app.services.channel_stream_bridge import ChannelStreamBridge
 from app.services.chat import ChatService
 from app.services.multimodal_understanding import (
     MultimodalUnderstandingResult,
@@ -65,11 +80,47 @@ class WechatGatewayStats:
     duplicate_events: int = 0
     media_attachments: int = 0
     failures: int = 0
+    reliability_status: str = "ok"
+    correlation: dict[str, Any] = field(default_factory=dict)
+    taxonomy: list[str] = field(default_factory=list)
+    failure_reason_codes: list[str] = field(default_factory=list)
+    turn_formation: dict[str, Any] = field(default_factory=dict)
+    delivery_binding: dict[str, Any] = field(default_factory=dict)
     details: dict[str, Any] = field(default_factory=dict)
 
     def response(self) -> WechatGatewayPollResponse:
         status = "healthy" if self.failures == 0 else "degraded"
-        return WechatGatewayPollResponse(status=status, **self.__dict__)
+        summary = summarize_records("wechat", self.details.get("reliability_records"))
+        return WechatGatewayPollResponse(
+            status=status,
+            processed_accounts=self.processed_accounts,
+            processed_events=self.processed_events,
+            created_pairing_requests=self.created_pairing_requests,
+            chat_turns_created=self.chat_turns_created,
+            deliveries_sent=self.deliveries_sent,
+            rejected_events=self.rejected_events,
+            duplicate_events=self.duplicate_events,
+            media_attachments=self.media_attachments,
+            failures=self.failures,
+            reliability_status=str(summary.get("reliability_status") or self.reliability_status),
+            correlation=dict(summary.get("correlation") or self.correlation),
+            taxonomy=list(summary.get("taxonomy") or self.taxonomy),
+            failure_reason_codes=list(
+                summary.get("failure_reason_codes") or self.failure_reason_codes
+            ),
+            turn_formation=dict(summary.get("turn_formation") or self.turn_formation),
+            delivery_binding=dict(summary.get("delivery_binding") or self.delivery_binding),
+            details={
+                **self.details,
+                "phase88": {
+                    "contract_version": PHASE88_CHANNEL_RELIABILITY_VERSION,
+                    "taxonomy_counts": summary.get("taxonomy_counts") or {},
+                    "delivery_binding_completeness": summary.get(
+                        "delivery_binding_completeness"
+                    ),
+                },
+            },
+        )
 
 
 @dataclass
@@ -125,9 +176,56 @@ class WechatChannelGatewayService:
         self._delivery_watch_timeout_seconds = 120.0
         self._delivery_watch_poll_seconds = 0.25
         self._channel_ingress_runtime: Any | None = None
+        self._session_context_runtime = ChannelSessionContext()
+        self._session_semantics_runtime = ChannelSessionSemanticsRuntime()
+        self._stream_bridge = ChannelStreamBridge()
+        self._approval_bridge = ChannelApprovalBridge()
 
     def set_channel_ingress_runtime(self, runtime: Any) -> None:
         self._channel_ingress_runtime = runtime
+
+    def set_channel_bridges(
+        self,
+        *,
+        session_context: ChannelSessionContext,
+        stream_bridge: ChannelStreamBridge,
+        approval_bridge: ChannelApprovalBridge,
+    ) -> None:
+        self._session_context_runtime = session_context
+        self._stream_bridge = stream_bridge
+        self._approval_bridge = approval_bridge
+
+    def set_channel_session_semantics_runtime(
+        self,
+        runtime: ChannelSessionSemanticsRuntime,
+    ) -> None:
+        self._session_semantics_runtime = runtime
+
+    def runtime_diagnostic(self) -> dict[str, Any]:
+        return {
+            "runtime": "wechat_gateway",
+            "maturity": "compat_bridge",
+            "session_context_runtime": "channel_session_context",
+            "session_semantics_runtime": "channel_session_semantics",
+            "stream_bridge": "channel_stream_bridge",
+            "approval_bridge": "channel_approval_bridge",
+            "ingress_runtime": (
+                "channel_ingress_runtime" if self._channel_ingress_runtime is not None else "chat_service_fallback"
+            ),
+            "fallback_removed": self._channel_ingress_runtime is not None,
+            "delivery_modes": ["dm", "group", "channel", "thread", "system"],
+            "thread_isolation": True,
+            **runtime_contract_details(),
+        }
+
+    def reliability_snapshot(self) -> dict[str, Any]:
+        phase88 = dict(self._last_poll_result.get("details", {}).get("phase88") or {})
+        return {
+            "contract_version": PHASE88_CHANNEL_RELIABILITY_VERSION,
+            "last_poll_result": redact(self._last_poll_result),
+            "taxonomy_counts": phase88.get("taxonomy_counts") or {},
+            "delivery_binding_completeness": phase88.get("delivery_binding_completeness"),
+        }
 
     async def poll_once(
         self,
@@ -389,6 +487,14 @@ class WechatChannelGatewayService:
             ),
             last_poll_result=redact(self._last_poll_result),
             immediate_delivery=self._immediate_delivery.response(),
+            reliability_status=str(self._last_poll_result.get("reliability_status") or "ok"),
+            correlation=dict(self._last_poll_result.get("correlation") or {}),
+            taxonomy=list(self._last_poll_result.get("taxonomy") or []),
+            failure_reason_codes=list(
+                self._last_poll_result.get("failure_reason_codes") or []
+            ),
+            turn_formation=dict(self._last_poll_result.get("turn_formation") or {}),
+            delivery_binding=dict(self._last_poll_result.get("delivery_binding") or {}),
             worker_health=worker_payload,
             provider_health=ChannelProviderHealthResponse(**provider_health.__dict__),
         )
@@ -448,15 +554,34 @@ class WechatChannelGatewayService:
             trace_id=trace_id,
         )
         stats = WechatGatewayStats()
-        response = await self._route_to_chat(
-            account,
-            session=session,
-            channel_event_id=channel_event_id,
-            normalized=normalized,
-            attachments=attachments,
-            stats=stats,
-            trace_id=trace_id,
+        correlation = build_correlation(
+            inbound_event_id=channel_event_id,
+            provider="wechat",
+            channel_account_id=account.get("channel_account_id"),
+            channel_message_id=normalized["provider_event_id"],
+            channel_peer_id_redacted=_hash_value(normalized["peer_ref"]),
+            channel_peer_session_id=session.get("channel_peer_session_id"),
+            conversation_id=session.get("conversation_id"),
         )
+        try:
+            response = await self._route_to_chat(
+                account,
+                session=session,
+                channel_event_id=channel_event_id,
+                normalized=normalized,
+                attachments=attachments,
+                stats=stats,
+                trace_id=trace_id,
+            )
+        except Exception:
+            return {
+                "status": "failed",
+                "chat_turns_created": 0,
+                **no_turn_payload(
+                    correlation=correlation,
+                    reason_code="channel_ingress_submit_failed",
+                ),
+            }
         binding = await self._repo.get_delivery_binding_by_turn(
             turn_id=response.turn_id,
             channel_peer_session_id=session["channel_peer_session_id"],
@@ -470,6 +595,45 @@ class WechatChannelGatewayService:
             binding = await self._repo.get_delivery_binding(
                 binding["channel_delivery_binding_id"]
             )
+        reliability = (
+            success_payload(
+                correlation=build_correlation(
+                    inbound_event_id=channel_event_id,
+                    provider="wechat",
+                    channel_account_id=account.get("channel_account_id"),
+                    channel_message_id=normalized["provider_event_id"],
+                    dedupe_key=session.get("policy_snapshot", {}).get("dedupe_key"),
+                    channel_peer_id_redacted=_hash_value(normalized["peer_ref"]),
+                    channel_peer_session_id=session.get("channel_peer_session_id"),
+                    conversation_id=response.conversation_id,
+                    turn_id=response.turn_id,
+                    channel_delivery_binding_id=(
+                        binding.get("channel_delivery_binding_id") if binding else None
+                    ),
+                ),
+                queue_status=response.queue_status,
+                delivery_binding_id=(
+                    binding.get("channel_delivery_binding_id") if binding else None
+                ),
+                delivery_status=binding.get("status") if binding else None,
+            )
+            if binding is not None
+            else orphan_turn_payload(
+                correlation=build_correlation(
+                    inbound_event_id=channel_event_id,
+                    provider="wechat",
+                    channel_account_id=account.get("channel_account_id"),
+                    channel_message_id=normalized["provider_event_id"],
+                    channel_peer_id_redacted=_hash_value(normalized["peer_ref"]),
+                    channel_peer_session_id=session.get("channel_peer_session_id"),
+                    conversation_id=response.conversation_id,
+                    turn_id=response.turn_id,
+                ),
+                reason_code="turn_completed_but_delivery_binding_missing",
+                turn_id=response.turn_id,
+                queue_status=response.queue_status,
+            )
+        )
         return {
             "status": "routed",
             "turn_id": response.turn_id,
@@ -479,6 +643,7 @@ class WechatChannelGatewayService:
             ),
             "delivery_status": binding.get("status") if binding else None,
             "chat_turns_created": 1,
+            **reliability,
         }
 
     async def deliver_binding(
@@ -521,6 +686,17 @@ class WechatChannelGatewayService:
         )
         if not inserted:
             stats.duplicate_events += 1
+            stats.details.setdefault("reliability_records", []).append(
+                duplicate_turn_payload(
+                    correlation=build_correlation(
+                        inbound_event_id=None,
+                        provider="wechat",
+                        channel_account_id=account.get("channel_account_id"),
+                        channel_message_id=normalized["provider_event_id"],
+                        channel_peer_id_redacted=peer_hash,
+                    )
+                )
+            )
             return
         peer = await self._repo.upsert_peer(
             {
@@ -624,6 +800,34 @@ class WechatChannelGatewayService:
         stats.processed_events += 1
         if status != "received" or session is None:
             return
+        conflicting_session = None
+        if session.get("conversation_id"):
+            conflicting_session = await self._repo.get_peer_session_by_conversation_id(
+                channel_account_id=account["channel_account_id"],
+                conversation_id=str(session["conversation_id"]),
+            )
+        if (
+            conflicting_session is not None
+            and conflicting_session.get("channel_peer_session_id")
+            != session.get("channel_peer_session_id")
+            and conflicting_session.get("peer_ref_redacted") != session.get("peer_ref_redacted")
+        ):
+            stats.failures += 1
+            stats.details.setdefault("reliability_records", []).append(
+                wrong_reuse_payload(
+                    correlation=build_correlation(
+                        inbound_event_id=channel_event_id,
+                        provider="wechat",
+                        channel_account_id=account.get("channel_account_id"),
+                        channel_message_id=normalized["provider_event_id"],
+                        channel_peer_id_redacted=peer_hash,
+                        channel_peer_session_id=session.get("channel_peer_session_id"),
+                        conversation_id=session.get("conversation_id"),
+                    ),
+                    conflicting_session_id=conflicting_session.get("channel_peer_session_id"),
+                )
+            )
+            return
         peer_state_ref = session.get("peer_state_ref")
         if not peer_state_ref:
             peer_state_ref, _ = self._secrets.put_secret(
@@ -649,15 +853,82 @@ class WechatChannelGatewayService:
         stats.media_attachments += len(attachments)
         if normalized["attachments"] and not attachments:
             stats.media_attachments += len(normalized["attachments"])
-        await self._route_to_chat(
-            account,
-            session=session,
-            channel_event_id=channel_event_id,
-            normalized=normalized,
-            attachments=attachments,
-            stats=stats,
-            trace_id=trace_id,
+        try:
+            response = await self._route_to_chat(
+                account,
+                session=session,
+                channel_event_id=channel_event_id,
+                normalized=normalized,
+                attachments=attachments,
+                stats=stats,
+                trace_id=trace_id,
+            )
+        except Exception:
+            stats.failures += 1
+            stats.details.setdefault("reliability_records", []).append(
+                no_turn_payload(
+                    correlation=build_correlation(
+                        inbound_event_id=channel_event_id,
+                        provider="wechat",
+                        channel_account_id=account.get("channel_account_id"),
+                        channel_message_id=normalized["provider_event_id"],
+                        dedupe_key=None,
+                        channel_peer_id_redacted=peer_hash,
+                        channel_peer_session_id=session.get("channel_peer_session_id"),
+                        conversation_id=session.get("conversation_id"),
+                    ),
+                    reason_code="channel_ingress_submit_failed",
+                )
+            )
+            return
+        binding = await self._repo.get_delivery_binding_by_turn(
+            turn_id=response.turn_id,
+            channel_peer_session_id=session["channel_peer_session_id"],
         )
+        record = (
+            success_payload(
+                correlation=build_correlation(
+                    inbound_event_id=channel_event_id,
+                    provider="wechat",
+                    channel_account_id=account.get("channel_account_id"),
+                    channel_message_id=normalized["provider_event_id"],
+                    dedupe_key=None,
+                    channel_peer_id_redacted=peer_hash,
+                    channel_thread_id=(
+                        normalized.get("raw_event", {}).get("source", {}).get("thread_ref")
+                        or normalized.get("raw_event", {}).get("source", {}).get("thread_id")
+                    ),
+                    channel_peer_session_id=session.get("channel_peer_session_id"),
+                    conversation_id=response.conversation_id,
+                    turn_id=response.turn_id,
+                    channel_delivery_binding_id=(
+                        binding.get("channel_delivery_binding_id") if binding else None
+                    ),
+                ),
+                queue_status=response.queue_status,
+                delivery_binding_id=(
+                    binding.get("channel_delivery_binding_id") if binding else None
+                ),
+                delivery_status=binding.get("status") if binding else None,
+            )
+            if binding is not None
+            else orphan_turn_payload(
+                correlation=build_correlation(
+                    inbound_event_id=channel_event_id,
+                    provider="wechat",
+                    channel_account_id=account.get("channel_account_id"),
+                    channel_message_id=normalized["provider_event_id"],
+                    channel_peer_id_redacted=peer_hash,
+                    channel_peer_session_id=session.get("channel_peer_session_id"),
+                    conversation_id=response.conversation_id,
+                    turn_id=response.turn_id,
+                ),
+                reason_code="turn_completed_but_delivery_binding_missing",
+                turn_id=response.turn_id,
+                queue_status=response.queue_status,
+            )
+        )
+        stats.details.setdefault("reliability_records", []).append(record)
 
     async def _create_pairing_request(
         self,
@@ -993,11 +1264,21 @@ class WechatChannelGatewayService:
         }
         if understanding_result is not None:
             raw_payload["multimodal_understanding"] = understanding_result.ingress_payload
-        ingress_metadata = ChatIngressMetadata(
-            channel="wechat",
+        semantics = self._session_semantics_runtime.resolve_inbound(
+            provider="wechat",
+            channel_account_id=account["channel_account_id"],
             channel_message_id=normalized["provider_event_id"],
+            raw_payload={
+                **raw_payload,
+                "chat_type": normalized["chat_type"],
+                "peer_ref_redacted": _hash_value(normalized["peer_ref"]),
+                "thread_ref": normalized.get("raw_event", {}).get("source", {}).get("thread_ref")
+                or normalized.get("raw_event", {}).get("source", {}).get("thread_id"),
+                "source_timestamp": normalized["received_at"],
+            },
             queue_policy="immediate",
-            raw_payload=raw_payload,
+            fallback_peer_ref_redacted=_hash_value(normalized["peer_ref"]),
+            fallback_source_timestamp=str(normalized["received_at"] or ""),
         )
         gateway_span_id = None
         if trace_id is not None:
@@ -1015,47 +1296,48 @@ class WechatChannelGatewayService:
                     "message_type": normalized["message_type"],
                     "text_length": len(text),
                     "attachment_count": len(attachments),
-                    "latency_markers": ingress_metadata.raw_payload["latency_markers"],
+                    "latency_markers": dict(raw_payload.get("latency_markers") or {}),
                 },
             )
         try:
-            if self._channel_ingress_runtime is not None and not attachments and not context_refs:
-                response = await self._channel_ingress_runtime.submit_channel_turn(
-                    provider="wechat",
-                    session=session,
-                    channel_message_id=normalized["provider_event_id"],
-                    text=text,
-                    raw_payload=dict(ingress_metadata.raw_payload or {}),
-                    ui_mode="wechat_chat",
-                )
-            else:
-                response = await self._chat.create_turn(
-                    ChatTurnRequest(
-                        session_id=session["session_id"],
-                        conversation_id=session.get("conversation_id"),
-                        member_id=session["member_id"],
-                        input=ChatInput(
-                            type="multi_part" if content_parts else "text",
-                            text=text,
-                            content_parts=content_parts,
-                        ),
-                        attachments=attachments,
-                        context_refs=context_refs,
-                        ingress_metadata=ingress_metadata,
-                        client_context=ClientContext(
-                            timezone="Asia/Shanghai",
-                            locale="zh-CN",
-                            ui_mode="wechat_chat",
-                        ),
-                    )
-                )
+            inbound_context = self._session_context_runtime.build_inbound(
+                provider="wechat",
+                session=session,
+                channel_message_id=normalized["provider_event_id"],
+                raw_payload=dict(raw_payload),
+                ui_mode="wechat_chat",
+                semantics=semantics,
+            )
+            response = await self._require_channel_ingress_runtime().submit_channel_turn(
+                provider="wechat",
+                session=session,
+                inbound_event_id=channel_event_id,
+                channel_message_id=normalized["provider_event_id"],
+                text=text,
+                raw_payload={
+                    **raw_payload,
+                    "channel_session_context": inbound_context,
+                },
+                ui_mode="wechat_chat",
+                input_type="multi_part" if content_parts else "text",
+                content_parts=content_parts,
+                attachments=attachments,
+                context_refs=context_refs,
+                queue_policy=str(semantics["queue_policy"]),
+                channel_account_id=semantics.get("channel_account_id"),
+                channel_peer_id_redacted=semantics.get("channel_peer_id_redacted"),
+                channel_thread_id=semantics.get("channel_thread_id"),
+                delivery_mode=semantics.get("delivery_mode"),
+                source_timestamp=semantics.get("source_timestamp"),
+                dedupe_key=semantics.get("dedupe_key"),
+            )
         except Exception as exc:
             if gateway_span_id is not None:
                 await self._trace.end_span(
                     gateway_span_id,
                     status=TraceSpanStatus.FAILED,
                     output_data={"error": str(redact(str(exc)))},
-            )
+                )
             raise
         if understanding_result is not None and self._multimodal_understanding is not None:
             try:
@@ -1080,25 +1362,23 @@ class WechatChannelGatewayService:
                     "queue_status": response.queue_status,
                     "envelope_id": response.envelope_id,
                     "latency_markers": {
-                        **ingress_metadata.raw_payload["latency_markers"],
+                        **dict(raw_payload.get("latency_markers") or {}),
                         "t3_turn_created_at": utc_now_iso(),
                     },
                 },
             )
-        if not session.get("conversation_id"):
-            await self._repo.update_peer_session(
-                session["channel_peer_session_id"],
-                {
-                    "conversation_id": response.conversation_id,
-                    "last_inbound_at": utc_now_iso(),
-                    "updated_at": utc_now_iso(),
-                },
-            )
-        else:
-            await self._repo.update_peer_session(
-                session["channel_peer_session_id"],
-                {"last_inbound_at": utc_now_iso(), "updated_at": utc_now_iso()},
-            )
+        await self._repo.update_peer_session(
+            session["channel_peer_session_id"],
+            {
+                "conversation_id": response.conversation_id,
+                "last_inbound_at": utc_now_iso(),
+                "updated_at": utc_now_iso(),
+                "policy_snapshot": self._session_semantics_runtime.merge_policy_snapshot(
+                    session.get("policy_snapshot"),
+                    semantics,
+                ),
+            },
+        )
         channel_delivery_binding_id = new_id("chdel")
         delivery_created_at = utc_now_iso()
         await self._repo.insert_delivery_binding(
@@ -1182,17 +1462,24 @@ class WechatChannelGatewayService:
                 },
             )
         notification = await self._notifications.create_message(
+            # Final visible text is always derived from the bridge, not ad hoc gateway copy.
             NotificationMessageCreateRequest(
                 channel_id=session["channel_id"],
                 message_type="wechat_chat_reply",
                 recipient=recipient,
                 subject="微信回复",
-                body=str(message["content_text"]),
+                body=self._stream_bridge.final_plain_text(message),
                 metadata={
                     "channel_delivery_binding_id": binding["channel_delivery_binding_id"],
                     "turn_id": turn_id,
                     "message_id": message_id,
                     "voice_reply": dict(message.get("voice_metadata") or {}),
+                    "channel_session_context": self._session_context_runtime.build_outbound(
+                        provider="wechat",
+                        session=session,
+                        binding=binding,
+                        message=message,
+                    ),
                 },
             ),
             trace_id=trace_id,
@@ -1474,6 +1761,15 @@ class WechatChannelGatewayService:
             raise AppError(ErrorCode.NOT_FOUND, "配对请求不存在", status_code=404)
         return request
 
+    def _require_channel_ingress_runtime(self) -> Any:
+        if self._channel_ingress_runtime is None:
+            raise AppError(
+                ErrorCode.CHAT_RUNTIME_FAILED,
+                "wechat gateway ingress runtime 未配置",
+                status_code=500,
+            )
+        return self._channel_ingress_runtime
+
     def _load_provider_state(self, provider_state_ref: str | None) -> dict[str, Any] | None:
         raw = self._secrets.get_secret(provider_state_ref)
         if not raw:
@@ -1542,14 +1838,40 @@ class WechatChannelGatewayService:
         if requested_pairing == "unpaired":
             return None
         peer_hash = _hash_value(normalized["peer_ref"])
+        semantics = self._session_semantics_runtime.resolve_inbound(
+            provider=account["provider"],
+            channel_account_id=account["channel_account_id"],
+            channel_message_id=str(normalized["provider_event_id"]),
+            raw_payload={
+                "chat_type": normalized["chat_type"],
+                "peer_ref_redacted": peer_hash,
+                "thread_ref": normalized.get("raw_event", {}).get("source", {}).get("thread_ref")
+                or normalized.get("raw_event", {}).get("source", {}).get("thread_id"),
+                "source_timestamp": normalized.get("received_at"),
+            },
+            queue_policy="immediate",
+            fallback_peer_ref_redacted=peer_hash,
+            fallback_source_timestamp=str(normalized.get("received_at") or ""),
+        )
+        session_peer_ref_redacted = semantics["session_peer_ref_redacted"]
         existing = await self._repo.get_peer_session_by_peer_ref(
             channel_account_id=account["channel_account_id"],
-            peer_ref_redacted=peer_hash,
+            peer_ref_redacted=session_peer_ref_redacted,
         )
         if existing is not None:
             if existing.get("pairing_status") in {"blocked", "denied", "revoked"}:
                 return None
             if existing.get("peer_state_ref"):
+                await self._repo.update_peer_session(
+                    existing["channel_peer_session_id"],
+                    {
+                        "policy_snapshot": self._session_semantics_runtime.merge_policy_snapshot(
+                            existing.get("policy_snapshot"),
+                            semantics,
+                        ),
+                        "updated_at": utc_now_iso(),
+                    },
+                )
                 return existing
         peer = await self._repo.upsert_peer(
             {
@@ -1588,7 +1910,7 @@ class WechatChannelGatewayService:
                 "channel_peer_id": peer.get("channel_peer_id"),
                 "channel_id": account.get("channel_id"),
                 "provider": account["provider"],
-                "peer_ref_redacted": peer_hash,
+                "peer_ref_redacted": session_peer_ref_redacted,
                 "peer_type": normalized["chat_type"],
                 "conversation_id": None,
                 "session_id": new_id("chsess"),
@@ -1597,7 +1919,10 @@ class WechatChannelGatewayService:
                 "pairing_status": "paired",
                 "allow_inbound": allow_inbound,
                 "allow_outbound": allow_inbound,
-                "policy_snapshot": _gateway_policy(self._config),
+                "policy_snapshot": self._session_semantics_runtime.merge_policy_snapshot(
+                    _gateway_policy(self._config),
+                    semantics,
+                ),
                 "last_inbound_at": now,
                 "created_at": now,
                 "updated_at": now,

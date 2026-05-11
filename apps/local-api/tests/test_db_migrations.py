@@ -70,6 +70,7 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     assert "047_feishu_message_channel.sql" in first
     assert "048_soul_manifests.sql" in first
     assert "049_chat_presence_runtime.sql" in first
+    assert "051_chat_ledger_memory_unification.sql" in first
     for phase, contract in PHASE_MIGRATION_REQUIREMENTS.items():
         assert contract["required_migration"] in first, phase
         assert set(contract.get("tables") or ()).issubset(table_names), phase
@@ -214,6 +215,8 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "conversation_continuity_snapshots",
         "assistant_commitments",
         "turn_presence_states",
+        "chat_turn_ledgers",
+        "chat_run_ledgers",
         "semantic_review_requests",
         "semantic_review_suggestions",
         "semantic_review_model_calls",
@@ -342,6 +345,14 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         chat_turn_columns = {
             row["name"]
             for row in await db.fetch_all("PRAGMA table_info(chat_turns)")
+        }
+        turn_ledger_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(chat_turn_ledgers)")
+        }
+        run_ledger_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(chat_run_ledgers)")
         }
         chat_turn_recovery_columns = {
             row["name"]
@@ -771,6 +782,36 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         "resolved_asset_refs_json",
     }.issubset(skill_run_columns)
     assert {"experience_json", "brain_decision_id"}.issubset(chat_turn_columns)
+    assert {
+        "turn_id",
+        "conversation_id",
+        "session_id",
+        "member_id",
+        "trace_id",
+        "status",
+        "route_type",
+        "mode",
+        "started_at",
+        "ended_at",
+        "retry_of_turn_id",
+        "recovered_from_turn_id",
+        "channel",
+        "source_message_id",
+    }.issubset(turn_ledger_columns)
+    assert {
+        "run_id",
+        "turn_id",
+        "trace_id",
+        "stage",
+        "event_type",
+        "status",
+        "ref_id",
+        "ref_type",
+        "summary",
+        "payload_json",
+        "trace_span_id",
+        "created_at",
+    }.issubset(run_ledger_columns)
     assert {
         "recovery_attempt_id",
         "turn_id",

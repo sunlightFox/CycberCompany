@@ -86,15 +86,6 @@ class ChatTurnFinalizeService:
                 code=code.value,
                 message=message,
             )
-            user_message = await facade._chat_repo.get_message(turn["user_message_id"])
-            user_text = str(user_message.get("content_text") if user_message else "")
-            await facade._chat_experience.update_working_state(
-                turn=turn,
-                user_text=user_text,
-                assistant_text=message,
-                response_plan=response_plan.model_dump(mode="json"),
-                status="recoverable",
-            )
             response_plan = facade._composer.response_plan_for_recovery(
                 summary=message,
                 error_code=code.value,
@@ -103,14 +94,6 @@ class ChatTurnFinalizeService:
                 base_plan=response_plan,
                 recovery=recovery_payload,
             )
-        response_plan = response_plan.model_copy(
-            update={
-                "structured_payload": {
-                    **response_plan.structured_payload,
-                    "response_filter": response_filter,
-                },
-            }
-        )
         response_plan = facade._with_experience_payload(turn, response_plan)
         response_plan = await facade._decorate_chat_payloads(turn, response_plan)
         response_plan = await facade._decorate_response_plan(
@@ -124,6 +107,29 @@ class ChatTurnFinalizeService:
             assistant_text=message,
             turn_status="failed",
         )
+        response_plan, message = await facade._apply_before_finalize_hook(
+            turn=turn,
+            response_plan=response_plan,
+            assistant_text=message,
+            turn_status="failed",
+        )
+        response_plan = facade._response_coordinator.finalize_plan(
+            response_plan,
+            message,
+            authoritative_text=message,
+            response_filter=response_filter,
+        )
+        message = response_plan.plain_text
+        if facade._chat_experience is not None:
+            user_message = await facade._chat_repo.get_message(turn["user_message_id"])
+            user_text = str(user_message.get("content_text") if user_message else "")
+            await facade._chat_experience.update_working_state(
+                turn=turn,
+                user_text=user_text,
+                assistant_text=message,
+                response_plan=response_plan.model_dump(mode="json"),
+                status="recoverable",
+            )
         if persist_assistant:
             compose_span = await facade._trace.start_span(
                 turn["trace_id"],

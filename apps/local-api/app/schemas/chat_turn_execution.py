@@ -72,9 +72,9 @@ class ChatTurnExecutionContext:
     privacy: Any | None = None
     brain_decision: Any | None = None
     context_packet: ContextPacket | None = None
+    context_runtime: dict[str, Any] = field(default_factory=dict)
     route_decision: Any | None = None
     presence_runtime: dict[str, Any] = field(default_factory=dict)
     chat_quality_shadow: dict[str, Any] = field(default_factory=dict)
     queue_item: dict[str, Any] | None = None
     envelope: dict[str, Any] | None = None
-

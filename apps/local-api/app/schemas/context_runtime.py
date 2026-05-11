@@ -17,6 +17,8 @@ class SessionContext(ApiModel):
     relevant_memory_items: list[dict[str, Any]] = Field(default_factory=list)
     current_action_facts: dict[str, Any] = Field(default_factory=dict)
     compaction_recovery_summary: str = ""
+    latest_instruction_override: bool = False
+    reason_codes: list[str] = Field(default_factory=list)
 
 
 class SilentContinuityRecord(ApiModel):

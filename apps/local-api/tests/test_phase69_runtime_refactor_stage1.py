@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, cast
 
+from chat_runtime import canonical_route_name
 from fastapi.testclient import TestClient
 
 
@@ -81,6 +84,42 @@ def test_phase69_mcp_result_exposes_taint_envelope_for_downstream_runtime(
     assert result["taint"]["guard_decision"] == result["taint_guard_decision"]
 
 
+def test_phase69_chat_runtime_becomes_real_runtime_surface(client: TestClient) -> None:
+    registry = cast(Any, client.app).state.registry
+
+    assert registry.session_runtime._runtime is registry.chat_runtime
+    assert registry.chat_service._execution._runner.__self__ is registry.chat_runtime
+
+
+def test_phase69_runtime_emits_route_taxonomy_for_readonly_shortcuts(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    home = _fake_home(tmp_path, monkeypatch)
+    (home / "Desktop" / "alpha.txt").write_text("alpha content", encoding="utf-8")
+    conversation = client.get("/api/chat/conversations").json()["items"][0]
+
+    turn = client.post(
+        "/api/chat/turn",
+        json={
+            "session_id": "phase69-route-taxonomy",
+            "conversation_id": conversation["conversation_id"],
+            "member_id": "mem_xiaoyao",
+            "input": {"type": "text", "text": "我桌面有哪些文件"},
+        },
+    ).json()
+    events = _parse_sse(client.get(turn["stream_url"]).text)
+    completed = next(event for event in events if event["event"] == "response.completed")
+    payload = completed["payload"]["response_plan"]["structured_payload"]
+
+    assert payload["route_semantics"]["route"] == "host_filesystem_list"
+    assert (
+        payload["route_semantics"]["route_taxonomy"]
+        == canonical_route_name("host_filesystem_list")
+    )
+
+
 class _Phase69MixedTransport:
     async def start(self) -> None:
         return None
@@ -128,3 +167,34 @@ class _Phase69MixedTransport:
                 ]
             }
         raise AssertionError(f"unexpected method: {method}")
+
+
+def _fake_home(tmp_path: Path, monkeypatch) -> Path:
+    home = tmp_path / "home"
+    for name in ["Desktop", "Downloads", "Documents"]:
+        (home / name).mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("HOME", str(home))
+    return home
+
+
+def _parse_sse(raw: str) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    current: dict[str, str] = {}
+    for line in raw.splitlines():
+        if not line.strip():
+            if current:
+                data = json.loads(current.get("data", "{}"))
+                events.append(
+                    {
+                        "event": data.get("event") or current.get("event"),
+                        "payload": data.get("payload", {}),
+                    }
+                )
+                current = {}
+            continue
+        if line.startswith("event:"):
+            current["event"] = line.split(":", 1)[1].strip()
+        elif line.startswith("data:"):
+            current["data"] = f"{current.get('data', '')}{line.split(':', 1)[1].strip()}"
+    return events

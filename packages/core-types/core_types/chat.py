@@ -56,12 +56,18 @@ class ChatContextRef(ApiModel):
 
 class ChatIngressMetadata(ApiModel):
     channel: str = "local"
+    inbound_event_id: str | None = None
     channel_message_id: str | None = None
+    channel_account_id: str | None = None
+    channel_peer_id_redacted: str | None = None
+    channel_thread_id: str | None = None
+    delivery_mode: str | None = None
     dedupe_key: str | None = None
     debounce_ms: int | None = None
     queue_policy: Literal["immediate", "collect", "followup", "steer", "interrupt"] = "immediate"
     collected_message_count: int | None = None
     collected_envelope_ids: list[EntityId] = Field(default_factory=list)
+    source_timestamp: str | None = None
     raw_payload: dict[str, Any] = Field(default_factory=dict)
 
 

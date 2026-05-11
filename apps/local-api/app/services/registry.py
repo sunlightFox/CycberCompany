@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from chat_runtime import ChatRuntime
 from shell_runtime import ShellRuntime
 from trace_service import TraceService, redact
 
@@ -50,6 +51,12 @@ from app.services.brain import BrainService
 from app.services.brain_decision import BrainDecisionService
 from app.services.browser_sessions import BrowserSessionService
 from app.services.browser_workflows import AutonomousBrowserWorkflowService
+from app.services.browser_workflow_runtime import BrowserWorkflowRuntime
+from app.services.browser_intent_resolver import BrowserIntentResolver
+from app.services.browser_page_state import BrowserPageStateRuntime
+from app.services.browser_plan_runtime import BrowserPlanRuntime
+from app.services.browser_replay_store import BrowserReplayStore
+from app.services.browser_session_runtime import BrowserSessionRuntime
 from app.services.capability import CapabilityGraphService
 from app.services.channel_connectors import (
     ChannelConnectorRegistry,
@@ -58,9 +65,16 @@ from app.services.channel_connectors import (
     WechatClawbotConnector,
     WechatMockConnector,
 )
+from app.services.channel_approval_bridge import ChannelApprovalBridge
+from app.services.channel_session_context import ChannelSessionContext
+from app.services.channel_session_semantics import ChannelSessionSemanticsRuntime
+from app.services.channel_stream_bridge import ChannelStreamBridge
 from app.services.channels import ChannelBindingService
 from app.services.chat import ChatService
 from app.services.chat_experience import ChatExperienceService
+from app.services.chat_hook_runtime import ChatHookRuntime
+from app.services.chat_mainline_readiness import ChatMainlineReadinessService
+from app.services.chat_run_ledger import ChatRunLedgerService
 from app.services.channel_ingress_runtime import ChannelIngressRuntime
 from app.services.conversation_understanding_runtime import ConversationUnderstandingRuntimeService
 from app.services.presence_state import PresenceStateResolverService
@@ -126,9 +140,13 @@ class ServiceRegistry:
     audit_service: AuditEventService
     bootstrap_service: BootstrapService
     chat_service: ChatService
+    chat_runtime: ChatRuntime
     session_runtime: SessionRuntime
     channel_ingress_runtime: ChannelIngressRuntime
+    channel_session_semantics_runtime: ChannelSessionSemanticsRuntime
     chat_experience_service: ChatExperienceService
+    chat_run_ledger_service: ChatRunLedgerService
+    chat_hook_runtime: ChatHookRuntime
     agent_workbench_service: AgentWorkbenchService
     memory_service: MemoryService
     media_service: MediaService
@@ -145,7 +163,11 @@ class ServiceRegistry:
     wechat_gateway_service: WechatChannelGatewayService
     feishu_gateway_service: FeishuChannelGatewayService
     browser_session_service: BrowserSessionService
-    autonomous_browser_workflow_service: AutonomousBrowserWorkflowService
+    autonomous_browser_workflow_service: BrowserWorkflowRuntime
+    browser_workflow_runtime: BrowserWorkflowRuntime
+    browser_session_runtime: BrowserSessionRuntime
+    browser_page_state_runtime: BrowserPageStateRuntime
+    browser_replay_store: BrowserReplayStore
     project_workspace_service: ProjectWorkspaceService
     project_deployment_service: ProjectDeploymentService
     toolchain_service: ToolchainService
@@ -160,6 +182,7 @@ class ServiceRegistry:
     supervisor_service: SupervisorService
     shell_switch_service: ShellSwitchService
     release_gate_service: ReleaseGateService
+    chat_mainline_readiness_service: ChatMainlineReadinessService
     release_gate_runtime: ReleaseGateRuntime
     release_report_builder: ReleaseReportBuilder
     runtime_contract_service: RuntimeContractService
@@ -287,6 +310,15 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         vector_service=vector_service,
         retrieval_repo=retrieval_repo,
     )
+    chat_run_ledger_service = ChatRunLedgerService(
+        chat_repo=chat_repo,
+        memory_repo=memory_repo,
+    )
+    chat_hook_runtime = ChatHookRuntime(
+        trace_service=trace_service,
+        audit_service=audit_service,
+        chat_run_ledger_service=chat_run_ledger_service,
+    )
     memory_service = MemoryService(
         db=db,
         repo=memory_repo,
@@ -296,6 +328,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         audit_service=audit_service,
         vector_service=vector_service,
         retrieval_repo=retrieval_repo,
+        chat_run_ledger=chat_run_ledger_service,
+        chat_hook_runtime=chat_hook_runtime,
     )
     chat_experience_service = ChatExperienceService(
         chat_repo=chat_repo,
@@ -377,6 +411,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         checkpoint_service=checkpoint_service,
         media_service=media_service,
         office_tool_service=office_tool_service,
+        chat_hook_runtime=chat_hook_runtime,
     )
     task_engine = TaskEngine(
         repo=task_repo,
@@ -443,6 +478,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         audit_service=audit_service,
         mcp_config=config.mcp,
         execution_boundary_service=execution_boundary_service,
+        chat_repo=chat_repo,
+        approval_service=approval_service,
     )
     tool_runtime.set_extension_services(
         skill_plugin_service=skill_plugin_service,
@@ -464,6 +501,10 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
         task_engine=task_engine,
+    )
+    mcp_service.set_conversation_bridge_services(
+        approval_service=approval_service,
+        notification_gateway=notification_gateway_service,
     )
     wechat_config = config.channels.providers.get("wechat")
     wechat_mock_config = config.channels.providers.get("wechat_mock")
@@ -572,6 +613,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     )
     release_gate_runtime = ReleaseGateRuntime()
     release_report_builder = ReleaseReportBuilder()
+    release_gate_runtime.bind_service(release_gate_service)
     runtime_contract_service = RuntimeContractService(
         repo=design_alignment_repo,
         data_dir=config.storage.data_dir,
@@ -681,7 +723,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         approval_service=approval_service,
         audit_service=audit_service,
     )
-    autonomous_browser_workflow_service = AutonomousBrowserWorkflowService(
+    autonomous_browser_workflow_legacy_service = AutonomousBrowserWorkflowService(
         repo=browser_workflow_repo,
         task_repo=task_repo,
         task_engine=task_engine,
@@ -689,6 +731,27 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         approval_service=approval_service,
         audit_service=audit_service,
         safety_policy_service=safety_policy_service,
+    )
+    browser_page_state_runtime = BrowserPageStateRuntime()
+    browser_replay_store = BrowserReplayStore(
+        browser_sessions=browser_session_service,
+        workflow_repo=browser_workflow_repo,
+    )
+    browser_session_runtime = BrowserSessionRuntime(
+        browser_sessions=browser_session_service,
+        asset_broker=asset_broker_service,
+        replay_store=browser_replay_store,
+    )
+    browser_workflow_runtime = BrowserWorkflowRuntime(
+        legacy_service=autonomous_browser_workflow_legacy_service,
+        intent_resolver=BrowserIntentResolver(repo=browser_workflow_repo),
+        plan_runtime=BrowserPlanRuntime(
+            repo=browser_workflow_repo,
+            task_engine=task_engine,
+            task_repo=task_repo,
+            response_builder=autonomous_browser_workflow_legacy_service._response,
+        ),
+        replay_store=browser_replay_store,
     )
     chat_service = ChatService(
         db,
@@ -719,12 +782,23 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         response_policy_service=response_policy_service,
         action_dialogue_mapper_service=action_dialogue_mapper_service,
         silent_continuity_service=silent_continuity_service,
+        chat_run_ledger_service=chat_run_ledger_service,
+        chat_hook_runtime=chat_hook_runtime,
     )
-    session_runtime = SessionRuntime(chat_service=chat_service)
+    chat_runtime = chat_service._runtime_impl
+    session_runtime = SessionRuntime(
+        chat_runtime=chat_runtime,
+        chat_repo=chat_repo,
+    )
+    channel_session_semantics = ChannelSessionSemanticsRuntime()
     channel_ingress_runtime = ChannelIngressRuntime(
-        chat_service=chat_service,
         session_runtime=session_runtime,
+        channel_session_semantics=channel_session_semantics,
+        chat_hook_runtime=chat_hook_runtime,
     )
+    channel_session_context = ChannelSessionContext()
+    channel_stream_bridge = ChannelStreamBridge()
+    channel_approval_bridge = ChannelApprovalBridge()
     skill_candidate_extractor = SkillCandidateExtractor()
     skill_promotion_runtime = SkillPromotionRuntime()
     wechat_gateway_service = WechatChannelGatewayService(
@@ -741,6 +815,12 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         config=wechat_config,
         multimodal_understanding=multimodal_understanding_service,
     )
+    wechat_gateway_service.set_channel_bridges(
+        session_context=channel_session_context,
+        stream_bridge=channel_stream_bridge,
+        approval_bridge=channel_approval_bridge,
+    )
+    wechat_gateway_service.set_channel_session_semantics_runtime(channel_session_semantics)
     feishu_gateway_service = FeishuChannelGatewayService(
         repo=channel_repo,
         chat_repo=chat_repo,
@@ -753,8 +833,36 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         audit_service=audit_service,
         config=feishu_config,
     )
+    feishu_gateway_service.set_channel_bridges(
+        session_context=channel_session_context,
+        stream_bridge=channel_stream_bridge,
+        approval_bridge=channel_approval_bridge,
+    )
+    feishu_gateway_service.set_channel_session_semantics_runtime(channel_session_semantics)
     wechat_gateway_service.set_channel_ingress_runtime(channel_ingress_runtime)
     feishu_gateway_service.set_channel_ingress_runtime(channel_ingress_runtime)
+    chat_mainline_readiness_service = ChatMainlineReadinessService(
+        root_dir=config.paths.root_dir,
+        chat_runtime=chat_runtime,
+        chat_service=chat_service,
+        session_runtime=session_runtime,
+        channel_session_semantics_runtime=channel_session_semantics,
+        channel_ingress_runtime=channel_ingress_runtime,
+        tool_runtime=tool_runtime,
+        browser_workflow_runtime=browser_workflow_runtime,
+        skill_plugin_service=skill_plugin_service,
+        mcp_service=mcp_service,
+        wechat_gateway_service=wechat_gateway_service,
+        feishu_gateway_service=feishu_gateway_service,
+        release_gate_service=release_gate_service,
+        chat_run_ledger_service=chat_run_ledger_service,
+        chat_hook_runtime=chat_hook_runtime,
+    )
+    release_gate_service.set_runtime_helpers(
+        gate_runtime=release_gate_runtime,
+        report_builder=release_report_builder,
+        chat_mainline_readiness_service=chat_mainline_readiness_service,
+    )
     background_worker_service.set_wechat_gateway(wechat_gateway_service)
     background_worker_service.set_feishu_gateway(feishu_gateway_service)
     return ServiceRegistry(
@@ -770,9 +878,13 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
             persona_heart_service,
         ),
         chat_service=chat_service,
+        chat_runtime=chat_runtime,
         session_runtime=session_runtime,
         channel_ingress_runtime=channel_ingress_runtime,
+        channel_session_semantics_runtime=channel_session_semantics,
         chat_experience_service=chat_experience_service,
+        chat_run_ledger_service=chat_run_ledger_service,
+        chat_hook_runtime=chat_hook_runtime,
         agent_workbench_service=agent_workbench_service,
         memory_service=memory_service,
         media_service=media_service,
@@ -789,7 +901,11 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         wechat_gateway_service=wechat_gateway_service,
         feishu_gateway_service=feishu_gateway_service,
         browser_session_service=browser_session_service,
-        autonomous_browser_workflow_service=autonomous_browser_workflow_service,
+        autonomous_browser_workflow_service=browser_workflow_runtime,
+        browser_workflow_runtime=browser_workflow_runtime,
+        browser_session_runtime=browser_session_runtime,
+        browser_page_state_runtime=browser_page_state_runtime,
+        browser_replay_store=browser_replay_store,
         project_workspace_service=project_workspace_service,
         project_deployment_service=project_deployment_service,
         toolchain_service=toolchain_service,
@@ -804,6 +920,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         supervisor_service=supervisor_service,
         shell_switch_service=shell_switch_service,
         release_gate_service=release_gate_service,
+        chat_mainline_readiness_service=chat_mainline_readiness_service,
         release_gate_runtime=release_gate_runtime,
         release_report_builder=release_report_builder,
         runtime_contract_service=runtime_contract_service,

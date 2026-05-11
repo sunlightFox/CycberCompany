@@ -68,7 +68,8 @@ def test_phase54_wechat_gateway_pairing_idempotency_and_reply_once(
 
     captured: list[Any] = []
 
-    async def fake_create_turn(request: Any, **_: Any) -> ChatTurnResponse:
+    async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+        request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
         captured.append(request)
         return await _insert_completed_turn(
             registry,
@@ -77,7 +78,7 @@ def test_phase54_wechat_gateway_pairing_idempotency_and_reply_once(
             conversation_id=request.conversation_id or "conv_phase54_wechat",
         )
 
-    registry.wechat_gateway_service._chat.create_turn = fake_create_turn
+    registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
     GatewayWechatClient.events = [
         _text_event("evt-paired", "wxid-phase54-peer-secret", "你能收到吗")
     ]
@@ -242,7 +243,8 @@ def test_phase54_xiaoyao_wechat_voice_reply_delivers_audio_message(
     registry = cast(Any, client.app).state.registry
     text_send_count = len(GatewayWechatClient.send_calls)
 
-    async def fake_create_turn(request: Any, **_: Any) -> ChatTurnResponse:
+    async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+        request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
         return await _insert_completed_voice_turn(
             registry,
             request,
@@ -250,7 +252,7 @@ def test_phase54_xiaoyao_wechat_voice_reply_delivers_audio_message(
             conversation_id=request.conversation_id or "conv_phase54_xiaoyao_voice",
         )
 
-    registry.wechat_gateway_service._chat.create_turn = fake_create_turn
+    registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
     GatewayWechatClient.events = [
         _text_event(
             "evt-xiaoyao-voice",
@@ -285,7 +287,8 @@ def test_phase54_wechat_gateway_routes_with_ingress_metadata_envelope_and_latenc
     _pair_peer(client, "wxid-rich-secret")
     registry = cast(Any, client.app).state.registry
 
-    async def fake_create_turn(request: Any, **_: Any) -> ChatTurnResponse:
+    async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+        request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
         assert request.input.text == "看下这个链接 https://example.com/a?token=secret"
         assert request.input.type == "multi_part"
         assert request.input.content_parts
@@ -306,7 +309,7 @@ def test_phase54_wechat_gateway_routes_with_ingress_metadata_envelope_and_latenc
             conversation_id=request.conversation_id or "conv_phase54_rich",
         )
 
-    registry.wechat_gateway_service._chat.create_turn = fake_create_turn
+    registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
     GatewayWechatClient.events = [
         _text_event(
             "evt-rich-link",
@@ -379,11 +382,14 @@ def test_phase54_wechat_gateway_fail_closed_and_media_degraded(
     _pair_peer(client, "wxid-media-secret")
     captured: list[Any] = []
 
-    async def fake_create_turn(request: Any, **_: Any) -> ChatTurnResponse:
+    async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+        request = cast(Any, client.app).state.registry.channel_ingress_runtime._router.route(
+            **kwargs
+        ).to_turn_request()
         captured.append(request)
         return await _insert_completed_turn(cast(Any, client.app).state.registry, request)
 
-    cast(Any, client.app).state.registry.wechat_gateway_service._chat.create_turn = fake_create_turn
+    cast(Any, client.app).state.registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
     GatewayWechatClient.events = [
         {
             "event_id": "evt-image",
@@ -450,7 +456,8 @@ def test_phase54_wechat_direct_inbound_routes_to_chat_turn_and_delivers_reply(
     binding = _bind_real_wechat(client)
     registry = cast(Any, client.app).state.registry
 
-    async def fake_create_turn(request: Any, **_: Any) -> ChatTurnResponse:
+    async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+        request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
         return await _insert_completed_turn(
             registry,
             request,
@@ -458,7 +465,7 @@ def test_phase54_wechat_direct_inbound_routes_to_chat_turn_and_delivers_reply(
             conversation_id=request.conversation_id or "conv_phase54_direct_inbound",
         )
 
-    registry.wechat_gateway_service._chat.create_turn = fake_create_turn
+    registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
     response = client.post(
         "/api/channels/inbound/wechat",
         json={
@@ -495,6 +502,9 @@ def test_phase54_wechat_direct_inbound_routes_to_chat_turn_and_delivers_reply(
     assert payload["delivery_binding_id"]
     assert payload["chat_turns_created"] == 1
     assert payload["diagnostic"]["chat_route"]["status"] == "routed"
+    assert payload["diagnostic"]["chat_route"]["reliability_status"] == "ok"
+    assert payload["diagnostic"]["chat_route"]["correlation"]["turn_id"] == payload["turn_id"]
+    assert payload["diagnostic"]["chat_route"]["delivery_binding"]["binding_visible"] is True
     _run_async(
         client,
         _wait_until,
@@ -523,7 +533,8 @@ def test_phase54_wechat_worker_tick_receives_and_delivers_natural_reply(
     registry = cast(Any, client.app).state.registry
     captured: list[Any] = []
 
-    async def fake_create_turn(request: Any, **_: Any) -> ChatTurnResponse:
+    async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+        request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
         captured.append(request)
         return await _insert_completed_turn(
             registry,
@@ -532,7 +543,7 @@ def test_phase54_wechat_worker_tick_receives_and_delivers_natural_reply(
             conversation_id=request.conversation_id or "conv_phase54_worker",
         )
 
-    registry.wechat_gateway_service._chat.create_turn = fake_create_turn
+    registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
     GatewayWechatClient.events = [
         _text_event("evt-worker-natural", "wxid-worker-secret", "在吗")
     ]
@@ -561,7 +572,8 @@ def test_phase54_wechat_immediate_delivery_after_turn_completion(
     registry = cast(Any, client.app).state.registry
     captured: list[Any] = []
 
-    async def fake_create_turn(request: Any, **_: Any) -> ChatTurnResponse:
+    async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+        request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
         captured.append(request)
         return await _insert_running_turn(
             registry,
@@ -569,7 +581,7 @@ def test_phase54_wechat_immediate_delivery_after_turn_completion(
             conversation_id=request.conversation_id or "conv_phase54_immediate",
         )
 
-    registry.wechat_gateway_service._chat.create_turn = fake_create_turn
+    registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
     GatewayWechatClient.events = [
         _text_event("evt-immediate-natural", "wxid-immediate-secret", "快一点回复")
     ]
@@ -695,14 +707,15 @@ def test_phase54_wechat_immediate_delivery_failure_is_auditable(
     _pair_peer(client, "wxid-failing-send-secret")
     registry = cast(Any, client.app).state.registry
 
-    async def fake_create_turn(request: Any, **_: Any) -> ChatTurnResponse:
+    async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+        request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
         return await _insert_running_turn(
             registry,
             request,
             conversation_id=request.conversation_id or "conv_phase54_send_failure",
         )
 
-    registry.wechat_gateway_service._chat.create_turn = fake_create_turn
+    registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
     FailingGatewayWechatClient.events = [
         _text_event("evt-failing-send", "wxid-failing-send-secret", "这条会发送失败")
     ]

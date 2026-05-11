@@ -208,6 +208,8 @@ class MemoryService:
         audit_service: AuditEventService,
         vector_service: Any | None = None,
         retrieval_repo: RetrievalRepository | None = None,
+        chat_run_ledger: Any | None = None,
+        chat_hook_runtime: Any | None = None,
     ) -> None:
         self._db = db
         self._repo = repo
@@ -217,6 +219,8 @@ class MemoryService:
         self._audit = audit_service
         self._vector = vector_service
         self._retrieval_repo = retrieval_repo
+        self._chat_run_ledger = chat_run_ledger
+        self._chat_hook_runtime = chat_hook_runtime
         self._reranker = MemoryRerankService()
         self._safety = SafetyService()
         self._background_tasks: set[asyncio.Task[int]] = set()
@@ -228,6 +232,9 @@ class MemoryService:
         status: str | None = None,
         layer: str | None = None,
         kind: str | None = None,
+        memory_class: str | None = None,
+        durability: str | None = None,
+        freshness_state: str | None = None,
         sensitivity: str | None = None,
         query: str | None = None,
         limit: int = 50,
@@ -237,6 +244,9 @@ class MemoryService:
             status=status,
             layer=layer,
             kind=kind,
+            memory_class=memory_class,
+            durability=durability,
+            freshness_state=freshness_state,
             sensitivity=sensitivity,
             query=query,
             limit=limit,
@@ -378,6 +388,10 @@ class MemoryService:
                     member_id=member_id,
                     query=str(redact(request.query)),
                     limit=request.limit,
+                    exclude_conversation_id=request.exclude_conversation_id,
+                    include_cross_session=request.include_cross_session,
+                    memory_classes=request.memory_classes,
+                    durability_filter=request.durability_filter,
                     include_archived=request.include_archived,
                     include_sensitive=request.include_sensitive,
                     include_asset_scoped=request.include_asset_scoped,
@@ -412,6 +426,8 @@ class MemoryService:
                     organization_id=organization_id,
                     member_id=member_id,
                     limit=request.limit,
+                    memory_classes=request.memory_classes,
+                    durability_filter=request.durability_filter,
                     include_sensitive=request.include_sensitive,
                     include_asset_scoped=request.include_asset_scoped,
                     asset_scope_ids=request.asset_scope_ids,
@@ -457,6 +473,7 @@ class MemoryService:
                 organization_id=organization_id,
                 member_id=member_id,
                 selected_rows=rows,
+                request=request,
                 include_sensitive=request.include_sensitive,
                 include_asset_scoped=request.include_asset_scoped,
                 asset_scope_ids=request.asset_scope_ids,
@@ -494,6 +511,15 @@ class MemoryService:
                     "retrieval_sources": sorted(retrieval_sources),
                     "fallback_policy": "fts",
                 },
+                recall_scope_applied=_recall_scope_applied(request),
+                request_filters={
+                    "recall_scope": request.recall_scope,
+                    "include_cross_session": request.include_cross_session,
+                    "exclude_conversation_id": request.exclude_conversation_id,
+                    "memory_classes": list(request.memory_classes or []),
+                    "durability_filter": list(request.durability_filter or []),
+                    "freshness_policy": request.freshness_policy,
+                },
                 degraded=degraded_reason is not None and "semantic_vector" not in retrieval_sources,
                 created_at=now,
             )
@@ -525,6 +551,7 @@ class MemoryService:
             return MemorySearchApiResponse(
                 retrieval_id=retrieval_id,
                 degraded=degraded_reason is not None and "semantic_vector" not in retrieval_sources,
+                recall_scope_applied=_recall_scope_applied(request),
                 provider=provider,
                 degraded_reason=degraded_reason,
                 selected_memory_ids=selected_ids,
@@ -535,12 +562,20 @@ class MemoryService:
                         memory_id=row["memory_id"],
                         layer=MemoryLayer(row["layer"]),
                         kind=row["kind"],
+                        memory_class=_memory_class_for_row(row),
                         summary_text=row["summary_text"],
                         score=float(row.get("rank_score", row.get("importance", 0.0))),
                         confidence=float(row["confidence"]),
                         importance=float(row["importance"]),
                         sensitivity=row["sensitivity"],
                         validity=_memory_validity(row),
+                        scope_policy=_scope_policy_for_row(row),
+                        durability=_durability_for_row(row),
+                        freshness_state=_freshness_state_for_row(row),
+                        cross_session=_is_cross_session_memory(
+                            row,
+                            conversation_id=request.conversation_id,
+                        ),
                         embedding_status=row.get("embedding_status", "pending"),
                         quality_score=float(row.get("quality_score", 0.5) or 0.5),
                         quality_breakdown=row.get("quality_breakdown", {}),
@@ -559,6 +594,9 @@ class MemoryService:
                         selection_confidence=row.get("selection_confidence"),
                         conflict_notes=row.get("conflict_notes", []),
                         suppressed_reason=row.get("suppressed_reason"),
+                        suppressed_reason_codes=_suppressed_reason_codes(row),
+                        superseded_by=_superseded_by(row),
+                        evidence_strength=_evidence_strength_for_row(row),
                         requires_user_confirmation=bool(
                             row.get("requires_user_confirmation", False)
                         ),
@@ -597,13 +635,24 @@ class MemoryService:
         )
         groups: dict[str, list[MemorySearchHit]] = {}
         for item in search_response.items:
-            groups.setdefault(item.kind, []).append(item)
+            group_key = f"{item.memory_class}:{item.freshness_state}"
+            groups.setdefault(group_key, []).append(item)
         blocks: list[MemoryBlock] = []
         token_total = 0
-        for kind, items in groups.items():
-            title = _memory_block_title(kind)
+        for group_key, items in groups.items():
+            memory_class, freshness_state = group_key.split(":", 1)
+            title = _memory_block_title(memory_class, freshness_state=freshness_state)
             block_items: list[MemoryBlockItem] = []
-            for item in items:
+            ordered_items = sorted(
+                items,
+                key=lambda item: (
+                    item.freshness_state != "fresh",
+                    -float(item.evidence_strength),
+                    -float(item.selection_confidence or 0.0),
+                    -float(item.quality_score),
+                ),
+            )
+            for item in ordered_items:
                 item_tokens = estimate_text_tokens(item.summary_text)
                 if token_total + item_tokens > token_budget and block_items:
                     break
@@ -625,6 +674,12 @@ class MemoryService:
                             "version_index": item.version_index,
                             "reuse_score": item.reuse_score,
                             "conflict_status": item.conflict_status,
+                            "memory_class": item.memory_class,
+                            "scope_policy": item.scope_policy,
+                            "durability": item.durability,
+                            "freshness_state": item.freshness_state,
+                            "cross_session": item.cross_session,
+                            "evidence_strength": item.evidence_strength,
                         },
                     )
                 )
@@ -639,7 +694,7 @@ class MemoryService:
                 blocks.append(
                     MemoryBlock(
                         block_id=new_id("memblk"),
-                        block_type=_block_type_for_kind(kind),
+                        block_type=_block_type_for_kind(memory_class),
                         title=title,
                         items=block_items,
                         token_estimate=sum(
@@ -665,6 +720,8 @@ class MemoryService:
         organization_id: str,
         member_id: str,
         limit: int,
+        memory_classes: list[str],
+        durability_filter: list[str],
         include_sensitive: bool,
         include_asset_scoped: bool,
         asset_scope_ids: list[str],
@@ -683,6 +740,8 @@ class MemoryService:
             }
             for row in rows
             if row["status"] == "active"
+            and (not memory_classes or _memory_class_for_row(row) in memory_classes)
+            and (not durability_filter or _durability_for_row(row) in durability_filter)
             and (
                 include_sensitive
                 or row["sensitivity"] not in {"high", "secret", "credential", "wallet"}
@@ -695,6 +754,7 @@ class MemoryService:
         organization_id: str,
         member_id: str,
         selected_rows: list[dict[str, Any]],
+        request: MemorySearchApiRequest,
         include_sensitive: bool,
         include_asset_scoped: bool,
         asset_scope_ids: list[str],
@@ -714,6 +774,7 @@ class MemoryService:
                 continue
             reason = _filter_reason(
                 item,
+                request=request,
                 include_sensitive=include_sensitive,
                 include_asset_scoped=include_asset_scoped,
                 asset_scope_ids=asset_scope_ids,
@@ -812,6 +873,76 @@ class MemoryService:
             }
         )
 
+    async def _default_conversation_id_for_member(self, member_id: str) -> str | None:
+        conversations = await self._chat.list_conversations()
+        for conversation in conversations:
+            if conversation.get("primary_member_id") == member_id:
+                return str(conversation["conversation_id"])
+        return None
+
+    async def _memory_source_payload(
+        self,
+        *,
+        source_type: str,
+        member_id: str,
+        conversation_id: str | None,
+        turn_id: str | None = None,
+        message_id: str | None = None,
+        task_id: str | None = None,
+        step_id: str | None = None,
+        tool_call_id: str | None = None,
+        approval_id: str | None = None,
+        trace_id: str | None = None,
+        channel: str | None = None,
+        channel_event_id: str | None = None,
+        artifact_id: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        canonical_type = _canonical_memory_source_type(source_type, conversation_id=conversation_id)
+        resolved_conversation_id = conversation_id
+        if resolved_conversation_id is None:
+            resolved_conversation_id = await self._default_conversation_id_for_member(member_id)
+        payload = {
+            "type": canonical_type,
+            "conversation_id": resolved_conversation_id,
+            "turn_id": turn_id,
+            "task_id": task_id,
+            "step_id": step_id,
+            "message_id": message_id,
+            "tool_call_id": tool_call_id,
+            "approval_id": approval_id,
+            "trace_id": trace_id,
+            "channel": channel or ("local" if canonical_type != "external_ingest" else None),
+            "captured_at": utc_now_iso(),
+            "channel_event_id": channel_event_id,
+            "artifact_id": artifact_id,
+        }
+        if extra:
+            payload.update(extra)
+        return payload
+
+    async def _record_memory_ledger(
+        self,
+        *,
+        source: dict[str, Any],
+        decision: str,
+        summary: str,
+        candidate_id: str | None = None,
+        memory_id: str | None = None,
+    ) -> None:
+        if self._chat_run_ledger is None:
+            return
+        await self._chat_run_ledger.record_memory_write_decision(
+            turn_id=source.get("turn_id"),
+            trace_id=source.get("trace_id"),
+            conversation_id=source.get("conversation_id"),
+            memory_id=memory_id,
+            candidate_id=candidate_id,
+            decision=decision,
+            source=source,
+            summary=summary,
+        )
+
     async def extract_from_turn(
         self,
         turn_id: str,
@@ -855,13 +986,15 @@ class MemoryService:
         command = self._classify_command(text, force=force, allow_implicit=allow_implicit)
         if command is None:
             return MemoryExtractResponse(candidates=[], memories=[])
-        source = {
-            "type": "conversation" if conversation_id else "manual",
-            "conversation_id": conversation_id,
-            "turn_id": turn_id,
-            "message_id": message_id,
-            "trace_id": trace_id,
-        }
+        source = await self._memory_source_payload(
+            source_type="conversation_turn" if conversation_id else "external_ingest",
+            member_id=member_id,
+            conversation_id=conversation_id,
+            turn_id=turn_id,
+            message_id=message_id,
+            trace_id=trace_id,
+            channel="local",
+        )
         span_id = await self._start_span(
             trace_id,
             TraceSpanType.MEMORY_EXTRACT,
@@ -1019,16 +1152,19 @@ class MemoryService:
             "但不得绕过 Safety、Approval、Capability Graph 或 Asset Broker。"
         )
         now = utc_now_iso()
+        source = await self._memory_source_payload(
+            source_type="task_result",
+            member_id=turn["member_id"],
+            conversation_id=turn["conversation_id"],
+            turn_id=turn_id,
+            message_id=turn.get("user_message_id"),
+            trace_id=trace_id,
+            channel="local",
+        )
         return await self._insert_candidate(
             organization_id=organization_id,
             member_id=turn["member_id"],
-            source={
-                "type": "turn_recovery",
-                "conversation_id": turn["conversation_id"],
-                "turn_id": turn_id,
-                "message_id": turn.get("user_message_id"),
-                "trace_id": trace_id,
-            },
+            source=source,
             proposed_layer=MemoryLayer.PROCEDURAL.value,
             proposed_kind="recovery_lesson",
             proposed_scope_type="member",
@@ -1263,6 +1399,7 @@ class MemoryService:
                 status_code=400,
             )
         now = utc_now_iso()
+        candidate = await self._before_memory_write_candidate(candidate, trace_id=trace_id)
         memory = await self._insert_memory_from_candidate(
             candidate,
             decision="user_approved",
@@ -1444,15 +1581,21 @@ class MemoryService:
         clean_summary = str(redact(summary_text)).strip()
         if not clean_summary:
             raise AppError(ErrorCode.VALIDATION_ERROR, "经验摘要不能为空", status_code=422)
-        source_payload = {
-            "type": str(source.get("type") or "task_experience"),
-            "conversation_id": conversation_id or source.get("conversation_id"),
-            "task_id": task_id or source.get("task_id"),
-            "step_id": source.get("step_id"),
-            "turn_id": source.get("turn_id"),
-            "message_id": source.get("message_id"),
-            "trace_id": trace_id or source.get("trace_id"),
-        }
+        source_payload = await self._memory_source_payload(
+            source_type=str(source.get("type") or "task_result"),
+            member_id=member_id,
+            conversation_id=conversation_id or source.get("conversation_id"),
+            turn_id=source.get("turn_id"),
+            message_id=source.get("message_id"),
+            task_id=task_id or source.get("task_id"),
+            step_id=source.get("step_id"),
+            tool_call_id=source.get("tool_call_id"),
+            approval_id=source.get("approval_id"),
+            trace_id=trace_id or source.get("trace_id"),
+            channel=source.get("channel") or "local",
+            channel_event_id=source.get("channel_event_id"),
+            artifact_id=source.get("artifact_id"),
+        )
         span_id = await self._start_span(
             trace_id,
             TraceSpanType.MEMORY_WRITE,
@@ -1505,6 +1648,12 @@ class MemoryService:
             decision_reason=None if decision == "auto_written" else "experience_requires_review",
             now=now,
         )
+        await self._record_memory_ledger(
+            source=source_payload,
+            decision="candidate_recorded",
+            summary=clean_summary,
+            candidate_id=candidate.candidate_id,
+        )
         conflicts = await self._resolve_experience_conflicts(
             organization_id=member["organization_id"],
             member_id=member_id,
@@ -1518,8 +1667,12 @@ class MemoryService:
         )
         memories: list[MemoryItem] = []
         if decision == "auto_written":
-            memory = await self._insert_memory_from_candidate(
+            candidate_row = await self._before_memory_write_candidate(
                 _candidate_row(candidate),
+                trace_id=trace_id,
+            )
+            memory = await self._insert_memory_from_candidate(
+                candidate_row,
                 decision=decision,
                 trace_id=trace_id,
                 now=now,
@@ -1530,6 +1683,20 @@ class MemoryService:
                 retention_policy=_retention_policy_for_experience(outcome, score),
             )
             memories.append(memory)
+            await self._record_memory_ledger(
+                source=source_payload,
+                decision="written",
+                summary=memory.summary_text,
+                candidate_id=candidate.candidate_id,
+                memory_id=memory.memory_id,
+            )
+        else:
+            await self._record_memory_ledger(
+                source=source_payload,
+                decision=decision,
+                summary=clean_summary,
+                candidate_id=candidate.candidate_id,
+            )
         experience = await self._persist_experience_record(
             organization_id=member["organization_id"],
             member_id=member_id,
@@ -1582,14 +1749,21 @@ class MemoryService:
         if memory is None:
             raise AppError(ErrorCode.MEMORY_NOT_FOUND, "记忆不存在", status_code=404)
         now = utc_now_iso()
-        source = {
-            "type": str(request.source.get("type") or "retrieval_feedback"),
-            "conversation_id": request.source.get("conversation_id"),
-            "task_id": request.task_id or request.source.get("task_id"),
-            "turn_id": request.source.get("turn_id"),
-            "message_id": request.source.get("message_id"),
-            "trace_id": trace_id or request.trace_id or request.source.get("trace_id"),
-        }
+        source = await self._memory_source_payload(
+            source_type=str(request.source.get("type") or "external_ingest"),
+            member_id=member_id,
+            conversation_id=request.source.get("conversation_id"),
+            turn_id=request.source.get("turn_id"),
+            message_id=request.source.get("message_id"),
+            task_id=request.task_id or request.source.get("task_id"),
+            step_id=request.source.get("step_id"),
+            tool_call_id=request.source.get("tool_call_id"),
+            approval_id=request.source.get("approval_id"),
+            trace_id=trace_id or request.trace_id or request.source.get("trace_id"),
+            channel=request.source.get("channel"),
+            channel_event_id=request.source.get("channel_event_id"),
+            artifact_id=request.source.get("artifact_id"),
+        )
         span_id = await self._start_span(
             trace_id or request.trace_id,
             TraceSpanType.MEMORY_CORRECTION,
@@ -1647,6 +1821,7 @@ class MemoryService:
         trace_id: str | None,
         root_span_id: str | None,
     ) -> MemoryCommandResult:
+        source = _normalize_memory_source_dict(source)
         classification = self._safety.classify_chat_input(text)
         summary = command.summary
         now = utc_now_iso()
@@ -1681,6 +1856,12 @@ class MemoryService:
                 },
                 trace_id=trace_id,
             )
+            await self._record_memory_ledger(
+                source=source,
+                decision="discarded_sensitive",
+                summary=str(redact(summary)),
+                candidate_id=candidate.candidate_id,
+            )
             return MemoryCommandResult(
                 handled=True,
                 candidates=[candidate],
@@ -1705,6 +1886,12 @@ class MemoryService:
                 decision="discarded_policy",
                 decision_reason="user_said_do_not_remember",
                 now=now,
+            )
+            await self._record_memory_ledger(
+                source=source,
+                decision="discarded_policy",
+                summary=str(redact(summary or text)),
+                candidate_id=candidate.candidate_id,
             )
             return MemoryCommandResult(handled=True, candidates=[candidate], reason="blocked")
 
@@ -1773,6 +1960,12 @@ class MemoryService:
                 decision_reason="duplicate_active_memory",
                 now=now,
             )
+            await self._record_memory_ledger(
+                source=source,
+                decision="discarded_duplicate",
+                summary=summary,
+                candidate_id=candidate.candidate_id,
+            )
             return MemoryCommandResult(handled=True, candidates=[candidate], reason="duplicate")
 
         candidate = await self._insert_candidate(
@@ -1799,6 +1992,12 @@ class MemoryService:
             now=now,
         )
         if decision != "auto_written":
+            await self._record_memory_ledger(
+                source=source,
+                decision=decision,
+                summary=summary,
+                candidate_id=candidate.candidate_id,
+            )
             return MemoryCommandResult(handled=True, candidates=[candidate], reason=decision)
 
         correction_span = None
@@ -1810,8 +2009,12 @@ class MemoryService:
                 parent_span_id=root_span_id,
                 metadata={"candidate_id": candidate.candidate_id},
             )
-        memory = await self._insert_memory_from_candidate(
+        candidate_row = await self._before_memory_write_candidate(
             _candidate_row(candidate),
+            trace_id=trace_id,
+        )
+        memory = await self._insert_memory_from_candidate(
+            candidate_row,
             decision="auto_written",
             trace_id=trace_id,
             now=now,
@@ -1826,6 +2029,19 @@ class MemoryService:
                     "correction_status": "applied" if memory.supersedes else "not_found",
                 },
             )
+        await self._record_memory_ledger(
+            source=source,
+            decision="candidate_recorded",
+            summary=summary,
+            candidate_id=candidate.candidate_id,
+        )
+        await self._record_memory_ledger(
+            source=source,
+            decision="written",
+            summary=memory.summary_text,
+            candidate_id=candidate.candidate_id,
+            memory_id=memory.memory_id,
+        )
         return MemoryCommandResult(handled=True, candidates=[candidate], memories=[memory])
 
     async def _resolve_experience_conflicts(
@@ -2124,15 +2340,30 @@ class MemoryService:
             "kind": candidate["proposed_kind"],
             "scope_type": candidate["proposed_scope_type"],
             "scope_id": candidate["proposed_scope_id"],
+            "memory_class": _memory_class_for_kind(
+                candidate["proposed_kind"],
+                layer=candidate["proposed_layer"],
+            ),
+            "scope_policy": _scope_policy_for_memory(
+                scope_type=candidate["proposed_scope_type"],
+            ),
             "summary_text": candidate["summary_text"],
             "payload": candidate["payload"],
             "source": candidate["source"],
             "confidence": quality_value,
             "importance": _importance_for_kind(candidate["proposed_kind"]),
             "sensitivity": candidate["sensitivity"],
+            "durability": _durability_for_kind(
+                candidate["proposed_kind"],
+                layer=candidate["proposed_layer"],
+                retention_policy=retention_policy
+                or _retention_policy_for_kind(candidate["proposed_kind"]),
+            ),
+            "freshness_state": "fresh",
             "valid_from": now,
             "valid_to": None,
             "supersedes": old_memory["memory_id"] if old_memory else None,
+            "superseded_by": None,
             "status": "active",
             "quality_score": quality_value,
             "quality_breakdown": breakdown,
@@ -2145,6 +2376,16 @@ class MemoryService:
             "retention_policy": retention_policy or _retention_policy_for_kind(candidate["proposed_kind"]),
             "retention_reason": _retention_reason_for_kind(candidate["proposed_kind"]),
             "expires_reason": None,
+            "expires_at": None,
+            "stale_after": _stale_after_for_kind(
+                candidate["proposed_kind"],
+                layer=candidate["proposed_layer"],
+                now=now,
+            ),
+            "evidence_strength": _evidence_strength_value(
+                quality_score=quality_value,
+                confidence=quality_value,
+            ),
             "review_required": False,
             "embedding_status": "pending",
             "metadata": {
@@ -2312,10 +2553,13 @@ class MemoryService:
                     old_memory["memory_id"],
                     {
                         "status": "superseded",
+                        "freshness_state": "superseded",
                         "valid_to": now,
                         "conflict_group_id": memory_conflict_group_id,
                         "conflict_status": "superseded",
                         "expires_reason": "superseded_by_newer_memory",
+                        "expires_at": now,
+                        "superseded_by": memory_id,
                         "updated_at": now,
                         "metadata": {
                             **old_memory.get("metadata", {}),
@@ -2391,6 +2635,42 @@ class MemoryService:
             raise AppError(ErrorCode.MEMORY_WRITE_FAILED, "记忆写入后无法读取", status_code=500)
         return _memory_item(memory)
 
+    async def _before_memory_write_candidate(
+        self,
+        candidate: dict[str, Any],
+        *,
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        if self._chat_hook_runtime is None:
+            return candidate
+        source = _normalize_memory_source_dict(dict(candidate.get("source") or {}))
+        hook_result = await self._chat_hook_runtime.run_before_memory_write(
+            {
+                "trace_id": trace_id or source.get("trace_id"),
+                "conversation_id": source.get("conversation_id"),
+                "turn_id": source.get("turn_id"),
+                "member_id": candidate.get("member_id"),
+                "session_id": None,
+                "channel": source.get("channel"),
+                "payload": {
+                    "candidate_id": candidate.get("candidate_id"),
+                    "summary_text": candidate.get("summary_text"),
+                    "source": source,
+                },
+            }
+        )
+        if hook_result.get("blocked"):
+            raise AppError(
+                ErrorCode.MEMORY_POLICY_BLOCKED,
+                "记忆写入被 hook 治理阻断",
+                status_code=422,
+                details={"reason_code": hook_result.get("reason_code")},
+            )
+        rewritten = dict(hook_result.get("rewritten_payload") or {})
+        if "source" not in rewritten:
+            return {**candidate, "source": source}
+        return {**candidate, "source": _normalize_memory_source_dict(dict(rewritten["source"]))}
+
     async def _set_memory_status(
         self,
         memory_id: str,
@@ -2411,9 +2691,18 @@ class MemoryService:
             metadata={"memory_id": memory_id, "status": status},
         )
         now = utc_now_iso()
+        freshness_state = (
+            "stale"
+            if status in {"archived", "deleted"}
+            else "fresh"
+        )
         await self._repo.update_memory_item(
             memory_id,
-            {"status": status, "updated_at": now},
+            {
+                "status": status,
+                "freshness_state": freshness_state,
+                "updated_at": now,
+            },
         )
         await self._end_span(span_id, output_data={"memory_id": memory_id, "status": status})
         await self._audit.write_event(
@@ -2555,8 +2844,10 @@ def _memory_item(row: dict[str, Any]) -> MemoryItem:
         user_id=row["user_id"],
         layer=MemoryLayer(row["layer"]),
         kind=row["kind"],
+        memory_class=_memory_class_for_row(row),
         scope_type=row["scope_type"],
         scope_id=row.get("scope_id"),
+        scope_policy=_scope_policy_for_row(row),
         summary_text=row["summary_text"],
         payload=row.get("payload", {}),
         source=row["source"],
@@ -2578,8 +2869,14 @@ def _memory_item(row: dict[str, Any]) -> MemoryItem:
         reuse_count=int(row.get("reuse_count") or 0),
         last_reused_at=row.get("last_reused_at"),
         retention_policy=row.get("retention_policy", "standard"),
+        durability=_durability_for_row(row),
+        freshness_state=_freshness_state_for_row(row),
         retention_reason=row.get("retention_reason"),
         expires_reason=row.get("expires_reason"),
+        superseded_by=_superseded_by(row),
+        expires_at=row.get("expires_at") or row.get("valid_to"),
+        stale_after=row.get("stale_after"),
+        evidence_strength=_evidence_strength_for_row(row),
         review_required=bool(row.get("review_required", False)),
         embedding_status=row.get("embedding_status", "pending"),
         metadata=row.get("metadata", {}),
@@ -2615,8 +2912,13 @@ def _memory_row_allowed(
     elif not request.include_archived or status not in {"archived"}:
         return False
     if row.get("valid_to") and str(row["valid_to"]) <= utc_now_iso():
-        return False
+        if request.freshness_policy != "allow_expired":
+            return False
     if request.layers and MemoryLayer(row["layer"]) not in request.layers:
+        return False
+    if request.memory_classes and _memory_class_for_row(row) not in request.memory_classes:
+        return False
+    if request.durability_filter and _durability_for_row(row) not in request.durability_filter:
         return False
     sensitivity = str(row.get("sensitivity") or "low")
     if not request.include_sensitive and sensitivity in {
@@ -2629,8 +2931,16 @@ def _memory_row_allowed(
     scope_type = row.get("scope_type")
     scope_id = row.get("scope_id")
     if scope_type in {"user", "organization"}:
-        return True
+        return request.include_cross_session or not _is_cross_session_memory(
+            row,
+            conversation_id=request.exclude_conversation_id or request.conversation_id,
+        )
     if row.get("member_id") == member_id or scope_id == member_id:
+        if not request.include_cross_session and _is_cross_session_memory(
+            row,
+            conversation_id=request.exclude_conversation_id or request.conversation_id,
+        ):
+            return False
         return True
     if scope_type == "asset":
         return request.include_asset_scoped and (
@@ -2647,8 +2957,17 @@ def _suppression_reason_for_memory(
     status = str(row.get("status") or "")
     if status in {"superseded", "deleted", "archived"} and not request.include_archived:
         return f"status_{status}"
-    if row.get("valid_to") and str(row["valid_to"]) <= utc_now_iso():
+    freshness_state = _freshness_state_for_row(row)
+    if freshness_state == "expired" and request.freshness_policy != "allow_expired":
         return "expired"
+    if freshness_state in {"stale", "aging"} and request.freshness_policy == "exclude_stale":
+        return freshness_state
+    if freshness_state == "superseded" and request.freshness_policy != "allow_superseded":
+        return "superseded"
+    if request.memory_classes and _memory_class_for_row(row) not in request.memory_classes:
+        return "memory_class_filtered"
+    if request.durability_filter and _durability_for_row(row) not in request.durability_filter:
+        return "durability_filtered"
     sensitivity = str(row.get("sensitivity") or "low")
     if not request.include_sensitive and sensitivity in {
         "high",
@@ -2673,6 +2992,15 @@ def _semantic_score(row: dict[str, Any]) -> float:
 
 
 def _recency_score(row: dict[str, Any]) -> float:
+    freshness_state = _freshness_state_for_row(row)
+    if freshness_state == "fresh":
+        return 0.88
+    if freshness_state == "aging":
+        return 0.68
+    if freshness_state == "stale":
+        return 0.28
+    if freshness_state in {"superseded", "expired"}:
+        return 0.08
     if row.get("updated_at"):
         return 0.7
     if row.get("created_at"):
@@ -2680,11 +3008,61 @@ def _recency_score(row: dict[str, Any]) -> float:
     return 0.4
 
 
+def _canonical_memory_source_type(
+    source_type: str,
+    *,
+    conversation_id: str | None = None,
+) -> str:
+    value = str(source_type or "").strip().lower()
+    mapping = {
+        "manual": "external_ingest",
+        "conversation": "conversation_turn",
+        "chat": "conversation_turn",
+        "message": "conversation_turn",
+        "turn": "conversation_turn",
+        "tool": "tool_result",
+        "tool_result": "tool_result",
+        "task": "task_result",
+        "task_experience": "task_result",
+        "approval": "approval_resolution",
+        "approval_resolution": "approval_resolution",
+        "external": "external_ingest",
+        "external_ingest": "external_ingest",
+        "retrieval_feedback": "external_ingest",
+        "agent_workbench_reflection": "conversation_turn",
+        "turn_recovery": "task_result",
+    }
+    if value in mapping:
+        return mapping[value]
+    if conversation_id and value in {"", "unknown"}:
+        return "conversation_turn"
+    return value or "external_ingest"
+
+
+def _normalize_memory_source_dict(source: dict[str, Any]) -> dict[str, Any]:
+    source = dict(source or {})
+    source["type"] = _canonical_memory_source_type(
+        str(source.get("type") or "unknown"),
+        conversation_id=source.get("conversation_id"),
+    )
+    source.setdefault("captured_at", utc_now_iso())
+    source.setdefault("channel", "local")
+    source.setdefault("tool_call_id", None)
+    source.setdefault("approval_id", None)
+    return source
+
+
 def _source_reliability(row: dict[str, Any]) -> float:
     source_value = row.get("source")
     source = source_value if isinstance(source_value, dict) else {}
     source_type = str(source.get("type") or "")
-    if source_type in {"explicit_user", "user_confirmed", "manual", "task_experience"}:
+    if source_type in {
+        "conversation_turn",
+        "tool_result",
+        "task_result",
+        "approval_resolution",
+        "external_ingest",
+    }:
         return 0.95
     if source_type in {"chat", "message", "turn", "retrieval_feedback"}:
         return 0.75
@@ -2694,12 +3072,16 @@ def _source_reliability(row: dict[str, Any]) -> float:
 def _public_memory_source(source_value: Any) -> dict[str, Any]:
     source = source_value if isinstance(source_value, dict) else {}
     return {
-        "type": str(source.get("type") or "unknown"),
+        "type": _canonical_memory_source_type(str(source.get("type") or "unknown")),
         "conversation_id": source.get("conversation_id"),
         "task_id": source.get("task_id"),
         "step_id": source.get("step_id"),
         "turn_id": None,
         "message_id": None,
+        "tool_call_id": None,
+        "approval_id": None,
+        "channel": source.get("channel"),
+        "captured_at": source.get("captured_at"),
         "trace_id": None,
     }
 
@@ -2758,7 +3140,10 @@ def _explicitness_score(row: dict[str, Any]) -> float:
     metadata = metadata_value if isinstance(metadata_value, dict) else {}
     source_value = row.get("source")
     source = source_value if isinstance(source_value, dict) else {}
-    if metadata.get("explicit") is True or source.get("type") in {"explicit_user", "manual"}:
+    if metadata.get("explicit") is True or source.get("type") in {
+        "conversation_turn",
+        "external_ingest",
+    }:
         return 0.95
     if row.get("kind") in {
         "preference",
@@ -2818,10 +3203,13 @@ def _provider_quality_score(row: dict[str, Any]) -> float:
 
 def _memory_conflict_notes(row: dict[str, Any]) -> list[str]:
     notes: list[str] = []
-    if row.get("status") == "superseded":
+    freshness_state = _freshness_state_for_row(row)
+    if freshness_state == "superseded":
         notes.append("superseded_by_newer_memory")
-    if row.get("valid_to") and str(row["valid_to"]) <= utc_now_iso():
+    if freshness_state == "expired":
         notes.append("expired_memory")
+    if freshness_state == "stale":
+        notes.append("stale_memory")
     if str(row.get("conflict_status") or "") in {"needs_review", "conflicted"}:
         notes.append(f"conflict_{row.get('conflict_status')}")
     return notes
@@ -2845,15 +3233,13 @@ def _suppressed_item(
 
 
 def _memory_validity(row: dict[str, Any]) -> str:
-    if row.get("status") == "superseded" or row.get("supersedes"):
-        return "superseded" if row.get("status") == "superseded" else "current"
-    conflict_status = str(row.get("conflict_status") or "")
-    if conflict_status in {"superseded", "resolved"} and row.get("supersedes"):
+    freshness_state = _freshness_state_for_row(row)
+    if freshness_state == "superseded":
         return "superseded"
-    if conflict_status in {"conflicted", "needs_review"}:
-        return "conflicted"
-    if row.get("valid_to") and str(row["valid_to"]) <= utc_now_iso():
+    if freshness_state == "expired":
         return "expired"
+    if str(row.get("conflict_status") or "") in {"conflicted", "needs_review"}:
+        return "conflicted"
     return "current"
 
 
@@ -3067,6 +3453,156 @@ def _kind_for_summary(summary: str) -> str:
     return "semantic_note"
 
 
+def _memory_class_for_kind(kind: str, *, layer: str) -> str:
+    if kind in {"preference", "correction"}:
+        return "preference"
+    if kind in {
+        "project_fact",
+        "knowledge_fact",
+        "semantic_note",
+    }:
+        return "fact"
+    if kind in {
+        "task_experience",
+        "episodic_experience",
+        "task_failure_experience",
+        "procedural_experience",
+        "skill_candidate",
+    }:
+        return "experience"
+    if layer in {
+        MemoryLayer.WORKING.value,
+        MemoryLayer.SESSION.value,
+        MemoryLayer.TEMPORAL.value,
+    }:
+        return "transient_working_state"
+    return "fact"
+
+
+def _scope_policy_for_memory(*, scope_type: str) -> str:
+    if scope_type == "asset":
+        return "asset_scoped"
+    if scope_type == "organization":
+        return "organization_shared"
+    if scope_type == "conversation":
+        return "current_conversation"
+    return "member_cross_session"
+
+
+def _durability_for_kind(kind: str, *, layer: str, retention_policy: str) -> str:
+    if layer in {
+        MemoryLayer.WORKING.value,
+        MemoryLayer.SESSION.value,
+        MemoryLayer.TEMPORAL.value,
+    }:
+        return "transient"
+    if retention_policy in {"persistent", "review_required"} or kind == "correction":
+        return "durable"
+    if retention_policy == "standard":
+        return "session"
+    return "durable"
+
+
+def _stale_after_for_kind(kind: str, *, layer: str, now: str) -> str | None:
+    if layer in {
+        MemoryLayer.WORKING.value,
+        MemoryLayer.SESSION.value,
+        MemoryLayer.TEMPORAL.value,
+    }:
+        return now
+    if kind == "skill_candidate":
+        return now
+    return None
+
+
+def _memory_class_for_row(row: dict[str, Any]) -> str:
+    value = str(row.get("memory_class") or "").strip()
+    if value:
+        return value
+    return _memory_class_for_kind(str(row.get("kind") or ""), layer=str(row.get("layer") or "semantic"))
+
+
+def _scope_policy_for_row(row: dict[str, Any]) -> str:
+    value = str(row.get("scope_policy") or "").strip()
+    if value:
+        return value
+    return _scope_policy_for_memory(scope_type=str(row.get("scope_type") or "member"))
+
+
+def _durability_for_row(row: dict[str, Any]) -> str:
+    value = str(row.get("durability") or "").strip()
+    if value:
+        return value
+    return _durability_for_kind(
+        str(row.get("kind") or ""),
+        layer=str(row.get("layer") or "semantic"),
+        retention_policy=str(row.get("retention_policy") or "standard"),
+    )
+
+
+def _freshness_state_for_row(row: dict[str, Any]) -> str:
+    value = str(row.get("freshness_state") or "").strip()
+    if value:
+        return value
+    status = str(row.get("status") or "")
+    if status == "superseded":
+        return "superseded"
+    if row.get("valid_to") and str(row["valid_to"]) <= utc_now_iso():
+        return "expired"
+    if status in {"archived", "deleted"}:
+        return "stale"
+    if row.get("stale_after") and str(row.get("stale_after")) <= utc_now_iso():
+        return "stale"
+    if _durability_for_row(row) == "transient":
+        return "aging"
+    return "fresh"
+
+
+def _superseded_by(row: dict[str, Any]) -> str | None:
+    return str(
+        row.get("superseded_by")
+        or dict(row.get("metadata") or {}).get("superseded_by")
+        or ""
+    ).strip() or None
+
+
+def _evidence_strength_value(*, quality_score: float, confidence: float) -> float:
+    return round(max(0.05, min(1.0, quality_score * 0.65 + confidence * 0.35)), 4)
+
+
+def _evidence_strength_for_row(row: dict[str, Any]) -> float:
+    value = row.get("evidence_strength")
+    if value is not None:
+        return float(value)
+    return _evidence_strength_value(
+        quality_score=float(row.get("quality_score", row.get("importance", 0.5)) or 0.5),
+        confidence=float(row.get("confidence", 0.5) or 0.5),
+    )
+
+
+def _is_cross_session_memory(row: dict[str, Any], *, conversation_id: str | None) -> bool:
+    source = dict(row.get("source") or {})
+    source_conversation_id = str(source.get("conversation_id") or "")
+    if not source_conversation_id or not conversation_id:
+        return _scope_policy_for_row(row) != "current_conversation"
+    return source_conversation_id != conversation_id
+
+
+def _recall_scope_applied(request: MemorySearchApiRequest) -> str:
+    if request.include_cross_session:
+        return str(request.recall_scope or "member_cross_session")
+    return "current_conversation"
+
+
+def _suppressed_reason_codes(row: dict[str, Any]) -> list[str]:
+    codes: list[str] = []
+    suppressed_reason = row.get("suppressed_reason")
+    if suppressed_reason:
+        codes.append(str(suppressed_reason))
+    codes.extend(str(item) for item in row.get("conflict_notes", []) if item)
+    return list(dict.fromkeys(codes))
+
+
 def _importance_for_kind(kind: str) -> float:
     if kind in {"preference", "project_fact", "correction"}:
         return 0.8
@@ -3075,20 +3611,26 @@ def _importance_for_kind(kind: str) -> float:
     return 0.5
 
 
-def _memory_block_title(kind: str) -> str:
+def _memory_block_title(kind: str, *, freshness_state: str = "fresh") -> str:
     titles = {
         "preference": "用户偏好",
         "project_fact": "项目事实",
         "correction": "用户纠错",
         "skill_candidate": "流程候选",
+        "fact": "长期事实",
+        "experience": "经验沉淀",
+        "transient_working_state": "临时上下文",
     }
-    return titles.get(kind, "相关记忆")
+    title = titles.get(kind, "相关记忆")
+    if freshness_state == "aging":
+        return f"{title}（较旧）"
+    return title
 
 
 def _block_type_for_kind(kind: str) -> str:
-    if kind == "correction":
+    if kind == "transient_working_state":
         return "temporal"
-    if kind == "skill_candidate":
+    if kind in {"skill_candidate", "experience"}:
         return "procedural"
     return "semantic"
 
@@ -3103,7 +3645,13 @@ def _memory_quality_breakdown(
 ) -> dict[str, float]:
     clean_summary = str(summary_text).strip()
     source_type = str((source or {}).get("type") or "")
-    explicit_source = source_type in {"manual", "conversation", "task_experience"}
+    explicit_source = source_type in {
+        "conversation_turn",
+        "tool_result",
+        "task_result",
+        "approval_resolution",
+        "external_ingest",
+    }
     value = 0.72 if kind in {"preference", "project_fact", "correction"} else 0.58
     if command_kind == "block":
         value = 0.12
@@ -3322,12 +3870,24 @@ def _should_use_recent_fallback(query: str, intent: str | None) -> bool:
 def _filter_reason(
     memory: dict[str, Any],
     *,
+    request: MemorySearchApiRequest,
     include_sensitive: bool,
     include_asset_scoped: bool,
     asset_scope_ids: list[str],
 ) -> str | None:
     if memory["status"] != "active":
         return f"status_{memory['status']}"
+    freshness_state = _freshness_state_for_row(memory)
+    if freshness_state == "expired" and request.freshness_policy != "allow_expired":
+        return "expired"
+    if freshness_state in {"stale", "aging"} and request.freshness_policy == "exclude_stale":
+        return freshness_state
+    if freshness_state == "superseded" and request.freshness_policy != "allow_superseded":
+        return "superseded"
+    if request.memory_classes and _memory_class_for_row(memory) not in request.memory_classes:
+        return "memory_class_filtered"
+    if request.durability_filter and _durability_for_row(memory) not in request.durability_filter:
+        return "durability_filtered"
     if not include_sensitive and memory["sensitivity"] in {
         "high",
         "secret",

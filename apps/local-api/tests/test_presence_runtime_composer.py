@@ -8,7 +8,7 @@ from app.services.natural_chat import response_plan_for_pending_action
 
 
 @pytest.mark.asyncio
-async def test_response_policy_stays_in_metadata_and_does_not_rewrite_visible_text() -> None:
+async def test_response_policy_can_restructure_visible_text_for_deep_reply() -> None:
     result = await ResponseComposer().compose(
         ComposeRequest(
         user_text="继续刚才那个方案，但别执行，只说风险。",
@@ -30,6 +30,7 @@ async def test_response_policy_stays_in_metadata_and_does_not_rewrite_visible_te
     assert "我的判断是" not in text
     assert "接着刚才那条" not in text
     assert text.startswith("先说风险。")
+    assert "\n" in text
     assert payload["response_policy"]["opening_style"] == "judgment_first"
     assert payload["session_context"]["current_conversation_summary"] == "刚才在聊同一个方案"
 
@@ -58,8 +59,9 @@ def test_pending_action_plan_keeps_action_metadata_without_runtime_applied_field
     )
 
     payload = plan.structured_payload
-    assert payload["action_dialogue"]["action_status"] == "pending_approval"
-    assert "response_policy" not in payload
+    assert payload["action_dialogue"]["action_status"] == "waiting_for_approval"
+    assert payload["action_status_semantics"]["status"] == "waiting_for_approval"
+    assert payload["response_policy"]["boundary_mode"] == "explicit_honest"
     assert "presence_runtime" not in payload
 
 
@@ -78,7 +80,7 @@ def test_continuation_revision_prompt_uses_quality_findings_only() -> None:
 
 
 @pytest.mark.asyncio
-async def test_response_policy_does_not_inject_followthrough_or_boundary_copy() -> None:
+async def test_response_policy_reorients_to_latest_instruction_without_boundary_copy() -> None:
     result = await ResponseComposer().compose(
         ComposeRequest(
             user_text="对比闲聊、任务、工具三种回复风格的差异。",
@@ -100,6 +102,18 @@ async def test_response_policy_does_not_inject_followthrough_or_boundary_copy() 
     )
 
     text = result.text
-    assert "接着刚才那条" not in text
+    assert text.startswith("按你刚刚改的这句，")
     assert "这一步我先停在确认前" not in text
-    assert text.startswith("闲聊重在接住情绪和语气。")
+    assert "前面在聊别的话题" not in text
+
+
+def test_compose_failure_uses_natural_language_for_model_route_and_context_failures() -> None:
+    composer = ResponseComposer()
+
+    model_text = composer.compose_failure("MODEL_ROUTE_NOT_FOUND", "没有可用模型路由")
+    context_text = composer.compose_failure("CONTEXT_BUILD_FAILED", "上下文构建失败")
+
+    assert "没有可用模型路由" not in model_text
+    assert "没拿到能用的模型路由" in model_text
+    assert "上下文构建失败" not in context_text
+    assert "没把上下文接稳" in context_text

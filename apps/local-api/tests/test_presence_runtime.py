@@ -145,7 +145,7 @@ def test_action_dialogue_pending_approval_never_claims_done() -> None:
         )
     )
 
-    assert decision.action_status == "pending_approval"
+    assert decision.action_status == "waiting_for_approval"
     assert decision.should_claim_completion is False
     assert decision.blocked_by_approval is True
     assert decision.visible_failure_strategy == "boundary_helpful"

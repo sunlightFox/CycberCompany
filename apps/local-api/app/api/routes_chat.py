@@ -296,7 +296,7 @@ async def create_turn(
     request: ChatTurnRequest,
     registry: ServiceRegistry = Depends(get_registry),
 ) -> ChatTurnResponse:
-    return await registry.chat_service.create_turn(request)
+    return await registry.session_runtime.create_turn(request)
 
 
 @router.get("/stream/{turn_id}")
@@ -308,7 +308,7 @@ async def stream_turn_events(
         raise AppError(ErrorCode.NOT_FOUND, "turn 不存在", status_code=404)
 
     async def event_source():
-        async for event in registry.chat_service.stream_turn_events(turn_id):
+        async for event in registry.session_runtime.stream_turn_events(turn_id):
             yield _sse(event)
 
     return StreamingResponse(event_source(), media_type="text/event-stream")
@@ -319,7 +319,7 @@ async def cancel_turn(
     turn_id: str,
     registry: ServiceRegistry = Depends(get_registry),
 ) -> ChatTurnResponse:
-    return await registry.chat_service.cancel_turn(turn_id)
+    return await registry.session_runtime.cancel_turn(turn_id)
 
 
 @router.post("/turns/{turn_id}/retry", response_model=ChatTurnResponse)
@@ -327,7 +327,7 @@ async def retry_turn(
     turn_id: str,
     registry: ServiceRegistry = Depends(get_registry),
 ) -> ChatTurnResponse:
-    return await registry.chat_service.retry_turn(turn_id)
+    return await registry.session_runtime.retry_turn(turn_id)
 
 
 def _sse(event: ChatEvent) -> str:

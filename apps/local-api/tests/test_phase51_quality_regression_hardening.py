@@ -237,6 +237,29 @@ def test_phase51_ambiguous_continue_and_task_status_do_not_fake_done(
             assert "尚未完成" in presentation.text or "等待确认" in presentation.text
 
 
+def test_phase51_latest_instruction_override_drops_stale_download_topic(
+    client: TestClient,
+) -> None:
+    conversation_id = _conversation_id(client)
+    _chat(
+        client,
+        conversation_id,
+        "phase51-latest-override",
+        "帮我下载 http://127.0.0.1:54069/download/report.csv，下载完告诉我结果。",
+    )
+    latest = _chat(
+        client,
+        conversation_id,
+        "phase51-latest-override",
+        "改口，现在只讨论风控，不执行任何工具或任务。",
+    )
+
+    assert "只讨论风控" in latest["reply"] or "现在先只讨论风控" in latest["reply"]
+    assert "report.csv" not in latest["reply"]
+    assert "下载完告诉我结果" not in latest["reply"]
+    assert "执行任何工具" in latest["reply"] or "重新判断" in latest["reply"]
+
+
 def test_phase51_browser_interactions_inherit_page_state_and_missing_session_is_recoverable(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

@@ -11,8 +11,13 @@ MEMORY_UPDATE_COLUMNS = {
     "confidence",
     "importance",
     "sensitivity",
+    "memory_class",
+    "scope_policy",
+    "durability",
+    "freshness_state",
     "valid_to",
     "supersedes",
+    "superseded_by",
     "status",
     "last_accessed_at",
     "access_count",
@@ -27,6 +32,9 @@ MEMORY_UPDATE_COLUMNS = {
     "retention_policy",
     "retention_reason",
     "expires_reason",
+    "expires_at",
+    "stale_after",
+    "evidence_strength",
     "review_required",
     "embedding_status",
     "metadata_json",
@@ -131,16 +139,18 @@ class MemoryRepository:
             """
             INSERT INTO memory_items (
               memory_id, organization_id, member_id, user_id, layer, kind, scope_type,
-              scope_id, summary_text, payload_json, source_json, confidence, importance,
-              sensitivity, valid_from, valid_to, supersedes, status, last_accessed_at,
+              scope_id, memory_class, scope_policy, summary_text, payload_json, source_json,
+              confidence, importance, sensitivity, durability, freshness_state, valid_from,
+              valid_to, supersedes, superseded_by, status, last_accessed_at,
               access_count, quality_score, quality_breakdown_json, version_index,
               conflict_group_id, conflict_status, reuse_score, reuse_count, last_reused_at,
-              retention_policy, retention_reason, expires_reason, review_required,
+              retention_policy, retention_reason, expires_reason, expires_at, stale_after,
+              evidence_strength, review_required,
               embedding_status, metadata_json, created_at, updated_at, normalized_summary,
               content_hash
             ) VALUES (
-              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0,
-              ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0,
+              ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -152,15 +162,20 @@ class MemoryRepository:
                 data["kind"],
                 data["scope_type"],
                 data.get("scope_id"),
+                data.get("memory_class", "fact"),
+                data.get("scope_policy", "member_cross_session"),
                 data["summary_text"],
                 _json(data.get("payload", {})),
                 _json(data["source"]),
                 data["confidence"],
                 data.get("importance", 0.5),
                 data["sensitivity"],
+                data.get("durability", "durable"),
+                data.get("freshness_state", "fresh"),
                 data.get("valid_from"),
                 data.get("valid_to"),
                 data.get("supersedes"),
+                data.get("superseded_by"),
                 data["status"],
                 data.get("quality_score", 0.5),
                 _json(data.get("quality_breakdown", {})),
@@ -172,6 +187,9 @@ class MemoryRepository:
                 data.get("retention_policy", "standard"),
                 data.get("retention_reason"),
                 data.get("expires_reason"),
+                data.get("expires_at"),
+                data.get("stale_after"),
+                data.get("evidence_strength", 0.5),
                 1 if bool(data.get("review_required", False)) else 0,
                 data.get("embedding_status", "pending"),
                 _json(data.get("metadata", {})),
@@ -203,6 +221,9 @@ class MemoryRepository:
         status: str | None = None,
         layer: str | None = None,
         kind: str | None = None,
+        memory_class: str | None = None,
+        durability: str | None = None,
+        freshness_state: str | None = None,
         sensitivity: str | None = None,
         query: str | None = None,
         limit: int = 50,
@@ -221,6 +242,15 @@ class MemoryRepository:
         if kind:
             where.append("kind = ?")
             params.append(kind)
+        if memory_class:
+            where.append("memory_class = ?")
+            params.append(memory_class)
+        if durability:
+            where.append("durability = ?")
+            params.append(durability)
+        if freshness_state:
+            where.append("freshness_state = ?")
+            params.append(freshness_state)
         if sensitivity:
             where.append("sensitivity = ?")
             params.append(sensitivity)
@@ -294,6 +324,10 @@ class MemoryRepository:
         member_id: str,
         query: str,
         limit: int = 10,
+        exclude_conversation_id: str | None = None,
+        include_cross_session: bool = True,
+        memory_classes: list[str] | None = None,
+        durability_filter: list[str] | None = None,
         include_archived: bool = False,
         include_sensitive: bool = False,
         include_asset_scoped: bool = False,
@@ -310,6 +344,14 @@ class MemoryRepository:
             include_asset_scoped=include_asset_scoped,
             asset_scope_ids=asset_scope_ids or [],
         )
+        cross_session_clause = ""
+        if not include_cross_session and exclude_conversation_id:
+            cross_session_clause = "AND json_extract(mi.source_json, '$.conversation_id') != ?"
+        elif not include_cross_session:
+            cross_session_clause = "AND (json_extract(mi.source_json, '$.conversation_id') = ? OR json_extract(mi.source_json, '$.conversation_id') IS NULL)"
+            exclude_conversation_id = query
+        class_clause, class_params = _in_clause("mi.memory_class", memory_classes or [])
+        durability_clause, durability_params = _in_clause("mi.durability", durability_filter or [])
         base_params: tuple[Any, ...] = (organization_id, member_id, member_id)
         match_query = _fts_query(query)
         rows: list[Any] = []
@@ -329,10 +371,21 @@ class MemoryRepository:
                   )
                   {sensitivity_clause}
                   {asset_clause}
+                  {cross_session_clause}
+                  {class_clause}
+                  {durability_clause}
                 ORDER BY rank_score DESC, mi.importance DESC, mi.updated_at DESC
                 LIMIT ?
                 """,
-                (match_query, *base_params, *asset_params, limit),
+                (
+                    match_query,
+                    *base_params,
+                    *asset_params,
+                    *((exclude_conversation_id,) if cross_session_clause else ()),
+                    *class_params,
+                    *durability_params,
+                    limit,
+                ),
             )
         if not rows:
             like_terms = _query_terms(query)
@@ -349,12 +402,23 @@ class MemoryRepository:
                     OR mi.member_id = ?
                   )
                   {asset_clause}
+                  {cross_session_clause}
+                  {class_clause}
+                  {durability_clause}
                   AND ({where_like})
                   {sensitivity_clause}
                 ORDER BY mi.importance DESC, mi.confidence DESC, mi.updated_at DESC
                 LIMIT ?
                 """,
-                (*base_params, *asset_params, *(f"%{term}%" for term in like_terms), limit),
+                (
+                    *base_params,
+                    *asset_params,
+                    *((exclude_conversation_id,) if cross_session_clause else ()),
+                    *class_params,
+                    *durability_params,
+                    *(f"%{term}%" for term in like_terms),
+                    limit,
+                ),
             )
         return [_memory_from_row(dict(row)) for row in rows]
 
@@ -697,6 +761,8 @@ class MemoryRepository:
         filtered_memory_ids: list[str],
         ranking: list[dict[str, Any]],
         token_budget: dict[str, Any],
+        recall_scope_applied: str,
+        request_filters: dict[str, Any],
         degraded: bool,
         created_at: str,
     ) -> None:
@@ -705,8 +771,9 @@ class MemoryRepository:
             INSERT INTO memory_retrieval_logs (
               retrieval_id, organization_id, trace_id, turn_id, conversation_id,
               member_id, query_text_hash, intent, selected_memory_ids_json,
-              filtered_memory_ids_json, ranking_json, token_budget_json, degraded, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              filtered_memory_ids_json, ranking_json, token_budget_json, recall_scope_applied,
+              request_filters_json, degraded, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 retrieval_id,
@@ -721,6 +788,8 @@ class MemoryRepository:
                 _json(filtered_memory_ids),
                 _json(ranking),
                 _json(token_budget),
+                recall_scope_applied,
+                _json(request_filters),
                 1 if degraded else 0,
                 created_at,
             ),
@@ -928,6 +997,13 @@ def _memory_from_row(row: dict[str, Any]) -> dict[str, Any]:
         except (TypeError, ValueError):
             row["rank_score"] = 0.0
     return row
+
+
+def _in_clause(column: str, values: list[str]) -> tuple[str, tuple[str, ...]]:
+    if not values:
+        return "", ()
+    placeholders = ",".join("?" for _ in values)
+    return (f"AND {column} IN ({placeholders})", tuple(values))
 
 
 def _job_from_row(row: dict[str, Any]) -> dict[str, Any]:

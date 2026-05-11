@@ -819,6 +819,7 @@ class TaskReplay(ApiModel):
     observations: list[TaskObservation] = Field(default_factory=list)
     retry_plans: list[TaskRetryPlan] = Field(default_factory=list)
     reflection_candidates: list[TaskReflectionCandidate] = Field(default_factory=list)
+    skill_candidates: list[dict[str, Any]] = Field(default_factory=list)
     model_plan_candidates: list[PlanCandidate] = Field(default_factory=list)
     plan_verification_results: list[PlanVerificationResult] = Field(default_factory=list)
     plan_policy_prunes: list[PlanPolicyPrune] = Field(default_factory=list)

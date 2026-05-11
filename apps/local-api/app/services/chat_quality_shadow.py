@@ -15,6 +15,7 @@ from app.schemas.chat_quality_shadow import (
     ShadowPolicyComparison,
 )
 from app.services.action_dialogue_mapper_shadow import ActionDialogueMapperShadowService
+from response_composer import canonical_action_status
 from app.services.conversation_understanding import ConversationUnderstandingService
 from app.services.dialogue_state_shadow import ChatDialogueStateShadowService
 from app.services.response_policy_shadow import ResponsePolicyShadowService
@@ -65,12 +66,12 @@ class ShadowPolicyAdvisoryGateService:
             tags.append("approval_prompt_excluded")
         structured = response_plan.structured_payload
         natural = structured.get("natural_interaction")
-        if isinstance(natural, dict) and natural.get("status") == "pending_action":
+        if isinstance(natural, dict) and canonical_action_status(natural.get("status"), default="") == "waiting_for_approval":
             tags.append("pending_action_excluded")
         task_status = structured.get("task_status_semantics") or structured.get("task_status") or {}
         if isinstance(task_status, dict):
-            status = str(task_status.get("status") or "")
-            if status in {"queued", "running", "waiting_approval", "pending_action"}:
+            status = canonical_action_status(task_status.get("status"), default="")
+            if status in {"planned", "executing", "waiting_for_approval"}:
                 tags.append(f"task_status_{status}_excluded")
         route_semantics = structured.get("route_semantics") or {}
         if isinstance(route_semantics, dict):
@@ -377,7 +378,10 @@ class ChatQualityShadowService:
             tags.append("system_tone_detected")
             risk_notes.append("reply_contains_overt_system_speech")
 
-        if any(text.startswith(marker) for marker in ["好的，我来处理", "收到，我来执行", "我先"]):
+        if any(
+            text.startswith(marker)
+            for marker in ["先处理这件事", "收到，这件事我先接住", "我先"]
+        ):
             tags.append("premature_acknowledgement_detected")
 
         if action_mapping.blocked_by_approval and any(

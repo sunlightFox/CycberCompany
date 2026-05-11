@@ -102,6 +102,10 @@ class ToolDlpReportListResponse(ApiModel):
 class ToolExecuteRequest(ApiModel):
     task_id: EntityId | None = None
     step_id: EntityId | None = None
+    turn_id: EntityId | None = None
+    conversation_id: EntityId | None = None
+    session_id: EntityId | None = None
+    channel: str | None = None
     member_id: EntityId = "mem_xiaoyao"
     tool_name: str
     args: dict[str, Any] = Field(default_factory=dict)

@@ -250,6 +250,93 @@ class ChatRepository:
             ),
         )
 
+    async def upsert_turn_ledger(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO chat_turn_ledgers (
+              turn_id, conversation_id, session_id, member_id, trace_id, status,
+              route_type, mode, started_at, ended_at, retry_of_turn_id,
+              recovered_from_turn_id, channel, source_message_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(turn_id) DO UPDATE SET
+              conversation_id = excluded.conversation_id,
+              session_id = excluded.session_id,
+              member_id = excluded.member_id,
+              trace_id = excluded.trace_id,
+              status = excluded.status,
+              route_type = COALESCE(excluded.route_type, chat_turn_ledgers.route_type),
+              mode = COALESCE(excluded.mode, chat_turn_ledgers.mode),
+              started_at = COALESCE(excluded.started_at, chat_turn_ledgers.started_at),
+              ended_at = COALESCE(excluded.ended_at, chat_turn_ledgers.ended_at),
+              retry_of_turn_id = COALESCE(excluded.retry_of_turn_id, chat_turn_ledgers.retry_of_turn_id),
+              recovered_from_turn_id = COALESCE(excluded.recovered_from_turn_id, chat_turn_ledgers.recovered_from_turn_id),
+              channel = COALESCE(excluded.channel, chat_turn_ledgers.channel),
+              source_message_id = COALESCE(excluded.source_message_id, chat_turn_ledgers.source_message_id),
+              updated_at = excluded.updated_at
+            """,
+            (
+                data["turn_id"],
+                data["conversation_id"],
+                data.get("session_id"),
+                data["member_id"],
+                data.get("trace_id"),
+                data["status"],
+                data.get("route_type"),
+                data.get("mode"),
+                data.get("started_at"),
+                data.get("ended_at"),
+                data.get("retry_of_turn_id"),
+                data.get("recovered_from_turn_id"),
+                data.get("channel"),
+                data.get("source_message_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def get_turn_ledger(self, turn_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM chat_turn_ledgers WHERE turn_id = ?",
+            (turn_id,),
+        )
+        return dict(row) if row else None
+
+    async def insert_run_ledger(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO chat_run_ledgers (
+              run_id, turn_id, trace_id, stage, event_type, status,
+              ref_id, ref_type, summary, payload_json, trace_span_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["run_id"],
+                data["turn_id"],
+                data.get("trace_id"),
+                data["stage"],
+                data["event_type"],
+                data["status"],
+                data.get("ref_id"),
+                data.get("ref_type"),
+                data.get("summary"),
+                json.dumps(data.get("payload") or {}, ensure_ascii=False),
+                data.get("trace_span_id"),
+                data["created_at"],
+            ),
+        )
+
+    async def list_run_ledgers(self, turn_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM chat_run_ledgers
+            WHERE turn_id = ?
+            ORDER BY created_at ASC, run_id ASC
+            """,
+            (turn_id,),
+        )
+        return [self._run_ledger_from_row(dict(row)) for row in rows]
+
     async def insert_message_envelope(self, data: dict[str, Any]) -> None:
         await self._db.execute(
             """
@@ -326,6 +413,34 @@ class ChatRepository:
         row = await self._db.fetch_one(
             "SELECT * FROM turn_presence_states WHERE turn_id = ?",
             (turn_id,),
+        )
+        if row is None:
+            return None
+        payload = dict(row)
+        return {
+            "presence_state_id": payload["presence_state_id"],
+            "turn_id": payload["turn_id"],
+            "conversation_id": payload["conversation_id"],
+            "understanding": json.loads(payload["understanding_json"] or "{}"),
+            "presence_state": json.loads(payload["presence_state_json"] or "{}"),
+            "session_context": json.loads(payload["session_context_json"] or "{}"),
+            "response_policy": json.loads(payload["response_policy_json"] or "{}"),
+            "action_dialogue": json.loads(payload["action_dialogue_json"] or "{}"),
+            "trace_id": payload.get("trace_id"),
+            "created_at": payload["created_at"],
+            "updated_at": payload["updated_at"],
+        }
+
+    async def get_latest_presence_state(self, conversation_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM turn_presence_states
+            WHERE conversation_id = ?
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 1
+            """,
+            (conversation_id,),
         )
         if row is None:
             return None
@@ -1744,6 +1859,10 @@ class ChatRepository:
         return row
 
     def _event_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        row["payload"] = json.loads(row.pop("payload_json") or "{}")
+        return row
+
+    def _run_ledger_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         row["payload"] = json.loads(row.pop("payload_json") or "{}")
         return row
 

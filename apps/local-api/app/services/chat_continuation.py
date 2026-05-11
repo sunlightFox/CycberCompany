@@ -220,6 +220,12 @@ _STRICT_FORMAT_MARKERS = (
     "代码块",
     "markdown表格",
     "markdown 表格",
+    "用表格比较",
+    "用表格",
+    "表格比较",
+    "只要表格",
+    "只返回代码",
+    "只要代码",
 )
 _QUALITY_RISK_PATTERNS = (
     "让我继续",

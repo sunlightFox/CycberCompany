@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.schemas.chat_quality_shadow import ActionDialogueMappingShadow
+from response_composer import canonical_action_status
 
 
 class ActionDialogueMapperShadowService:
@@ -37,9 +38,9 @@ class ActionDialogueMapperShadowService:
         ):
             dimensions.append("skill_mcp_transition_naturalness")
 
-        if isinstance(natural, dict) and natural.get("status") == "pending_action":
+        if isinstance(natural, dict) and canonical_action_status(natural.get("status"), default="") == "waiting_for_approval":
             return ActionDialogueMappingShadow(
-                action_status="pending_action",
+                action_status="waiting_for_approval",
                 narration_style="approval_waiting",
                 should_explain_pending=True,
                 should_claim_completion=False,
@@ -51,8 +52,8 @@ class ActionDialogueMapperShadowService:
             )
 
         if isinstance(task_status, dict):
-            status = str(task_status.get("status") or "")
-            if status in {"waiting_approval", "pending_action"}:
+            status = canonical_action_status(task_status.get("status"), default="")
+            if status == "waiting_for_approval":
                 return ActionDialogueMappingShadow(
                     action_status=status,
                     narration_style="approval_waiting",
@@ -64,7 +65,7 @@ class ActionDialogueMapperShadowService:
                     quality_dimensions=sorted(set(dimensions + ["anti_false_completion"])),
                     risk_notes=["task_waiting_approval_should_not_sound_done"],
                 )
-            if status in {"running", "queued"}:
+            if status in {"executing", "planned"}:
                 return ActionDialogueMappingShadow(
                     action_status=status,
                     narration_style="brief_progress",
@@ -76,7 +77,7 @@ class ActionDialogueMapperShadowService:
                     quality_dimensions=sorted(set(dimensions)),
                     risk_notes=risk_notes,
                 )
-            if status in {"completed", "succeeded"}:
+            if status in {"completed_with_evidence", "partially_completed"}:
                 return ActionDialogueMappingShadow(
                     action_status=status,
                     narration_style="result_first",
@@ -100,4 +101,3 @@ class ActionDialogueMapperShadowService:
             quality_dimensions=sorted(set(dimensions)),
             risk_notes=risk_notes,
         )
-

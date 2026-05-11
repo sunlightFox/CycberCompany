@@ -67,10 +67,35 @@ class RuntimeTopologyResponse(ApiModel):
     items: list[RuntimeTopologyComponent] = Field(default_factory=list)
 
 
+class PhaseReadinessItem(ApiModel):
+    status: str = "blocked"
+    source_of_truth: list[str] = Field(default_factory=list)
+    blocking_reasons: list[str] = Field(default_factory=list)
+    next_owner_module: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatMainlineReadinessResponse(ApiModel):
+    phase76_control_plane_version: str
+    mainline_path_declared: list[str] = Field(default_factory=list)
+    phase_readiness: dict[str, PhaseReadinessItem] = Field(default_factory=dict)
+    blocking_gaps: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    runtime_facts: dict[str, Any] = Field(default_factory=dict)
+
+
 class SessionRuntimeResponse(ApiModel):
     runtime: str
     executor: str
     ingress: str
+    route_source: str | None = None
+    delegates_to: str | None = None
+    maturity: str | None = None
+    ownership_mode: str | None = None
+    state_machine_owner: str | None = None
+    event_source: str | None = None
+    business_logic_owner: str | None = None
+    public_entrypoints: list[str] = Field(default_factory=list)
     route_selectors: list[str] = Field(default_factory=list)
     running_turn_count: int = 0
 

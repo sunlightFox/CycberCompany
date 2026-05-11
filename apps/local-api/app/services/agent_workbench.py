@@ -286,10 +286,11 @@ class AgentWorkbenchService:
                 outcome="completed",
                 summary_text=experience_summary,
                 source={
-                    "type": "agent_workbench_reflection",
+                    "type": "conversation_turn",
                     "turn_id": turn_id,
                     "message_id": turn.get("user_message_id"),
                     "trace_id": effective_trace_id,
+                    "channel": "local",
                 },
                 evidence={
                     "assistant_message_id": turn.get("assistant_message_id"),

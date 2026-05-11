@@ -26,6 +26,8 @@ from app.schemas.mcp import MCPServerCreateRequest, MCPSyncResponse
 from app.schemas.tasks import ToolExecuteRequest
 from app.services.audit import AuditEventService
 from app.services.execution_boundary import ExecutionBoundaryService
+from app.services.mcp_conversation_bridge import MCPConversationBridge
+from app.services.mcp_event_bridge import MCPEventBridge
 from app.services.mcp_runtime import (
     MCP_DEFAULT_TIMEOUT_SECONDS,
     MCP_PROTOCOL_VERSION,
@@ -169,6 +171,9 @@ class MCPService:
         mcp_config: dict[str, Any] | None = None,
         transport_factory: Callable[[dict[str, Any]], MCPTransport] | None = None,
         execution_boundary_service: ExecutionBoundaryService | None = None,
+        chat_repo: Any | None = None,
+        approval_service: Any | None = None,
+        notification_gateway: Any | None = None,
     ) -> None:
         self._repo = repo
         self._task_repo = task_repo
@@ -177,6 +182,9 @@ class MCPService:
         self._mcp_config = _normalize_mcp_config(mcp_config or {})
         self._transport_factory = transport_factory or self._stdio_transport_factory
         self._boundary = execution_boundary_service
+        self._chat_repo = chat_repo
+        self._approval_service = approval_service
+        self._notification_gateway = notification_gateway
         self._profiles = MCPRuntimeProfileService(repo)
         self._lifecycle = MCPLifecycleManager(repo)
         self._protocol = MCPProtocolValidator(repo)
@@ -185,9 +193,31 @@ class MCPService:
         self._connection_runtime = MCPConnectionRuntime(self)
         self._policy_runtime = MCPPolicyRuntime()
         self._call_runtime = MCPCallRuntime()
+        self._event_bridge = MCPEventBridge()
+        self._conversation_bridge = MCPConversationBridge(
+            chat_repo=chat_repo,
+            task_repo=task_repo,
+            approval_service=approval_service,
+            notification_gateway=notification_gateway,
+            event_bridge=self._event_bridge,
+        )
 
     def set_transport_factory(self, factory: Callable[[dict[str, Any]], MCPTransport]) -> None:
         self._transport_factory = factory
+
+    def set_conversation_bridge_services(
+        self,
+        *,
+        approval_service: Any | None = None,
+        notification_gateway: Any | None = None,
+    ) -> None:
+        self._conversation_bridge = MCPConversationBridge(
+            chat_repo=self._chat_repo,
+            task_repo=self._task_repo,
+            approval_service=approval_service or self._approval_service,
+            notification_gateway=notification_gateway or self._notification_gateway,
+            event_bridge=self._event_bridge,
+        )
 
     async def create_server(
         self,
@@ -271,9 +301,79 @@ class MCPService:
             "connection": await self._connection_runtime.diagnostic(),
             "policy": self._policy_runtime.diagnostic(),
             "call": self._call_runtime.diagnostic(),
+            "conversation_bridge": "mcp_conversation_bridge",
+            "event_bridge": "mcp_event_bridge",
+            "bridge_capabilities": [
+                "conversation_list",
+                "conversation_read",
+                "events_poll_wait",
+                "approval_list_respond",
+                "channel_target_send",
+            ],
             "approval_gate_required": True,
             "capability_graph_required": True,
         }
+
+    async def list_conversations(self) -> list[dict[str, Any]]:
+        return await self._conversation_bridge.list_conversations()
+
+    async def read_conversation(self, conversation_id: str) -> dict[str, Any]:
+        return await self._conversation_bridge.read_conversation(conversation_id)
+
+    async def poll_events(
+        self,
+        *,
+        turn_id: str | None = None,
+        task_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return await self._conversation_bridge.poll_events(turn_id=turn_id, task_id=task_id)
+
+    async def wait_events(
+        self,
+        *,
+        turn_id: str | None = None,
+        task_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return await self._conversation_bridge.wait_events(turn_id=turn_id, task_id=task_id)
+
+    async def list_approvals(self, task_id: str) -> list[dict[str, Any]]:
+        return await self._conversation_bridge.list_approvals(task_id)
+
+    async def respond_approval(
+        self,
+        *,
+        approval_id: str,
+        decision: str,
+        actor_member_id: str,
+        reason: str | None = None,
+        trace_id: str | None = None,
+    ) -> Any:
+        return await self._conversation_bridge.respond_approval(
+            approval_id=approval_id,
+            decision=decision,
+            actor_member_id=actor_member_id,
+            reason=reason,
+            trace_id=trace_id,
+        )
+
+    async def send_channel_target(
+        self,
+        *,
+        channel_id: str,
+        recipient: str,
+        body: str,
+        message_type: str = "mcp_bridge_message",
+        trace_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> Any:
+        return await self._conversation_bridge.send_channel_target(
+            channel_id=channel_id,
+            recipient=recipient,
+            body=body,
+            message_type=message_type,
+            trace_id=trace_id,
+            metadata=metadata,
+        )
 
     async def runtime_profile(self, server_id: str) -> Any:
         await self.get_server(server_id)

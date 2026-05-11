@@ -62,6 +62,8 @@ def test_phase66_feishu_inbound_pairing_chat_delivery_and_operations(
         duplicate = client.post("/api/channels/providers/feishu/poll-once")
         assert duplicate.status_code == 200, duplicate.text
         assert duplicate.json()["duplicate_events"] == 1
+        assert "duplicate_turn" in duplicate.json()["taxonomy"]
+        assert "duplicate_inbound_suppressed" in duplicate.json()["failure_reason_codes"]
 
         pairings = client.get(
             "/api/channels/pairing-requests",
@@ -82,7 +84,8 @@ def test_phase66_feishu_inbound_pairing_chat_delivery_and_operations(
         registry = cast(Any, client.app).state.registry
         captured: list[Any] = []
 
-        async def fake_create_turn(request: Any, **_: Any) -> ChatTurnResponse:
+        async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+            request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
             captured.append(request)
             return await _insert_completed_turn(
                 registry,
@@ -91,11 +94,12 @@ def test_phase66_feishu_inbound_pairing_chat_delivery_and_operations(
                 conversation_id=request.conversation_id or "conv_phase66_feishu",
             )
 
-        registry.feishu_gateway_service._chat.create_turn = fake_create_turn
+        registry.feishu_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
         fake.enqueue_event(_text_event("evt-feishu-paired", "oc_phase66", "ou_sender", "请回复"))
         routed = client.post("/api/channels/providers/feishu/poll-once")
         assert routed.status_code == 200, routed.text
         assert routed.json()["chat_turns_created"] == 1
+        assert routed.json()["reliability_status"] == "ok"
         assert captured[-1].input.text == "请回复"
         assert captured[-1].client_context.ui_mode == "feishu_chat"
 

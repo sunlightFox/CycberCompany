@@ -16,6 +16,10 @@ class MemorySource(ApiModel):
     task_id: EntityId | None = None
     step_id: EntityId | None = None
     message_id: EntityId | None = None
+    tool_call_id: EntityId | None = None
+    approval_id: EntityId | None = None
+    channel: str | None = None
+    captured_at: datetime | None = None
     channel_event_id: EntityId | None = None
     channel_attachment_id: EntityId | None = None
     media_id: EntityId | None = None
@@ -32,8 +36,10 @@ class MemoryItem(ApiModel):
     user_id: EntityId
     layer: MemoryLayer
     kind: str
+    memory_class: str = "fact"
     scope_type: str = "member"
     scope_id: EntityId | None = None
+    scope_policy: str = "member_cross_session"
     summary_text: str
     payload: dict[str, Any] = Field(default_factory=dict)
     source: MemorySource
@@ -55,8 +61,14 @@ class MemoryItem(ApiModel):
     reuse_count: int = 0
     last_reused_at: datetime | None = None
     retention_policy: str = "standard"
+    durability: str = "durable"
+    freshness_state: str = "fresh"
     retention_reason: str | None = None
     expires_reason: str | None = None
+    superseded_by: EntityId | None = None
+    expires_at: datetime | None = None
+    stale_after: datetime | None = None
+    evidence_strength: float = 0.5
     review_required: bool = False
     embedding_status: str = "pending"
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -152,6 +164,12 @@ class MemorySearchRequest(ApiModel):
     intent: str | None = None
     layers: list[MemoryLayer] = Field(default_factory=list)
     limit: int = Field(default=10, ge=1, le=50)
+    recall_scope: str = "member_cross_session"
+    exclude_conversation_id: EntityId | None = None
+    include_cross_session: bool = True
+    memory_classes: list[str] = Field(default_factory=list)
+    durability_filter: list[str] = Field(default_factory=list)
+    freshness_policy: str = "exclude_stale"
     include_archived: bool = False
     include_sensitive: bool = False
     include_asset_scoped: bool = False
@@ -162,12 +180,17 @@ class MemorySearchHit(ApiModel):
     memory_id: EntityId
     layer: MemoryLayer
     kind: str
+    memory_class: str = "fact"
     summary_text: str
     score: float
     confidence: float
     importance: float
     sensitivity: str = "low"
     validity: str = "current"
+    scope_policy: str = "member_cross_session"
+    durability: str = "durable"
+    freshness_state: str = "fresh"
+    cross_session: bool = False
     embedding_status: str = "pending"
     quality_score: float = 0.5
     quality_breakdown: dict[str, Any] = Field(default_factory=dict)
@@ -186,6 +209,9 @@ class MemorySearchHit(ApiModel):
     selection_confidence: float | None = None
     conflict_notes: list[str] = Field(default_factory=list)
     suppressed_reason: str | None = None
+    suppressed_reason_codes: list[str] = Field(default_factory=list)
+    superseded_by: EntityId | None = None
+    evidence_strength: float = 0.5
     requires_user_confirmation: bool = False
     source: MemorySource
 
@@ -208,5 +234,6 @@ class MemorySearchResponse(ApiModel):
     filtered: list[MemorySearchFilteredItem] = Field(default_factory=list)
     ranking: list[MemorySearchRankingItem] = Field(default_factory=list)
     degraded: bool = False
+    recall_scope_applied: str = "member_cross_session"
     provider: str | None = None
     degraded_reason: str | None = None

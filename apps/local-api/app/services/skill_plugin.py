@@ -31,8 +31,12 @@ from app.schemas.skills import BundleInstallRequest, SkillMatchRequest
 from app.schemas.tasks import ToolExecuteRequest
 from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
+from app.services.skill_eval_runtime import SkillEvalRuntime
 from app.services.skill_governance import SkillGovernanceService
+from app.services.skill_installer import SkillInstaller
+from app.services.skill_registry import SkillRegistry
 from app.services.skill_repositories import SkillRepositoryService
+from app.services.skill_runtime import SkillRuntime
 from app.services.skill_source_resolver import SkillSourceResolver
 from app.services.tools import ToolRuntime
 
@@ -63,6 +67,10 @@ class SkillPluginService:
         self._governance = governance_service
         self._repository_service = repository_service
         self._safety = SafetyService()
+        self._installer = SkillInstaller(self)
+        self._registry = SkillRegistry(self)
+        self._runtime = SkillRuntime(self)
+        self._eval_runtime = SkillEvalRuntime(self)
 
     def set_governance_service(self, governance_service: SkillGovernanceService) -> None:
         self._governance = governance_service
@@ -74,6 +82,14 @@ class SkillPluginService:
         self._repository_service = repository_service
 
     async def install_bundle(
+        self,
+        request: BundleInstallRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> tuple[PluginBundle, list[SkillRecord], PermissionPreview]:
+        return await self._installer.install_bundle(request, trace_id=trace_id)
+
+    async def _install_bundle_impl(
         self,
         request: BundleInstallRequest,
         *,
@@ -477,6 +493,9 @@ class SkillPluginService:
         return [PluginEvent(**row) for row in await self._repo.list_events(bundle_id)]
 
     async def list_skills(self, status: str | None = None) -> list[SkillRecord]:
+        return await self._registry.list_skills(status=status)
+
+    async def _list_skills_impl(self, status: str | None = None) -> list[SkillRecord]:
         return [SkillRecord(**row) for row in await self._repo.list_skills(status=status)]
 
     async def get_skill(self, skill_id: str) -> SkillRecord:
@@ -564,6 +583,14 @@ class SkillPluginService:
         *,
         trace_id: str | None = None,
     ) -> list[SkillMatch]:
+        return await self._runtime.match(request, trace_id=trace_id)
+
+    async def _match_skills_impl(
+        self,
+        request: SkillMatchRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> list[SkillMatch]:
         span_id = await self._start_span(
             trace_id,
             TraceSpanType.SKILL_MATCH,
@@ -596,6 +623,31 @@ class SkillPluginService:
             raise
 
     async def run_skill(
+        self,
+        skill_id: str,
+        *,
+        task_id: str | None,
+        step_id: str | None,
+        owner_member_id: str,
+        input_data: dict[str, Any],
+        matched_reason: str | None = None,
+        confidence: float | None = None,
+        approval_id: str | None = None,
+        trace_id: str | None = None,
+    ) -> SkillRunRecord:
+        return await self._runtime.run(
+            skill_id,
+            task_id=task_id,
+            step_id=step_id,
+            owner_member_id=owner_member_id,
+            input_data=input_data,
+            matched_reason=matched_reason,
+            confidence=confidence,
+            approval_id=approval_id,
+            trace_id=trace_id,
+        )
+
+    async def _run_skill_impl(
         self,
         skill_id: str,
         *,
@@ -809,6 +861,9 @@ class SkillPluginService:
             raise AppError(ErrorCode.SKILL_RUN_FAILED, "Skill 执行失败", status_code=500) from exc
 
     async def run_eval(self, skill_id: str, *, trace_id: str | None = None) -> SkillEvalRun:
+        return await self._eval_runtime.run_eval(skill_id, trace_id=trace_id)
+
+    async def _run_eval_impl(self, skill_id: str, *, trace_id: str | None = None) -> SkillEvalRun:
         skill = await self.get_skill(skill_id)
         span_id = await self._start_span(
             trace_id,
@@ -1022,10 +1077,33 @@ class SkillPluginService:
         return SkillCandidateRecord(**updated)
 
     async def replay_skill_runs(self, task_id: str) -> list[dict[str, Any]]:
-        return [redact(row) for row in await self._repo.list_skill_runs(task_id)]
+        return await self._registry.replay_skill_runs(task_id)
 
     async def replay_plugin_events(self, task_id: str) -> list[dict[str, Any]]:
+        return await self._registry.replay_plugin_events(task_id)
+
+    async def _replay_skill_runs_impl(self, task_id: str) -> list[dict[str, Any]]:
+        return [redact(row) for row in await self._repo.list_skill_runs(task_id)]
+
+    async def _replay_plugin_events_impl(self, task_id: str) -> list[dict[str, Any]]:
         return [redact(row) for row in await self._repo.list_events_for_task_replay(task_id)]
+
+    async def runtime_diagnostic(self) -> dict[str, Any]:
+        return {
+            "runtime": "skill_runtime",
+            "installer": "skill_installer",
+            "registry": "skill_registry",
+            "execution": "skill_runtime",
+            "eval": "skill_eval_runtime",
+            "status": "compat_bridge",
+            "delegates": {
+                "install_bundle": "skill_installer",
+                "list_skills": "skill_registry",
+                "match_skills": "skill_runtime",
+                "run_skill": "skill_runtime",
+                "run_eval": "skill_eval_runtime",
+            },
+        }
 
     async def _load_and_validate(
         self,

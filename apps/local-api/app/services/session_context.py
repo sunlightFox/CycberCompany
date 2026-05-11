@@ -45,6 +45,12 @@ class SessionContextCuratorService:
                 "latest_topic_anchor": conversation.get("active_topic"),
             },
             compaction_recovery_summary=summary,
+            latest_instruction_override=override,
+            reason_codes=_session_reason_codes(
+                override=override,
+                action_state=action_state,
+                latest_continuity=latest_continuity,
+            ),
         )
 
 
@@ -76,3 +82,21 @@ def _open_loops(
         loops.append("pending_approval_not_completed")
     loops.extend(str(item) for item in latest_continuity.get("followup_candidates") or [])
     return list(dict.fromkeys(loops))
+
+
+def _session_reason_codes(
+    *,
+    override: bool,
+    action_state: dict[str, Any],
+    latest_continuity: dict[str, Any],
+) -> list[str]:
+    reason_codes = ["session_context_runtime"]
+    if override:
+        reason_codes.append("latest_instruction_override")
+    if action_state.get("pending_approval"):
+        reason_codes.append("pending_approval_present")
+    if action_state.get("running_task"):
+        reason_codes.append("running_task_present")
+    if latest_continuity.get("followup_candidates"):
+        reason_codes.append("continuity_followup_present")
+    return reason_codes

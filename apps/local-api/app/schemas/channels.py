@@ -153,6 +153,12 @@ class WechatGatewayPollResponse(ApiModel):
     duplicate_events: int = 0
     media_attachments: int = 0
     failures: int = 0
+    reliability_status: str = "ok"
+    correlation: dict[str, Any] = Field(default_factory=dict)
+    taxonomy: list[str] = Field(default_factory=list)
+    failure_reason_codes: list[str] = Field(default_factory=list)
+    turn_formation: dict[str, Any] = Field(default_factory=dict)
+    delivery_binding: dict[str, Any] = Field(default_factory=dict)
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -171,6 +177,12 @@ class WechatGatewayHealthResponse(ApiModel):
     pending_deliveries: int = 0
     last_poll_result: dict[str, Any] = Field(default_factory=dict)
     immediate_delivery: dict[str, Any] = Field(default_factory=dict)
+    reliability_status: str = "ok"
+    correlation: dict[str, Any] = Field(default_factory=dict)
+    taxonomy: list[str] = Field(default_factory=list)
+    failure_reason_codes: list[str] = Field(default_factory=list)
+    turn_formation: dict[str, Any] = Field(default_factory=dict)
+    delivery_binding: dict[str, Any] = Field(default_factory=dict)
     worker_health: dict[str, Any] = Field(default_factory=dict)
     provider_health: ChannelProviderHealthResponse
 
@@ -187,6 +199,12 @@ class FeishuGatewayPollResponse(ApiModel):
     media_attachments: int = 0
     operations_recorded: int = 0
     failures: int = 0
+    reliability_status: str = "ok"
+    correlation: dict[str, Any] = Field(default_factory=dict)
+    taxonomy: list[str] = Field(default_factory=list)
+    failure_reason_codes: list[str] = Field(default_factory=list)
+    turn_formation: dict[str, Any] = Field(default_factory=dict)
+    delivery_binding: dict[str, Any] = Field(default_factory=dict)
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -205,6 +223,12 @@ class FeishuGatewayHealthResponse(ApiModel):
     pending_deliveries: int = 0
     connections: list[dict[str, Any]] = Field(default_factory=list)
     last_poll_result: dict[str, Any] = Field(default_factory=dict)
+    reliability_status: str = "ok"
+    correlation: dict[str, Any] = Field(default_factory=dict)
+    taxonomy: list[str] = Field(default_factory=list)
+    failure_reason_codes: list[str] = Field(default_factory=list)
+    turn_formation: dict[str, Any] = Field(default_factory=dict)
+    delivery_binding: dict[str, Any] = Field(default_factory=dict)
     worker_health: dict[str, Any] = Field(default_factory=dict)
     provider_health: ChannelProviderHealthResponse
 

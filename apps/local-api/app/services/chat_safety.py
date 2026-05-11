@@ -90,6 +90,7 @@ class ChatVisibleOutputFilter:
     _seen_browser_artifact: bool = False
     _seen_browser_selector: bool = False
     _strict_format_output: bool = False
+    _last_visible_text: str = ""
 
     def feed(self, text: str) -> str:
         if not text:
@@ -115,7 +116,10 @@ class ChatVisibleOutputFilter:
             self._seen_browser_selector = True
         return filtered
 
-    def summary(self) -> dict[str, Any]:
+    def summary(self, *, visible_text: str | None = None) -> dict[str, Any]:
+        normalized_visible = visible_text
+        if normalized_visible is None:
+            normalized_visible = self._last_visible_text
         return {
             "component": "ChatVisibleOutputFilter",
             "version": VISIBLE_GUARD_VERSION,
@@ -123,6 +127,12 @@ class ChatVisibleOutputFilter:
             "output_chars": self.output_chars,
             "changed_count": self.changed_count,
             "blocked_terms": sorted(self.blocked_terms),
+            "visible_text": normalized_visible or "",
+            "filtered_segments": [
+                {"reason": reason, "suppressed": True}
+                for reason in sorted(self.blocked_terms)
+            ],
+            "suppression_reason_codes": sorted(self.blocked_terms),
             "stream_safe": True,
             "final_from_filtered_delta": True,
         }
@@ -139,7 +149,8 @@ class ChatVisibleOutputFilter:
             filter_.changed_count += 1
             filter_.blocked_terms.add("browser_selector_evidence_hint")
             filter_._seen_browser_selector = True
-        return filtered, filter_.summary()
+        filter_._last_visible_text = filtered
+        return filtered, filter_.summary(visible_text=filtered)
 
     def _filter_visible(self, text: str) -> str:
         if not text:
@@ -168,6 +179,7 @@ class ChatVisibleOutputFilter:
         if filtered != original:
             self.changed_count += 1
         self.output_chars += len(filtered)
+        self._last_visible_text = filtered
         return filtered
 
     def _update_browser_evidence_flags(self, text: str) -> None:
@@ -327,7 +339,15 @@ class ChatTaskStatusPresenter:
 
 
 def response_filter_payload(summary: dict[str, Any] | None) -> dict[str, Any]:
-    return dict(summary or {"component": "ChatVisibleOutputFilter", "stream_safe": True})
+    payload = dict(summary or {})
+    payload.setdefault("component", "ChatVisibleOutputFilter")
+    payload.setdefault("version", VISIBLE_GUARD_VERSION)
+    payload.setdefault("visible_text", "")
+    payload.setdefault("filtered_segments", [])
+    payload.setdefault("suppression_reason_codes", [])
+    payload.setdefault("stream_safe", True)
+    payload.setdefault("final_from_filtered_delta", True)
+    return payload
 
 
 def context_redaction_summary(

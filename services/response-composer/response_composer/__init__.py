@@ -23,13 +23,26 @@ from response_composer.chat_voice import (
     render_silent_reply,
     voice_metadata_for_scenario,
 )
+from response_composer.action_status import (
+    CANONICAL_ACTION_STATUSES,
+    canonical_action_status,
+    has_completion_evidence,
+    mirrored_status_payload,
+    normalize_action_status_semantics,
+    status_reason_codes,
+)
 
 __all__ = [
     "CHAT_PROMPT_ASSEMBLY_VERSION",
     "CHAT_VOICE_POLICY_VERSION",
     "ChatPromptAssembler",
+    "CANONICAL_ACTION_STATUSES",
     "ComposeRequest",
     "ComposeResult",
+    "canonical_action_status",
+    "has_completion_evidence",
+    "mirrored_status_payload",
+    "normalize_action_status_semantics",
     "PromptAssembly",
     "PromptAssemblyInput",
     "PromptAssemblyResult",
@@ -45,5 +58,6 @@ __all__ = [
     "render_progress_draft",
     "render_silent_reply",
     "strip_reasoning_tags",
+    "status_reason_codes",
     "voice_metadata_for_scenario",
 ]

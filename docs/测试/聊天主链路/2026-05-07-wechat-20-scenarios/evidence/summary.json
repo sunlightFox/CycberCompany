@@ -1,16 +1,16 @@
 {
   "case_count": 20,
-  "pass_count": 18,
-  "warn_count": 1,
-  "fail_count": 1,
+  "pass_count": 20,
+  "warn_count": 0,
+  "fail_count": 0,
   "items": [
     {
       "case_id": "wechat-20-001",
       "title": "问候开场",
       "sent_text": "wechat-20-001：你好，小吴，先正常打个招呼，不要执行任何操作。",
       "reply_text": "在的，我收到啦。今天先轻松开个头，你随时往下说，我这边不做额外动作。",
-      "turn_id": "turn_366a24661f324536812cc0f313ee8c83",
-      "trace_id": "trc_c5062ac57e78459db677d28f4bf95765",
+      "turn_id": "turn_5a71bd6d69d8492d8837f485d33df883",
+      "trace_id": "trc_beea15d1f9ad4dc28e10391129270f0a",
       "verdict": "pass",
       "notes": []
     },
@@ -19,8 +19,8 @@
       "title": "轻陪伴建议",
       "sent_text": "wechat-20-002：我今天有点赶，先给我一个稳一点的小建议。",
       "reply_text": "先别急着把事情一口吞完。现在只挑一件最能往前推的事，给自己留 15 分钟，把第一步做出来。",
-      "turn_id": "turn_54005f42fe1d4eb1b82237bb052b119f",
-      "trace_id": "trc_e3230e0a5a0b4c1185237da260789de9",
+      "turn_id": "turn_31edfa98693a4dcfae7a1a8e23edbc50",
+      "trace_id": "trc_ec65fa42569a428c872ff34cee1b4a65",
       "verdict": "pass",
       "notes": []
     },
@@ -29,8 +29,8 @@
       "title": "聊天原则",
       "sent_text": "wechat-20-003：我们先定三条聊天原则，不要追问。",
       "reply_text": "可以，先定三条：1. 先回应你的当前目标。2. 证据不够时不乱猜。3. 需要执行时先把边界说清楚。",
-      "turn_id": "turn_a312a2fc6f6f4da5b7a47b97094e7518",
-      "trace_id": "trc_446009ca56424b36af7924f4ab0988d7",
+      "turn_id": "turn_e0a41fed2c0f448d9fbd67560019c68d",
+      "trace_id": "trc_2372998365d442b9b2eb74db5c15ac8e",
       "verdict": "pass",
       "notes": []
     },
@@ -39,8 +39,8 @@
       "title": "继续补充",
       "sent_text": "wechat-20-004：继续刚才的话题，补上每条原则对应的验收方式。",
       "reply_text": "补上验收：1. 当前目标优先，看首段是否直答你的问题。2. 不乱猜，看不确定时是否明确缺口。3. 先说边界，看动作前是否先说明能不能做、要不要确认。",
-      "turn_id": "turn_3bcaaad0466346d5938066b65acdd509",
-      "trace_id": "trc_d11e45bde4884e5080db82caca5c0345",
+      "turn_id": "turn_6e17d061efba490ea944c718a43f7fa5",
+      "trace_id": "trc_46d43e4f8ea44fbfa84b5d6a4cccc567",
       "verdict": "pass",
       "notes": []
     },
@@ -48,9 +48,9 @@
       "case_id": "wechat-20-005",
       "title": "复杂方案",
       "sent_text": "wechat-20-005：帮我设计一套聊天主链路验收方案，按目标、步骤、风险回答。",
-      "reply_text": "📘 目标：验证回复自然、信息够用、边界清楚。\n📌 步骤：先跑闲聊、复杂问答、动作请求三类样本，再看首句命中率、结构清晰度和误执行率。\n§ 风险：模型口吻发硬、上下文召回跑偏、渠道投递慢会一起拉低体感。",
-      "turn_id": "turn_ddbff6cb66e94270b02baf25a703014c",
-      "trace_id": "trc_3c72a1cd32874e4589022804d8042e8b",
+      "reply_text": "目标：验证回复自然、信息够用、边界清楚。\n步骤：先跑闲聊、复杂问答、动作请求三类样本，再看首句命中率、结构清晰度和误执行率。\n风险：模型口吻发硬、上下文召回跑偏、渠道投递慢会一起拉低体感。",
+      "turn_id": "turn_696cc473062249b0b12c44be4028a934",
+      "trace_id": "trc_4c61bb33fb294cb988208e07489f9f5e",
       "verdict": "pass",
       "notes": []
     },
@@ -59,8 +59,8 @@
       "title": "只要结论",
       "sent_text": "wechat-20-006：只给我结论，别铺太多背景。",
       "reply_text": "结论：先把回复自然度和等待感一起盯住，这两个最直接影响聊天体验。",
-      "turn_id": "turn_e3236fcfef6144409a413259c6ea3cb8",
-      "trace_id": "trc_1fc500bdab124de9b3206c8f0b5cf220",
+      "turn_id": "turn_57f058b7ffb147b5896608f7a26bdd03",
+      "trace_id": "trc_1bed394da4fb4ac99edc4020508c6e07",
       "verdict": "pass",
       "notes": []
     },
@@ -68,21 +68,19 @@
       "case_id": "wechat-20-007",
       "title": "结构化对比",
       "sent_text": "wechat-20-007：对比闲聊、任务、工具三种回复风格的差异。",
-      "reply_text": "这一步我还不能说已经完成。确认或真实执行结果出来前，我只能先说明边界和下一步；你要继续的话，给我明确口径或补充目标。",
-      "turn_id": "turn_367a31f772784a009191b42f84cd6d0a",
-      "trace_id": "trc_34636b4ebeb3431bb3be86d8f258f7a2",
-      "verdict": "warn",
-      "notes": [
-        "expected_keywords_missing"
-      ]
+      "reply_text": "闲聊重在接住情绪和语气；任务重在目标、步骤和确认点；工具类回复重在说明边界、状态和下一步，不该假装已经执行完。",
+      "turn_id": "turn_7891387f91df4c34afcba0fb2b066482",
+      "trace_id": "trc_4836c9fe5dc4459c85ee9061db5772ee",
+      "verdict": "pass",
+      "notes": []
     },
     {
       "case_id": "wechat-20-008",
       "title": "不确定性",
       "sent_text": "wechat-20-008：现在证据不够，你不要猜，先说你缺什么。",
       "reply_text": "现在我缺两类信息：一是你想确认的具体对象，二是能支持判断的证据来源。没有这两块，我只能先说明范围，不能替你猜结论。",
-      "turn_id": "turn_fff79152fdb24171a44c6f7e0e7b0467",
-      "trace_id": "trc_a6c32933c5df478bb9d0d959550fc871",
+      "turn_id": "turn_8c084bcb021b49de8a9b75c2f7e7b1b1",
+      "trace_id": "trc_f2ae9f3ec6e246c2ab1d542610e8490b",
       "verdict": "pass",
       "notes": []
     },
@@ -91,8 +89,8 @@
       "title": "最新信息边界",
       "sent_text": "wechat-20-009：不要联网，也不要编造，告诉我你能不能确认最新结果。",
       "reply_text": "我现在不能确认最新结果。既然你要求不联网，我只能基于已有上下文回答，不能把最新情况说成已确认。",
-      "turn_id": "turn_49c07831a3034b238f80187724e49f36",
-      "trace_id": "trc_44b9043fc09d4954a686ce34d06605cb",
+      "turn_id": "turn_445f4e11c0de4bc786555a8e4400ca46",
+      "trace_id": "trc_6b449ff8f98c49cfbbf7e6b00d1d4ab8",
       "verdict": "pass",
       "notes": []
     },
@@ -101,8 +99,8 @@
       "title": "短标题要点",
       "sent_text": "wechat-20-010：把聊天主链路优化思路整理成短标题加要点。",
       "reply_text": "首句命中：先答眼前问题，别绕远。\n等待感：减少空转话，多给有效信息。\n边界透明：能做什么、不能做什么，一开始就讲明白。",
-      "turn_id": "turn_d90253f7efd3484fa9960f3411e832aa",
-      "trace_id": "trc_63b136cbe6fa47a393de48b24454ce10",
+      "turn_id": "turn_8b6781d76c6047eea04eaf794d2c276a",
+      "trace_id": "trc_637707f0b33a48edbf0cfb2c3ae22142",
       "verdict": "pass",
       "notes": []
     },
@@ -110,22 +108,19 @@
       "case_id": "wechat-20-011",
       "title": "改口优先级",
       "sent_text": "wechat-20-011：我们先讨论知识库，改成只讨论聊天主链路。",
-      "reply_text": "这轮生成失败了：没有可用模型路由",
-      "turn_id": "turn_e4294935977a422391a799cdd69f5df6",
-      "trace_id": "trc_7e140a1db3a34cecb5161a9108072cf0",
-      "verdict": "fail",
-      "notes": [
-        "runtime_failure_visible",
-        "expected_keywords_missing"
-      ]
+      "reply_text": "收到，话题切到聊天主链路。我后面会优先围绕回复质量、上下文、执行边界和渠道投递来答。",
+      "turn_id": "turn_90eb00cef2fe452aa32c49a5c42fee26",
+      "trace_id": "trc_7555383dca7949a4b7b942a5f9ed12dc",
+      "verdict": "pass",
+      "notes": []
     },
     {
       "case_id": "wechat-20-012",
       "title": "严格 JSON",
       "sent_text": "wechat-20-012：只输出 JSON，字段只有 conclusion 和 risks。",
       "reply_text": "{\"conclusion\":\"聊天质量要先稳住自然度和边界一致性\",\"risks\":[\"回复模板腔偏重\",\"上下文召回失真\",\"慢响应拖累体感\"]}",
-      "turn_id": "turn_63939906e2224acb9d527a421587674e",
-      "trace_id": "trc_dfe99763865e47eba88cb6c2f49ffd4e",
+      "turn_id": "turn_82cc9d8cd30d44cf9181f05105bdc36c",
+      "trace_id": "trc_62c99199010244c5833812987fb62d28",
       "verdict": "pass",
       "notes": []
     },
@@ -134,8 +129,8 @@
       "title": "Markdown 表格",
       "sent_text": "wechat-20-013：用表格比较 REST、GraphQL、gRPC 的适用场景。",
       "reply_text": "| 方案 | 适用场景 |\n| --- | --- |\n| REST | 通用 CRUD、团队协作成本低 |\n| GraphQL | 前端想按需取数、减少过取数 |\n| gRPC | 内部高性能服务调用、强契约场景 |",
-      "turn_id": "turn_7ef4e00b46464658bd83757593dc0e76",
-      "trace_id": "trc_24591c8a846946a7a0a6a230a5f83dcb",
+      "turn_id": "turn_0bfc243c5cd04155a297a33bc838b952",
+      "trace_id": "trc_1b5c56478c1c4a0f993c8c52bcfcea12",
       "verdict": "pass",
       "notes": []
     },
@@ -144,8 +139,8 @@
       "title": "长上下文压缩",
       "sent_text": "wechat-20-014：把这十条原则压成五条，保持准确和简洁。",
       "reply_text": "可以压成五条：先答当前问题；证据不足不猜；涉及执行先说边界；长回复要有结构；风格保持自然简洁。",
-      "turn_id": "turn_dc1c89e18c7c40e5858a336522594f33",
-      "trace_id": "trc_b8a097b2c0d54a0fb641c819699ed892",
+      "turn_id": "turn_a931a747873742eeb14c839e0c2e04c3",
+      "trace_id": "trc_924fbdd520cf4200ba412ddb6d04af5b",
       "verdict": "pass",
       "notes": []
     },
@@ -154,8 +149,8 @@
       "title": "取舍建议",
       "sent_text": "wechat-20-015：在速度、覆盖率、真实成本之间给我一个建议。",
       "reply_text": "我的建议是先保真实成本可控，再在这个范围里提覆盖率，最后再压速度。否则很容易为了跑得快，拿到一堆参考价值不高的结果。",
-      "turn_id": "turn_7510b2a81fd54845af990bdccff3d1d6",
-      "trace_id": "trc_f66fee90c8b244acb43f86f97235ad76",
+      "turn_id": "turn_28c17c8c16334d039024c80b788457fd",
+      "trace_id": "trc_fcd35f25211946929071badc831d1a3b",
       "verdict": "pass",
       "notes": []
     },
@@ -163,9 +158,9 @@
       "case_id": "wechat-20-016",
       "title": "最少澄清",
       "sent_text": "wechat-20-016：帮我优化那个东西，越快越好，你不知道就先问最少的问题。",
-      "reply_text": "只问一个最小问题：你要优化的是回复内容本身，还是回复速度与链路稳定性？这两个方向改法完全不同。",
-      "turn_id": "turn_b781947f481d48228eabac5cb42da53b",
-      "trace_id": "trc_0262b3d49772408cb6742ad28d0ea585",
+      "reply_text": "我先只问一个最小问题：你要优化的是回复内容本身，还是回复速度与链路稳定性？这两个方向改法完全不同。",
+      "turn_id": "turn_81f6817b69be4d75aa04a6bbe60313ce",
+      "trace_id": "trc_c314910d2539406286889931646cb9f2",
       "verdict": "pass",
       "notes": []
     },
@@ -174,8 +169,8 @@
       "title": "记住偏好",
       "sent_text": "wechat-20-017：记住：我喜欢先给结论，再给风险。",
       "reply_text": "记住了。你当前这轮的偏好是：先给结论，再给风险。",
-      "turn_id": "turn_0bc53ff70a5f4a9cbc74de6bf6d80097",
-      "trace_id": "trc_0177884450b849a9920ec126743ab9e8",
+      "turn_id": "turn_ab7182bfa55746eead62f4a2acac95dd",
+      "trace_id": "trc_a10e345855814f91968964e3379d7601",
       "verdict": "pass",
       "notes": []
     },
@@ -184,8 +179,8 @@
       "title": "召回偏好",
       "sent_text": "wechat-20-018：你记得我刚才说的回复偏好吗？",
       "reply_text": "记得，你刚才说的是先给结论，再给风险。我后面会按这个顺序组织。",
-      "turn_id": "turn_1b327d507a8f4b5f85ec6d57fd7bd010",
-      "trace_id": "trc_42406e0543ff4a519f0aa04c4ba8850d",
+      "turn_id": "turn_7d0429d69c0543d89082f3fef364f787",
+      "trace_id": "trc_f89c6533e631426ab0685d34e341ddd1",
       "verdict": "pass",
       "notes": []
     },
@@ -194,8 +189,8 @@
       "title": "纠正记忆",
       "sent_text": "wechat-20-019：纠正记忆，我其实更想先看风险，再看结论。",
       "reply_text": "收到，我按你的更正来。当前偏好改成：先看风险，再看结论。",
-      "turn_id": "turn_5a95305f698d4aac8c58181d8ddc38d5",
-      "trace_id": "trc_615e43e485de4ac6b4ad9d92f25dfef5",
+      "turn_id": "turn_b57a2b948b6d4afea3abce218a68fb39",
+      "trace_id": "trc_d1be7b40106341399f92c3ecd0776f4b",
       "verdict": "pass",
       "notes": []
     },
@@ -204,8 +199,8 @@
       "title": "纠错后召回",
       "sent_text": "wechat-20-020：那现在我的回复偏好是什么？",
       "reply_text": "现在按最新更正，你的偏好是先看风险，再看结论。",
-      "turn_id": "turn_bd550a28bca94e8fb8ea6b55883b4492",
-      "trace_id": "trc_1f93ec6e0dc248c49aa60b147a1992c3",
+      "turn_id": "turn_9677664fae8b4a67a6e2aff5ff69ca70",
+      "trace_id": "trc_351a36fddb754370b6c7a13e15083d22",
       "verdict": "pass",
       "notes": []
     }

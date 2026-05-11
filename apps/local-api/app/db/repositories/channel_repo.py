@@ -387,6 +387,24 @@ class ChannelRepository:
         )
         return _peer_session_from_row(dict(row)) if row else None
 
+    async def get_peer_session_by_conversation_id(
+        self,
+        *,
+        channel_account_id: str,
+        conversation_id: str,
+    ) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM channel_peer_sessions
+            WHERE channel_account_id = ? AND conversation_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (channel_account_id, conversation_id),
+        )
+        return _peer_session_from_row(dict(row)) if row else None
+
     async def list_peer_sessions(
         self,
         *,

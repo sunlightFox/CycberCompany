@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import Field
 
@@ -100,17 +100,22 @@ class ResourceHandleSummary(ApiModel):
     summary: str
     allowed_actions: list[str] = Field(default_factory=list)
     approval_required_actions: list[str] = Field(default_factory=list)
+    verification_summary: str | None = None
+    freshness_summary: str | None = None
 
 
 class SafetyNote(ApiModel):
     risk_level: RiskLevel
     summary: str
+    source: str | None = None
+    reason_codes: list[str] = Field(default_factory=list)
 
 
 class ConversationContext(ApiModel):
     conversation_id: EntityId
     recent_summary: str | None = None
     last_messages: list[dict[str, Any]] = Field(default_factory=list)
+    summary_layers: dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkbenchContext(ApiModel):
@@ -132,24 +137,50 @@ class ContextPacket(ApiModel):
     persona: PersonaSummary | None = None
     heart: HeartSummary | None = None
     conversation: ConversationContext
+    session_context: dict[str, Any] = Field(default_factory=dict)
     memories: list[MemoryBlock] = Field(default_factory=list)
     capabilities: list[CapabilitySummary] = Field(default_factory=list)
     resource_handles: list[ResourceHandleSummary] = Field(default_factory=list)
     safety_notes: list[SafetyNote] = Field(default_factory=list)
     untrusted_context: list[dict[str, Any]] = Field(default_factory=list)
     workbench: WorkbenchContext | None = None
+    context_diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
 class ResponsePlan(ApiModel):
+    VISIBLE_LAYER_FIELDS: ClassVar[tuple[str, ...]] = (
+        "plain_text",
+        "sections",
+        "reply_blocks",
+        "approval_prompt",
+        "action_buttons",
+        "user_next_step",
+        "visible_status_hint",
+        "channel_render_overrides",
+    )
+    INTERNAL_LAYER_FIELDS: ClassVar[tuple[str, ...]] = (
+        "structured_payload",
+        "response_filter",
+        "response_quality_guard",
+        "route_semantics",
+        "task_status_semantics",
+        "tool_status_semantics",
+        "memory_write_hints",
+        "prompt_contract_metadata",
+    )
+
     title: str | None = None
     style: str = "result_first"
     sections: list[dict[str, Any]] = Field(default_factory=list)
+    reply_blocks: list[dict[str, Any]] = Field(default_factory=list)
     tables: list[dict[str, Any]] = Field(default_factory=list)
     code_blocks: list[dict[str, Any]] = Field(default_factory=list)
     action_buttons: list[dict[str, Any]] = Field(default_factory=list)
     tone: dict[str, Any] = Field(default_factory=dict)
     summary: str | None = None
     approval_prompt: dict[str, Any] | None = None
+    visible_status_hint: str | None = None
+    channel_render_overrides: dict[str, Any] = Field(default_factory=dict)
     task_status: dict[str, Any] | None = None
     artifact_refs: list[dict[str, Any]] = Field(default_factory=list)
     safety_notice: str | None = None
@@ -161,12 +192,50 @@ class ResponsePlan(ApiModel):
     trace_refs: list[dict[str, Any]] = Field(default_factory=list)
     plain_text: str | None = None
     structured_payload: dict[str, Any] = Field(default_factory=dict)
+    response_filter: dict[str, Any] = Field(default_factory=dict)
+    response_quality_guard: dict[str, Any] = Field(default_factory=dict)
+    route_semantics: dict[str, Any] = Field(default_factory=dict)
+    task_status_semantics: dict[str, Any] = Field(default_factory=dict)
+    tool_status_semantics: dict[str, Any] = Field(default_factory=dict)
+    memory_write_hints: dict[str, Any] = Field(default_factory=dict)
+    prompt_contract_metadata: dict[str, Any] = Field(default_factory=dict)
     tone_mode: str | None = None
     quality_markers: dict[str, Any] = Field(default_factory=dict)
     boundary_notice: str | None = None
     continuity_refs: list[dict[str, Any]] = Field(default_factory=list)
     deescalation_notice: str | None = None
     user_next_step: str | None = None
+
+    def visible_layer_payload(self) -> dict[str, Any]:
+        return {
+            "plain_text": self.plain_text,
+            "sections": list(self.sections),
+            "reply_blocks": list(self.reply_blocks or self.sections),
+            "approval_prompt": self.approval_prompt,
+            "action_buttons": list(self.action_buttons),
+            "user_next_step": self.user_next_step,
+            "visible_status_hint": self.visible_status_hint,
+            "channel_render_overrides": dict(self.channel_render_overrides),
+        }
+
+    def internal_layer_payload(self) -> dict[str, Any]:
+        return {
+            "structured_payload": dict(self.structured_payload),
+            "response_filter": dict(self.response_filter),
+            "response_quality_guard": dict(self.response_quality_guard),
+            "route_semantics": dict(self.route_semantics),
+            "task_status_semantics": dict(self.task_status_semantics),
+            "tool_status_semantics": dict(self.tool_status_semantics),
+            "memory_write_hints": dict(self.memory_write_hints),
+            "prompt_contract_metadata": dict(self.prompt_contract_metadata),
+        }
+
+    def layer_diagnostics(self) -> dict[str, Any]:
+        return {
+            "visible_fields": list(self.VISIBLE_LAYER_FIELDS),
+            "internal_fields": list(self.INTERNAL_LAYER_FIELDS),
+            "visible_authority": "response_plan_plain_text",
+        }
 
 
 class PersonaConsistencyProfile(ApiModel):

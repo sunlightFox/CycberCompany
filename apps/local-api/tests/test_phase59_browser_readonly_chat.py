@@ -45,6 +45,8 @@ def test_phase59_browser_read_page_executes_snapshot_without_task(
     assert payload["route_semantics"]["route"] == "browser_read_page"
     assert payload["route_semantics"]["tool_name"] == "browser.snapshot"
     assert payload["browser_read_page"]["title"] == "Phase59 测试网页"
+    assert payload["browser_read_page"]["page_state"]["status"] in {"observed", "actionable"}
+    assert payload["browser_read_page"]["evidence_refs"]
     assert payload["task_status"]["status"] == "not_created"
 
 

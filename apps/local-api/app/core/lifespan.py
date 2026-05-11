@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             output_data={"manifest_count": len(soul_manifests)},
         )
 
-        await registry.chat_service.recover_incomplete_turns()
+        await registry.session_runtime.recover_incomplete_turns()
         await registry.tool_runtime.ensure_builtin_tools()
         try:
             await registry.skill_repository_service.ensure_configured(

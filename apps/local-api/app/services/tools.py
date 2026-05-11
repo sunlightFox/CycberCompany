@@ -59,6 +59,9 @@ if TYPE_CHECKING:
     from app.services.skill_plugin import SkillPluginService
 
 from app.services.office_tools import OfficeToolService
+from app.services.browser_page_state import BrowserPageStateRuntime
+from app.services.browser_replay_store import BrowserReplayStore
+from app.services.browser_session_runtime import BrowserSessionRuntime
 from app.services.tool_asset_runtime import ToolAssetRuntime
 from app.services.tool_browser_runtime import ToolBrowserRuntime
 from app.services.tool_builtin_runtime import ToolBuiltinRuntime
@@ -67,6 +70,7 @@ from app.services.tool_memory_runtime import ToolMemoryRuntime
 from app.services.tool_mcp_runtime import ToolMcpRuntime
 from app.services.tool_safety_bridge import ToolSafetyBridge
 from app.services.tool_terminal_runtime import ToolTerminalRuntime
+from app.services.terminal_queue import TerminalQueueService
 
 
 @dataclass(frozen=True)
@@ -189,6 +193,7 @@ class ToolRuntime:
         checkpoint_service: CheckpointService | None = None,
         media_service: MediaService | None = None,
         office_tool_service: OfficeToolService | None = None,
+        chat_hook_runtime: Any | None = None,
     ) -> None:
         self._repo = repo
         self._artifacts = artifact_store
@@ -206,10 +211,21 @@ class ToolRuntime:
         self._checkpoints = checkpoint_service
         self._media = media_service
         self._office = office_tool_service
+        self._chat_hook_runtime = chat_hook_runtime
         self._skill_plugin: SkillPluginService | None = None
         self._mcp: MCPService | None = None
         self._dispatcher = ToolDispatcher(self)
         self._safety_bridge = ToolSafetyBridge(self)
+        self._browser_page_state_runtime = BrowserPageStateRuntime()
+        self._browser_replay_store = BrowserReplayStore(
+            browser_sessions=browser_session_service
+        )
+        self._browser_session_runtime = BrowserSessionRuntime(
+            browser_sessions=browser_session_service,
+            asset_broker=asset_broker,
+            replay_store=self._browser_replay_store,
+        )
+        self._terminal_queue = TerminalQueueService()
         self._terminal_runtime = ToolTerminalRuntime(self)
         self._mcp_runtime = ToolMcpRuntime(self)
         self._builtin_runtime = ToolBuiltinRuntime(self)
@@ -286,7 +302,65 @@ class ToolRuntime:
         *,
         trace_id: str | None = None,
     ) -> ToolExecuteResponse:
-        return await self._dispatcher.execute(request, trace_id=trace_id)
+        active_request = request
+        if self._chat_hook_runtime is not None:
+            hook_result = await self._chat_hook_runtime.run_before_tool_call(
+                {
+                    "trace_id": trace_id,
+                    "conversation_id": request.conversation_id,
+                    "turn_id": request.turn_id,
+                    "member_id": request.member_id,
+                    "session_id": request.session_id,
+                    "channel": request.channel or "local",
+                    "payload": request.model_dump(mode="json"),
+                }
+            )
+            if hook_result.get("blocked"):
+                raise AppError(
+                    ErrorCode.TOOL_PERMISSION_DENIED,
+                    "工具调用被 hook 治理阻断",
+                    status_code=403,
+                    details={
+                        "reason_code": hook_result.get("reason_code"),
+                        "hook_stage": "before_tool_call",
+                    },
+                )
+            rewritten = dict(hook_result.get("rewritten_payload") or {})
+            if rewritten:
+                active_request = request.model_copy(
+                    update={
+                        "args": rewritten.get("args", request.args),
+                        "idempotency_key": rewritten.get(
+                            "idempotency_key",
+                            request.idempotency_key,
+                        ),
+                    }
+                )
+        response = await self._dispatcher.execute(active_request, trace_id=trace_id)
+        if self._chat_hook_runtime is None:
+            return response
+        hook_result = await self._chat_hook_runtime.run_after_tool_call(
+            {
+                "trace_id": trace_id,
+                "conversation_id": active_request.conversation_id,
+                "turn_id": active_request.turn_id,
+                "member_id": active_request.member_id,
+                "session_id": active_request.session_id,
+                "channel": active_request.channel or "local",
+                "payload": {
+                    "tool_name": active_request.tool_name,
+                    "result": response.result,
+                    "artifacts": [item.model_dump(mode="json") for item in response.artifacts],
+                    "tool_call_id": response.tool_call.tool_call_id,
+                },
+            }
+        )
+        rewritten = dict(hook_result.get("rewritten_payload") or {})
+        if not rewritten:
+            return response
+        return response.model_copy(
+            update={"result": rewritten.get("result", response.result)}
+        )
 
     async def diagnostic(self) -> dict[str, Any]:
         sandbox_status = (
@@ -297,11 +371,36 @@ class ToolRuntime:
             "runtime": "tool_runtime",
             "dispatcher": "tool_dispatcher",
             "safety_bridge": "tool_safety_bridge",
-            "builtin": {"runtime": "tool_builtin_runtime"},
-            "browser": self._browser_runtime.diagnostic(),
+            "builtin": {
+                "runtime": "tool_builtin_runtime",
+                "entrypoint": "tool_runtime.execute",
+                "dispatch_mode": "builtin_dispatcher_single_track",
+            },
+            "browser": {
+                **self._browser_runtime.diagnostic(),
+                "session_runtime": self._browser_session_runtime.diagnostic(),
+                "page_state_runtime": {
+                    "runtime": "browser_page_state_runtime",
+                    "status_model": [
+                        "observed",
+                        "actionable",
+                        "login_required",
+                        "approval_required",
+                        "challenge_detected",
+                        "handoff_required",
+                        "completed",
+                        "failed",
+                    ],
+                },
+                "replay_store": {
+                    "runtime": "browser_replay_store",
+                    "latest_page_state_supported": self._browser_sessions is not None,
+                },
+            },
             "asset": self._asset_runtime.diagnostic(),
             "memory": self._memory_runtime.diagnostic(),
             "terminal": {
+                **self._terminal_runtime.snapshot(),
                 "runtime": "tool_terminal_runtime",
                 "backend_profile": sandbox_status,
                 "approval_required_for_high_risk": True,
@@ -345,81 +444,21 @@ class ToolRuntime:
         organization_id: str,
         trace_id: str | None,
     ) -> ToolRunOutcome:
-        return await self._execute_builtin_impl(
+        return await self._builtin_runtime.execute(
             request,
             tool_call_id=tool_call_id,
             organization_id=organization_id,
             trace_id=trace_id,
         )
 
-    async def _execute_builtin_impl(
-        self,
-        request: ToolExecuteRequest,
-        *,
-        tool_call_id: str,
-        organization_id: str,
-        trace_id: str | None,
-    ) -> ToolRunOutcome:
-        name = request.tool_name
-        if name.startswith("file."):
-            return await self._execute_file_tool(
-                request,
-                tool_call_id=tool_call_id,
-                organization_id=organization_id,
-                trace_id=trace_id,
-            )
-        if name.startswith("knowledge."):
-            return await self._execute_knowledge_tool(request, trace_id=trace_id)
-        if name.startswith("memory."):
-            return await self._execute_memory_tool(request, trace_id=trace_id)
-        if name.startswith("asset."):
-            return await self._execute_asset_tool(request, trace_id=trace_id)
-        if name.startswith("browser."):
-            return await self._execute_browser_tool(
-                request,
-                tool_call_id=tool_call_id,
-                organization_id=organization_id,
-                trace_id=trace_id,
-            )
-        if name.startswith("terminal."):
-            return await self._execute_terminal_tool(
-                request,
-                tool_call_id=tool_call_id,
-                organization_id=organization_id,
-                trace_id=trace_id,
-            )
-        if name.startswith(("project.", "runtime.", "host.")):
-            return await self._execute_deployment_tool(
-                request,
-                tool_call_id=tool_call_id,
-                organization_id=organization_id,
-                trace_id=trace_id,
-            )
-        if name.startswith("media."):
-            return await self._execute_media_tool(request, trace_id=trace_id)
-        if name.startswith("office."):
-            return await self._execute_office_tool(
-                request,
-                tool_call_id=tool_call_id,
-                organization_id=organization_id,
-                trace_id=trace_id,
-            )
-        if name.startswith("account."):
-            return await self._execute_account_tool(
-                request,
-                tool_call_id=tool_call_id,
-                organization_id=organization_id,
-                trace_id=trace_id,
-            )
-        if name == "hardware.query_status":
-            return ToolRunOutcome(
-                result={
-                    "status": "unknown",
-                    "message": "本阶段只返回本地配置状态，不控制硬件。",
-                },
-                artifacts=[],
-            )
-        raise AppError(ErrorCode.TOOL_NOT_FOUND, "工具不存在", status_code=404)
+    def _hardware_query_status_outcome(self) -> ToolRunOutcome:
+        return ToolRunOutcome(
+            result={
+                "status": "unknown",
+                "message": "本阶段只返回本地配置状态，不控制硬件。",
+            },
+            artifacts=[],
+        )
 
     async def _execute_mcp_tool(
         self,
@@ -1052,59 +1091,14 @@ class ToolRuntime:
         *,
         trace_id: str | None,
     ) -> dict[str, Any]:
-        if self._browser_sessions is None:
-            return {}
-        handle_id = str(
-            request.args.get("session_handle_id")
-            or request.args.get("browser_session_handle_id")
-            or ""
+        return await self._browser_session_runtime.get_or_create(
+            request.task_id,
+            request.member_id,
+            tool_name=request.tool_name,
+            args=request.args,
+            approval_id=request.approval_id,
+            trace_id=trace_id,
         )
-        if handle_id:
-            resolved = await self._asset_broker.resolve_for_tool(
-                handle_id,
-                AssetResolveForToolRequest(
-                    subject_id=request.member_id,
-                    action=_asset_action_for_tool(request.tool_name, request.args),
-                    tool_name=request.tool_name,
-                    task_id=request.task_id,
-                    conversation_id=None,
-                    approval_id=request.approval_id,
-                ),
-                trace_id=trace_id,
-            )
-            resource = resolved.resource if isinstance(resolved.resource, dict) else {}
-            raw_config = resource.get("config")
-            config = raw_config if isinstance(raw_config, dict) else {}
-            context = await self._browser_sessions.validate_session_context(
-                browser_profile_id=str(
-                    config.get("browser_profile_id") or config.get("profile_id") or ""
-                )
-                or None,
-                browser_session_id=str(config.get("browser_session_id") or "") or None,
-                member_id=request.member_id,
-                task_id=request.task_id,
-                url=str(request.args.get("url") or request.args.get("current_url") or "")
-                or None,
-            )
-            return _merge_browser_page_args({
-                **context,
-                "asset_handle_id": handle_id,
-                "asset_id": resolved.asset_id,
-                "asset_summary": resolved.summary,
-                "session_handle_resolved": True,
-                "cookie_material_exposed": False,
-            }, request.args)
-        if request.args.get("browser_profile_id") or request.args.get("browser_session_id"):
-            context = await self._browser_sessions.validate_session_context(
-                browser_profile_id=str(request.args.get("browser_profile_id") or "") or None,
-                browser_session_id=str(request.args.get("browser_session_id") or "") or None,
-                member_id=request.member_id,
-                task_id=request.task_id,
-                url=str(request.args.get("url") or request.args.get("current_url") or "")
-                or None,
-            )
-            return _merge_browser_page_args(context, request.args)
-        return _merge_browser_page_args({}, request.args)
 
     async def _resolve_browser_page_url(
         self,
@@ -1113,55 +1107,25 @@ class ToolRuntime:
         action: str,
         session_context: dict[str, Any],
     ) -> str:
-        direct_url = str(
-            request.args.get("url")
-            or request.args.get("current_url")
-            or request.args.get("expected_url")
-            or ""
-        ).strip()
-        if direct_url:
-            session_context.setdefault("current_url", direct_url)
-            return direct_url
-        context_url = str(session_context.get("current_url") or "").strip()
-        if context_url:
-            return context_url
-        if request.task_id and self._browser_sessions is not None:
-            evidence = await self._latest_browser_page_evidence(request.task_id)
-            if evidence is not None:
-                evidence_url = str(evidence.get("url") or "").strip()
-                if evidence_url:
-                    session_context.update(
-                        {
-                            "current_url": evidence_url,
-                            "last_browser_evidence_id": evidence.get("browser_evidence_id"),
-                            "last_browser_evidence_action": evidence.get("action"),
-                            "last_browser_evidence_status": evidence.get("action_status"),
-                            "page_id": evidence.get("page_id") or session_context.get("page_id"),
-                        }
-                    )
-                    return evidence_url
-        if action in _BROWSER_PAGE_STATE_ACTIONS:
-            raise AppError(
-                "BROWSER_SESSION_REQUIRED",
-                "请先打开页面，或提供 current_url/browser_session_id 后再执行浏览器交互。",
-                status_code=409,
-                details={
-                    "reason_code": "BROWSER_SESSION_REQUIRED",
-                    "recoverable": True,
-                    "next_step": "先执行 browser.open，或在参数中提供 current_url。",
-                    "action": action,
-                },
-            )
-        return ""
+        return await self._browser_session_runtime.resolve_page_url(
+            task_id=request.task_id,
+            args=request.args,
+            action=action,
+            session_context=session_context,
+        )
 
     async def _latest_browser_page_evidence(self, task_id: str) -> dict[str, Any] | None:
-        if self._browser_sessions is None:
+        page_state = await self._browser_replay_store.latest_page_state(task_id)
+        if page_state is None:
             return None
-        rows = await self._browser_sessions.list_task_evidence(task_id)
-        for row in reversed(rows):
-            if row.url:
-                return row.model_dump(mode="json")
-        return None
+        refs = page_state.get("evidence_refs") or []
+        return {
+            "url": page_state.get("current_url"),
+            "browser_evidence_id": (refs[0] or {}).get("id") if refs else None,
+            "page_id": page_state.get("page_id"),
+            "action": page_state.get("action"),
+            "action_status": page_state.get("action_status"),
+        }
 
     async def _ensure_browser_url_allowed(
         self,
@@ -1174,52 +1138,31 @@ class ToolRuntime:
         session_context: dict[str, Any],
         trace_id: str | None,
     ) -> dict[str, Any]:
-        if self._browser_sessions is None:
-            if not url.startswith(("http://", "https://")):
-                raise AppError(
-                    ErrorCode.TOOL_PERMISSION_DENIED,
-                    "浏览器 URL 被安全策略阻断",
-                    status_code=403,
-                    details={"reason_codes": ["browser_session_service_unavailable"]},
-                )
-            return {
-                "allowed": True,
-                "url": str(redact(url)),
-                "reason_codes": ["browser_url_allowed_without_profile"],
-            }
-        decision = self._browser_sessions.classify_url(
-            url,
+        async def _blocked(payload: dict[str, Any]) -> None:
+            if self._browser_sessions is None:
+                return
+            await self._browser_sessions.record_evidence(
+                task_id=request.task_id,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                action=action,
+                action_status="blocked",
+                url=str(payload.get("url") or ""),
+                title=None,
+                http_status=None,
+                evidence_summary="browser URL blocked by safety policy before navigation",
+                network_summary={"request_count": 0, "failed_count": 0},
+                console_summary={"error_count": 0, "warning_count": 0},
+                redaction_summary={"blocked_before_navigation": True},
+                safety_decision=payload,
+                session_context=session_context,
+                trace_id=trace_id,
+            )
+
+        return await self._browser_session_runtime.ensure_url_allowed(
+            url=url,
             session_context=session_context,
-        )
-        payload = decision.as_dict()
-        if decision.allowed:
-            return payload
-        await self._browser_sessions.record_evidence(
-            task_id=request.task_id,
-            tool_call_id=tool_call_id,
-            organization_id=organization_id,
-            action=action,
-            action_status="blocked",
-            url=decision.redacted_url,
-            title=None,
-            http_status=None,
-            evidence_summary="browser URL blocked by safety policy before navigation",
-            network_summary={"request_count": 0, "failed_count": 0},
-            console_summary={"error_count": 0, "warning_count": 0},
-            redaction_summary={"blocked_before_navigation": True},
-            safety_decision=payload,
-            session_context=session_context,
-            trace_id=trace_id,
-        )
-        raise AppError(
-            ErrorCode.TOOL_PERMISSION_DENIED,
-            "浏览器 URL 被安全策略阻断",
-            status_code=403,
-            details={
-                "reason_codes": decision.reason_codes,
-                "blocked_reason": decision.blocked_reason,
-                "url": decision.redacted_url,
-            },
+            blocked_callback=_blocked,
         )
 
     async def _attach_browser_evidence(
@@ -1243,82 +1186,39 @@ class ToolRuntime:
     ) -> None:
         if self._browser_sessions is None:
             return
-        evidence = await self._browser_sessions.record_evidence(
-            task_id=request.task_id,
+        url_source = _browser_url_source(request.args, session_context)
+        page_state = self._browser_page_state_runtime.build_page_state(
+            action=action,
+            result=result,
+            session_context=session_context,
+            url_source=url_source,
+            evidence_refs=[],
+        )
+        if not page_state.get("page_key"):
+            page_state["page_key"] = _browser_page_key(result, session_context, url or "")
+        page_state["current_url"] = str(redact(str(result.get("url") or url or ""))) or None
+        page_state["page_title"] = title
+        await self._browser_replay_store.record_observation(
+            request=request,
             tool_call_id=tool_call_id,
             organization_id=organization_id,
             action=action,
-            action_status=str(result.get("action_status") or "completed"),
-            url=url,
-            title=title,
-            http_status=http_status,
-            evidence_summary=str(result.get("evidence_summary") or "browser evidence"),
-            snapshot_preview=snapshot_preview,
+            result=result,
+            session_context=session_context,
+            page_state=page_state,
+            safety=safety,
+            trace_id=trace_id,
             screenshot_artifact_id=screenshot_artifact_id,
             download_artifact_id=download_artifact_id,
             artifact_ids=artifact_ids,
-            network_summary=dict(
-                result.get("network_summary")
-                or {
-                    "request_count": 1 if url else 0,
-                    "failed_count": 1 if result.get("action_status") == "http_error" else 0,
-                    "http_status": http_status,
-                }
-            ),
-            console_summary=dict(
-                result.get("console_summary") or {"error_count": 0, "warning_count": 0}
-            ),
-            redaction_summary={
-                "session_handle_redacted": True,
-                "executor_backend": result.get("backend"),
-                "backend_status": result.get("backend_status"),
-            },
-            safety_decision=safety,
-            session_context=session_context,
-            trace_id=trace_id,
-        )
-        result["browser_evidence_id"] = evidence.browser_evidence_id
-        result["browser_evidence"] = evidence.model_dump(mode="json")
-        result.setdefault("browser_page_state", {})
-        page_state = await self._browser_sessions.record_page_state(
-            task_id=request.task_id,
-            tool_call_id=tool_call_id,
-            organization_id=organization_id,
-            action=action,
-            action_status=str(result.get("action_status") or "completed"),
-            page_key=_browser_page_key(result, session_context, url),
-            current_url=str(result.get("url") or url or "") or None,
-            title=title,
-            http_status=http_status,
-            dom_summary=_browser_dom_summary(result),
-            network_summary=dict(
-                result.get("network_summary")
-                or {
-                    "request_count": 1 if url else 0,
-                    "failed_count": 1 if result.get("action_status") == "http_error" else 0,
-                    "http_status": http_status,
-                }
-            ),
-            console_summary=dict(
-                result.get("console_summary") or {"error_count": 0, "warning_count": 0}
-            ),
             task_checkpoint=_browser_task_checkpoint(
                 request=request,
                 tool_call_id=tool_call_id,
-                evidence_id=evidence.browser_evidence_id,
+                evidence_id="pending",
                 result=result,
             ),
-            redaction_summary={
-                "session_handle_redacted": True,
-                "storage_state_redacted": True,
-                "download_path_visible": False,
-            },
-            session_context=session_context,
-            trace_id=trace_id,
-            browser_evidence_id=evidence.browser_evidence_id,
+            dom_summary=self._browser_page_state_runtime.dom_summary(result),
         )
-        result["browser_page_state"]["page_state_id"] = page_state.page_state_id
-        result["browser_page_state"]["page_key"] = page_state.page_key
 
     async def _execute_browser_tool(
         self,
@@ -1687,15 +1587,13 @@ class ToolRuntime:
             )
         )
         result = execution.public_result()
-        result["browser_page_state"] = {
-            "url_source": _browser_url_source(request.args, session_context),
-            "current_url": str(redact(url)),
-            "browser_session_id": session_context.get("browser_session_id"),
-            "browser_profile_id": session_context.get("browser_profile_id"),
-            "page_id": session_context.get("page_id") or request.args.get("page_id"),
-            "last_browser_evidence_id": session_context.get("last_browser_evidence_id"),
-            "recoverable": False,
-        }
+        result["browser_page_state"] = self._browser_page_state_runtime.build_page_state(
+            action=action,
+            result={**result, "url": url},
+            session_context=session_context,
+            url_source=_browser_url_source(request.args, session_context),
+            evidence_refs=[],
+        )
         artifacts: list[TaskArtifact] = []
         artifact_ids: list[str] = []
         screenshot_artifact_id: str | None = None
@@ -1870,148 +1768,11 @@ class ToolRuntime:
         organization_id: str,
         trace_id: str | None,
     ) -> ToolRunOutcome:
-        if request.tool_name == "terminal.stop":
-            return ToolRunOutcome(
-                result={
-                    "status": "not_running",
-                    "message": "当前运行时以同步子进程执行，暂无可停止的后台终端进程。",
-                },
-                artifacts=[],
-            )
-        if request.tool_name == "terminal.read_log":
-            return await self._read_terminal_log(request)
-        if request.tool_name != "terminal.run":
-            return ToolRunOutcome(result={"status": "not_running"}, artifacts=[])
-        if not request.task_id:
-            raise AppError(
-                ErrorCode.TOOL_PERMISSION_DENIED,
-                "终端工具必须绑定任务",
-                status_code=422,
-            )
-        command = str(request.args.get("command") or "")
-        if request.args.get("cwd"):
-            raise AppError(
-                ErrorCode.TOOL_PERMISSION_DENIED,
-                "终端工具不接受自定义 cwd，只能在任务工件沙箱中执行",
-                status_code=403,
-            )
-        terminal_policy = (
-            self._boundary.classify_terminal_command(command)
-            if self._boundary is not None
-            else _terminal_command_policy(command)
-        )
-        if terminal_policy["decision"] == "deny":
-            raise AppError(
-                ErrorCode.TOOL_OUTPUT_BLOCKED,
-                "危险终端命令已被阻断",
-                status_code=403,
-                details={"reason": terminal_policy["reason"]},
-        )
-        if self._boundary is None:
-            raise AppError(
-                ErrorCode.TOOL_EXECUTION_FAILED,
-                "执行边界服务未初始化，拒绝运行终端命令",
-                status_code=500,
-            )
-        cwd = self._artifacts.task_dir(request.task_id)
-        cwd.mkdir(parents=True, exist_ok=True)
-        sandbox_profile = await self._boundary.sandbox_profile()
-        sandbox_result = await self._boundary.run_terminal_command(
-            organization_id=organization_id,
-            task_id=request.task_id,
-            command=command,
-            cwd=cwd,
-            timeout_seconds=request.args.get("timeout_seconds"),
-            max_output_bytes=request.args.get("max_output_bytes"),
+        return await self._terminal_runtime.execute(
+            request,
             tool_call_id=tool_call_id,
-            trace_id=trace_id,
-        )
-        output = sandbox_result.output
-        redacted_output = str(redact(output))
-        dlp_report_id = None
-        dlp = await self._boundary.scan_output(
             organization_id=organization_id,
-            source_type="terminal_output",
-            source_id=tool_call_id,
-            scan_target="stdout_stderr",
-            value=output,
-            tool_call_id=tool_call_id,
-            task_id=request.task_id,
             trace_id=trace_id,
-        )
-        redacted_output = str(dlp.redacted_value)
-        dlp_report_id = dlp.report.dlp_report_id
-        sandbox_profile_result = sandbox_result.sandbox_profile_result()
-        if sandbox_profile is not None:
-            sandbox_profile_result["profile_id"] = sandbox_profile.profile_id
-        sandbox_metadata = {
-            "sandbox": "task_artifact",
-            "sandbox_profile": {
-                **sandbox_profile_result,
-                "cwd": "task_artifact_sandbox",
-            },
-            "selected_backend": sandbox_result.backend,
-            "backend_status": sandbox_result.backend_status,
-            "fallback_chain": sandbox_result.fallback_chain,
-            "degraded_reason": sandbox_result.degraded_reason,
-            "resource_usage": sandbox_result.resource_usage,
-            "cleanup": sandbox_result.cleanup,
-            "env_policy": sandbox_result.env_policy,
-            "filesystem_policy": sandbox_result.filesystem_policy,
-            "network_policy": sandbox_result.network_policy,
-            "output_truncated": sandbox_result.output_truncated,
-            "timed_out": sandbox_result.timed_out,
-            "command_class": terminal_policy["command_class"],
-            "policy_snapshot": terminal_policy,
-            "dlp_report_id": dlp_report_id,
-            "cwd": "task_artifact_sandbox",
-        }
-        artifact = await self._artifacts.write_text(
-            task_id=request.task_id,
-            organization_id=organization_id,
-            step_id=request.step_id,
-            tool_call_id=tool_call_id,
-            display_name="terminal.log",
-            content=redacted_output,
-            artifact_type="terminal_log",
-            subdir="logs",
-            metadata=sandbox_metadata,
-            trace_id=trace_id,
-        )
-        await self._update_terminal_policy_snapshot(
-            tool_call_id,
-            sandbox_result=sandbox_result,
-            log_artifact_id=artifact.artifact_id,
-            dlp_report_id=dlp_report_id,
-        )
-        if sandbox_result.timed_out:
-            raise AppError(
-                ErrorCode.TOOL_TIMEOUT,
-                "终端命令超时，沙箱已尝试终止进程树",
-                status_code=504,
-                details={
-                    "sandbox_profile": sandbox_profile_result,
-                    "cleanup": sandbox_result.cleanup,
-                },
-            )
-        return ToolRunOutcome(
-            result={
-                "exit_code": sandbox_result.exit_code,
-                "output_preview": redacted_output[:1000],
-                "log_artifact_id": artifact.artifact_id,
-                "sandbox_profile": sandbox_profile_result,
-                "policy_snapshot": terminal_policy,
-                "selected_backend": sandbox_result.backend,
-                "backend_status": sandbox_result.backend_status,
-                "fallback_chain": sandbox_result.fallback_chain,
-                "degraded_reason": sandbox_result.degraded_reason,
-                "output_truncated": sandbox_result.output_truncated,
-                "timed_out": sandbox_result.timed_out,
-                "resource_usage": sandbox_result.resource_usage,
-                "cleanup": sandbox_result.cleanup,
-                "dlp_report_id": dlp_report_id,
-            },
-            artifacts=[artifact],
         )
 
     async def _update_terminal_policy_snapshot(
@@ -2038,107 +1799,7 @@ class ToolRuntime:
         )
 
     async def _read_terminal_log(self, request: ToolExecuteRequest) -> ToolRunOutcome:
-        artifact_id = request.args.get("artifact_id")
-        if artifact_id:
-            artifact, preview = await self._artifacts.read_preview(str(artifact_id))
-            if artifact.artifact_type != "terminal_log":
-                raise AppError(
-                    ErrorCode.TOOL_PERMISSION_DENIED,
-                    "指定工件不是终端日志",
-                    status_code=403,
-                )
-            return ToolRunOutcome(
-                result={
-                    "status": "completed",
-                    "reason_code": "terminal_log_available",
-                    "log_artifact_id": artifact.artifact_id,
-                    "content_preview": preview,
-                    "recoverable": False,
-                    "next_step": None,
-                },
-                artifacts=[],
-            )
-        if not request.task_id:
-            return ToolRunOutcome(
-                result={
-                    "status": "unavailable",
-                    "reason_code": "task_id_required",
-                    "log_artifact_id": None,
-                    "content_preview": None,
-                    "recoverable": True,
-                    "next_step": "提供 task_id 或 log artifact_id 后重试。",
-                },
-                artifacts=[],
-            )
-        logs = [
-            artifact
-            for artifact in await self._repo.list_artifacts(request.task_id)
-            if artifact["artifact_type"] == "terminal_log"
-        ]
-        if not logs:
-            reason = "terminal_log_missing"
-            next_step = "先执行 terminal.run 并通过审批；执行完成后再读取日志。"
-            task = await self._repo.get_task(request.task_id)
-            task_status = str((task or {}).get("status") or "")
-            steps = await self._repo.list_steps(request.task_id)
-            terminal_steps = [
-                step
-                for step in steps
-                if str((step.get("input") or {}).get("tool_name") or "") == "terminal.run"
-            ]
-            latest_terminal_step = terminal_steps[-1] if terminal_steps else None
-            approval_status = ""
-            if latest_terminal_step and latest_terminal_step.get("approval_id"):
-                approval = await self._repo.get_approval(str(latest_terminal_step["approval_id"]))
-                approval_status = str((approval or {}).get("status") or "")
-            if task_status == "waiting_approval":
-                reason = "waiting_approval"
-                next_step = "先确认终端命令；确认前不会产生终端日志。"
-                if approval_status in {"approved", "edited"}:
-                    reason = "approval_resolved_pending_resume"
-                    next_step = "审批已通过，终端命令正在恢复执行；稍后再读取日志。"
-            elif latest_terminal_step and str(latest_terminal_step.get("status") or "") == "running":
-                reason = "executing_after_approval"
-                next_step = "终端命令正在执行；执行完成后再读取日志。"
-            elif task_status in {"planned", "pending"}:
-                reason = "terminal_not_executed"
-                next_step = "先启动任务或执行 terminal.run。"
-            elif task_status in {"failed", "cancelled", "paused"}:
-                reason = f"task_{task_status}"
-                next_step = "查看任务回放了解失败/暂停原因，或重新发起命令。"
-            elif latest_terminal_step and str(latest_terminal_step.get("status") or "") == "completed":
-                reason = "completed_but_log_missing"
-                next_step = "终端命令已结束，但日志工件缺失；请查看任务回放和 tool_call 输出。"
-            return ToolRunOutcome(
-                result={
-                    "status": "unavailable",
-                    "reason_code": reason,
-                    "log_artifact_id": None,
-                    "content_preview": None,
-                    "recoverable": True,
-                    "next_step": next_step,
-                    "task_status": task_status or None,
-                    "step_status": (
-                        str(latest_terminal_step.get("status") or "")
-                        if latest_terminal_step
-                        else None
-                    ),
-                    "approval_status": approval_status or None,
-                },
-                artifacts=[],
-            )
-        artifact, preview = await self._artifacts.read_preview(logs[-1]["artifact_id"])
-        return ToolRunOutcome(
-            result={
-                "status": "completed",
-                "reason_code": "terminal_log_available",
-                "log_artifact_id": artifact.artifact_id,
-                "content_preview": preview,
-                "recoverable": False,
-                "next_step": None,
-            },
-            artifacts=[],
-        )
+        return await self._terminal_runtime.read_log(request)
 
     async def _execute_deployment_tool(
         self,

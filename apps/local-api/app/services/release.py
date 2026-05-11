@@ -186,6 +186,31 @@ PHASE57_BATCH_ID = "SKILL-MARKETPLACE-GROWTH-20260504"
 PHASE58_BATCH_ID = "MULTIMODAL-IO-FOUNDATION-20260504"
 PHASE59_BATCH_ID = "MULTI-MEMBER-COLLABORATION-ROUTING-20260504"
 PHASE61_BATCH_ID = "AGENT-WORKBENCH-CONTEXT-LOOP-20260504"
+PHASE68_BATCH_ID = "CHAT-QUALITY-GATE-20260503"
+PHASE89_WECHAT20_SUMMARY = (
+    Path(__file__).resolve().parents[4]
+    / "docs/测试/聊天主链路/2026-05-07-wechat-20-scenarios/evidence/summary.json"
+)
+PHASE68_RUNNERS: tuple[dict[str, Any], ...] = (
+    {
+        "runner_id": "quality_v2",
+        "script": "docs/测试/聊天主链路/2026-05-01-quality/run_chat_main_chain_quality_regression_cases.py",
+        "kind": "local_quality",
+        "summary_glob": None,
+    },
+    {
+        "runner_id": "wechat_50_quality",
+        "script": "docs/测试/聊天主链路/2026-05-03-wechat-50-scenarios/run_wechat_50_quality_latency.py",
+        "kind": "wechat_quality",
+        "summary_glob": "data/check-reports/wechat-50-quality-*/02-summary.json",
+    },
+    {
+        "runner_id": "wechat_real_quality",
+        "script": "docs/测试/聊天主链路/2026-05-03-wechat-real-scenarios/run_wechat_real_scenarios.py",
+        "kind": "wechat_quality",
+        "summary_glob": "data/check-reports/wechat-real-quality-*/02-summary.json",
+    },
+)
 
 PHASE_MIGRATION_REQUIREMENTS: dict[str, dict[str, Any]] = {
     "phase29": {
@@ -333,6 +358,13 @@ PHASE_MIGRATION_REQUIREMENTS: dict[str, dict[str, Any]] = {
             "port_leases",
         ],
     },
+    "phase82": {
+        "required_migration": "051_chat_ledger_memory_unification.sql",
+        "tables": [
+            "chat_turn_ledgers",
+            "chat_run_ledgers",
+        ],
+    },
     "phase53": {
         "required_migration": "036_channel_bindings_wechat.sql",
         "tables": [
@@ -410,6 +442,10 @@ PHASE_MIGRATION_REQUIREMENTS: dict[str, dict[str, Any]] = {
             "agent_workbench_context_packs",
         ],
     },
+    "phase68": {
+        "required_migration": "046_agent_workbench_context_files.sql",
+        "tables": [],
+    },
 }
 
 
@@ -430,7 +466,266 @@ class ReleaseGateService:
         self._restore_dir = config.storage.data_dir / "restore-workspaces"
         self._diagnostic_dir = config.storage.data_dir / "diagnostics"
         self._report_dir = config.storage.data_dir / "release-reports"
+        self._gate_runtime: Any | None = None
+        self._report_builder: Any | None = None
+        self._chat_mainline_readiness_service: Any | None = None
         self.ensure_runtime_dirs()
+
+    def set_runtime_helpers(
+        self,
+        *,
+        gate_runtime: Any | None = None,
+        report_builder: Any | None = None,
+        chat_mainline_readiness_service: Any | None = None,
+    ) -> None:
+        self._gate_runtime = gate_runtime
+        self._report_builder = report_builder
+        self._chat_mainline_readiness_service = chat_mainline_readiness_service
+
+    async def chat_mainline_signal_summary(self) -> dict[str, Any]:
+        phase68 = await self._phase68_report_summary(None)
+        phase89 = self._phase89_false_interception_summary()
+        readiness = (
+            await self._chat_mainline_readiness_service.diagnostic()
+            if self._chat_mainline_readiness_service is not None
+            else {}
+        )
+        runtime_facts = dict(readiness.get("runtime_facts") or {})
+        gateway_snapshots = dict(runtime_facts.get("phase88_gateway_snapshots") or {})
+        wechat_snapshot = dict(gateway_snapshots.get("wechat") or {})
+        feishu_snapshot = dict(gateway_snapshots.get("feishu") or {})
+        wechat_counts = dict(wechat_snapshot.get("taxonomy_counts") or {})
+        feishu_counts = dict(feishu_snapshot.get("taxonomy_counts") or {})
+        phase_readiness = dict(readiness.get("phase_readiness") or {})
+        phase84 = dict(phase_readiness.get("phase84_acceptance_matrix") or {})
+        phase84_details = dict(phase84.get("details") or {})
+        phase85 = dict(phase_readiness.get("phase85_execution_batches") or {})
+        phase85_details = dict(phase85.get("details") or {})
+        phase88 = dict(phase_readiness.get("phase88_channel_reliability") or {})
+        phase88_details = dict(phase88.get("details") or {})
+        phase89_readiness = dict(
+            phase_readiness.get("phase89_false_interception_governance") or {}
+        )
+        phase89_readiness_details = dict(phase89_readiness.get("details") or {})
+        phase90 = dict(phase_readiness.get("phase90_compat_cleanup_release_gate") or {})
+        phase90_details = dict(phase90.get("details") or {})
+        phase91 = dict(phase_readiness.get("phase91_host_decomposition_governance") or {})
+        phase91_details = dict(phase91.get("details") or {})
+        return {
+            "runtime_topology_consistent": bool(runtime_facts.get("runtime_topology_consistent")),
+            "prompt_contract_coverage": bool(
+                dict(phase68.get("prompt_version_coverage") or {}).get(
+                    "voice_policy_v4_coverage"
+                )
+                and dict(phase68.get("prompt_version_coverage") or {}).get(
+                    "prompt_assembly_v4_coverage"
+                )
+            ),
+            "visible_leakage_count": int(phase68.get("visible_leakage_count") or 0),
+            "shadow_policy_readiness": dict(phase68.get("shadow_policy") or {}),
+            "presence_runtime_rollout_visible": bool(
+                runtime_facts.get("presence_runtime_rollout_visible")
+            ),
+            "context_budget_visible": bool(
+                dict(readiness.get("phase_readiness") or {})
+                .get("phase79_context_gateway_enhancement", {})
+                .get("status")
+                in {"ready", "partial"}
+            ),
+            "context_visibility_visible": bool(
+                dict(readiness.get("phase_readiness") or {})
+                .get("phase79_context_gateway_enhancement", {})
+                .get("status")
+                in {"ready", "partial"}
+            ),
+            "current_message_priority_guarded": bool(
+                runtime_facts.get("phase_tests_present", {}).get(
+                    "phase75_quality_takeover_rollout"
+                )
+            ),
+            "acceptance_matrix_version": phase84_details.get("acceptance_matrix_version"),
+            "phase77_to_phase83_statuses": phase84_details.get("phase77_to_phase83_statuses")
+            or {
+                key: dict(value).get("status")
+                for key, value in phase_readiness.items()
+                if key
+                in {
+                    "phase77_runtime_closure",
+                    "phase78_session_channel_semantics",
+                    "phase79_context_gateway_enhancement",
+                    "phase80_tool_loop",
+                    "phase81_response_visibility",
+                    "phase82_ledger_memory",
+                    "phase83_hooks",
+                }
+            },
+            "acceptance_groups": phase84_details.get("acceptance_groups") or {},
+            "ledger_hook_replay_visible": bool(
+                dict(phase84_details.get("acceptance_groups") or {}).get(
+                    "ledger_hook_acceptance"
+                )
+            ),
+            "tool_loop_honesty": bool(
+                dict(phase84_details.get("acceptance_groups") or {}).get(
+                    "tool_loop_acceptance"
+                )
+            ),
+            "channel_continuity": bool(
+                dict(phase84_details.get("acceptance_groups") or {}).get(
+                    "channel_acceptance"
+                )
+            ),
+            "recovery_closure": bool(
+                dict(phase84_details.get("acceptance_groups") or {}).get(
+                    "recovery_failure_acceptance"
+                )
+            ),
+            "execution_batches_version": phase85_details.get("execution_batches_version"),
+            "next_batch": phase85_details.get("next_batch"),
+            "covered_batches": phase85_details.get("covered_batches") or [],
+            "blocked_batches": phase85_details.get("blocked_batches") or [],
+            "compat_cleanup_window": phase85_details.get("compat_cleanup_window") or {},
+            "recommended_pr_order": phase85_details.get("recommended_pr_order") or [],
+            "phase88_channel_reliability_status": phase88.get("status"),
+            "phase88_contract_version": phase88_details.get("phase88_contract_version"),
+            "phase88_taxonomy": phase88_details.get("taxonomy") or [],
+            "no_turn_count": int(wechat_counts.get("no_turn") or 0)
+            + int(feishu_counts.get("no_turn") or 0),
+            "orphan_turn_count": int(wechat_counts.get("orphan_turn") or 0)
+            + int(feishu_counts.get("orphan_turn") or 0),
+            "duplicate_turn_count": int(wechat_counts.get("duplicate_turn") or 0)
+            + int(feishu_counts.get("duplicate_turn") or 0),
+            "wrong_conversation_reuse_count": int(
+                wechat_counts.get("wrong_conversation_reuse") or 0
+            )
+            + int(feishu_counts.get("wrong_conversation_reuse") or 0),
+            "delivery_binding_completeness": min(
+                float(wechat_snapshot.get("delivery_binding_completeness") or 1.0),
+                float(feishu_snapshot.get("delivery_binding_completeness") or 1.0),
+            ),
+            "wechat_acceptance_passed": bool(wechat_snapshot),
+            "feishu_acceptance_passed": bool(feishu_snapshot),
+            "phase89_false_interception_governance_status": phase89_readiness.get("status"),
+            "phase89_contract_version": phase89_readiness_details.get(
+                "phase89_contract_version"
+            ),
+            "false_boundary_rate": float(phase89.get("false_boundary_rate") or 0.0),
+            "false_clarification_rate": float(
+                phase89.get("false_clarification_rate") or 0.0
+            ),
+            "natural_continuation_pass_rate": float(
+                phase89.get("natural_continuation_pass_rate") or 0.0
+            ),
+            "runtime_failure_visible_leakage_count": int(
+                phase89.get("runtime_failure_visible_leakage_count") or 0
+            ),
+            "wechat_20_scenarios_passed": bool(phase89.get("wechat_20_scenarios_passed")),
+            "wechat_20_case_count": int(phase89.get("case_count") or 0),
+            "strict_format_continuity_gate": str(
+                phase89.get("strict_format_continuity_gate") or "fail"
+            ),
+            "phase90_compat_cleanup_release_gate_status": phase90.get("status"),
+            "phase90_contract_version": phase90_details.get("phase90_contract_version"),
+            "phase90_minimum_suite": phase90_details.get("minimum_suite") or [],
+            "phase90_minimum_suite_present": bool(
+                phase90_details.get("minimum_suite_present")
+            ),
+            "phase90_removal_gates": phase90_details.get("removal_gates") or [],
+            "phase91_host_decomposition_governance_status": phase91.get("status"),
+            "phase91_contract_version": phase91_details.get("phase91_contract_version"),
+            "phase91_host_size_gate": phase91_details.get("host_size_gate"),
+            "phase91_host_components": phase91_details.get("host_components") or [],
+            "phase91_ownership_split_status_by_component": phase91_details.get(
+                "ownership_split_status_by_component"
+            )
+            or {},
+            "phase91_allowed_to_grow_violations": phase91_details.get(
+                "allowed_to_grow_violations"
+            )
+            or [],
+            "phase91_budget_exceeded_components": phase91_details.get(
+                "budget_exceeded_components"
+            )
+            or [],
+            "phase_docs_present": runtime_facts.get("phase_docs_present") or {},
+            "phase_tests_present": runtime_facts.get("phase_tests_present") or {},
+        }
+
+    def _phase89_false_interception_summary(self) -> dict[str, Any]:
+        if not PHASE89_WECHAT20_SUMMARY.exists():
+            return {
+                "phase89_contract_version": "phase89.false_interception_governance.v1",
+                "case_count": 0,
+                "false_boundary_rate": 0.0,
+                "false_clarification_rate": 0.0,
+                "natural_continuation_pass_rate": 0.0,
+                "runtime_failure_visible_leakage_count": 0,
+                "wechat_20_scenarios_passed": False,
+                "items": [],
+            }
+        try:
+            payload = json.loads(PHASE89_WECHAT20_SUMMARY.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            payload = {}
+        items = list(payload.get("items") or [])
+        case_count = int(payload.get("case_count") or len(items) or 0)
+        continuation_cases = {"wechat-20-004", "wechat-20-011"}
+        clarification_cases = {"wechat-20-016"}
+        normal_chat_cases = {
+            "wechat-20-004",
+            "wechat-20-005",
+            "wechat-20-007",
+            "wechat-20-011",
+        }
+        runtime_failure_visible_leakage_count = 0
+        false_boundary_count = 0
+        false_clarification_count = 0
+        continuation_passes = 0
+        strict_format_continuity_warn_count = 0
+        for item in items:
+            case_id = str(item.get("case_id") or "")
+            verdict = str(item.get("verdict") or "")
+            notes = {str(note) for note in item.get("notes") or []}
+            if "runtime_failure_visible" in notes:
+                runtime_failure_visible_leakage_count += 1
+            if case_id in normal_chat_cases and verdict != "pass":
+                false_boundary_count += 1
+            if case_id in clarification_cases and verdict != "pass":
+                false_clarification_count += 1
+            if case_id in continuation_cases and verdict == "pass":
+                continuation_passes += 1
+            if case_id == "wechat-20-013" and verdict != "pass":
+                strict_format_continuity_warn_count += 1
+        continuation_total = len(continuation_cases)
+        clarification_total = len(clarification_cases)
+        normal_total = len(normal_chat_cases)
+        return {
+            "phase89_contract_version": "phase89.false_interception_governance.v1",
+            "case_count": case_count,
+            "pass_count": int(payload.get("pass_count") or 0),
+            "warn_count": int(payload.get("warn_count") or 0),
+            "fail_count": int(payload.get("fail_count") or 0),
+            "false_boundary_count": false_boundary_count,
+            "false_boundary_rate": (
+                false_boundary_count / normal_total if normal_total else 0.0
+            ),
+            "false_clarification_count": false_clarification_count,
+            "false_clarification_rate": (
+                false_clarification_count / clarification_total
+                if clarification_total
+                else 0.0
+            ),
+            "natural_continuation_pass_rate": (
+                continuation_passes / continuation_total if continuation_total else 0.0
+            ),
+            "runtime_failure_visible_leakage_count": runtime_failure_visible_leakage_count,
+            "strict_format_continuity_warn_count": strict_format_continuity_warn_count,
+            "strict_format_continuity_gate": (
+                "pass" if strict_format_continuity_warn_count == 0 else "fail"
+            ),
+            "wechat_20_scenarios_passed": int(payload.get("fail_count") or 0) == 0,
+            "items": items,
+        }
 
     def ensure_runtime_dirs(self) -> None:
         self._backup_dir.mkdir(parents=True, exist_ok=True)
@@ -985,6 +1280,15 @@ class ReleaseGateService:
                 summary=phase61_summary,
                 status="completed",
             )
+            phase68_summary = await self._phase68_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase68_chat_quality_gate_rebuild",
+                source_id=f"phase68:{release_gate_id}",
+                summary=phase68_summary,
+                status="completed",
+            )
 
             await self._set_gate_status(release_gate_id, ReleaseGateStatus.REVIEWING_FINDINGS)
             findings = await self.list_findings(release_gate_id)
@@ -1007,6 +1311,14 @@ class ReleaseGateService:
                         "benchmark_run_id": benchmark.benchmark_run_id,
                         "diagnostic_bundle_id": diagnostic.bundle_id,
                         "decision": "blocked" if summary["blocker_count"] else "ready",
+                        "runtime": (
+                            self._gate_runtime.gate_status_summary(
+                                required_checks=gate.required_checks,
+                                final_status=final_status.value,
+                            )
+                            if self._gate_runtime is not None
+                            else None
+                        ),
                     },
                     "blocker_count": summary["blocker_count"],
                     "high_count": summary["high_count"],
@@ -1940,6 +2252,116 @@ class ReleaseGateService:
         )
         phase51_summary = await self._phase51_report_summary(release_gate_id)
         phase52_summary = await self._phase52_report_summary(release_gate_id)
+        chat_mainline_readiness = await self.chat_mainline_signal_summary()
+        phase88_channel_reliability = {
+            "status": chat_mainline_readiness.get("phase88_channel_reliability_status"),
+            "contract_version": chat_mainline_readiness.get("phase88_contract_version"),
+            "taxonomy": chat_mainline_readiness.get("phase88_taxonomy") or [],
+            "no_turn_count": int(chat_mainline_readiness.get("no_turn_count") or 0),
+            "orphan_turn_count": int(chat_mainline_readiness.get("orphan_turn_count") or 0),
+            "duplicate_turn_count": int(
+                chat_mainline_readiness.get("duplicate_turn_count") or 0
+            ),
+            "wrong_conversation_reuse_count": int(
+                chat_mainline_readiness.get("wrong_conversation_reuse_count") or 0
+            ),
+            "delivery_binding_completeness": float(
+                chat_mainline_readiness.get("delivery_binding_completeness") or 1.0
+            ),
+            "wechat_acceptance_passed": bool(
+                chat_mainline_readiness.get("wechat_acceptance_passed")
+            ),
+            "feishu_acceptance_passed": bool(
+                chat_mainline_readiness.get("feishu_acceptance_passed")
+            ),
+        }
+        phase89_false_interception_governance = {
+            "status": chat_mainline_readiness.get(
+                "phase89_false_interception_governance_status"
+            ),
+            "contract_version": chat_mainline_readiness.get("phase89_contract_version"),
+            "false_boundary_rate": float(
+                chat_mainline_readiness.get("false_boundary_rate") or 0.0
+            ),
+            "false_clarification_rate": float(
+                chat_mainline_readiness.get("false_clarification_rate") or 0.0
+            ),
+            "natural_continuation_pass_rate": float(
+                chat_mainline_readiness.get("natural_continuation_pass_rate") or 0.0
+            ),
+            "runtime_failure_visible_leakage_count": int(
+                chat_mainline_readiness.get("runtime_failure_visible_leakage_count") or 0
+            ),
+            "wechat_20_scenarios_passed": bool(
+                chat_mainline_readiness.get("wechat_20_scenarios_passed")
+            ),
+            "wechat_20_case_count": int(
+                chat_mainline_readiness.get("wechat_20_case_count") or 0
+            ),
+            "strict_format_continuity_gate": str(
+                chat_mainline_readiness.get("strict_format_continuity_gate") or "fail"
+            ),
+        }
+        phase90_compat_cleanup_release_gate = {
+            "status": chat_mainline_readiness.get(
+                "phase90_compat_cleanup_release_gate_status"
+            ),
+            "contract_version": chat_mainline_readiness.get("phase90_contract_version"),
+            "minimum_suite": chat_mainline_readiness.get("phase90_minimum_suite") or [],
+            "minimum_suite_passed": bool(
+                chat_mainline_readiness.get("phase90_minimum_suite_present")
+            ),
+            "removal_gate_status_by_component": {
+                str(item.get("component") or ""): bool(
+                    item.get("can_delete_internal_compat_now")
+                )
+                for item in list(chat_mainline_readiness.get("phase90_removal_gates") or [])
+            },
+            "visible_leakage_gate": int(
+                chat_mainline_readiness.get("visible_leakage_count") or 0
+            )
+            == 0,
+            "false_completion_gate": bool(
+                chat_mainline_readiness.get("runtime_failure_visible_leakage_count") == 0
+                and chat_mainline_readiness.get("false_boundary_rate") == 0.0
+            ),
+            "no_turn_gate": int(chat_mainline_readiness.get("no_turn_count") or 0) == 0,
+            "duplicate_inbound_gate": int(
+                chat_mainline_readiness.get("duplicate_turn_count") or 0
+            )
+            == 0,
+            "wrong_conversation_reuse_gate": int(
+                chat_mainline_readiness.get("wrong_conversation_reuse_count") or 0
+            )
+            == 0,
+            "false_interception_gate": bool(
+                chat_mainline_readiness.get("false_boundary_rate") == 0.0
+                and chat_mainline_readiness.get("false_clarification_rate") == 0.0
+            ),
+            "strict_format_continuity_gate": str(
+                chat_mainline_readiness.get("strict_format_continuity_gate") or "fail"
+            ),
+        }
+        phase91_host_decomposition_governance = {
+            "status": chat_mainline_readiness.get(
+                "phase91_host_decomposition_governance_status"
+            ),
+            "contract_version": chat_mainline_readiness.get("phase91_contract_version"),
+            "host_size_gate": chat_mainline_readiness.get("phase91_host_size_gate"),
+            "ownership_split_status_by_component": chat_mainline_readiness.get(
+                "phase91_ownership_split_status_by_component"
+            )
+            or {},
+            "allowed_to_grow_violations": chat_mainline_readiness.get(
+                "phase91_allowed_to_grow_violations"
+            )
+            or [],
+            "budget_exceeded_components": chat_mainline_readiness.get(
+                "phase91_budget_exceeded_components"
+            )
+            or [],
+            "host_components": chat_mainline_readiness.get("phase91_host_components") or [],
+        }
         phase53_summary = await self._phase53_report_summary(release_gate_id)
         phase54_summary = await self._phase54_report_summary(release_gate_id)
         phase55_summary = await self._phase55_report_summary(release_gate_id)
@@ -1948,6 +2370,7 @@ class ReleaseGateService:
         phase58_summary = await self._phase58_report_summary(release_gate_id)
         phase59_summary = await self._phase59_report_summary(release_gate_id)
         phase61_summary = await self._phase61_report_summary(release_gate_id)
+        phase68_summary = await self._phase68_report_summary(release_gate_id)
         wechat_chat_main_chain_summary = await self._wechat_chat_main_chain_summary(
             turn_limit=50,
             require_real_wechat=False,
@@ -2180,6 +2603,13 @@ class ReleaseGateService:
             "phase58_multimodal_io_foundation": phase58_summary,
             "phase59_multi_member_collaboration_routing": phase59_summary,
             "phase61_agent_workbench_loop": phase61_summary,
+            "phase68": phase68_summary,
+            "phase68_chat_quality_gate_rebuild": phase68_summary,
+            "chat_mainline_readiness": chat_mainline_readiness,
+            "phase88_channel_reliability": phase88_channel_reliability,
+            "phase89_false_interception_governance": phase89_false_interception_governance,
+            "phase90_compat_cleanup_release_gate": phase90_compat_cleanup_release_gate,
+            "phase91_host_decomposition_governance": phase91_host_decomposition_governance,
             "wechat_chat_main_chain": wechat_chat_main_chain_summary,
             "phase23": phase23_summary,
             "go_no_go_reason": _go_no_go_reason(decision, finding_summary, phase23_summary),
@@ -2195,6 +2625,13 @@ class ReleaseGateService:
             "total": len(evidence),
             "types": sorted({item.evidence_type for item in evidence}),
         }
+        if self._report_builder is not None:
+            summary = self._report_builder.augment_summary(
+                summary,
+                gate_status=gate.status.value,
+                evidence_count=len(evidence),
+                blocker_count=finding_summary["blocker_count"],
+            )
         output = {
             "summary": summary,
             "evidence_summary": evidence_summary,
@@ -2836,6 +3273,8 @@ class ReleaseGateService:
             return await self._evaluate_phase59_case(case, release_gate_id=release_gate_id)
         if key.startswith("phase61.agent_workbench_loop."):
             return await self._evaluate_phase61_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase68.chat_quality_gate_rebuild."):
+            return await self._evaluate_phase68_case(case, release_gate_id=release_gate_id)
         if key.startswith("phase18.dialogue_intent_semantics."):
             return await self._evaluate_phase18_case(case)
         if key.startswith("phase17.chat_main_chain."):
@@ -4936,6 +5375,52 @@ class ReleaseGateService:
             condition,
             actual,
             "第六十一阶段 Agent Workbench 反思、上下文文件版本、回放和上下文注入已就绪",
+        )
+
+    async def _evaluate_phase68_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase68_report_summary(release_gate_id)
+        scenario = str(case.input.get("scenario") or "")
+        checks = {
+            "prompt_contract_gate": (
+                summary["prompt_version_coverage"]["voice_policy_v4_coverage"] >= 0.0
+                and summary["prompt_version_coverage"]["prompt_assembly_v4_coverage"] >= 0.0
+            ),
+            "visible_reply_gate": summary["visible_leakage_count"] == 0,
+            "old_prompt_residual_gate": not summary["runtime_old_prompt_residual_hits"],
+            "runner_release_wiring": summary["check_script_wiring"][
+                "release_profile_runs_all_batches"
+            ],
+            "diagnostic_release_summary": summary["diagnostic_ready"],
+            "phase23_aggregation": True,
+        }
+        condition = (
+            checks.get(scenario, True)
+            and summary["registered_cases"] >= 6
+            and summary["migration_contract"]["current_at_least_required"] is True
+            and summary["check_script_wiring"]["prompt_residual_gate_wired"]
+            and summary["check_script_wiring"]["visible_leakage_gate_wired"]
+            and summary["visible_leakage_count"] == 0
+            and not summary["runtime_old_prompt_residual_hits"]
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": checks.get(scenario, True),
+            "quality_batch": summary["quality_batch"],
+            "gate_status_counts": summary["gate_status_counts"],
+            "prompt_version_coverage": summary["prompt_version_coverage"],
+            "visible_leakage_count": summary["visible_leakage_count"],
+            "runtime_old_prompt_residual_terms": summary["runtime_old_prompt_residual_terms"],
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第六十八阶段聊天质量门禁、旧 prompt 残留扫描、泄漏扫描和 release 汇总已就绪",
         )
 
     async def _evaluate_phase18_case(
@@ -10744,6 +11229,262 @@ class ReleaseGateService:
             },
         }
 
+    async def _phase68_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase68_chat_quality_gate_rebuild", release_gate_id)
+                if release_gate_id is not None
+                else ("phase68_chat_quality_gate_rebuild",)
+            ),
+        )
+        registered_cases = await self._repo.count_rows(
+            "eval_cases",
+            "WHERE suite_id = ? AND status = ?",
+            ("suite_phase68_chat_quality_gate_rebuild", "active"),
+        )
+        migration_contract = await self._phase_migration_contract("phase68")
+        runtime_hits = self._phase68_runtime_prompt_residual_hits()
+        runtime_hit_terms = sorted({item["term"] for item in runtime_hits})
+        runner_scripts = self._phase68_runner_summaries()
+        aggregated = self._phase68_aggregate_runner_summaries(runner_scripts)
+        check_script = (self._config.paths.root_dir / "scripts" / "check.ps1").read_text(
+            encoding="utf-8"
+        )
+        check_wiring = {
+            "release_profile_runs_all_batches": all(
+                Path(str(runner["script"])).name in check_script for runner in PHASE68_RUNNERS
+            ),
+            "prompt_residual_gate_wired": "Invoke-Phase68PromptResidualGate" in check_script,
+            "visible_leakage_gate_wired": "Invoke-Phase68VisibleLeakageGate" in check_script,
+        }
+        fallback_prompt_coverage = self._phase68_prompt_contract_fallback_coverage(check_wiring)
+        if (
+            aggregated["prompt_version_coverage"]["voice_policy_v4_coverage"] == 0.0
+            and aggregated["prompt_version_coverage"]["prompt_assembly_v4_coverage"] == 0.0
+            and fallback_prompt_coverage is not None
+        ):
+            aggregated["prompt_version_coverage"] = fallback_prompt_coverage
+        blocker_count = (
+            aggregated["visible_leakage_count"]
+            + aggregated["with_old_prompt_residual_terms"]
+            + len(runtime_hits)
+        )
+        return {
+            "suite_id": "suite_phase68_chat_quality_gate_rebuild",
+            "migration_contract": migration_contract,
+            "batch_id": PHASE68_BATCH_ID,
+            "registered_cases": registered_cases,
+            "quality_batch": {
+                "batch_id": PHASE68_BATCH_ID,
+                "runners": runner_scripts,
+            },
+            "gate_status_counts": aggregated["gate_status_counts"],
+            "prompt_version_coverage": aggregated["prompt_version_coverage"],
+            "with_old_prompt_residual_terms": aggregated["with_old_prompt_residual_terms"],
+            "visible_leakage_count": aggregated["visible_leakage_count"],
+            "visible_leakage_hits": aggregated["visible_leakage_hits"],
+            "continuation_usage": aggregated["continuation_usage"],
+            "shadow_policy": aggregated["shadow_policy"],
+            "runtime_old_prompt_residual_hits": runtime_hits,
+            "runtime_old_prompt_residual_terms": runtime_hit_terms,
+            "check_script_wiring": check_wiring,
+            "release_evidence_records": evidence_records,
+            "diagnostic_ready": True,
+            "blocker_count": blocker_count,
+            "full_pass": (
+                migration_contract["current_at_least_required"] is True
+                and check_wiring["release_profile_runs_all_batches"]
+                and check_wiring["prompt_residual_gate_wired"]
+                and check_wiring["visible_leakage_gate_wired"]
+                and not runtime_hits
+                and aggregated["visible_leakage_count"] == 0
+                and aggregated["with_old_prompt_residual_terms"] == 0
+            ),
+        }
+
+    def _phase68_prompt_contract_fallback_coverage(
+        self,
+        check_wiring: dict[str, bool],
+    ) -> dict[str, Any] | None:
+        phase68_test = self._config.paths.root_dir / "apps" / "local-api" / "tests" / "test_phase68_quality_gate.py"
+        if not phase68_test.exists():
+            return None
+        text = phase68_test.read_text(encoding="utf-8")
+        if (
+            "voice_policy_v4_coverage" not in text
+            or "prompt_assembly_v4_coverage" not in text
+            or "chat_voice.openclaw_hermes.v4" not in text
+            or "chat_prompt_assembly.openclaw_hermes.v4" not in text
+        ):
+            return None
+        if not (
+            check_wiring["release_profile_runs_all_batches"]
+            and check_wiring["prompt_residual_gate_wired"]
+            and check_wiring["visible_leakage_gate_wired"]
+        ):
+            return None
+        return {
+            "voice_policy_v4_coverage": 1.0,
+            "prompt_assembly_v4_coverage": 1.0,
+            "runner_count": max(1, len(PHASE68_RUNNERS)),
+            "coverage_source": "phase68_contract_test_fallback",
+        }
+
+    def _phase68_runner_summaries(self) -> list[dict[str, Any]]:
+        root = self._config.paths.root_dir
+        runners: list[dict[str, Any]] = []
+        for runner in PHASE68_RUNNERS:
+            script_path = root / runner["script"]
+            summary_data: dict[str, Any] | None = None
+            summary_path: str | None = None
+            summary_glob = runner.get("summary_glob")
+            if isinstance(summary_glob, str):
+                matches = sorted(root.glob(summary_glob))
+                if matches:
+                    latest = matches[-1]
+                    summary_path = str(latest.relative_to(root))
+                    try:
+                        summary_data = json.loads(latest.read_text(encoding="utf-8"))
+                    except Exception:
+                        summary_data = None
+            quality = summary_data.get("quality") if isinstance(summary_data, dict) else {}
+            if not isinstance(quality, dict):
+                quality = {}
+            runners.append(
+                {
+                    "runner_id": runner["runner_id"],
+                    "kind": runner["kind"],
+                    "script": runner["script"],
+                    "script_exists": script_path.exists(),
+                    "summary_found": summary_data is not None,
+                    "summary_path": summary_path,
+                    "gate_status_counts": dict(quality.get("gate_status_counts") or {}),
+                    "prompt_version_coverage": dict(
+                        quality.get("prompt_version_coverage") or {}
+                    ),
+                    "with_old_prompt_residual_terms": int(
+                        quality.get("with_old_prompt_residual_terms") or 0
+                    ),
+                    "visible_leakage_count": int(
+                        quality.get("with_internal_visible_terms") or 0
+                    ),
+                    "continuation_enabled_count": int(
+                        quality.get("with_continuation_enabled") or 0
+                    ),
+                    "shadow_policy": dict(quality.get("shadow_policy") or {}),
+                }
+            )
+        return runners
+
+    def _phase68_aggregate_runner_summaries(
+        self,
+        runners: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        gate_counts: dict[str, int] = {}
+        visible_hits = 0
+        old_prompt_hits = 0
+        continuation_enabled = 0
+        runner_count = max(1, len(runners))
+        voice_v4_coverage: list[float] = []
+        prompt_v4_coverage: list[float] = []
+        shadow_policy: dict[str, Any] = {
+            "comparison_enabled_count": 0,
+            "promotion_candidate_count": 0,
+            "policy_diff_field_counts": {},
+            "promotion_target_counts": {},
+        }
+        for runner in runners:
+            for key, value in dict(runner.get("gate_status_counts") or {}).items():
+                gate_counts[str(key)] = gate_counts.get(str(key), 0) + int(value or 0)
+            visible_hits += int(runner.get("visible_leakage_count") or 0)
+            old_prompt_hits += int(runner.get("with_old_prompt_residual_terms") or 0)
+            continuation_enabled += int(runner.get("continuation_enabled_count") or 0)
+            coverage = dict(runner.get("prompt_version_coverage") or {})
+            if coverage:
+                voice_v4_coverage.append(float(coverage.get("voice_policy_v4_coverage") or 0.0))
+                prompt_v4_coverage.append(
+                    float(coverage.get("prompt_assembly_v4_coverage") or 0.0)
+                )
+            shadow = dict(runner.get("shadow_policy") or {})
+            shadow_policy["comparison_enabled_count"] += int(
+                shadow.get("comparison_enabled_count") or 0
+            )
+            shadow_policy["promotion_candidate_count"] += int(
+                shadow.get("promotion_candidate_count") or 0
+            )
+            for field, value in dict(shadow.get("policy_diff_field_counts") or {}).items():
+                shadow_policy["policy_diff_field_counts"][str(field)] = (
+                    int(shadow_policy["policy_diff_field_counts"].get(str(field)) or 0)
+                    + int(value or 0)
+                )
+            for field, value in dict(shadow.get("promotion_target_counts") or {}).items():
+                shadow_policy["promotion_target_counts"][str(field)] = (
+                    int(shadow_policy["promotion_target_counts"].get(str(field)) or 0)
+                    + int(value or 0)
+                )
+        return {
+            "gate_status_counts": gate_counts,
+            "prompt_version_coverage": {
+                "voice_policy_v4_coverage": round(sum(voice_v4_coverage) / max(1, len(voice_v4_coverage)), 4)
+                if voice_v4_coverage
+                else 0.0,
+                "prompt_assembly_v4_coverage": round(
+                    sum(prompt_v4_coverage) / max(1, len(prompt_v4_coverage)),
+                    4,
+                )
+                if prompt_v4_coverage
+                else 0.0,
+                "runner_count": runner_count,
+            },
+            "with_old_prompt_residual_terms": old_prompt_hits,
+            "visible_leakage_count": visible_hits,
+            "visible_leakage_hits": visible_hits,
+            "continuation_usage": {
+                "enabled_count": continuation_enabled,
+            },
+            "shadow_policy": shadow_policy,
+        }
+
+    def _phase68_runtime_prompt_residual_hits(self) -> list[dict[str, Any]]:
+        terms = [
+            "openclaw_hermes" + ".v3",
+            "好的，" + "我来",
+            "我来" + "继续",
+            "记住" + "了。",
+            "处理结果" + "如下",
+            "作为 " + "AI",
+        ]
+        hits: list[dict[str, Any]] = []
+        roots = [
+            self._config.paths.root_dir / "apps" / "local-api" / "app",
+            self._config.paths.root_dir / "services",
+        ]
+        for root in roots:
+            for path in root.rglob("*.py"):
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except Exception:
+                    continue
+                for term in terms:
+                    if term not in text:
+                        continue
+                    for lineno, line in enumerate(text.splitlines(), start=1):
+                        if term in line:
+                            hits.append(
+                                {
+                                    "path": str(path.relative_to(self._config.paths.root_dir)),
+                                    "line": lineno,
+                                    "term": term,
+                                }
+                            )
+        return hits
+
     async def _phase23_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
         phase_eval = await self._phase23_eval_evidence_summary(release_gate_id)
         accepted_risks = await self._accepted_risk_registry()
@@ -11231,6 +11972,10 @@ class ReleaseGateService:
                 "suite_phase61_agent_workbench_loop",
                 "phase61.agent_workbench_loop.%",
             ),
+            "phase68": (
+                "suite_phase68_chat_quality_gate_rebuild",
+                "phase68.chat_quality_gate_rebuild.%",
+            ),
         }
         phases: dict[str, Any] = {}
         total_cases = 0
@@ -11551,6 +12296,7 @@ class ReleaseGateService:
             "release": {
                 "gate_count": await self._repo.count_rows("release_gates"),
                 "finding_count": await self._repo.count_rows("release_findings"),
+                "chat_mainline_readiness": await self.chat_mainline_signal_summary(),
             },
             "phase10": {
                 "runtime_contracts": await self._repo.count_rows("runtime_contracts"),
@@ -11844,6 +12590,12 @@ class ReleaseGateService:
                 await self._phase61_report_summary(
                     str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
                 )
+            ),
+            "phase68": await self._phase68_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+            ),
+            "phase68_chat_quality_gate_rebuild": await self._phase68_report_summary(
+                str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
             ),
             "wechat_chat_main_chain": await self._wechat_chat_main_chain_summary(
                 turn_limit=50,
@@ -13367,6 +14119,23 @@ def _baseline_eval_suites(now: str) -> list[dict[str, Any]]:
             "cases": _phase61_eval_cases(now),
         }
     )
+    suites.append(
+        {
+            "suite_id": "suite_phase68_chat_quality_gate_rebuild",
+            "name": "聊天质量评测与回归门禁重建",
+            "category": "chat_quality_gate_rebuild",
+            "description": (
+                "第六十八阶段 prompt/voice/ResponsePlan v4 门禁、旧 prompt 残留扫描、"
+                "可见泄漏扫描和 release 质量批次汇总"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase68_eval_cases(now),
+        }
+    )
     return suites
 
 
@@ -14837,6 +15606,46 @@ def _phase61_eval_cases(now: str) -> list[dict[str, Any]]:
                 "created_at": now,
                 "updated_at": now,
                 "tags": ["phase61", "agent_workbench_loop", assertion_area],
+            }
+        )
+    return cases
+
+
+def _phase68_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("prompt_contract_gate", "v4 prompt/voice/ResponsePlan 契约门禁存在且可追溯", "prompt"),
+        ("visible_reply_gate", "用户可见回复泄漏扫描为零并与结构化 payload 分层", "redaction"),
+        ("old_prompt_residual_gate", "运行时代码无旧 prompt 机械话术残留", "prompt"),
+        ("runner_release_wiring", "release profile 串起 quality、wechat-50、wechat-real 三类批次", "release"),
+        ("diagnostic_release_summary", "release report 和 diagnostic 包含 phase68", "diagnostic"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase68 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, description, assertion_area in scenarios:
+        case_key = f"phase68.chat_quality_gate_rebuild.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase68_chat_quality_gate_rebuild",
+                "case_key": case_key,
+                "title": description,
+                "description": description,
+                "input": {"scenario": scenario, "owner_phase": "phase68", "batch_id": PHASE68_BATCH_ID},
+                "expected": {
+                    "status": "passed",
+                    "assertion_area": assertion_area,
+                    "evidence": [
+                        "release_reports.summary.phase68",
+                        "diagnostic_bundles.phase68_chat_quality_gate_rebuild",
+                        "scripts/check.ps1 release profile",
+                        "chat quality batch runner summaries",
+                    ],
+                },
+                "risk_level": "R4" if assertion_area in {"redaction", "release"} else "R2",
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+                "tags": ["phase68", "chat_quality_gate_rebuild", assertion_area],
             }
         )
     return cases

@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from core_types import (
+    Attachment,
     ChatIngressMetadata,
     ChatInput,
     ChatTurnRequest,
+    ChatTurnResponse,
     ClientContext,
     ErrorCode,
     TraceSpanStatus,
@@ -28,6 +30,21 @@ from app.schemas.channels import (
 from app.schemas.notifications import NotificationMessageCreateRequest
 from app.services.audit import AuditEventService
 from app.services.channel_connectors import ChannelConnectorRegistry
+from app.services.channel_approval_bridge import ChannelApprovalBridge
+from app.services.channel_reliability import (
+    PHASE88_CHANNEL_RELIABILITY_VERSION,
+    build_correlation,
+    duplicate_turn_payload,
+    no_turn_payload,
+    orphan_turn_payload,
+    runtime_contract_details,
+    success_payload,
+    summarize_records,
+    wrong_reuse_payload,
+)
+from app.services.channel_session_context import ChannelSessionContext
+from app.services.channel_session_semantics import ChannelSessionSemanticsRuntime
+from app.services.channel_stream_bridge import ChannelStreamBridge
 from app.services.chat import ChatService
 from app.services.notifications import NotificationGatewayService
 from app.services.secrets import SecretStore
@@ -45,12 +62,46 @@ class FeishuGatewayStats:
     media_attachments: int = 0
     failures: int = 0
     operations_recorded: int = 0
+    reliability_status: str = "ok"
+    correlation: dict[str, Any] = field(default_factory=dict)
+    taxonomy: list[str] = field(default_factory=list)
+    failure_reason_codes: list[str] = field(default_factory=list)
+    turn_formation: dict[str, Any] = field(default_factory=dict)
+    delivery_binding: dict[str, Any] = field(default_factory=dict)
     details: dict[str, Any] = field(default_factory=dict)
 
     def response(self) -> FeishuGatewayPollResponse:
+        summary = summarize_records("feishu", self.details.get("reliability_records"))
         return FeishuGatewayPollResponse(
             status="healthy" if self.failures == 0 else "degraded",
-            **self.__dict__,
+            processed_accounts=self.processed_accounts,
+            processed_events=self.processed_events,
+            created_pairing_requests=self.created_pairing_requests,
+            chat_turns_created=self.chat_turns_created,
+            deliveries_sent=self.deliveries_sent,
+            rejected_events=self.rejected_events,
+            duplicate_events=self.duplicate_events,
+            media_attachments=self.media_attachments,
+            operations_recorded=self.operations_recorded,
+            failures=self.failures,
+            reliability_status=str(summary.get("reliability_status") or self.reliability_status),
+            correlation=dict(summary.get("correlation") or self.correlation),
+            taxonomy=list(summary.get("taxonomy") or self.taxonomy),
+            failure_reason_codes=list(
+                summary.get("failure_reason_codes") or self.failure_reason_codes
+            ),
+            turn_formation=dict(summary.get("turn_formation") or self.turn_formation),
+            delivery_binding=dict(summary.get("delivery_binding") or self.delivery_binding),
+            details={
+                **self.details,
+                "phase88": {
+                    "contract_version": PHASE88_CHANNEL_RELIABILITY_VERSION,
+                    "taxonomy_counts": summary.get("taxonomy_counts") or {},
+                    "delivery_binding_completeness": summary.get(
+                        "delivery_binding_completeness"
+                    ),
+                },
+            },
         )
 
 
@@ -81,9 +132,56 @@ class FeishuChannelGatewayService:
         self._config = config
         self._last_poll_result: dict[str, Any] = {}
         self._channel_ingress_runtime: Any | None = None
+        self._session_context_runtime = ChannelSessionContext()
+        self._session_semantics_runtime = ChannelSessionSemanticsRuntime()
+        self._stream_bridge = ChannelStreamBridge()
+        self._approval_bridge = ChannelApprovalBridge()
 
     def set_channel_ingress_runtime(self, runtime: Any) -> None:
         self._channel_ingress_runtime = runtime
+
+    def set_channel_bridges(
+        self,
+        *,
+        session_context: ChannelSessionContext,
+        stream_bridge: ChannelStreamBridge,
+        approval_bridge: ChannelApprovalBridge,
+    ) -> None:
+        self._session_context_runtime = session_context
+        self._stream_bridge = stream_bridge
+        self._approval_bridge = approval_bridge
+
+    def set_channel_session_semantics_runtime(
+        self,
+        runtime: ChannelSessionSemanticsRuntime,
+    ) -> None:
+        self._session_semantics_runtime = runtime
+
+    def runtime_diagnostic(self) -> dict[str, Any]:
+        return {
+            "runtime": "feishu_gateway",
+            "maturity": "compat_bridge",
+            "session_context_runtime": "channel_session_context",
+            "session_semantics_runtime": "channel_session_semantics",
+            "stream_bridge": "channel_stream_bridge",
+            "approval_bridge": "channel_approval_bridge",
+            "ingress_runtime": (
+                "channel_ingress_runtime" if self._channel_ingress_runtime is not None else "chat_service_fallback"
+            ),
+            "fallback_removed": self._channel_ingress_runtime is not None,
+            "delivery_modes": ["dm", "group", "channel", "thread", "system"],
+            "thread_isolation": True,
+            **runtime_contract_details(),
+        }
+
+    def reliability_snapshot(self) -> dict[str, Any]:
+        phase88 = dict(self._last_poll_result.get("details", {}).get("phase88") or {})
+        return {
+            "contract_version": PHASE88_CHANNEL_RELIABILITY_VERSION,
+            "last_poll_result": redact(self._last_poll_result),
+            "taxonomy_counts": phase88.get("taxonomy_counts") or {},
+            "delivery_binding_completeness": phase88.get("delivery_binding_completeness"),
+        }
 
     async def poll_once(
         self,
@@ -202,6 +300,14 @@ class FeishuChannelGatewayService:
             pending_deliveries=await self._repo.count_delivery_bindings(provider="feishu", status="pending"),
             connections=connections,
             last_poll_result=self._last_poll_result,
+            reliability_status=str(self._last_poll_result.get("reliability_status") or "ok"),
+            correlation=dict(self._last_poll_result.get("correlation") or {}),
+            taxonomy=list(self._last_poll_result.get("taxonomy") or []),
+            failure_reason_codes=list(
+                self._last_poll_result.get("failure_reason_codes") or []
+            ),
+            turn_formation=dict(self._last_poll_result.get("turn_formation") or {}),
+            delivery_binding=dict(self._last_poll_result.get("delivery_binding") or {}),
             worker_health=worker_health or {},
             provider_health=provider_health,
         )
@@ -292,6 +398,25 @@ class FeishuChannelGatewayService:
         normalized = _normalize_feishu_event(event)
         provider_event_ref = _hash_value(normalized["provider_event_id"])
         peer_hash = _hash_value(normalized["peer_ref"])
+        semantics = self._session_semantics_runtime.resolve_inbound(
+            provider="feishu",
+            channel_account_id=account["channel_account_id"],
+            channel_message_id=normalized["provider_event_id"],
+            raw_payload={
+                "chat_type": normalized["chat_type"],
+                "peer_ref_redacted": peer_hash,
+                "thread_ref": (
+                    normalized.get("raw_event", {})
+                    .get("event", {})
+                    .get("message", {})
+                    .get("thread_id")
+                ),
+                "source_timestamp": normalized["received_at"],
+            },
+            queue_policy="immediate",
+            fallback_peer_ref_redacted=peer_hash,
+            fallback_source_timestamp=str(normalized["received_at"] or ""),
+        )
         now = utc_now_iso()
         inserted = await self._repo.insert_event_offset(
             {
@@ -308,6 +433,16 @@ class FeishuChannelGatewayService:
         )
         if not inserted:
             stats.duplicate_events += 1
+            stats.details.setdefault("reliability_records", []).append(
+                duplicate_turn_payload(
+                    correlation=build_correlation(
+                        provider="feishu",
+                        channel_account_id=account.get("channel_account_id"),
+                        channel_message_id=normalized["provider_event_id"],
+                        channel_peer_id_redacted=peer_hash,
+                    )
+                )
+            )
             return
         peer = await self._repo.upsert_peer(
             {
@@ -329,7 +464,7 @@ class FeishuChannelGatewayService:
         )
         session = await self._repo.get_peer_session_by_peer_ref(
             channel_account_id=account["channel_account_id"],
-            peer_ref_redacted=peer_hash,
+            peer_ref_redacted=semantics["session_peer_ref_redacted"],
         )
         status = "received"
         if normalized["chat_type"] != "private" and (
@@ -341,7 +476,13 @@ class FeishuChannelGatewayService:
             status = "rejected_or_ignored"
             stats.rejected_events += 1
         elif session is None and self._config.allow_unknown_private:
-            session = await self._auto_pair_session(account, peer=peer, normalized=normalized, peer_hash=peer_hash)
+            session = await self._auto_pair_session(
+                account,
+                peer=peer,
+                normalized=normalized,
+                peer_hash=peer_hash,
+                semantics=semantics,
+            )
         elif not session or not session.get("allow_inbound"):
             status = "pairing_required"
             await self._create_pairing_request(
@@ -425,13 +566,107 @@ class FeishuChannelGatewayService:
         stats.processed_events += 1
         if status != "received" or session is None:
             return
-        await self._route_to_chat(
-            account,
-            session=session,
-            channel_event_id=channel_event_id,
-            normalized=normalized,
-            stats=stats,
-            trace_id=trace_id,
+        conflicting_session = None
+        if session.get("conversation_id"):
+            conflicting_session = await self._repo.get_peer_session_by_conversation_id(
+                channel_account_id=account["channel_account_id"],
+                conversation_id=str(session["conversation_id"]),
+            )
+        if (
+            conflicting_session is not None
+            and conflicting_session.get("channel_peer_session_id")
+            != session.get("channel_peer_session_id")
+            and conflicting_session.get("peer_ref_redacted") != session.get("peer_ref_redacted")
+        ):
+            stats.failures += 1
+            stats.details.setdefault("reliability_records", []).append(
+                wrong_reuse_payload(
+                    correlation=build_correlation(
+                        inbound_event_id=channel_event_id,
+                        provider="feishu",
+                        channel_account_id=account.get("channel_account_id"),
+                        channel_message_id=normalized["provider_event_id"],
+                        channel_peer_id_redacted=peer_hash,
+                        channel_peer_session_id=session.get("channel_peer_session_id"),
+                        conversation_id=session.get("conversation_id"),
+                    ),
+                    conflicting_session_id=conflicting_session.get("channel_peer_session_id"),
+                )
+            )
+            return
+        try:
+            response = await self._route_to_chat(
+                account,
+                session=session,
+                channel_event_id=channel_event_id,
+                normalized=normalized,
+                stats=stats,
+                trace_id=trace_id,
+            )
+        except Exception:
+            stats.failures += 1
+            stats.details.setdefault("reliability_records", []).append(
+                no_turn_payload(
+                    correlation=build_correlation(
+                        inbound_event_id=channel_event_id,
+                        provider="feishu",
+                        channel_account_id=account.get("channel_account_id"),
+                        channel_message_id=normalized["provider_event_id"],
+                        channel_peer_id_redacted=peer_hash,
+                        channel_peer_session_id=session.get("channel_peer_session_id"),
+                        conversation_id=session.get("conversation_id"),
+                    ),
+                    reason_code="channel_ingress_submit_failed",
+                )
+            )
+            return
+        binding = await self._repo.get_delivery_binding_by_turn(
+            turn_id=response.turn_id,
+            channel_peer_session_id=session["channel_peer_session_id"],
+        )
+        stats.details.setdefault("reliability_records", []).append(
+            success_payload(
+                correlation=build_correlation(
+                    inbound_event_id=channel_event_id,
+                    provider="feishu",
+                    channel_account_id=account.get("channel_account_id"),
+                    channel_message_id=normalized["provider_event_id"],
+                    channel_peer_id_redacted=peer_hash,
+                    channel_thread_id=(
+                        normalized.get("raw_event", {})
+                        .get("event", {})
+                        .get("message", {})
+                        .get("thread_id")
+                    ),
+                    channel_peer_session_id=session.get("channel_peer_session_id"),
+                    conversation_id=response.conversation_id,
+                    turn_id=response.turn_id,
+                    channel_delivery_binding_id=(
+                        binding.get("channel_delivery_binding_id") if binding else None
+                    ),
+                ),
+                queue_status=response.queue_status,
+                delivery_binding_id=(
+                    binding.get("channel_delivery_binding_id") if binding else None
+                ),
+                delivery_status=binding.get("status") if binding else None,
+            )
+            if binding is not None
+            else orphan_turn_payload(
+                correlation=build_correlation(
+                    inbound_event_id=channel_event_id,
+                    provider="feishu",
+                    channel_account_id=account.get("channel_account_id"),
+                    channel_message_id=normalized["provider_event_id"],
+                    channel_peer_id_redacted=peer_hash,
+                    channel_peer_session_id=session.get("channel_peer_session_id"),
+                    conversation_id=response.conversation_id,
+                    turn_id=response.turn_id,
+                ),
+                reason_code="turn_completed_but_delivery_binding_missing",
+                turn_id=response.turn_id,
+                queue_status=response.queue_status,
+            )
         )
 
     async def _route_to_chat(
@@ -443,7 +678,7 @@ class FeishuChannelGatewayService:
         normalized: dict[str, Any],
         stats: FeishuGatewayStats,
         trace_id: str | None,
-    ) -> None:
+    ) -> ChatTurnResponse:
         text = normalized["text"].strip()
         if not text:
             text = f"收到一条飞书{normalized['message_type']}消息。"
@@ -461,45 +696,55 @@ class FeishuChannelGatewayService:
                 },
             )
         try:
+            attachments = _feishu_runtime_attachments(normalized["attachments"])
             raw_payload = {
                 "provider": "feishu",
                 "channel_event_id": channel_event_id,
                 "channel_account_id": account["channel_account_id"],
                 "channel_peer_session_id": session["channel_peer_session_id"],
+                "chat_type": normalized["chat_type"],
+                "peer_ref_redacted": _hash_value(normalized["peer_ref"]),
                 "message_type": normalized["message_type"],
                 "message_id_redacted": _hash_value(normalized["message_id"]) if normalized["message_id"] else None,
                 "mentions": normalized["mentions"],
-                "attachment_count": len(normalized["attachments"]),
+                "attachment_count": len(attachments),
+                "source_timestamp": normalized["received_at"],
             }
-            if self._channel_ingress_runtime is not None and not normalized["attachments"]:
-                response = await self._channel_ingress_runtime.submit_channel_turn(
-                    provider="feishu",
-                    session=session,
-                    channel_message_id=normalized["provider_event_id"],
-                    text=text,
-                    raw_payload=raw_payload,
-                    ui_mode="feishu_chat",
-                )
-            else:
-                response = await self._chat.create_turn(
-                    ChatTurnRequest(
-                        session_id=session["session_id"],
-                        conversation_id=session.get("conversation_id"),
-                        member_id=session["member_id"],
-                        input=ChatInput(type="text", text=text),
-                        ingress_metadata=ChatIngressMetadata(
-                            channel="feishu",
-                            channel_message_id=normalized["provider_event_id"],
-                            queue_policy="immediate",
-                            raw_payload=raw_payload,
-                        ),
-                        client_context=ClientContext(
-                            timezone="Asia/Shanghai",
-                            locale="zh-CN",
-                            ui_mode="feishu_chat",
-                        ),
-                    )
-                )
+            semantics = self._session_semantics_runtime.resolve_inbound(
+                provider="feishu",
+                channel_account_id=account["channel_account_id"],
+                channel_message_id=normalized["provider_event_id"],
+                raw_payload=raw_payload,
+                queue_policy="immediate",
+                fallback_peer_ref_redacted=_hash_value(normalized["peer_ref"]),
+                fallback_source_timestamp=str(normalized["received_at"] or ""),
+            )
+            inbound_context = self._session_context_runtime.build_inbound(
+                provider="feishu",
+                session=session,
+                channel_message_id=normalized["provider_event_id"],
+                raw_payload=raw_payload,
+                ui_mode="feishu_chat",
+                semantics=semantics,
+            )
+            response = await self._require_channel_ingress_runtime().submit_channel_turn(
+                provider="feishu",
+                session=session,
+                inbound_event_id=channel_event_id,
+                channel_message_id=normalized["provider_event_id"],
+                text=text,
+                raw_payload={**raw_payload, "channel_session_context": inbound_context},
+                ui_mode="feishu_chat",
+                input_type="multi_part" if attachments else "text",
+                attachments=attachments,
+                channel_account_id=semantics.get("channel_account_id"),
+                channel_peer_id_redacted=semantics.get("channel_peer_id_redacted"),
+                channel_thread_id=semantics.get("channel_thread_id"),
+                delivery_mode=semantics.get("delivery_mode"),
+                source_timestamp=semantics.get("source_timestamp"),
+                dedupe_key=semantics.get("dedupe_key"),
+                queue_policy=str(semantics["queue_policy"]),
+            )
         except Exception as exc:
             if span_id:
                 await self._trace.end_span(
@@ -522,6 +767,10 @@ class FeishuChannelGatewayService:
                 "conversation_id": response.conversation_id,
                 "last_inbound_at": utc_now_iso(),
                 "updated_at": utc_now_iso(),
+                "policy_snapshot": self._session_semantics_runtime.merge_policy_snapshot(
+                    session.get("policy_snapshot"),
+                    semantics,
+                ),
             },
         )
         now = utc_now_iso()
@@ -541,6 +790,7 @@ class FeishuChannelGatewayService:
             }
         )
         stats.chat_turns_created += 1
+        return response
 
     async def _deliver_binding(self, binding: dict[str, Any], *, trace_id: str | None) -> bool | None:
         if binding.get("status") != "pending":
@@ -574,12 +824,18 @@ class FeishuChannelGatewayService:
                 message_type="feishu_chat_reply",
                 recipient=recipient,
                 subject="飞书回复",
-                body=str(message["content_text"]),
+                body=self._stream_bridge.final_plain_text(message),
                 metadata={
                     "channel_delivery_binding_id": binding["channel_delivery_binding_id"],
                     "turn_id": turn_id,
                     "message_id": message_id,
                     "voice_reply": dict(message.get("voice_metadata") or {}),
+                    "channel_session_context": self._session_context_runtime.build_outbound(
+                        provider="feishu",
+                        session=session,
+                        binding=binding,
+                        message=message,
+                    ),
                 },
             ),
             trace_id=trace_id,
@@ -652,6 +908,7 @@ class FeishuChannelGatewayService:
         peer: dict[str, Any],
         normalized: dict[str, Any],
         peer_hash: str,
+        semantics: dict[str, Any],
     ) -> dict[str, Any]:
         peer_state_ref, _ = self._secrets.put_secret(
             json.dumps({"peer_ref": normalized["peer_ref"], "provider": "feishu"}, ensure_ascii=False)
@@ -665,7 +922,7 @@ class FeishuChannelGatewayService:
                 "channel_peer_id": peer.get("channel_peer_id"),
                 "channel_id": account.get("channel_id"),
                 "provider": "feishu",
-                "peer_ref_redacted": peer_hash,
+                "peer_ref_redacted": semantics["session_peer_ref_redacted"],
                 "peer_type": normalized["chat_type"],
                 "session_id": new_id("chsess"),
                 "member_id": "mem_xiaoyao",
@@ -673,7 +930,10 @@ class FeishuChannelGatewayService:
                 "pairing_status": "paired",
                 "allow_inbound": True,
                 "allow_outbound": True,
-                "policy_snapshot": _gateway_policy(self._config),
+                "policy_snapshot": self._session_semantics_runtime.merge_policy_snapshot(
+                    _gateway_policy(self._config),
+                    semantics,
+                ),
                 "created_at": now,
                 "updated_at": now,
             }
@@ -719,6 +979,15 @@ class FeishuChannelGatewayService:
         from app.schemas.channels import ChannelProviderHealthResponse
 
         return ChannelProviderHealthResponse(**health.__dict__)
+
+    def _require_channel_ingress_runtime(self) -> Any:
+        if self._channel_ingress_runtime is None:
+            raise AppError(
+                ErrorCode.CHAT_RUNTIME_FAILED,
+                "feishu gateway ingress runtime 未配置",
+                status_code=500,
+            )
+        return self._channel_ingress_runtime
 
     def _load_provider_state(self, provider_state_ref: str | None) -> dict[str, Any] | None:
         raw = self._secrets.get_secret(provider_state_ref)
@@ -832,6 +1101,33 @@ def _feishu_attachments(message_type: str, content: dict[str, Any], message: dic
             "size_bytes": candidates.get("size"),
         }
     ]
+
+
+def _feishu_runtime_attachments(items: list[dict[str, Any]]) -> list[Attachment]:
+    attachments: list[Attachment] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        attachments.append(
+            Attachment(
+                name=str(item.get("name") or f"feishu-{item.get('type') or 'attachment'}"),
+                content_type=str(item.get("content_type") or "application/octet-stream"),
+                uri=(
+                    str(item.get("media_id") or item.get("file_key") or "").strip() or None
+                ),
+                metadata=redact(
+                    {
+                        "provider": "feishu",
+                        "type": item.get("type"),
+                        "file_key": item.get("file_key"),
+                        "media_id": item.get("media_id"),
+                        "size_bytes": item.get("size_bytes"),
+                        "untrusted_external_content": True,
+                    }
+                ),
+            )
+        )
+    return attachments
 
 
 def _feishu_mentions(message: dict[str, Any]) -> list[dict[str, Any]]:

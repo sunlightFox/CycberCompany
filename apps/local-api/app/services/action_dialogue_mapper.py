@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.schemas.chat_quality import ActionDialogueDecision, ActionDialogueFacts
+from response_composer import canonical_action_status
 
 
 class ActionDialogueMapperService:
@@ -11,9 +12,10 @@ class ActionDialogueMapperService:
         route = str(route_semantics.get("route") or "")
         related_capabilities = [route] if route else []
 
-        if facts.approval_pending or natural.get("status") == "pending_action":
+        natural_status = canonical_action_status(natural.get("status"), default="")
+        if facts.approval_pending or natural_status == "waiting_for_approval":
             return ActionDialogueDecision(
-                action_status="pending_approval",
+                action_status="waiting_for_approval",
                 narration_style="approval_waiting",
                 natural_transition="ask_for_confirmation",
                 should_explain_pending=True,
@@ -23,8 +25,8 @@ class ActionDialogueMapperService:
                 related_capabilities=related_capabilities,
                 reason_codes=["approval_pending"],
             )
-        status = str(task_status.get("status") or "")
-        if status in {"queued", "running"}:
+        status = canonical_action_status(task_status.get("status"), default="")
+        if status in {"planned", "executing"}:
             return ActionDialogueDecision(
                 action_status=status,
                 narration_style="brief_progress",
@@ -36,7 +38,7 @@ class ActionDialogueMapperService:
                 related_capabilities=related_capabilities,
                 reason_codes=[f"task_status:{status}"],
             )
-        if status in {"completed", "succeeded"}:
+        if status in {"completed_with_evidence", "partially_completed"}:
             return ActionDialogueDecision(
                 action_status=status,
                 narration_style=(
@@ -52,7 +54,7 @@ class ActionDialogueMapperService:
                 related_capabilities=related_capabilities,
                 reason_codes=[f"task_status:{status}"],
             )
-        if status in {"failed", "error"}:
+        if status in {"failed_with_reason", "blocked_by_boundary", "cancelled"}:
             return ActionDialogueDecision(
                 action_status=status,
                 narration_style=(

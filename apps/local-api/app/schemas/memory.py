@@ -36,6 +36,12 @@ class MemorySearchApiRequest(ApiModel):
     intent: str | None = None
     layers: list[MemoryLayer] = Field(default_factory=list)
     limit: int = Field(default=10, ge=1, le=50)
+    recall_scope: str = "member_cross_session"
+    exclude_conversation_id: EntityId | None = None
+    include_cross_session: bool = True
+    memory_classes: list[str] = Field(default_factory=list)
+    durability_filter: list[str] = Field(default_factory=list)
+    freshness_policy: str = "exclude_stale"
     include_archived: bool = False
     include_sensitive: bool = False
     include_asset_scoped: bool = False

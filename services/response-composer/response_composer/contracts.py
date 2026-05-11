@@ -8,6 +8,10 @@ from core_types import ApiModel, ErrorCode, ResponsePlan
 from core_types.voice_copy import pick_variant
 from pydantic import Field
 from response_composer.chat_voice import voice_metadata_for_scenario
+from response_composer.action_status import (
+    canonical_action_status,
+    normalize_action_status_semantics,
+)
 from response_composer.opening_copy import (
     apply_conversation_voice,
     conversation_voice_strategy,
@@ -244,6 +248,14 @@ class ResponseComposer:
             scenario=scenario,
             section_count=1,
         )
+        result_summary = _apply_runtime_response_policy(
+            result_summary,
+            response_policy=dict(request.response_policy or {}),
+            session_context=dict(request.session_context or {}),
+            action_dialogue=dict(request.action_dialogue or {}),
+            scenario=scenario,
+            user_text=request.user_text,
+        )
         response_quality_guard = _response_quality_guard(
             text=result_summary,
             original_text=raw_summary,
@@ -348,8 +360,33 @@ class ResponseComposer:
         *,
         ui_mode: str | None = None,
         response_plan: ResponsePlan | None = None,
+        presence_runtime: dict[str, Any] | None = None,
+        user_text: str = "",
     ) -> str:
         visible, _ = redact_visible_text(strip_reasoning_tags(str(text or "")))
+        response_policy: dict[str, Any] = {}
+        session_context: dict[str, Any] = {}
+        action_dialogue: dict[str, Any] = {}
+        scenario = "direct"
+        if response_plan is not None:
+            structured = dict(response_plan.structured_payload or {})
+            response_policy = dict(structured.get("response_policy") or {})
+            session_context = dict(structured.get("session_context") or {})
+            action_dialogue = dict(structured.get("action_dialogue") or {})
+            scenario = str(structured.get("scenario") or scenario)
+        if presence_runtime:
+            response_policy = response_policy or dict(presence_runtime.get("response_policy") or {})
+            session_context = session_context or dict(presence_runtime.get("session_context") or {})
+            action_dialogue = action_dialogue or dict(presence_runtime.get("action_dialogue") or {})
+        if response_policy or session_context or action_dialogue:
+            visible = _apply_runtime_response_policy(
+                visible,
+                response_policy=response_policy,
+                session_context=session_context,
+                action_dialogue=action_dialogue,
+                scenario=scenario,
+                user_text=user_text,
+            )
         if ui_mode == "wechat_chat":
             scenario = None
             section_count = 0
@@ -386,6 +423,9 @@ class ResponseComposer:
         memory_notice: str | None = None,
         tool_notice: str | None = None,
         trace_refs: list[dict[str, Any]] | None = None,
+        response_policy: dict[str, Any] | None = None,
+        session_context: dict[str, Any] | None = None,
+        action_dialogue: dict[str, Any] | None = None,
     ) -> ResponsePlan:
         visible_summary, redaction_summary = redact_visible_text(summary)
         safety_notice, safety_redactions = _redact_optional_string(safety_notice)
@@ -427,6 +467,14 @@ class ResponseComposer:
             channel_profile=None,
             scenario=scenario,
             section_count=1,
+        )
+        visible_summary = _apply_runtime_response_policy(
+            visible_summary,
+            response_policy=dict(response_policy or {}),
+            session_context=dict(session_context or {}),
+            action_dialogue=dict(action_dialogue or {}),
+            scenario=scenario,
+            user_text="",
         )
         tone_metadata = _default_tone_metadata(
             scenario=scenario,
@@ -472,6 +520,21 @@ class ResponseComposer:
                 "safety_notice": safety_notice,
                 "memory_notice": memory_notice,
                 "tool_notice": tool_notice,
+                **(
+                    {"response_policy": _redact_payload(dict(response_policy or {}))}
+                    if response_policy
+                    else {}
+                ),
+                **(
+                    {"session_context": _redact_payload(dict(session_context or {}))}
+                    if session_context
+                    else {}
+                ),
+                **(
+                    {"action_dialogue": _redact_payload(dict(action_dialogue or {}))}
+                    if action_dialogue
+                    else {}
+                ),
                 **_voice_metadata_payload(scenario=scenario),
                 "response_quality_guard": response_quality_guard,
             },
@@ -491,6 +554,8 @@ class ResponseComposer:
         facts: dict[str, Any],
         task_status: dict[str, Any] | None = None,
         trace_refs: list[dict[str, Any]] | None = None,
+        response_policy: dict[str, Any] | None = None,
+        session_context: dict[str, Any] | None = None,
     ) -> ResponsePlan:
         text = _compose_action_status_text(facts)
         visible_summary, redaction_summary = redact_visible_text(text)
@@ -504,7 +569,12 @@ class ResponseComposer:
             for item in facts.get("reply_option_items") or []
             if isinstance(item, dict)
         ]
-        status = str(facts.get("status") or "pending_action")
+        semantics = normalize_action_status_semantics(
+            facts.get("action_status_semantics") or facts,
+            default_status="requested",
+            scope=str(facts.get("scope") or "workflow_summary"),
+        )
+        status = str(semantics.get("status") or "requested")
         high_risk = bool(
             facts.get("approval_required") or facts.get("risk_level") in {"R5", "R6", "R7"}
         )
@@ -519,6 +589,15 @@ class ResponseComposer:
             channel_profile=None,
             scenario="action_status",
             section_count=1,
+        )
+        action_dialogue = dict(facts.get("action_dialogue") or {})
+        visible_summary = _apply_runtime_response_policy(
+            visible_summary,
+            response_policy=dict(response_policy or {}),
+            session_context=dict(session_context or {}),
+            action_dialogue=action_dialogue,
+            scenario="action_status",
+            user_text="",
         )
         tone_metadata = _default_tone_metadata(
             scenario="action_status",
@@ -557,9 +636,25 @@ class ResponseComposer:
                 "scenario": "action_status",
                 "conversation_voice": conversation_voice,
                 **_voice_metadata_payload(scenario="action_status"),
-                "action_status": _redact_payload(facts),
+                "action_status": _redact_payload({**facts, "status": status}),
+                "action_status_semantics": _redact_payload(semantics),
                 "reply_option_items": _redact_payload(reply_option_items),
                 "task_status": task_status or {},
+                **(
+                    {"response_policy": _redact_payload(dict(response_policy or {}))}
+                    if response_policy
+                    else {}
+                ),
+                **(
+                    {"session_context": _redact_payload(dict(session_context or {}))}
+                    if session_context
+                    else {}
+                ),
+                **(
+                    {"action_dialogue": _redact_payload(action_dialogue)}
+                    if action_dialogue
+                    else {}
+                ),
                 "response_quality_guard": response_quality_guard,
             },
             tone_mode=_tone_mode_from_metadata(tone_metadata),
@@ -751,8 +846,18 @@ class ResponseComposer:
         if code_value == ErrorCode.MODEL_ROUTE_BLOCKED_BY_PRIVACY.value:
             return self.compose_privacy_block()
         if code_value == ErrorCode.MODEL_NOT_CONFIGURED.value:
-            return self.compose_model_not_configured()
-        return f"这轮生成失败了：{message}"
+            return "我这边现在没有起得来的可用模型，所以没法把这题正常往下展开。你可以稍后重试，或者先让我只给确定性能说的部分。"
+        if code_value == ErrorCode.MODEL_ROUTE_NOT_FOUND.value:
+            return "我这边刚才没拿到能用的模型路由，所以这轮没法正常接下去。你可以稍后再试，或者先让我只给你确定性的结论。"
+        if code_value == ErrorCode.CONTEXT_BUILD_FAILED.value:
+            return "我刚才这一下没把上下文接稳，所以这轮没能顺着聊下去。你再发一句，我按你最新这句重接。"
+        if code_value in {
+            ErrorCode.TOOL_FAILED.value,
+            ErrorCode.MCP_UNAVAILABLE.value,
+            ErrorCode.TASK_STEP_FAILED.value,
+        }:
+            return f"这一步刚才没跑通。{message}"
+        return f"我这轮没接住，卡在这里了：{message}"
 
     def response_plan_for_failure(self, *, code: ErrorCode | str, message: str) -> ResponsePlan:
         code_value = code.value if isinstance(code, ErrorCode) else code
@@ -1463,8 +1568,147 @@ def _apply_runtime_response_policy(
     scenario: str,
     user_text: str,
 ) -> str:
-    del response_policy, session_context, action_dialogue, scenario, user_text
-    return str(text or "").strip()
+    del scenario
+    styled = str(text or "").strip()
+    if not styled:
+        return styled
+
+    followthrough_mode = str(response_policy.get("followthrough_mode") or "")
+    boundary_mode = str(response_policy.get("boundary_mode") or "")
+    depth_mode = str(response_policy.get("depth_mode") or "")
+    structure_mode = str(response_policy.get("structure_mode") or "")
+    progress_mode = str(response_policy.get("progress_mode") or "")
+    opening_style = str(response_policy.get("opening_style") or "")
+    quality_takeover_scope = str(response_policy.get("quality_takeover_scope") or "")
+    continuity_summary = str(session_context.get("current_conversation_summary") or "").strip()
+    open_loops = [str(item) for item in session_context.get("current_open_loops") or []]
+    action_status = canonical_action_status(action_dialogue.get("action_status"), default="")
+    stripped_user_text = str(user_text or "").strip()
+
+    if _latest_instruction_override(open_loops, continuity_summary):
+        styled = _drop_stale_followthrough_openers(styled)
+        if not _starts_with_override_anchor(styled):
+            styled = f"按你刚刚改的这句，{styled}"
+
+    if opening_style == "repair_soft" and not _starts_with_repair_anchor(styled):
+        styled = f"刚才那一下没接稳，我按你这句重接。{styled}"
+
+    if followthrough_mode == "reorient" and not _starts_with_override_anchor(styled):
+        styled = _drop_stale_followthrough_openers(styled)
+
+    if boundary_mode == "explicit_honest":
+        styled = strip_mechanical_openers(styled)
+        styled = styled.replace("当前状态", "现在").replace("处理结果", "这一步的情况")
+
+    if action_status in {
+        "waiting_for_approval",
+        "executing",
+        "failed_with_reason",
+        "partially_completed",
+        "completed_with_evidence",
+    } and (
+        quality_takeover_scope in {"", "action_semantics"}
+    ):
+        styled = _normalize_action_dialogue_text(
+            styled,
+            action_status=action_status,
+            session_context=session_context,
+        )
+
+    if progress_mode == "ask_one_question":
+        styled = _single_question_text(styled)
+    elif depth_mode == "light" and structure_mode == "minimal":
+        styled = _split_sentences(styled, max_sentences=2, multiline=False)
+    elif depth_mode == "deep" and structure_mode == "structured_when_useful":
+        styled = _split_sentences(styled, max_sentences=3, multiline=True)
+
+    if progress_mode == "answer_directly" and stripped_user_text:
+        styled = _drop_meta_preface(styled)
+
+    return styled.strip()
+
+
+def _latest_instruction_override(open_loops: list[str], continuity_summary: str) -> bool:
+    if "latest_instruction_overrides_previous_goal" in open_loops:
+        return True
+    return "latest_instruction_override" in continuity_summary
+
+
+def _drop_stale_followthrough_openers(text: str) -> str:
+    patterns = (
+        r"^(接着刚才(?:那条|的话题)?[，,、 ]*)",
+        r"^(继续刚才(?:那条|的话题)?[，,、 ]*)",
+        r"^(顺着刚才(?:那条|的话题)?[，,、 ]*)",
+        r"^(沿着刚才(?:那条|的话题)?[，,、 ]*)",
+        r"^(接上刚才(?:那条|的话题)?[，,、 ]*)",
+    )
+    result = str(text or "")
+    for pattern in patterns:
+        result = re.sub(pattern, "", result)
+    return result.lstrip()
+
+
+def _starts_with_override_anchor(text: str) -> bool:
+    stripped = str(text or "").strip()
+    return stripped.startswith("按你刚刚改的这句") or stripped.startswith("按你最新这句")
+
+
+def _starts_with_repair_anchor(text: str) -> bool:
+    stripped = str(text or "").strip()
+    return stripped.startswith("刚才那一下没接稳") or stripped.startswith("刚才那步没接稳")
+
+
+def _normalize_action_dialogue_text(
+    text: str,
+    *,
+    action_status: str,
+    session_context: dict[str, Any],
+) -> str:
+    styled = str(text or "").strip()
+    if action_status == "waiting_for_approval":
+        styled = styled.replace("当前状态", "现在").replace("处理结果", "这一步的情况")
+        if "等你点头" not in styled and "你确认前" not in styled and "你没点头前" not in styled:
+            styled = f"{styled}\n先等你点头，我再往下走。"
+        return styled
+    if action_status == "executing":
+        if "已经完成" in styled or "已完成" in styled:
+            styled = styled.replace("已经完成", "还在推进").replace("已完成", "还在推进")
+        return styled
+    if action_status == "failed_with_reason":
+        if not any(marker in styled for marker in ("没做成", "没跑通", "卡住", "失败")):
+            styled = f"这一步没跑通。{styled}"
+        return styled
+    if action_status == "partially_completed":
+        if "部分" not in styled and "还没完全做完" not in styled:
+            styled = f"这一步只完成了一部分。{styled}"
+        return styled
+    if action_status == "completed_with_evidence":
+        if not any(marker in styled for marker in ("结果", "已经", "已")):
+            anchor = str(session_context.get("current_conversation_summary") or "").strip()
+            if anchor:
+                styled = f"结果我拿到了。{styled}"
+        return styled
+    return styled
+
+
+def _single_question_text(text: str) -> str:
+    stripped = str(text or "").strip()
+    lines = [line.strip() for line in stripped.splitlines() if line.strip()]
+    for line in lines:
+        if "？" in line or "?" in line:
+            return line
+    return lines[0] if lines else stripped
+
+
+def _drop_meta_preface(text: str) -> str:
+    stripped = str(text or "").strip()
+    patterns = (
+        r"^(先说(风险|结论|结果)[。！! ]*)",
+        r"^(我先说(风险|结论|结果)[。！! ]*)",
+    )
+    for pattern in patterns:
+        stripped = re.sub(pattern, "", stripped)
+    return stripped.lstrip() or str(text or "").strip()
 
 
 def _split_sentences(text: str, *, max_sentences: int, multiline: bool) -> str:
@@ -1604,7 +1848,12 @@ def _action_seed(facts: dict[str, Any]) -> str:
 
 
 def _compose_action_status_text(facts: dict[str, Any]) -> str:
-    status = str(facts.get("status") or "pending_action")
+    semantics = normalize_action_status_semantics(
+        facts.get("action_status_semantics") or facts,
+        default_status="requested",
+        scope=str(facts.get("scope") or "workflow_summary"),
+    )
+    status = str(semantics.get("status") or "requested")
     action_label = str(facts.get("action_label") or "这一步操作").strip()
     target = str(facts.get("target") or "").strip()
     label = (
@@ -1613,7 +1862,7 @@ def _compose_action_status_text(facts: dict[str, Any]) -> str:
         else f"{action_label} {target}".strip()
     )
     seed = _action_seed(facts)
-    if status == "already_absent" or facts.get("already_absent"):
+    if "already_absent" in list(semantics.get("reason_codes") or []) or facts.get("already_absent"):
         return pick_variant(
             seed,
             (
@@ -1622,7 +1871,7 @@ def _compose_action_status_text(facts: dict[str, Any]) -> str:
                 f"{target or label}本来就不在本机里，这次不用动它。",
             ),
         )
-    if status in {"pending_action", "waiting_approval"}:
+    if status == "waiting_for_approval":
         opener = _pending_opener(facts)
         reason = _pending_reason_text(facts)
         options = [str(item) for item in facts.get("reply_options") or [] if str(item).strip()]
@@ -1641,7 +1890,16 @@ def _compose_action_status_text(facts: dict[str, Any]) -> str:
             )
         )
         return "\n".join(line for line in lines if line)
-    if status == "manual_only":
+    if status == "planned":
+        return pick_variant(
+            seed,
+            (
+                f"{label}这一步我已经准备好了，但还没开始真正执行。",
+                f"{label}现在已经进入计划态，后面会按实际执行结果继续说。",
+                f"{label}这一步先落成了方案，还没有发生实际动作。",
+            ),
+        )
+    if status == "blocked_by_boundary":
         reason = str(facts.get("failure_reason") or facts.get("safe_next_step") or "").strip()
         return opening_copy(
             "action.manual_only",
@@ -1649,57 +1907,45 @@ def _compose_action_status_text(facts: dict[str, Any]) -> str:
             label=label,
             reason=reason or "现在还缺一个更稳的可信来源。",
         )
-    if status == "blocked":
-        reason = str(facts.get("failure_reason") or facts.get("safe_next_step") or "").strip()
-        return opening_copy(
-            "action.blocked",
+    if status == "executing":
+        return pick_variant(
             seed,
-            label=label,
-            reason=reason or "这一步先停住，我不能把它说成已经完成。",
+            (
+                f"{label}这一步已经开始推进了，我会按实际结果继续汇报。",
+                f"{label}现在正在执行中，我还不会提前把它说成完成。",
+                f"{label}已经进到执行态了，等拿到结果我再落完成结论。",
+            ),
         )
-    if status == "approved":
-        detail_status = str(facts.get("detail_status") or "")
-        evidence = str(facts.get("evidence_summary") or "").strip()
-        if detail_status == "completed" or facts.get("completed"):
-            return opening_copy("action.approved_completed", seed, label=label) + _friendly_evidence_text(
-                evidence,
-                seed=seed,
-            )
-        if detail_status in {"paused", "waiting_approval"}:
-            return opening_copy("action.approved_waiting", seed, label=label)
-        if detail_status == "failed" or facts.get("failed"):
-            reason = str(facts.get("failure_reason") or "").strip()
-            return opening_copy(
-                "action.approved_failed",
-                seed,
-                label=label,
-                reason=reason or "你可以换个目标或来源，我再试一轮。",
-            )
-        return opening_copy("action.approved_progress", seed, label=label)
-    if status == "completed":
-        evidence = str(facts.get("evidence_summary") or "").strip()
+    if status == "partially_completed":
+        evidence = str(semantics.get("evidence_summary") or facts.get("evidence_summary") or "").strip()
+        remaining = list(semantics.get("remaining_parts") or semantics.get("pending_work") or [])
+        tail = f" 还没完成的部分：{'、'.join(remaining[:3])}。" if remaining else ""
+        return f"{label}这一步目前只完成了一部分。{_friendly_evidence_text(evidence, seed=seed)}{tail}"
+    if status == "completed_with_evidence":
+        evidence = str(semantics.get("evidence_summary") or facts.get("evidence_summary") or "").strip()
         return opening_copy("task.completed", seed, title=label) + _friendly_evidence_text(
             evidence,
             seed=seed,
         )
-    if status == "denied":
+    if status == "cancelled":
         return opening_copy("action.denied", seed, label=label)
-    if status == "edited":
-        return opening_copy("action.edited", seed, label=label)
-    if status == "edit_missing_target":
+    if status == "failed_with_reason":
         reason = str(facts.get("failure_reason") or "").strip()
-        return opening_copy("action.edit_missing_target", seed, label=label, reason=reason)
-    if status == "resolution_failed":
-        reason = str(facts.get("failure_reason") or "").strip()
-        fallback = "你可以修改目标后重试，或取消这次操作。"
-        return opening_copy("action.resolution_failed", seed, label=label, reason=reason or fallback)
-    if status == "no_pending_action":
-        return opening_copy("action.no_pending", seed, label=label)
-    if status == "multiple_pending_actions":
-        labels = str(facts.get("labels") or label)
-        return opening_copy("action.multiple_pending", seed, labels=labels)
-    if status == "ambiguous_confirmation_blocked":
-        return opening_copy("action.ambiguous_blocked", seed, label=label)
+        return opening_copy(
+            "action.resolution_failed",
+            seed,
+            label=label,
+            reason=reason or "你可以修改目标后重试，或取消这次操作。",
+        )
+    if status == "requested":
+        return pick_variant(
+            seed,
+            (
+                f"{label}这一步我已经收到诉求，接下来会先判断该走哪条执行路径。",
+                f"{label}这个动作目标我接住了，还在准备执行判断。",
+                f"{label}这一步先记下来了，我会按边界和证据规则继续往下推。",
+            ),
+        )
     return opening_copy("action.default", seed, label=label, status=status)
 
 
@@ -1777,22 +2023,23 @@ def _soften_action_text(text: str) -> str:
 
 
 def _action_status_title(status: str) -> str | None:
-    if status == "already_absent":
+    status = canonical_action_status(status)
+    if status == "completed_with_evidence":
         return "无需操作"
-    if status in {"pending_action", "waiting_approval"}:
+    if status == "waiting_for_approval":
         return "等待确认"
-    if status == "manual_only":
-        return "需要人工处理"
-    if status == "approved":
-        return "已确认"
-    if status == "denied":
+    if status == "planned":
+        return "已计划"
+    if status == "executing":
+        return "执行中"
+    if status == "partially_completed":
+        return "部分完成"
+    if status == "cancelled":
         return "已取消"
-    if status == "edited":
-        return "已更新"
-    if status == "edit_missing_target":
-        return "需要新目标"
-    if status == "resolution_failed":
+    if status == "failed_with_reason":
         return "未完成"
+    if status == "blocked_by_boundary":
+        return "受边界阻断"
     return None
 
 
@@ -1819,8 +2066,8 @@ def _scenario_for_status(
     if safety_notice:
         return "safety_deny"
     if task_status:
-        status = str(task_status.get("status") or "")
-        return "task_completed" if status == "completed" else "task_status"
+        status = canonical_action_status(task_status.get("status"))
+        return "task_completed" if status == "completed_with_evidence" else "task_status"
     if memory_notice:
         return "memory_written"
     if tool_notice:
