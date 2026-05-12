@@ -235,20 +235,10 @@ class RuntimeContextGateway:
                             selection_reason=["phase94_failure_advisory_recall"],
                         )
                     )
-            memory_search_summary = {
-                "retrieval_id": memory_search.retrieval_id,
-                "recall_scope_applied": memory_search.recall_scope_applied,
-                "selected_memory_ids": list(memory_search.selected_memory_ids),
-                "item_count": len(memory_search.items),
-                "cross_session_selected_count": sum(
-                    1 for item in memory_search.items if item.cross_session
-                ),
-                "freshness_states": sorted(
-                    {item.freshness_state for item in memory_search.items}
-                ),
-                "memory_classes": sorted({item.memory_class for item in memory_search.items}),
-                "freshness_policy": "prefer_fresh" if latest_override else "exclude_stale",
-            }
+            memory_search_summary = _memory_search_summary(
+                memory_search,
+                freshness_policy="prefer_fresh" if latest_override else "exclude_stale",
+            )
         resource_handles, handle_summary = (
             await self._resource_handles(
                 member_id=turn["member_id"],
@@ -737,6 +727,50 @@ def _memory_layers(context_decision: ContextDecision | None) -> list[Any]:
     if not isinstance(configured, list):
         return []
     return [item for item in configured if isinstance(item, str)]
+
+
+def _memory_search_summary(
+    memory_search: Any,
+    *,
+    freshness_policy: str,
+) -> dict[str, Any]:
+    if isinstance(memory_search, list):
+        items = memory_search
+        return {
+            "retrieval_id": None,
+            "recall_scope_applied": None,
+            "selected_memory_ids": [],
+            "item_count": len(items),
+            "cross_session_selected_count": 0,
+            "freshness_states": [],
+            "memory_classes": [],
+            "freshness_policy": freshness_policy,
+        }
+    items = list(getattr(memory_search, "items", []) or [])
+    return {
+        "retrieval_id": getattr(memory_search, "retrieval_id", None),
+        "recall_scope_applied": getattr(memory_search, "recall_scope_applied", None),
+        "selected_memory_ids": list(getattr(memory_search, "selected_memory_ids", []) or []),
+        "item_count": len(items),
+        "cross_session_selected_count": sum(
+            1 for item in items if getattr(item, "cross_session", False)
+        ),
+        "freshness_states": sorted(
+            {
+                str(getattr(item, "freshness_state", ""))
+                for item in items
+                if getattr(item, "freshness_state", None)
+            }
+        ),
+        "memory_classes": sorted(
+            {
+                str(getattr(item, "memory_class", ""))
+                for item in items
+                if getattr(item, "memory_class", None)
+            }
+        ),
+        "freshness_policy": freshness_policy,
+    }
 
 
 def _summary_with_working_state(

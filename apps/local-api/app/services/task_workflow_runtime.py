@@ -35,6 +35,7 @@ class TaskWorkflowRuntime:
 
     async def run_task(self, task_id: str, *, trace_id: str | None) -> None:
         task = await self._engine._get_task(task_id)
+        await self._engine._ensure_repo_workspace_baseline(task_id, trace_id=trace_id)
         if task["mode"] == TaskMode.SUPERVISOR.value:
             await self._run_supervisor_task(task_id, trace_id=trace_id)
             return
@@ -224,5 +225,6 @@ class TaskWorkflowRuntime:
             "runtime": "task_workflow_runtime",
             "approval_wait_supported": True,
             "step_state_machine": True,
+            "agent_mode_delegates_to": "task_agent_runtime",
             "public_entrypoints": ["start_task", "resume_task", "run_task"],
         }

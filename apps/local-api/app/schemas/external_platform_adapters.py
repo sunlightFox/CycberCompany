@@ -61,6 +61,7 @@ class ExternalPlatformAdapterExecuteRequest(ApiModel):
     approval_id: EntityId | None = None
     force: bool = False
     allow_discovery: bool = True
+    provider_mode: str | None = None
 
 
 class ExternalPlatformAdapterResumeRequest(ApiModel):

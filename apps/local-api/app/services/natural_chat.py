@@ -171,6 +171,13 @@ class NaturalChatActionGateway:
             session_id,
             user_text=text,
         )
+        if not pending and (_looks_like_resolution(text) or _is_ambiguous_continue(text)):
+            return _outcome(
+                _no_pending_text(text),
+                status="no_pending_action",
+                reason_codes=["no_pending_action"],
+                clear_pending=True,
+            )
         if not pending:
             return None
         if text_is_new_action and not _looks_like_resolution(text):
@@ -663,8 +670,11 @@ def _outcome(
                 "user_next_step": reply_options[0] if reply_options else None,
             }
         )
+        visible_text = plan.plain_text or plan.summary or text
+        if status in {"approved", "edited", "denied", "blocked", "hard_block", "no_pending_action"} and text:
+            visible_text = text
         return NaturalChatOutcome(
-            text=visible_text_guard(plan.plain_text or plan.summary or text),
+            text=visible_text_guard(visible_text),
             response_plan=plan,
         )
     plan = _plan(
@@ -974,15 +984,15 @@ def _plain_next_step_text(pending: list[dict[str, Any]]) -> str:
 
 def _no_pending_text(text: str) -> str:
     if _is_deny(text):
-        return opening_copy("action.no_pending", seed=text, mode="deny")
+        return "现在没有等待你确认的动作，所以我不会把这句当成拒绝执行。"
     if _is_edit(text):
-        return opening_copy("action.no_pending", seed=text, mode="edit")
-    return opening_copy("action.no_pending", seed=text)
+        return "现在没有等待你确认的动作，所以我还不知道要改哪一步。"
+    return "现在没有等待你确认的动作，所以我不会把这句直接当成执行口令。"
 
 
 def _ambiguous_pending_text(pending: list[dict[str, Any]]) -> str:
     label = str(pending[0].get("user_label") or "这一步操作")
-    return opening_copy("action.ambiguous_blocked", seed=label, label=label)
+    return f"{label} 这步还差一句明确的话。你回只允许这一次、拒绝，或者给新目标都行。\n在你点头前，我不会自己往下走。"
 
 
 def _multiple_pending_text(pending: list[dict[str, Any]]) -> str:
@@ -1001,9 +1011,9 @@ def _after_resolution_text(label: str, resolution: str, *, detail: Any | None) -
     if not status:
         return _natural_copy("after_no_status", seed=label, prefix=prefix)
     if status == "completed_with_evidence":
-        return _natural_copy("after_completed", seed=label, prefix=prefix)
+        return f"{prefix} 这一步我已经确认继续过并且处理完了，结果和记录都能回看。"
     if status in {"partially_completed", "waiting_for_approval", "planned"}:
-        return _natural_copy("after_waiting", seed=label, prefix=prefix)
+        return f"{prefix} 我已经按你的确认继续往下推了，但这一步还没有完成，我会按实际进展继续回你。"
     if status in {"failed_with_reason", "blocked_by_boundary"}:
         return _natural_copy("after_failed", seed=label, prefix=prefix)
     return f"{prefix} 当前状态是 {status}，下一步我会按实际结果说。"
@@ -1120,6 +1130,22 @@ def _allowed_scopes(action_type: str, risk_level: str) -> list[str]:
     if _risk_order(risk_level) <= 1 and action_type.startswith("browser.") is False:
         scopes.append("always")
     return scopes
+
+
+def _risk_order(value: str) -> int:
+    mapping = {
+        "R1": 1,
+        "R2": 2,
+        "R3": 3,
+        "R4": 4,
+        "R5": 5,
+        "R6": 6,
+    }
+    return mapping.get(str(value or "R1").upper(), 1)
+
+
+def _max_risk(pending: list[dict[str, Any]]) -> int:
+    return max((_risk_order(str(item.get("risk_level") or "R1")) for item in pending), default=1)
 
 
 def _payload_summary(payload: dict[str, Any]) -> dict[str, Any]:

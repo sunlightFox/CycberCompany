@@ -83,30 +83,34 @@ class FailureExperienceService:
             memory_decision = "needs_review"
             review_status = "pending_review"
         else:
-            memory = await self._memory.write_failure_advisory_memory(
-                member_id=member_id,
-                summary_text=summary_text,
-                source={
-                    "type": "failure_experience",
-                    "conversation_id": conversation_id,
-                    "turn_id": turn_id,
-                    "task_id": task_id,
-                    "trace_id": trace_id,
-                    "captured_at": now,
-                },
-                payload={
-                    "failure_class": failure_class,
-                    "reason_code": reason_code,
-                    "impact_scope": impact_scope,
-                    "severity": severity,
-                    "evidence_summary": evidence_summary,
-                    "evidence_refs": evidence_refs,
-                },
-                trace_id=trace_id,
-            )
-            memory_id = memory.memory_id
-            memory_decision = "written"
-            advisory_status = "advisory_only"
+            try:
+                memory = await self._memory.write_failure_advisory_memory(
+                    member_id=member_id,
+                    summary_text=summary_text,
+                    source={
+                        "type": "failure_experience",
+                        "conversation_id": conversation_id,
+                        "turn_id": turn_id,
+                        "task_id": task_id,
+                        "trace_id": trace_id,
+                        "captured_at": now,
+                    },
+                    payload={
+                        "failure_class": failure_class,
+                        "reason_code": reason_code,
+                        "impact_scope": impact_scope,
+                        "severity": severity,
+                        "evidence_summary": evidence_summary,
+                        "evidence_refs": evidence_refs,
+                    },
+                    trace_id=trace_id,
+                )
+                memory_id = memory.memory_id
+                memory_decision = "written"
+                advisory_status = "advisory_only"
+            except Exception:
+                memory_decision = "write_failed"
+                advisory_status = "inactive"
         data = {
             "failure_id": new_id("fail"),
             "organization_id": member["organization_id"],

@@ -26,7 +26,7 @@ class ActionDialogueMapperService:
                 reason_codes=["approval_pending"],
             )
         status = canonical_action_status(task_status.get("status"), default="")
-        if status in {"planned", "executing"}:
+        if status in {"planned", "executing", "paused"}:
             return ActionDialogueDecision(
                 action_status=status,
                 narration_style="brief_progress",

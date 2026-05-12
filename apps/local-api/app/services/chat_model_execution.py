@@ -42,6 +42,11 @@ class ChatModelExecutionService:
         turn_id = turn["turn_id"]
         trace_id = turn["trace_id"]
         channel_profile = facade._channel_profile_for_turn(turn)
+        ui_mode = (
+            facade._ui_mode_for_turn(turn)
+            if hasattr(facade, "_ui_mode_for_turn")
+            else None
+        )
         prompt_options = facade._prompt_options_for_turn(
             turn=turn,
             context=context,
@@ -98,7 +103,11 @@ class ChatModelExecutionService:
             intent=intent,
             mode=mode,
         )
-        buffer_visible_response = continuation_decision.enabled
+        buffer_visible_response = (
+            continuation_decision.enabled
+            or channel_profile != "local"
+            or ui_mode in {"wechat_chat", "feishu_chat"}
+        )
         model_span = await facade._trace.start_span(
             trace_id,
             span_type=TraceSpanType.MODEL_CALL,
@@ -260,17 +269,6 @@ class ChatModelExecutionService:
                 model_params=model_params,
                 root_span_id=root_span_id,
             )
-            yield await facade._emit_and_record(
-                turn_id,
-                trace_id,
-                events,
-                ChatEventType.RESPONSE_DELTA,
-                {
-                    "text": assistant_text,
-                    "response_filter": response_filter,
-                    **({"continuation": continuation_payload} if continuation_payload else {}),
-                },
-            )
         async for event in facade._complete_model_turn(
             turn,
             events,
@@ -284,6 +282,7 @@ class ChatModelExecutionService:
             response_plan=response_plan,
             response_filter=response_filter,
             prompt_metadata=prompt_metadata,
+            emit_final_delta=buffer_visible_response,
         ):
             yield event
 

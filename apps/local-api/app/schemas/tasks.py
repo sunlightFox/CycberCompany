@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from core_types import (
+    AgentLoopFrame,
+    AgentLoopState,
     AgentLoopIteration,
     AgentNextActionDecision,
     ApiModel,
@@ -142,10 +144,19 @@ class PlannerDecisionListResponse(ApiModel):
 
 
 class AgentLoopListResponse(ApiModel):
-    items: list[AgentLoopIteration] = Field(default_factory=list)
+    runtime: str = "task_agent_runtime"
+    authoritative: bool = True
+    task_id: EntityId | None = None
+    current_status: str | None = None
+    pause_reason: str | None = None
+    stop_reason: str | None = None
+    items: list[AgentLoopFrame] = Field(default_factory=list)
 
 
 class TaskObservationListResponse(ApiModel):
+    runtime: str = "task_agent_runtime"
+    authoritative: bool = True
+    task_id: EntityId | None = None
     items: list[TaskObservation] = Field(default_factory=list)
 
 
@@ -174,6 +185,9 @@ class PlannerCapabilityCandidateListResponse(ApiModel):
 
 
 class AgentNextActionDecisionListResponse(ApiModel):
+    runtime: str = "task_agent_runtime"
+    authoritative: bool = True
+    task_id: EntityId | None = None
     items: list[AgentNextActionDecision] = Field(default_factory=list)
 
 

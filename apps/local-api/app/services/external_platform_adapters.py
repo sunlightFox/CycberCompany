@@ -23,6 +23,7 @@ from app.db.repositories.external_platform_adapter_repo import (
     ExternalPlatformAdapterRepository,
 )
 from app.db.repositories.external_platform_repo import ExternalPlatformRepository
+from app.schemas.assets import AssetResolveForToolRequest
 from app.schemas.external_platform_adapters import (
     ExternalPlatformAdapterCompileRequest,
     ExternalPlatformAdapterCreateRequest,
@@ -35,6 +36,7 @@ from app.schemas.external_platform_adapters import (
 )
 from app.schemas.tasks import ToolExecuteRequest
 from app.services.approvals import ApprovalService
+from app.services.asset_broker import AssetBrokerService
 from app.services.audit import AuditEventService
 from app.services.external_platform_discovery import (
     DiscoveryCandidate,
@@ -68,12 +70,14 @@ class ExternalPlatformAdapterService:
         tool_runtime: ToolRuntime,
         approval_service: ApprovalService,
         audit_service: AuditEventService,
+        asset_broker: AssetBrokerService,
     ) -> None:
         self._repo = repo
         self._platform_repo = platform_repo
         self._tools = tool_runtime
         self._approvals = approval_service
         self._audit = audit_service
+        self._asset_broker = asset_broker
         self._discovery = ExternalPlatformDiscoveryService(
             platform_repo=platform_repo,
             tool_runtime=tool_runtime,
@@ -120,7 +124,10 @@ class ExternalPlatformAdapterService:
                 {
                     **request.metadata,
                     "phase": "phase50",
-                    "real_platform_integration": False,
+                    "real_platform_integration": bool(
+                        request.metadata.get("real_platform_integration")
+                    ),
+                    "playwright_required": bool(request.metadata.get("playwright_required")),
                     "secret_material_visible": False,
                 }
             ),
@@ -370,7 +377,13 @@ class ExternalPlatformAdapterService:
                 message="发布/提交类 adapter step 必须绑定任务和审批，未执行。",
                 trace_id=trace_id,
             )
-        execution = await self._start_execution(plan, adapter, version, trace_id=trace_id)
+        execution = await self._start_or_resume_execution(
+            plan=plan,
+            adapter=adapter,
+            version=version,
+            force=request.force,
+            trace_id=trace_id,
+        )
         completed_step_ids: list[str] = []
         evidence_items: list[dict[str, Any]] = []
         current_url: str | None = None
@@ -472,9 +485,109 @@ class ExternalPlatformAdapterService:
                     current_url=current_url,
                     trace_id=trace_id,
                 )
+                result = _enrich_step_result(plan=plan, adapter=adapter, step=step, result=result)
+                backend_problem = _browser_backend_failure(
+                    plan=plan,
+                    adapter=adapter,
+                    step=step,
+                    result=result,
+                )
+                if backend_problem is not None:
+                    await self._record_drift_or_challenge(
+                        plan=plan,
+                        adapter=adapter,
+                        step=step,
+                        drift_type="playwright_required",
+                        status="failed",
+                        evidence={**result, "backend_requirement": backend_problem},
+                        trace_id=trace_id,
+                    )
+                    await self._finish_execution(
+                        execution.adapter_execution_id,
+                        status="failed",
+                        evidence={"step_id": step.step_id, "backend_requirement": backend_problem},
+                        error_code="PLAYWRIGHT_REQUIRED",
+                        error_summary=backend_problem["message"],
+                    )
+                    await self._platform_repo.update_plan(
+                        plan.plan_id,
+                        {
+                            "status": "failed",
+                            "failure_reason": "playwright_required",
+                            "updated_at": utc_now_iso(),
+                        },
+                    )
+                    return await self._response(
+                        plan.plan_id,
+                        adapter=adapter,
+                        version=version,
+                        execution=await self._execution(execution.adapter_execution_id),
+                        discovery=_discovery_with_status(
+                            discovery,
+                            status="failed",
+                            failure_reason="playwright_required",
+                            message=backend_problem["message"],
+                        ),
+                        message=backend_problem["message"],
+                        next_step="retry_with_playwright",
+                    )
                 current_url = _evidence_url(result) or current_url
-                challenge = self._detect_challenge(adapter["manifest"], result)
+                challenge = self._detect_challenge(adapter["manifest"], result, step=step)
                 if challenge is not None:
+                    if _challenge_waits_for_human(plan=plan, adapter=adapter):
+                        await self._record_drift_or_challenge(
+                            plan=plan,
+                            adapter=adapter,
+                            step=step,
+                            drift_type=challenge["drift_type"],
+                            status="awaiting_human",
+                            evidence={**result, "challenge": challenge, "resume_token": plan.plan_id},
+                            trace_id=trace_id,
+                        )
+                        await self._finish_execution(
+                            execution.adapter_execution_id,
+                            status="awaiting_human",
+                            evidence={
+                                "step_id": step.step_id,
+                                "challenge": challenge,
+                                "human_intervention_required": True,
+                                "resume_token": plan.plan_id,
+                                "resume_action": "human_resume_real_browser_flow",
+                            },
+                            error_code=challenge["reason_code"].upper(),
+                            error_summary=challenge["message"],
+                        )
+                        await self._platform_repo.update_plan(
+                            plan.plan_id,
+                            {
+                                "status": "awaiting_human",
+                                "failure_reason": challenge["reason_code"],
+                                "evidence": {
+                                    **plan.evidence,
+                                    "adapter_execution": {
+                                        "status": "awaiting_human",
+                                        "reason_code": challenge["reason_code"],
+                                        "human_intervention_required": True,
+                                        "resume_token": plan.plan_id,
+                                    },
+                                },
+                                "updated_at": utc_now_iso(),
+                            },
+                        )
+                        return await self._response(
+                            plan.plan_id,
+                            adapter=adapter,
+                            version=version,
+                            execution=await self._execution(execution.adapter_execution_id),
+                            discovery=_discovery_with_status(
+                                discovery,
+                                status="awaiting_human",
+                                failure_reason=challenge["reason_code"],
+                                message="检测到登录验证或风控提示，已保留现场并等待人工接管后恢复。",
+                            ),
+                            message="检测到登录验证或风控提示，已保留现场并等待人工接管后恢复。",
+                            next_step="human_resume_real_browser_flow",
+                        )
                     await self._record_drift_or_challenge(
                         plan=plan,
                         adapter=adapter,
@@ -522,7 +635,7 @@ class ExternalPlatformAdapterService:
                             message=challenge["message"],
                         ),
                         message=challenge["message"],
-                        next_step="human_login_or_adapter_refresh",
+                        next_step="retry_or_refresh_adapter",
                     )
                 drift = self._detect_drift(result)
                 if drift is not None:
@@ -931,8 +1044,10 @@ class ExternalPlatformAdapterService:
         plan: ExternalPlatformActionPlan,
         adapter: dict[str, Any],
     ) -> list[dict[str, Any]]:
+        if _is_real_xiaohongshu_flow(plan, adapter) and plan.action_type == "publish_content":
+            return _compile_real_xiaohongshu_steps(plan, adapter)
         manifest = adapter["manifest"]
-        flow = _publish_flow(manifest)
+        flow = _action_flow(manifest, plan.action_type)
         selectors = _manifest_selectors(flow)
         start_url = str(flow.get("start_url") or manifest.get("start_url") or "").strip()
         if not start_url:
@@ -948,25 +1063,94 @@ class ExternalPlatformAdapterService:
         def browser_input(values: dict[str, Any]) -> dict[str, Any]:
             if session_handle_id:
                 values["session_handle_id"] = session_handle_id
+            if plan.metadata.get("test_account_approval_bypass"):
+                values["test_account_approval_bypass"] = True
+            provider_mode = str(plan.metadata.get("provider_mode") or "").strip()
+            if provider_mode:
+                values["provider_mode"] = provider_mode
             return values
 
-        steps = [
+        steps: list[dict[str, Any]] = []
+        login_flow = _login_flow(manifest, flow)
+        if login_flow:
+            login_url = str(login_flow.get("login_url") or "").strip() or start_url
+            login_selectors = _manifest_selectors(login_flow)
+            steps.extend(
+                [
+                    {
+                        "step_name": "login_state_check",
+                        "tool_name": "browser.snapshot",
+                        "risk_level": "R2",
+                        "requires_approval": False,
+                        "input": browser_input({"url": login_url, "challenge_check": True}),
+                    },
+                    {
+                        "step_name": "open_login_page",
+                        "tool_name": "browser.open",
+                        "risk_level": "R2",
+                        "requires_approval": False,
+                        "input": browser_input({"url": login_url}),
+                    },
+                ]
+            )
+            if login_selectors.get("username"):
+                steps.append(
+                    {
+                        "step_name": "fill_login_username",
+                        "tool_name": "browser.fill",
+                        "risk_level": "R2",
+                        "requires_approval": False,
+                        "input": browser_input(
+                            {
+                                "url": login_url,
+                                "selector": login_selectors["username"],
+                                "value_from": "account_username",
+                            }
+                        ),
+                    }
+                )
+            if login_selectors.get("password"):
+                steps.append(
+                    {
+                        "step_name": "fill_login_password",
+                        "tool_name": "browser.fill",
+                        "risk_level": "R2",
+                        "requires_approval": False,
+                        "input": browser_input(
+                            {
+                                "url": login_url,
+                                "selector": login_selectors["password"],
+                                "value_from": "account_secret",
+                            }
+                        ),
+                    }
+                )
+            if login_selectors.get("submit") or login_selectors.get("form"):
+                steps.append(
+                    {
+                        "step_name": "submit_login",
+                        "tool_name": "browser.submit",
+                        "risk_level": "R2",
+                        "requires_approval": False,
+                        "input": browser_input(
+                            {
+                                "url": login_url,
+                                "selector": login_selectors.get("submit") or login_selectors.get("form"),
+                                "action": "external_platform_login_submit",
+                            }
+                        ),
+                    }
+                )
+        steps.append(
             {
-                "step_name": "login_state_check",
-                "tool_name": "browser.snapshot",
-                "risk_level": "R2",
-                "requires_approval": False,
-                "input": browser_input({"url": start_url, "challenge_check": True}),
-            },
-            {
-                "step_name": "navigate_publish_page",
+                "step_name": "navigate_action_page",
                 "tool_name": "browser.open",
                 "risk_level": "R2",
                 "requires_approval": False,
                 "input": browser_input({"url": start_url}),
-            },
-        ]
-        if selectors.get("title"):
+            }
+        )
+        if plan.action_type == "publish_content" and selectors.get("title"):
             steps.append(
                 {
                     "step_name": "fill_title",
@@ -982,7 +1166,7 @@ class ExternalPlatformAdapterService:
                     ),
                 }
             )
-        if selectors.get("body"):
+        if plan.action_type == "publish_content" and selectors.get("body"):
             steps.append(
                 {
                     "step_name": "fill_body",
@@ -998,7 +1182,7 @@ class ExternalPlatformAdapterService:
                     ),
                 }
             )
-        if selectors.get("tags") and content.get("tags"):
+        if plan.action_type == "publish_content" and selectors.get("tags") and content.get("tags"):
             steps.append(
                 {
                     "step_name": "fill_tags",
@@ -1014,6 +1198,66 @@ class ExternalPlatformAdapterService:
                     ),
                 }
             )
+        target_post_url = str(
+            plan.metadata.get("target_post_url")
+            or flow.get("target_post_url")
+            or (flow.get("verify") or {}).get("expected_url")
+            or start_url
+        )
+        action_url = start_url if plan.action_type == "publish_content" else target_post_url
+        if plan.action_type == "comment_content":
+            if selectors.get("target_post"):
+                steps.append(
+                    {
+                        "step_name": "locate_post",
+                        "tool_name": "browser.click",
+                        "risk_level": "R2",
+                        "requires_approval": False,
+                        "input": browser_input({"url": start_url, "selector": selectors["target_post"]}),
+                    }
+                )
+            else:
+                steps.append(
+                    {
+                        "step_name": "locate_post",
+                        "tool_name": "browser.open",
+                        "risk_level": "R2",
+                        "requires_approval": False,
+                        "input": browser_input({"url": target_post_url}),
+                    }
+                )
+            if selectors.get("comment_box"):
+                steps.append(
+                    {
+                        "step_name": "open_comment_box",
+                        "tool_name": "browser.click",
+                        "risk_level": "R2",
+                        "requires_approval": False,
+                        "input": browser_input({"url": target_post_url, "selector": selectors["comment_box"]}),
+                    }
+                )
+            if selectors.get("comment_input"):
+                steps.append(
+                    {
+                        "step_name": "fill_comment",
+                        "tool_name": "browser.fill",
+                        "risk_level": "R2",
+                        "requires_approval": False,
+                        "input": browser_input(
+                            {
+                                "url": target_post_url,
+                                "selector": selectors["comment_input"],
+                                "value": content["comment_text"],
+                            }
+                        ),
+                    }
+                )
+        submit_step_name = "submit_comment" if plan.action_type == "comment_content" else "submit_publish"
+        submit_action = (
+            "external_platform_comment_submit"
+            if plan.action_type == "comment_content"
+            else "external_platform_publish_submit"
+        )
         steps.extend(
             [
                 {
@@ -1021,20 +1265,18 @@ class ExternalPlatformAdapterService:
                     "tool_name": "browser.snapshot",
                     "risk_level": "R2",
                     "requires_approval": False,
-                    "input": browser_input(
-                        {"url": start_url, "evidence": "pre_submit_snapshot"}
-                    ),
+                    "input": browser_input({"url": action_url, "evidence": "pre_submit_snapshot"}),
                 },
                 {
-                    "step_name": "submit_publish",
+                    "step_name": submit_step_name,
                     "tool_name": "browser.submit",
-                    "risk_level": "R5",
-                    "requires_approval": True,
+                    "risk_level": "R3" if plan.action_type == "comment_content" else "R5",
+                    "requires_approval": _approval_required_for_plan(plan),
                     "input": browser_input(
                         {
-                            "url": start_url,
+                            "url": action_url,
                             "selector": selectors.get("submit") or selectors.get("form"),
-                            "action": "external_platform_publish_submit",
+                            "action": submit_action,
                         }
                     ),
                 },
@@ -1048,7 +1290,12 @@ class ExternalPlatformAdapterService:
                             "url": str(
                                 (flow.get("verify") or {}).get("expected_url")
                                 or flow.get("verify_url")
-                                or start_url
+                                or action_url
+                            ),
+                            "expected_text": (
+                                content["comment_text"]
+                                if plan.action_type == "comment_content"
+                                else content["body"]
                             ),
                             "verification": _redacted_dict(flow.get("verify") or {}),
                         }
@@ -1134,6 +1381,33 @@ class ExternalPlatformAdapterService:
         await self._repo.insert_execution(data)
         return ExternalPlatformAdapterExecution(**data)
 
+    async def _start_or_resume_execution(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        adapter: dict[str, Any],
+        version: dict[str, Any],
+        force: bool,
+        trace_id: str | None,
+    ) -> ExternalPlatformAdapterExecution:
+        if force:
+            rows = await self._repo.list_executions(plan.plan_id)
+            if rows:
+                latest = ExternalPlatformAdapterExecution(**rows[-1])
+                if latest.status == "awaiting_human":
+                    await self._repo.update_execution(
+                        latest.adapter_execution_id,
+                        {
+                            "status": "running",
+                            "completed_at": None,
+                            "updated_at": utc_now_iso(),
+                        },
+                    )
+                    resumed = await self._execution(latest.adapter_execution_id)
+                    if resumed is not None:
+                        return resumed
+        return await self._start_execution(plan, adapter, version, trace_id=trace_id)
+
     async def _finish_execution(
         self,
         execution_id: str,
@@ -1182,6 +1456,12 @@ class ExternalPlatformAdapterService:
         args = dict(step.input_redacted)
         if adapter["adapter_type"] == "browser":
             args = self._browser_args(args, current_url=current_url)
+            args = await self._inject_runtime_browser_values(
+                plan=plan,
+                step=step,
+                args=args,
+                trace_id=trace_id,
+            )
         if adapter["adapter_type"] == "mcp":
             args = {
                 **args,
@@ -1214,7 +1494,7 @@ class ExternalPlatformAdapterService:
             "tool_call_id": tool_call.tool_call_id,
             "mcp_call_id": mcp_call_id,
             "approval_id": approval_id if step.requires_approval else None,
-            "input_redacted": _redacted_dict(args),
+            "input_redacted": _redacted_step_input(step=step, args=args),
             "output_redacted": result,
             "artifact_refs": [item.artifact_id for item in response.artifacts],
             "evidence_refs": _evidence_refs(result),
@@ -1232,6 +1512,40 @@ class ExternalPlatformAdapterService:
             )
         updated = {**args, "url": url}
         return {key: value for key, value in updated.items() if value is not None}
+
+    async def _inject_runtime_browser_values(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        step: ExternalPlatformAdapterStep,
+        args: dict[str, Any],
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        value_from = str(args.get("value_from") or "").strip()
+        if not value_from:
+            return args
+        resolved = await self._asset_broker.resolve_secret_for_tool(
+            str(plan.selected_handle_id or ""),
+            AssetResolveForToolRequest(
+                subject_id=plan.member_id,
+                action="login",
+                tool_name=step.tool_name or "browser.fill",
+                task_id=plan.task_id,
+                conversation_id=plan.conversation_id,
+                approval_id=plan.approval_id,
+            ),
+            trace_id=trace_id or plan.trace_id,
+        )
+        base_resource = resolved.resolved.resource
+        resource = base_resource if isinstance(base_resource, dict) else {}
+        config = resource.get("config") if isinstance(resource.get("config"), dict) else {}
+        updated = dict(args)
+        if value_from == "account_username":
+            updated["value"] = str(config.get("username") or "")
+        elif value_from == "account_secret":
+            updated["value"] = resolved.secret_value or ""
+        updated.pop("value_from", None)
+        return updated
 
     async def _record_drift_or_challenge(
         self,
@@ -1270,6 +1584,8 @@ class ExternalPlatformAdapterService:
         self,
         manifest: dict[str, Any],
         result: dict[str, Any],
+        *,
+        step: ExternalPlatformAdapterStep,
     ) -> dict[str, str] | None:
         challenge = dict(manifest.get("challenge_detection") or {})
         texts = [str(item).lower() for item in challenge.get("any_text") or [] if str(item)]
@@ -1281,12 +1597,19 @@ class ExternalPlatformAdapterService:
             if text and text in serialized:
                 return {
                     "drift_type": "login_required",
-                    "status": "awaiting_human",
-                    "reason_code": "adapter_login_required",
-                    "message": "adapter 检测到未登录状态，已停止并等待人工处理。",
+                    "status": "failed",
+                    "reason_code": "login_required",
+                    "message": "adapter 检测到未登录状态，已停止自动执行。",
                 }
         for text in texts:
             if text and text in serialized:
+                if step.step_name.startswith("login_") or step.step_name == "submit_login":
+                    return {
+                        "drift_type": "challenge_detected",
+                        "status": "challenge_detected",
+                        "reason_code": "login_verification_required",
+                        "message": "adapter 检测到登录验证或风控提示，已 fail closed。",
+                    }
                 return {
                     "drift_type": "challenge_detected",
                     "status": "challenge_detected",
@@ -1380,11 +1703,11 @@ class ExternalPlatformAdapterService:
             issues.append({"severity": "fatal", "code": "adapter_type_invalid"})
         if status not in ADAPTER_STATUSES:
             issues.append({"severity": "fatal", "code": "adapter_status_invalid"})
-        if action_type != "publish_content":
+        if action_type not in {"publish_content", "comment_content"}:
             issues.append({"severity": "warning", "code": "action_not_phase50_primary"})
         issues.extend(_secret_manifest_issues(manifest))
         if adapter_type == "browser":
-            flow = _publish_flow(manifest)
+            flow = _action_flow(manifest, action_type)
             domains = allowed_domains or _manifest_allowed_domains(manifest)
             if not domains:
                 issues.append({"severity": "error", "code": "allowed_domains_missing"})
@@ -1445,12 +1768,24 @@ def _discovery_next_step(discovery: ExternalPlatformDiscoveryResult | None) -> s
     return None
 
 
-def _publish_flow(manifest: dict[str, Any]) -> dict[str, Any]:
+def _action_flow(manifest: dict[str, Any], action_type: str) -> dict[str, Any]:
     actions = manifest.get("actions")
-    if isinstance(actions, dict) and isinstance(actions.get("publish_content"), dict):
-        return dict(actions["publish_content"])
+    if isinstance(actions, dict) and isinstance(actions.get(action_type), dict):
+        return dict(actions[action_type])
+    if action_type == "comment_content":
+        flow = manifest.get("comment_flow")
+        if isinstance(flow, dict):
+            return dict(flow)
     flow = manifest.get("publish_flow")
     return dict(flow) if isinstance(flow, dict) else dict(manifest)
+
+
+def _login_flow(manifest: dict[str, Any], flow: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(flow.get("login_flow"), dict):
+        return dict(flow["login_flow"])
+    if isinstance(manifest.get("login_flow"), dict):
+        return dict(manifest["login_flow"])
+    return {}
 
 
 def _manifest_selectors(flow: dict[str, Any]) -> dict[str, str]:
@@ -1478,13 +1813,239 @@ def _browser_session_handle(flow: dict[str, Any], manifest: dict[str, Any]) -> s
 
 
 def _content_for_plan(plan: ExternalPlatformActionPlan, flow: dict[str, Any]) -> dict[str, Any]:
-    body = str(plan.content_summary or "外部平台发布内容").strip()
+    body = str(
+        plan.metadata.get("publish_text") or plan.content_summary or "外部平台发布内容"
+    ).strip()
     title = str(flow.get("default_title") or body[:60] or "外部平台发布").strip()
     tags = flow.get("default_tags") or []
+    comment_text = str(
+        plan.metadata.get("comment_text") or plan.content_summary or flow.get("default_comment") or "已测试通过"
+    ).strip()
     return {
         "title": title,
         "body": body,
         "tags": [str(item) for item in tags],
+        "comment_text": comment_text,
+    }
+
+
+def _approval_required_for_plan(plan: ExternalPlatformActionPlan) -> bool:
+    return not bool(plan.metadata.get("test_account_approval_bypass"))
+
+
+def _is_real_xiaohongshu_flow(plan: ExternalPlatformActionPlan, adapter: dict[str, Any]) -> bool:
+    if str(plan.platform_key or "") != "social_xiaohongshu":
+        return False
+    metadata = adapter.get("metadata") if isinstance(adapter.get("metadata"), dict) else {}
+    manifest = adapter.get("manifest") if isinstance(adapter.get("manifest"), dict) else {}
+    return bool(
+        plan.metadata.get("provider_mode") == "playwright"
+        or metadata.get("real_platform_integration")
+        or metadata.get("playwright_required")
+        or manifest.get("real_site_flow")
+    )
+
+
+def _challenge_waits_for_human(plan: ExternalPlatformActionPlan, adapter: dict[str, Any]) -> bool:
+    metadata = adapter.get("metadata") if isinstance(adapter.get("metadata"), dict) else {}
+    return _is_real_xiaohongshu_flow(plan, adapter) or bool(metadata.get("human_challenge_resume"))
+
+
+def _compile_real_xiaohongshu_steps(
+    plan: ExternalPlatformActionPlan,
+    adapter: dict[str, Any],
+) -> list[dict[str, Any]]:
+    manifest = adapter["manifest"]
+    flow = _action_flow(manifest, plan.action_type)
+    login_flow = _login_flow(manifest, flow)
+    content = _content_for_plan(plan, flow)
+    login_url = str(login_flow.get("login_url") or flow.get("login_url") or "").strip()
+    start_url = str(flow.get("start_url") or manifest.get("start_url") or "").strip()
+    target_post_url = str(
+        plan.metadata.get("target_post_url")
+        or flow.get("target_post_url")
+        or (flow.get("verify") or {}).get("expected_url")
+        or ""
+    ).strip()
+    login_selectors = _manifest_selectors(login_flow)
+    selectors = _manifest_selectors(flow)
+    provider_mode = str(plan.metadata.get("provider_mode") or "playwright").strip() or "playwright"
+    if not login_url or not start_url:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            "小红书真实 Playwright 流缺少 login_url 或 start_url",
+            status_code=422,
+            details={"reason_code": "xiaohongshu_real_flow_missing_url"},
+        )
+
+    def step(step_name: str, tool_name: str, values: dict[str, Any], *, risk: str = "R2", approval: bool = False) -> dict[str, Any]:
+        payload = {
+            **values,
+            "provider_mode": provider_mode,
+            "playwright_required": True,
+        }
+        return {
+            "step_name": step_name,
+            "tool_name": tool_name,
+            "risk_level": risk,
+            "requires_approval": approval,
+            "input": payload,
+        }
+
+    steps: list[dict[str, Any]] = [
+        step("open_login_page", "browser.open", {"url": login_url}),
+        step(
+            "fill_login_username",
+            "browser.fill",
+            {"url": login_url, "selector": login_selectors.get("username"), "value_from": "account_username"},
+        ),
+        step(
+            "fill_login_password",
+            "browser.fill",
+            {"url": login_url, "selector": login_selectors.get("password"), "value_from": "account_secret"},
+        ),
+        step(
+            "submit_login",
+            "browser.submit",
+            {
+                "url": login_url,
+                "selector": login_selectors.get("submit") or login_selectors.get("form"),
+                "action": "external_platform_login_submit",
+            },
+        ),
+        step("detect_login_challenge", "browser.snapshot", {"url": login_url, "challenge_check": True}),
+        step("open_publish_entry", "browser.open", {"url": start_url}),
+    ]
+    if selectors.get("title"):
+        steps.append(step("fill_title", "browser.fill", {"url": start_url, "selector": selectors.get("title"), "value": content["title"]}))
+    if selectors.get("body"):
+        steps.append(step("fill_publish_content", "browser.fill", {"url": start_url, "selector": selectors.get("body"), "value": content["body"]}))
+    steps.extend(
+        [
+            step(
+                "submit_publish",
+                "browser.submit",
+                {
+                    "url": start_url,
+                    "selector": selectors.get("submit") or selectors.get("form"),
+                    "action": "external_platform_publish_submit",
+                },
+                risk="R5",
+                approval=_approval_required_for_plan(plan),
+            ),
+            step(
+                "capture_post_url_or_post_id",
+                "browser.snapshot",
+                {"url": target_post_url or start_url, "capture_post_identity": True},
+            ),
+            step(
+                "reopen_post_for_publish_recheck",
+                "browser.open",
+                {"url": target_post_url or start_url},
+            ),
+            step(
+                "assert_post_content_visible",
+                "browser.snapshot",
+                {"url": target_post_url or start_url, "expected_text": content["body"], "proof_kind": "publish_recheck"},
+            ),
+        ]
+    )
+    if selectors.get("comment_box"):
+        steps.append(step("open_comment_box", "browser.click", {"url": target_post_url or start_url, "selector": selectors.get("comment_box")}))
+    if selectors.get("comment_input"):
+        steps.append(step("fill_comment_content", "browser.fill", {"url": target_post_url or start_url, "selector": selectors.get("comment_input"), "value": content["comment_text"]}))
+    steps.extend(
+        [
+            step(
+                "submit_comment",
+                "browser.submit",
+                {
+                    "url": target_post_url or start_url,
+                    "selector": selectors.get("submit") or selectors.get("form"),
+                    "action": "external_platform_comment_submit",
+                },
+                risk="R3",
+                approval=_approval_required_for_plan(plan),
+            ),
+            step("reopen_post_for_comment_recheck", "browser.open", {"url": target_post_url or start_url}),
+            step(
+                "assert_comment_visible",
+                "browser.snapshot",
+                {"url": target_post_url or start_url, "expected_text": content["comment_text"], "proof_kind": "comment_recheck"},
+            ),
+        ]
+    )
+    return steps
+
+
+def _enrich_step_result(
+    *,
+    plan: ExternalPlatformActionPlan,
+    adapter: dict[str, Any],
+    step: ExternalPlatformAdapterStep,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    output = result.get("output_redacted") if isinstance(result, dict) else {}
+    if not isinstance(output, dict):
+        return result
+    updated = dict(result)
+    verification = dict(updated.get("verification") or {})
+    content = json.dumps(output, ensure_ascii=False)
+    expected_text = str(step.input_redacted.get("expected_text") or "").strip()
+    proof_kind = str(step.input_redacted.get("proof_kind") or "").strip()
+    if expected_text:
+        confirmed = expected_text in content
+        verification.update(
+            {
+                "status": "confirmed" if confirmed else "missing",
+                "expected_text": str(redact(expected_text)),
+                "visible_excerpt": str(redact(expected_text[:120])) if confirmed else None,
+                "proof_source": "page_text",
+            }
+        )
+        if proof_kind == "publish_recheck":
+            verification["publish_visible_text_confirmed"] = confirmed
+        if proof_kind == "comment_recheck":
+            verification["comment_visible_text_confirmed"] = confirmed
+    if step.step_name == "capture_post_url_or_post_id":
+        current_url = str(output.get("url") or "").strip()
+        post_id_match = re.search(r"(?:note-|explore/|notes/)([A-Za-z0-9_-]+)", content)
+        verification["published_post_url"] = current_url or str(plan.metadata.get("target_post_url") or "")
+        if post_id_match:
+            verification["published_post_id"] = post_id_match.group(1)
+    if _is_real_xiaohongshu_flow(plan, adapter):
+        verification["playwright_backend_required"] = True
+    if verification:
+        updated["verification"] = _redacted_dict(verification)
+    return updated
+
+
+def _browser_backend_failure(
+    *,
+    plan: ExternalPlatformActionPlan,
+    adapter: dict[str, Any],
+    step: ExternalPlatformAdapterStep,
+    result: dict[str, Any],
+) -> dict[str, Any] | None:
+    if adapter.get("adapter_type") != "browser":
+        return None
+    requires_playwright = _is_real_xiaohongshu_flow(plan, adapter) or bool(
+        step.input_redacted.get("playwright_required")
+    )
+    if not requires_playwright:
+        return None
+    output = result.get("output_redacted") if isinstance(result, dict) else {}
+    if not isinstance(output, dict):
+        return None
+    backend = str(output.get("backend") or "").lower()
+    backend_status = str(output.get("backend_status") or "").lower()
+    action_status = str(output.get("action_status") or "").lower()
+    if backend == "playwright" and backend_status == "available" and action_status == "completed":
+        return None
+    return {
+        "required_backend": "playwright",
+        "actual_backend": backend or "unknown",
+        "message": "小红书真实站点链路要求 Playwright 真实浏览器执行，当前执行未满足。",
     }
 
 
@@ -1501,7 +2062,8 @@ def _secret_manifest_issues(value: Any, path: str = "manifest") -> list[dict[str
             key_lower = key_text.lower()
             child_path = f"{path}.{key_text}"
             selector_key = "selector" in key_lower
-            if key_lower in SENSITIVE_KEY_EXACT and not selector_key:
+            in_selector_block = ".selectors." in child_path.lower()
+            if key_lower in SENSITIVE_KEY_EXACT and not selector_key and not in_selector_block:
                 issues.append(
                     {
                         "severity": "fatal",
@@ -1523,6 +2085,13 @@ def _secret_manifest_issues(value: Any, path: str = "manifest") -> list[dict[str
 def _redacted_dict(value: Any) -> dict[str, Any]:
     redacted = redact(value)
     return redacted if isinstance(redacted, dict) else {"value": redacted}
+
+
+def _redacted_step_input(*, step: ExternalPlatformAdapterStep, args: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(args)
+    if step.step_name.endswith("password") and "value" in payload:
+        payload["value"] = "[REDACTED_SECRET]"
+    return _redacted_dict(payload)
 
 
 def _mcp_call_id(result: dict[str, Any]) -> str | None:
@@ -1574,15 +2143,55 @@ def _final_execution_evidence(
     completed_step_ids: list[str],
 ) -> dict[str, Any]:
     refs: list[dict[str, Any]] = []
+    publish_recheck = {"status": "missing", "visible_excerpt": None}
+    comment_recheck = {"status": "missing", "visible_excerpt": None}
+    published_post_url: str | None = None
+    published_post_id: str | None = None
     for item in evidence_items:
         raw_refs = item.get("evidence_refs")
         if isinstance(raw_refs, dict):
             refs.append({key: value for key, value in raw_refs.items() if value is not None})
-    serialized = json.dumps(refs, ensure_ascii=False)
-    verification = any(
-        marker in serialized
-        for marker in ("url", "post_id", "success", "browser_evidence_id", "mcp_call_id")
-    )
+        verification_payload = item.get("verification")
+        verification_data = (
+            verification_payload if isinstance(verification_payload, dict) else {}
+        )
+        if verification_data.get("published_post_url") and not published_post_url:
+            published_post_url = str(verification_data["published_post_url"])
+        if verification_data.get("published_post_id") and not published_post_id:
+            published_post_id = str(verification_data["published_post_id"])
+        if verification_data.get("publish_visible_text_confirmed") is True:
+            publish_recheck = {
+                "status": "confirmed",
+                "visible_excerpt": verification_data.get("visible_excerpt"),
+            }
+        if verification_data.get("comment_visible_text_confirmed") is True:
+            comment_recheck = {
+                "status": "confirmed",
+                "visible_excerpt": verification_data.get("visible_excerpt"),
+            }
+        if verification_data.get("status") == "confirmed":
+            if plan.action_type == "publish_content" and publish_recheck["status"] != "confirmed":
+                publish_recheck = {
+                    "status": "confirmed",
+                    "visible_excerpt": verification_data.get("visible_excerpt"),
+                }
+            if plan.action_type == "comment_content" and comment_recheck["status"] != "confirmed":
+                comment_recheck = {
+                    "status": "confirmed",
+                    "visible_excerpt": verification_data.get("visible_excerpt"),
+                }
+    serialized = json.dumps({"refs": refs, "items": evidence_items}, ensure_ascii=False).lower()
+    if _is_real_xiaohongshu_flow(plan, adapter):
+        verification = (
+            publish_recheck["status"] == "confirmed"
+            and comment_recheck["status"] == "confirmed"
+        )
+    else:
+        verification = (
+            publish_recheck["status"] == "confirmed"
+            or comment_recheck["status"] == "confirmed"
+            or any(marker in serialized for marker in ("published post_id", "comment success", "publish success"))
+        )
     return _redacted_dict(
         {
             "plan_id": plan.plan_id,
@@ -1592,6 +2201,16 @@ def _final_execution_evidence(
             "action_type": plan.action_type,
             "completed_step_ids": completed_step_ids,
             "evidence_refs": refs,
+            "published_post_url": published_post_url,
+            "published_post_id": published_post_id,
+            "publish_recheck": publish_recheck,
+            "comment_recheck": comment_recheck,
+            "publish_visible_text_confirmed": publish_recheck["status"] == "confirmed",
+            "comment_visible_text_confirmed": comment_recheck["status"] == "confirmed",
+            "proof_source": "page_text",
+            "playwright_backend_required": _is_real_xiaohongshu_flow(plan, adapter),
+            "human_intervention_required": False,
+            "resume_token": plan.plan_id if _is_real_xiaohongshu_flow(plan, adapter) else None,
             "verification_evidence_present": verification,
             "external_state_change": True,
             "secret_material_visible": False,

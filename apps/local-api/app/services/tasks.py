@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from core_types import (
+    AgentLoopEvaluation,
+    AgentLoopFrame,
     AgentLoopIteration,
+    AgentLoopSelectedAction,
+    AgentLoopState,
     AgentNextActionDecision,
     CollaborationOutput,
     CollaborationPlan,
@@ -47,7 +53,8 @@ from app.core.errors import AppError
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.member_repo import MemberRepository
 from app.db.repositories.task_repo import TaskRepository
-from app.schemas.skills import SkillMatchRequest
+from app.schemas.skill_governance import SkillGrantCreateRequest
+from app.schemas.skills import BundleInstallRequest, SkillMatchRequest
 from app.schemas.tasks import TaskCreateRequest, ToolExecuteRequest
 from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
@@ -77,7 +84,9 @@ from app.services.skill_candidate_extractor import SkillCandidateExtractor
 
 if TYPE_CHECKING:
     from app.services.mcp import MCPService
+    from app.services.skill_governance import SkillGovernanceService
     from app.services.skill_plugin import SkillPluginService
+    from app.services.skill_repositories import SkillRepositoryService
     from app.services.supervisor import SupervisorService
 
 
@@ -104,6 +113,8 @@ class TaskEngine:
         self._trace = trace_service
         self._audit = audit_service
         self._skills: SkillPluginService | None = None
+        self._skill_governance: SkillGovernanceService | None = None
+        self._skill_repositories: SkillRepositoryService | None = None
         self._mcp: MCPService | None = None
         self._supervisor: SupervisorService | None = None
         self._browser_evidence_provider: (
@@ -141,9 +152,13 @@ class TaskEngine:
         self,
         *,
         skill_plugin_service: SkillPluginService | None = None,
+        skill_governance_service: SkillGovernanceService | None = None,
+        skill_repository_service: SkillRepositoryService | None = None,
         mcp_service: MCPService | None = None,
     ) -> None:
         self._skills = skill_plugin_service
+        self._skill_governance = skill_governance_service
+        self._skill_repositories = skill_repository_service
         self._mcp = mcp_service
 
     def set_supervisor_service(self, supervisor_service: SupervisorService) -> None:
@@ -191,6 +206,7 @@ class TaskEngine:
             "resume": self._resume_runtime.diagnostic(),
             "planning": self._planning_runtime.diagnostic(),
             "entry_mode": "runtime_single_track",
+            "agent_runtime_authority": "task_agent_runtime",
             "supervisor_integrated": self._supervisor is not None,
         }
 
@@ -433,6 +449,7 @@ class TaskEngine:
                         "status": "pending",
                         "input": step.get("input", {}),
                         "risk_level": step.get("risk_level", "R1"),
+                        "metadata": step.get("metadata", {}),
                         "created_at": now,
                         "updated_at": now,
                     }
@@ -496,13 +513,14 @@ class TaskEngine:
     async def detail(self, task_id: str) -> TaskDetail:
         task = await self._get_task(task_id)
         summary = await self._summary(task)
+        normalized_result = await self._normalized_task_result(task)
         return TaskDetail(
             **summary.model_dump(mode="json"),
             plan=TaskPlan(**task["plan"]) if task.get("plan") else None,
             budget=TaskBudget(**task.get("budget", {})),
             preflight=task.get("preflight", {}),
             artifact_plan=task.get("artifact_plan", {}),
-            result=task.get("result", {}),
+            result=normalized_result,
         )
 
     async def start_task(self, task_id: str, *, trace_id: str | None = None) -> TaskDetail:
@@ -659,12 +677,8 @@ class TaskEngine:
             for row in await self._repo.list_planner_decisions(task_id)
         ]
 
-    async def agent_loop(self, task_id: str) -> list[AgentLoopIteration]:
-        await self._get_task(task_id)
-        return [
-            AgentLoopIteration(**row)
-            for row in await self._repo.list_agent_loop_iterations(task_id)
-        ]
+    async def agent_loop(self, task_id: str) -> list[AgentLoopFrame]:
+        return (await self._build_agent_loop_state(task_id)).iterations
 
     async def observations(self, task_id: str) -> list[TaskObservation]:
         await self._get_task(task_id)
@@ -722,6 +736,9 @@ class TaskEngine:
             for row in await self._repo.list_agent_next_action_decisions(task_id)
         ]
 
+    async def agent_loop_state(self, task_id: str) -> AgentLoopState:
+        return await self._build_agent_loop_state(task_id)
+
     async def failure_recovery_plans(self, task_id: str) -> list[ToolFailureRecoveryPlan]:
         await self._get_task(task_id)
         return [
@@ -769,9 +786,30 @@ class TaskEngine:
                 if self._media_replay_provider is not None
                 else []
             )
+            steps = [TaskStep(**row) for row in await self._repo.list_steps(task_id)]
+            retry_plans = [
+                TaskRetryPlan(**row)
+                for row in await self._repo.list_task_retry_plans(task_id)
+            ]
+            recovery_plans = [
+                ToolFailureRecoveryPlan(**row)
+                for row in await self._repo.list_tool_failure_recovery_plans(task_id)
+            ]
+            handoff_records = [
+                CollaborationHandoffRecord(**row)
+                for row in await self._repo.list_handoff_records(task_id)
+            ]
+            agent_loop_state = await self._build_agent_loop_state(task_id)
+            final_result = await self._normalized_task_result(
+                task.model_dump(mode="json") if hasattr(task, "model_dump") else dict(task),
+                raw_result=dict(task.result or {}),
+            )
+            if agent_loop_state.stop_reason and "stop_reason" not in final_result:
+                final_result["stop_reason"] = agent_loop_state.stop_reason
             replay = TaskReplay(
                 task=task,
-                steps=[TaskStep(**row) for row in await self._repo.list_steps(task_id)],
+                agent_loop=agent_loop_state,
+                steps=steps,
                 events=[TaskEvent(**row) for row in await self._repo.list_events(task_id)],
                 tool_calls=[
                     ToolCallRecord(**row) for row in await self._repo.list_tool_calls(task_id)
@@ -810,10 +848,7 @@ class TaskEngine:
                     TaskObservation(**row)
                     for row in await self._repo.list_task_observations(task_id)
                 ],
-                retry_plans=[
-                    TaskRetryPlan(**row)
-                    for row in await self._repo.list_task_retry_plans(task_id)
-                ],
+                retry_plans=retry_plans,
                 reflection_candidates=[
                     TaskReflectionCandidate(**row)
                     for row in await self._repo.list_task_reflection_candidates(task_id)
@@ -839,10 +874,7 @@ class TaskEngine:
                     AgentNextActionDecision(**row)
                     for row in await self._repo.list_agent_next_action_decisions(task_id)
                 ],
-                tool_failure_recovery_plans=[
-                    ToolFailureRecoveryPlan(**row)
-                    for row in await self._repo.list_tool_failure_recovery_plans(task_id)
-                ],
+                tool_failure_recovery_plans=recovery_plans,
                 collaboration_plan=(
                     CollaborationPlan(**plan_row)
                     if (plan_row := await self._repo.get_collaboration_plan(task_id))
@@ -857,10 +889,7 @@ class TaskEngine:
                     for row in await self._repo.list_participants(task_id)
                 ],
                 subtasks=[TaskSubtask(**row) for row in await self._repo.list_subtasks(task_id)],
-                handoff_records=[
-                    CollaborationHandoffRecord(**row)
-                    for row in await self._repo.list_handoff_records(task_id)
-                ],
+                handoff_records=handoff_records,
                 context_boundaries=[
                     CollaborationContextBoundary(**row)
                     for row in await self._repo.list_context_boundaries(task_id)
@@ -873,7 +902,68 @@ class TaskEngine:
                 host_decisions=[
                     HostDecision(**row) for row in await self._repo.list_host_decisions(task_id)
                 ],
-                final_result=task.result,
+                workflow_evidence={
+                    "mode": task.mode.value,
+                    "step_count": len(steps),
+                    "completed_step_count": sum(
+                        1 for step in steps if step.status == "completed"
+                    ),
+                    "repo_execution": {
+                        "enabled": bool(final_result.get("repo_request_type")),
+                        "deliverable": bool(final_result.get("deliverable")),
+                        "files_changed_count": len(final_result.get("files_changed") or []),
+                    },
+                    "code_hosting": {
+                        "enabled": bool(final_result.get("code_hosting_request_type")),
+                        "request_type": final_result.get("code_hosting_request_type"),
+                        "skill_binding": {
+                            "package_ref": final_result.get("code_hosting_package_ref"),
+                            "bundle_id": final_result.get("code_hosting_bundle_id"),
+                            "skill_id": final_result.get("code_hosting_skill_id"),
+                            "selection_reason": final_result.get("code_hosting_selection_reason"),
+                        },
+                        "remote_execution": {
+                            "remote_artifact_count": len(final_result.get("remote_artifacts") or []),
+                            "deliverable": bool(final_result.get("deliverable")),
+                        },
+                        "approval_state": {
+                            "blocked": "approval_required"
+                            in set(final_result.get("publish_blockers") or []),
+                            "publish_blockers": list(final_result.get("publish_blockers") or []),
+                        },
+                    },
+                },
+                agent_loop_evidence={
+                    "runtime": agent_loop_state.runtime,
+                    "authoritative": agent_loop_state.authoritative,
+                    "iteration_count": len(agent_loop_state.iterations),
+                    "pause_reason": agent_loop_state.pause_reason,
+                    "stop_reason": agent_loop_state.stop_reason,
+                    "repo_execution": {
+                        "repair_attempted": bool(final_result.get("repair_attempted")),
+                        "repair_outcome": final_result.get("repair_outcome"),
+                    },
+                    "code_hosting": {
+                        "publish_blocker_count": len(final_result.get("publish_blockers") or []),
+                        "remote_artifact_count": len(final_result.get("remote_artifacts") or []),
+                    },
+                },
+                recovery_evidence={
+                    "retry_plan_count": len(retry_plans),
+                    "failure_recovery_plan_count": len(recovery_plans),
+                    "repo_execution": {
+                        "residual_risk": list(final_result.get("residual_risk") or []),
+                    },
+                    "code_hosting": {
+                        "publish_blockers": list(final_result.get("publish_blockers") or []),
+                        "residual_risk": list(final_result.get("residual_risk") or []),
+                    },
+                },
+                handoff_evidence={
+                    "handoff_count": len(handoff_records),
+                    "handoff_records_present": bool(handoff_records),
+                },
+                final_result=final_result,
             )
             replay.skill_candidates = self._skill_candidate_extractor.extract_from_replay(replay)
             await self._end_span(span_id, output_data={"task_id": task_id})
@@ -881,6 +971,115 @@ class TaskEngine:
         except Exception:
             await self._end_span(span_id, status=TraceSpanStatus.FAILED)
             raise
+
+    async def _build_agent_loop_state(self, task_id: str) -> AgentLoopState:
+        task = await self.detail(task_id)
+        observations = [
+            TaskObservation(**row) for row in await self._repo.list_task_observations(task_id)
+        ]
+        iterations = [
+            AgentLoopIteration(**row)
+            for row in await self._repo.list_agent_loop_iterations(task_id)
+        ]
+        next_actions = [
+            AgentNextActionDecision(**row)
+            for row in await self._repo.list_agent_next_action_decisions(task_id)
+        ]
+        observation_by_id = {
+            str(item.observation_id): item
+            for item in observations
+            if item.observation_id is not None
+        }
+        next_action_by_iteration = {
+            str(item.iteration_id): item
+            for item in next_actions
+            if item.iteration_id is not None
+        }
+        frames: list[AgentLoopFrame] = []
+        for iteration in iterations:
+            observation = (
+                observation_by_id.get(str(iteration.observation_id))
+                if iteration.observation_id is not None
+                else None
+            )
+            next_action = next_action_by_iteration.get(str(iteration.iteration_id))
+            selected_action = AgentLoopSelectedAction(
+                action_type=str(
+                    (iteration.selected_action or {}).get("next_action_type")
+                    or (next_action.next_action_type if next_action is not None else "unknown")
+                ),
+                step_id=(iteration.selected_action or {}).get("step_id"),
+                step_key=(iteration.selected_action or {}).get("step_key"),
+                step_type=(iteration.selected_action or {}).get("step_type"),
+                tool_call_refs=list(iteration.tool_call_refs or []),
+                safety_decision_refs=list(iteration.safety_decision_refs or []),
+            )
+            evaluation_payload = dict(iteration.evaluation_result or {})
+            pause_reason = str(
+                evaluation_payload.get("pause_reason")
+                or evaluation_payload.get("reason")
+                or (
+                    "approval_waiting"
+                    if iteration.stop_reason == "approval_required"
+                    else "budget_exhausted"
+                    if iteration.stop_reason == "budget_exhausted"
+                    else ""
+                )
+            ).strip() or None
+            stop_reason = _phase96_stop_reason(iteration.stop_reason, task.status.value)
+            frames.append(
+                AgentLoopFrame(
+                    iteration=iteration,
+                    observation=observation,
+                    next_action=next_action,
+                    selected_action=selected_action,
+                    evaluation=AgentLoopEvaluation(
+                        task_status=str(evaluation_payload.get("task_status") or task.status.value),
+                        step_status=(
+                            str(evaluation_payload.get("step_status"))
+                            if evaluation_payload.get("step_status") is not None
+                            else None
+                        ),
+                        pause_reason=pause_reason,
+                        stop_reason=stop_reason,
+                        recoverable=bool(evaluation_payload.get("recoverable")),
+                        reason_codes=list(evaluation_payload.get("reason_codes") or []),
+                        summary=(
+                            observation.summary
+                            if observation is not None
+                            else iteration.observation_summary
+                        ),
+                    ),
+                    plan_delta=dict(iteration.plan_delta or {}),
+                    pause_reason=pause_reason,
+                    stop_reason=stop_reason,
+                )
+            )
+        latest_observation = observations[-1] if observations else None
+        latest_next_action = next_actions[-1] if next_actions else None
+        final_stop_reason = _phase96_stop_reason(
+            str(task.result.get("stop_reason") or task.failure_reason or ""),
+            task.status.value,
+        )
+        pause_reason = None
+        if task.status.value == TaskStatus.WAITING_APPROVAL.value:
+            pause_reason = "approval_waiting"
+        elif task.status.value == TaskStatus.PAUSED.value:
+            pause_reason = final_stop_reason
+        normalized_result = await self._normalized_task_result(
+            task.model_dump(mode="json") if hasattr(task, "model_dump") else dict(task),
+            raw_result=dict(task.result or {}),
+        )
+        return AgentLoopState(
+            task_id=task.task_id,
+            current_status=task.status.value,
+            pause_reason=pause_reason,
+            stop_reason=final_stop_reason,
+            iterations=frames,
+            latest_observation=latest_observation,
+            latest_next_action=latest_next_action,
+            final_result=normalized_result,
+        )
 
     async def recover_stale_jobs(self) -> None:
         await self._resume_runtime.recover_stale_jobs()
@@ -990,6 +1189,8 @@ class TaskEngine:
         await self._agent_runtime.run_agent_loop(task_id, trace_id=trace_id)
 
     async def _run_agent_loop_impl(self, task_id: str, *, trace_id: str | None) -> None:
+        await self._agent_runtime.run_agent_loop(task_id, trace_id=trace_id)
+        return
         task = await self._get_task(task_id)
         span_id = await self._start_span(
             trace_id,
@@ -1533,6 +1734,8 @@ class TaskEngine:
             input_data={"step_id": step["step_id"], "step_key": step["step_key"]},
         )
         now = utc_now_iso()
+        output: dict[str, Any] = {}
+        tool_call_id: str | None = None
         await self._repo.update_step(step["step_id"], {"status": "running", "updated_at": now})
         await self._event(
             task["task_id"],
@@ -1705,6 +1908,20 @@ class TaskEngine:
             else:
                 output = {"status": "skipped", "reason": f"unsupported_step:{step['step_type']}"}
                 tool_call_id = None
+            if _repo_profile_from_task(task).get("enabled"):
+                output, tool_call_id = await self._finalize_repo_step_output(
+                    task=task,
+                    step=step,
+                    output=output,
+                    tool_call_id=tool_call_id,
+                    trace_id=trace_id,
+                )
+                if output.get("repo_verify_failed"):
+                    raise AppError(
+                        ErrorCode.TASK_STEP_FAILED,
+                        "代码验证失败，且当前任务未收敛。",
+                        status_code=409,
+                    )
             await self._repo.update_step(
                 step["step_id"],
                 {
@@ -1728,6 +1945,7 @@ class TaskEngine:
                 step["step_id"],
                 {
                     "status": "failed",
+                    "output": redact(output),
                     "error_code": getattr(exc, "code", ErrorCode.TASK_STEP_FAILED.value),
                     "error_summary": str(redact(str(exc))),
                     "updated_at": utc_now_iso(),
@@ -1790,6 +2008,522 @@ class TaskEngine:
         )
         return {**skill_input, "source_artifact_id": copied.artifact_id}
 
+    async def _ensure_repo_workspace_baseline(
+        self,
+        task_id: str,
+        *,
+        trace_id: str | None,
+    ) -> dict[str, str]:
+        task = await self._get_task(task_id)
+        repo_profile = _repo_profile_from_task(task)
+        code_hosting_profile = _code_hosting_profile_from_task(task)
+        if not repo_profile.get("enabled") and not code_hosting_profile.get("enabled"):
+            return {}
+        preflight = dict(task.get("preflight") or {})
+        repo_execution = dict(preflight.get("repo_execution") or {})
+        if "workspace_baseline" in repo_execution and isinstance(
+            repo_execution.get("workspace_baseline"),
+            dict,
+        ):
+            baseline = repo_execution.get("workspace_baseline")
+            return {str(key): str(value) for key, value in baseline.items()}
+        snapshot = _workspace_snapshot(self._artifacts.task_dir(task_id))
+        repo_execution["workspace_baseline"] = snapshot
+        repo_execution["workspace_dirty_preexisting"] = sorted(snapshot.keys())
+        preflight["repo_execution"] = repo_execution
+        await self._repo.update_task(
+            task_id,
+            {
+                "preflight": preflight,
+                "updated_at": utc_now_iso(),
+            },
+        )
+        await self._event(
+            task_id,
+            "repo.workspace_baseline_captured",
+            {
+                "file_count": len(snapshot),
+                "workspace_dirty_preexisting": sorted(snapshot.keys()),
+            },
+            trace_id=trace_id,
+        )
+        await self._create_observation(
+            task=await self._get_task(task_id),
+            step=None,
+            source_type="workspace_dirty_state",
+            source_ref={"task_id": task_id},
+            summary=(
+                "检测到预存工作区文件。"
+                if snapshot
+                else "工作区在任务开始前是干净的。"
+            ),
+            payload={
+                "workspace_dirty_preexisting": sorted(snapshot.keys()),
+                "workspace_baseline_count": len(snapshot),
+            },
+            trace_id=trace_id,
+        )
+        return snapshot
+
+    async def _normalized_task_result(
+        self,
+        task: dict[str, Any],
+        *,
+        raw_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        result = dict(raw_result or task.get("result") or {})
+        repo_profile = _repo_profile_from_task(task)
+        code_hosting_profile = _code_hosting_profile_from_task(task)
+        if not repo_profile.get("enabled") and not code_hosting_profile.get("enabled"):
+            return result
+        steps = await self._repo.list_steps(task["task_id"])
+        workspace_dir = self._artifacts.task_dir(task["task_id"])
+        workspace_snapshot = _workspace_snapshot(workspace_dir)
+        preflight = dict(task.get("preflight") or {})
+        repo_execution = dict(preflight.get("repo_execution") or {})
+        baseline = {
+            str(key): str(value)
+            for key, value in dict(repo_execution.get("workspace_baseline") or {}).items()
+        }
+        files_changed = _workspace_diff_files(baseline, workspace_snapshot)
+        workspace_dirty_preexisting = sorted(
+            str(item) for item in list(repo_execution.get("workspace_dirty_preexisting") or [])
+        )
+        verification_steps = [step for step in steps if _repo_step_role(step) == "verify"]
+        verification_checks: list[dict[str, Any]] = []
+        failed_checks: list[str] = []
+        verification_ran = False
+        verification_passed = not bool(repo_profile.get("requires_verification"))
+        for step in verification_steps:
+            output = dict(step.get("output") or {})
+            repair_info = dict(output.get("repo_repair") or {})
+            retry_output = dict(output.get("verification_retry") or {})
+            check_status = "not_run"
+            exit_code = None
+            if repair_info.get("outcome") == "resolved":
+                verification_ran = True
+                exit_code = retry_output.get("exit_code", 0)
+                check_status = "passed"
+            elif step["status"] == "completed":
+                verification_ran = True
+                exit_code = output.get("exit_code")
+                if exit_code in {0, "0", None}:
+                    check_status = "passed"
+                else:
+                    check_status = "failed"
+                    failed_checks.append(step["step_key"])
+            elif step["status"] == "failed":
+                verification_ran = True
+                check_status = "failed"
+                failed_checks.append(step["step_key"])
+                exit_code = output.get("exit_code")
+            verification_checks.append(
+                {
+                    "step_key": step["step_key"],
+                    "title": step["title"],
+                    "status": check_status,
+                    "command": ((step.get("input") or {}).get("args") or {}).get("command"),
+                    "exit_code": exit_code,
+                }
+            )
+        if repo_profile.get("requires_verification"):
+            verification_passed = (
+                verification_ran
+                and bool(verification_steps)
+                and not failed_checks
+                and all(item["status"] == "passed" for item in verification_checks)
+            )
+        repair_outputs = [
+            dict(step.get("output") or {}).get("repo_repair")
+            for step in steps
+            if dict(step.get("output") or {}).get("repo_repair") is not None
+        ]
+        repair_attempted = any(
+            isinstance(item, dict) and bool(item.get("attempted")) for item in repair_outputs
+        )
+        repair_outcome = "not_needed"
+        if repair_attempted:
+            repair_outcome = "failed"
+            if any(isinstance(item, dict) and item.get("outcome") == "resolved" for item in repair_outputs):
+                repair_outcome = "resolved"
+        not_run_checks: list[str] = []
+        if repo_profile.get("requires_verification") and not verification_ran:
+            not_run_checks.append("targeted_verification")
+        residual_risk: list[str] = []
+        if repo_profile.get("requires_verification") and not verification_ran:
+            residual_risk.append("代码改动未经过验证。")
+        if failed_checks:
+            residual_risk.append("至少一个验证检查失败。")
+        if task["status"] in {
+            TaskStatus.WAITING_APPROVAL.value,
+            TaskStatus.PAUSED.value,
+            TaskStatus.FAILED.value,
+        }:
+            residual_risk.append(f"任务当前状态为 {task['status']}，不可视为最终可交付。")
+        deliverable = task["status"] == TaskStatus.COMPLETED.value
+        if repo_profile.get("requires_verification"):
+            deliverable = deliverable and verification_passed
+        if repo_profile.get("allow_write") and files_changed and not verification_ran:
+            deliverable = False
+        if task["status"] != TaskStatus.COMPLETED.value:
+            deliverable = False
+        patch_summary = {
+            "changed_files_count": len(files_changed),
+            "changed_files": files_changed,
+            "summary": (
+                f"修改了 {len(files_changed)} 个文件。"
+                if files_changed
+                else "没有检测到新的文件改动。"
+            ),
+        }
+        verification_summary = {
+            "required": bool(repo_profile.get("requires_verification")),
+            "ran": verification_ran,
+            "passed": verification_passed,
+            "status": (
+                "passed"
+                if verification_passed
+                else "failed"
+                if failed_checks
+                else "not_run"
+                if repo_profile.get("requires_verification")
+                else "not_required"
+            ),
+            "scope": str(repo_profile.get("verification_scope") or "targeted"),
+            "checks": verification_checks,
+            "failed_checks": failed_checks,
+        }
+        normalized_result = {
+            **result,
+            "files_changed": files_changed,
+            "workspace_dirty_preexisting": workspace_dirty_preexisting,
+        }
+        if repo_profile.get("enabled"):
+            summary = str(result.get("summary") or "").strip()
+            if not summary:
+                if deliverable:
+                    summary = "代码仓任务已完成，改动和验证都已收口。"
+                elif failed_checks:
+                    summary = "代码仓任务已产出改动，但验证未通过。"
+                elif not_run_checks:
+                    summary = "代码仓任务已产出改动，但还没有完成验证。"
+                else:
+                    summary = "代码仓任务已结束。"
+            normalized_result.update(
+                {
+                    "summary": summary,
+                    "repo_request_type": repo_profile.get("request_type"),
+                    "patch_summary": patch_summary,
+                    "verification_summary": verification_summary,
+                    "not_run_checks": not_run_checks,
+                    "residual_risk": residual_risk,
+                    "repair_attempted": repair_attempted,
+                    "repair_outcome": repair_outcome,
+                    "deliverable": deliverable,
+                }
+            )
+        if code_hosting_profile.get("enabled"):
+            binding = dict(code_hosting_profile.get("skill_binding") or {})
+            code_steps = [
+                step
+                for step in steps
+                if str(dict(step.get("metadata") or {}).get("code_hosting_step_role") or "")
+                == "remote_execution"
+            ]
+            code_step = code_steps[-1] if code_steps else None
+            code_step_output = dict(code_step.get("output") or {}) if code_step is not None else {}
+            skill_run = (
+                dict(code_step_output.get("skill_run") or {})
+                if isinstance(code_step_output.get("skill_run"), dict)
+                else {}
+            )
+            skill_output = (
+                dict(skill_run.get("output_redacted") or {})
+                if isinstance(skill_run.get("output_redacted"), dict)
+                else {}
+            )
+            branch_state = dict(skill_output.get("branch_state") or {})
+            if not branch_state:
+                branch_state = {
+                    "base_branch": result.get("base_branch")
+                    or binding.get("base_branch")
+                    or task.get("plan", {}).get("constraints", {}).get("base_branch")
+                    or preflight.get("planner_context", {}).get("base_branch")
+                    or None,
+                    "target_branch": result.get("target_branch")
+                    or binding.get("target_branch")
+                    or task.get("plan", {}).get("constraints", {}).get("target_branch")
+                    or preflight.get("planner_context", {}).get("target_branch")
+                    or None,
+                    "workspace_dirty": bool(files_changed),
+                }
+            else:
+                branch_state.setdefault("workspace_dirty", bool(files_changed))
+            remote_artifacts = skill_output.get("remote_artifacts")
+            if not isinstance(remote_artifacts, list):
+                remote_artifacts = []
+            commit_summary = dict(skill_output.get("commit_summary") or {})
+            pr_summary = dict(skill_output.get("pr_summary") or {})
+            review_outcome = dict(skill_output.get("review_outcome") or {})
+            release_summary = dict(skill_output.get("release_summary") or {})
+            publish_blockers = [
+                str(item)
+                for item in list(skill_output.get("publish_blockers") or [])
+                if str(item).strip()
+            ]
+            if not binding.get("ready"):
+                publish_blockers.append(
+                    str(binding.get("blocked_reason") or "code_hosting_skill_binding_unavailable")
+                )
+            if code_step is not None and code_step.get("status") == "failed":
+                publish_blockers.append(
+                    str(code_step.get("error_code") or code_step.get("error_summary") or "skill_run_failed")
+                )
+            if task["status"] == TaskStatus.WAITING_APPROVAL.value:
+                publish_blockers.append("approval_required")
+            if task["status"] in {TaskStatus.PAUSED.value, TaskStatus.FAILED.value}:
+                publish_blockers.append(f"task_status:{task['status']}")
+            publish_blockers = sorted({item for item in publish_blockers if item})
+            code_residual_risk = list(normalized_result.get("residual_risk") or [])
+            for blocker in publish_blockers:
+                if blocker == "approval_required":
+                    code_residual_risk.append("远程工程动作仍在等待审批。")
+                elif blocker == "clawhub_catalog_search_empty":
+                    code_residual_risk.append("ClawHub 中没有找到可绑定的 GitHub Skill。")
+                elif blocker == "code_hosting_skill_binding_unavailable":
+                    code_residual_risk.append("远程工程 Skill 绑定未就绪。")
+                else:
+                    code_residual_risk.append(f"远程工程协作存在阻断：{blocker}。")
+            code_deliverable = (
+                task["status"] == TaskStatus.COMPLETED.value and not publish_blockers
+            )
+            if repo_profile.get("requires_verification"):
+                code_deliverable = code_deliverable and verification_passed
+            deliverable = bool(normalized_result.get("deliverable", task["status"] == TaskStatus.COMPLETED.value))
+            deliverable = deliverable and code_deliverable
+            summary = str(normalized_result.get("summary") or "").strip()
+            if not summary:
+                if deliverable:
+                    summary = "远程工程协作任务已完成，本地与远程证据都已收口。"
+                elif publish_blockers:
+                    summary = "远程工程协作任务已生成过程证据，但仍存在阻断。"
+                else:
+                    summary = "远程工程协作任务已结束。"
+            normalized_result.update(
+                {
+                    "summary": summary,
+                    "code_hosting_request_type": code_hosting_profile.get("request_type"),
+                    "forge_provider_type": binding.get("provider_type")
+                    or code_hosting_profile.get("provider_type")
+                    or "github",
+                    "code_hosting_package_ref": binding.get("package_ref"),
+                    "code_hosting_bundle_id": binding.get("bundle_id"),
+                    "code_hosting_skill_id": binding.get("skill_id"),
+                    "code_hosting_selection_reason": binding.get("selection_reason"),
+                    "remote_artifacts": remote_artifacts,
+                    "branch_state": branch_state,
+                    "commit_summary": commit_summary,
+                    "pr_summary": pr_summary,
+                    "review_outcome": review_outcome,
+                    "release_summary": release_summary,
+                    "publish_blockers": publish_blockers,
+                    "verification_summary": normalized_result.get("verification_summary")
+                    or verification_summary,
+                    "not_run_checks": normalized_result.get("not_run_checks") or not_run_checks,
+                    "residual_risk": code_residual_risk,
+                    "deliverable": deliverable,
+                }
+            )
+        return normalized_result
+
+    async def _finalize_repo_step_output(
+        self,
+        *,
+        task: dict[str, Any],
+        step: dict[str, Any],
+        output: dict[str, Any],
+        tool_call_id: str | None,
+        trace_id: str | None,
+    ) -> tuple[dict[str, Any], str | None]:
+        role = _repo_step_role(step)
+        if role == "explore":
+            await self._create_observation(
+                task=task,
+                step=step,
+                source_type="workspace_dirty_state",
+                source_ref={"step_id": step["step_id"], "step_key": step["step_key"]},
+                summary="已采集代码仓工作区概况。",
+                payload={"workspace_items": output.get("items") or []},
+                trace_id=trace_id,
+            )
+            return output, tool_call_id
+        if role == "patch":
+            args = dict((step.get("input") or {}).get("args") or {})
+            await self._create_observation(
+                task=task,
+                step=step,
+                source_type="diff_summary",
+                source_ref={"step_id": step["step_id"], "step_key": step["step_key"]},
+                summary=f"已写入文件：{args.get('path') or 'unknown'}",
+                payload={
+                    "path": args.get("path"),
+                    "overwrite": bool(args.get("overwrite")),
+                },
+                trace_id=trace_id,
+            )
+            return output, tool_call_id
+        if role != "verify":
+            return output, tool_call_id
+        metadata = dict(step.get("metadata") or {})
+        verify_mode = str(metadata.get("repo_verify_mode") or "").strip()
+        if verify_mode == "content_contains":
+            expected = str(metadata.get("repo_verify_expected_text") or "")
+            content = str(output.get("content") or "")
+            output = {
+                **output,
+                "exit_code": 0 if expected in content else 1,
+                "verification_mode": verify_mode,
+            }
+        exit_code = output.get("exit_code")
+        if exit_code in {None, 0, "0"}:
+            await self._create_observation(
+                task=task,
+                step=step,
+                source_type="verification_summary",
+                source_ref={"step_id": step["step_id"], "step_key": step["step_key"]},
+                summary="目标验证已通过。",
+                payload=output,
+                trace_id=trace_id,
+            )
+            return output, tool_call_id
+        verify_kind = str(metadata.get("repo_verify_kind") or "test")
+        await self._create_observation(
+            task=task,
+            step=step,
+            source_type="lint_failure" if verify_kind == "lint" else "test_failure",
+            source_ref={"step_id": step["step_id"], "step_key": step["step_key"]},
+            summary="目标验证失败，准备评估是否可局部修复。",
+            payload=output,
+            trace_id=trace_id,
+        )
+        repair = await self._attempt_repo_repair(
+            task=task,
+            step=step,
+            verify_output=output,
+            trace_id=trace_id,
+        )
+        if repair is None:
+            return {
+                **output,
+                "repo_verify_failed": True,
+                "repo_verify_failure_reason": "no_repair_available",
+            }, tool_call_id
+        output = {
+            **output,
+            "repo_repair": {
+                "attempted": True,
+                "outcome": "resolved" if repair["resolved"] else "failed",
+                "repair_paths": repair["repair_paths"],
+                "initial_exit_code": exit_code,
+                "final_exit_code": repair["final_output"].get("exit_code"),
+            },
+            "verification_retry": repair["final_output"],
+        }
+        tool_call_id = repair["tool_call_id"]
+        await self._create_observation(
+            task=task,
+            step=step,
+            source_type="partial_success_recovery",
+            source_ref={"step_id": step["step_id"], "step_key": step["step_key"]},
+            summary=(
+                "验证失败后已通过局部修复收敛。"
+                if repair["resolved"]
+                else "验证失败后尝试过局部修复，但仍未收敛。"
+            ),
+            payload=output,
+            trace_id=trace_id,
+        )
+        if not repair["resolved"]:
+            return {
+                **output,
+                "repo_verify_failed": True,
+                "repo_verify_failure_reason": "repair_failed",
+            }, tool_call_id
+        return output, tool_call_id
+
+    async def _attempt_repo_repair(
+        self,
+        *,
+        task: dict[str, Any],
+        step: dict[str, Any],
+        verify_output: dict[str, Any],
+        trace_id: str | None,
+    ) -> dict[str, Any] | None:
+        profile = _repo_profile_from_task(task)
+        if not profile.get("allow_auto_repair"):
+            return None
+        metadata = dict(step.get("metadata") or {})
+        repair_writes = metadata.get("repo_repair_writes") or []
+        if not isinstance(repair_writes, list) or not repair_writes:
+            single_path = metadata.get("repo_repair_path")
+            single_content = metadata.get("repo_repair_content")
+            if single_path and single_content is not None:
+                repair_writes = [{"path": single_path, "content": single_content}]
+        if not repair_writes:
+            return None
+        repair_paths: list[str] = []
+        for index, item in enumerate(repair_writes, start=1):
+            if not isinstance(item, dict):
+                continue
+            path = str(item.get("path") or "").strip()
+            if not path:
+                continue
+            repair_paths.append(path)
+            resolved = self._artifacts.resolve_task_relative_path(task["task_id"], path)
+            await self._artifacts.write_text(
+                task_id=task["task_id"],
+                organization_id=str(task.get("organization_id") or "org_default"),
+                step_id=step["step_id"],
+                tool_call_id=f"{step['step_id']}:repo-repair:{index}",
+                display_name=resolved.name,
+                content=str(item.get("content") or ""),
+                artifact_type="text",
+                subdir=resolved.parent.relative_to(
+                    self._artifacts.task_dir(task["task_id"])
+                ).as_posix(),
+                trace_id=trace_id,
+            )
+        verify_args = dict((step.get("input") or {}).get("args") or {})
+        metadata = dict(step.get("metadata") or {})
+        verify_mode = str(metadata.get("repo_verify_mode") or "").strip()
+        verify_tool_name = "terminal.run"
+        if verify_mode == "content_contains":
+            verify_tool_name = "file.read"
+        rerun = await self._tools.execute(
+            ToolExecuteRequest(
+                task_id=task["task_id"],
+                step_id=step["step_id"],
+                member_id=task["owner_member_id"],
+                tool_name=verify_tool_name,
+                args=verify_args,
+                idempotency_key=f"{step['step_id']}:repo-verify-retry",
+            ),
+            trace_id=trace_id,
+        )
+        final_output = dict(rerun.result or {})
+        if verify_mode == "content_contains":
+            expected = str(metadata.get("repo_verify_expected_text") or "")
+            content = str(final_output.get("content") or "")
+            final_output["exit_code"] = 0 if expected in content else 1
+            final_output["verification_mode"] = verify_mode
+        return {
+            "resolved": final_output.get("exit_code") in {None, 0, "0"},
+            "repair_paths": repair_paths,
+            "final_output": final_output,
+            "tool_call_id": rerun.tool_call.tool_call_id,
+            "initial_output": verify_output,
+        }
+
     async def _complete_task(
         self,
         task_id: str,
@@ -1803,7 +2537,19 @@ class TaskEngine:
             trace_id=trace_id,
             extra={"result": result, "current_approval_id": None},
         )
-        await self._event(task_id, "task.completed", result, trace_id=trace_id)
+        task = await self._get_task(task_id)
+        normalized_result = await self._normalized_task_result(task, raw_result=result)
+        if normalized_result != task.get("result", {}):
+            await self._repo.update_task(
+                task_id,
+                {
+                    "result": normalized_result,
+                    "updated_at": utc_now_iso(),
+                },
+            )
+        else:
+            normalized_result = task.get("result", {})
+        await self._event(task_id, "task.completed", normalized_result, trace_id=trace_id)
         await self._audit.write_event(
             actor_type="system",
             action="task.completed",
@@ -2131,6 +2877,126 @@ class TaskEngine:
             )
         return refs
 
+    async def _resolve_code_hosting_skill_binding(
+        self,
+        request: TaskCreateRequest,
+        *,
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        query = str(request.constraints.get("code_hosting_skill_query") or "github").strip() or (
+            "github"
+        )
+        if (
+            self._skills is None
+            or self._skill_governance is None
+            or self._skill_repositories is None
+        ):
+            return {
+                "enabled": True,
+                "ready": False,
+                "provider_type": "github",
+                "repository_id": "clawhub",
+                "query": query,
+                "selection_reason": "code_hosting_services_unavailable",
+                "blocked_reason": "code_hosting_services_unavailable",
+            }
+        try:
+            entries = await self._skill_repositories.search(
+                query=query,
+                repository_id="clawhub",
+                limit=20,
+            )
+        except Exception as exc:
+            return {
+                "enabled": True,
+                "ready": False,
+                "provider_type": "github",
+                "repository_id": "clawhub",
+                "query": query,
+                "selection_reason": "clawhub_catalog_search_failed",
+                "blocked_reason": str(redact(str(exc)))[:160],
+            }
+        if not entries:
+            return {
+                "enabled": True,
+                "ready": False,
+                "provider_type": "github",
+                "repository_id": "clawhub",
+                "query": query,
+                "selection_reason": "clawhub_catalog_search_empty",
+                "blocked_reason": "clawhub_catalog_search_empty",
+            }
+        selected = entries[0]
+        package_ref = str(selected.package_ref)
+        source_uri = f"{selected.repository_id}:{package_ref}"
+        try:
+            bundle, skills, _preview = await self._skills.install_bundle(
+                BundleInstallRequest(
+                    source_type="repository_ref",
+                    source_uri=source_uri,
+                    requested_by_member_id=request.owner_member_id,
+                    idempotency_key=f"phase98:code_hosting:{source_uri}",
+                ),
+                trace_id=trace_id,
+            )
+            if bundle.status != "enabled":
+                bundle = await self._skills.enable_bundle(
+                    bundle.bundle_id,
+                    actor_member_id=request.owner_member_id,
+                    trace_id=trace_id,
+                )
+            bound_skill = skills[0] if skills else None
+            if bound_skill is None:
+                return {
+                    "enabled": True,
+                    "ready": False,
+                    "provider_type": "github",
+                    "repository_id": selected.repository_id,
+                    "package_ref": package_ref,
+                    "bundle_id": bundle.bundle_id,
+                    "selection_reason": "clawhub_catalog_search_first_result",
+                    "blocked_reason": "clawhub_package_has_no_skills",
+                }
+            skill = await self._skills.get_skill(bound_skill.skill_id)
+            grants = await self._skill_governance.list_grants(skill.skill_id)
+            active_grants = [
+                item
+                for item in grants
+                if item.status == "active" and item.subject_id == request.owner_member_id
+            ]
+            if not active_grants:
+                await self._skill_governance.create_grant(
+                    skill.skill_id,
+                    SkillGrantCreateRequest(
+                        subject_id=request.owner_member_id,
+                        created_by_member_id=request.owner_member_id,
+                    ),
+                    trace_id=trace_id,
+                )
+            return {
+                "enabled": True,
+                "ready": True,
+                "provider_type": "github",
+                "repository_id": selected.repository_id,
+                "package_ref": package_ref,
+                "bundle_id": bundle.bundle_id,
+                "skill_id": skill.skill_id,
+                "selection_reason": "clawhub_catalog_search_first_result",
+                "query": query,
+            }
+        except Exception as exc:
+            return {
+                "enabled": True,
+                "ready": False,
+                "provider_type": "github",
+                "repository_id": selected.repository_id,
+                "package_ref": package_ref,
+                "bundle_id": getattr(selected, "bundle_id", None),
+                "selection_reason": "clawhub_catalog_search_first_result",
+                "blocked_reason": str(getattr(exc, "code", ErrorCode.SKILL_RUN_FAILED.value)),
+                "error_summary": str(redact(str(exc)))[:160],
+            }
+
     async def _plan(
         self,
         task_id: str,
@@ -2151,13 +3017,62 @@ class TaskEngine:
         mode = _select_mode(request)
         risk = _risk_for_goal(request.goal)
         budget = TaskBudget(**{**TaskBudget().model_dump(), **request.budget_override})
-        capability_snapshot = await self._capability_snapshot(request, trace_id=trace_id)
-        steps = _steps_for_goal(request, mode, capability_snapshot)
-        planner_reason_codes = _planner_reason_codes(request, mode, risk)
+        resolved_constraints = dict(request.constraints or {})
+        code_hosting_profile = _code_hosting_profile_for_request(request)
+        code_hosting_binding = (
+            await self._resolve_code_hosting_skill_binding(request, trace_id=trace_id)
+            if code_hosting_profile["enabled"]
+            else {"enabled": False, "ready": False}
+        )
+        for key in (
+            "package_ref",
+            "bundle_id",
+            "skill_id",
+            "selection_reason",
+            "provider_type",
+        ):
+            value = code_hosting_binding.get(key)
+            if value:
+                resolved_constraints[f"code_hosting_{key}"] = value
+        planning_request = (
+            request.model_copy(update={"constraints": resolved_constraints})
+            if resolved_constraints != dict(request.constraints or {})
+            else request
+        )
+        capability_snapshot = await self._capability_snapshot(planning_request, trace_id=trace_id)
+        repo_profile = _repo_profile_for_request(planning_request)
+        steps = (
+            _code_hosting_steps_for_request(
+                planning_request,
+                repo_profile,
+                code_hosting_profile,
+                code_hosting_binding,
+            )
+            if code_hosting_profile["enabled"]
+            else _repo_steps_for_request(planning_request, repo_profile)
+            if repo_profile["enabled"]
+            else _steps_for_goal(planning_request, mode, capability_snapshot)
+        )
+        planner_reason_codes = _planner_reason_codes(planning_request, mode, risk)
         planner_reason_codes.extend(capability_snapshot.get("reason_codes", []))
+        if repo_profile["enabled"]:
+            planner_reason_codes.extend(
+                [
+                    "phase97_repo_execution_profile",
+                    f"repo_request_type_{repo_profile['request_type']}",
+                ]
+            )
+        if code_hosting_profile["enabled"]:
+            planner_reason_codes.extend(
+                [
+                    "phase98_code_hosting_profile",
+                    f"code_hosting_request_type_{code_hosting_profile['request_type']}",
+                    str(code_hosting_binding.get("selection_reason") or "code_hosting_binding"),
+                ]
+            )
         blocked_actions: list[dict[str, Any]] = []
 
-        if request.constraints.get("mcp_tool_name") and not capability_snapshot.get(
+        if planning_request.constraints.get("mcp_tool_name") and not capability_snapshot.get(
             "mcp_tool_refs"
         ):
             steps = [step for step in steps if step.get("step_key") != "mcp_call"]
@@ -2165,12 +3080,12 @@ class TaskEngine:
             blocked_actions.append(
                 {
                     "type": "mcp_call",
-                    "tool_name": request.constraints.get("mcp_tool_name"),
+                    "tool_name": planning_request.constraints.get("mcp_tool_name"),
                     "reason": "mcp_tool_not_ready_or_not_active",
                     "execution_created": False,
                 }
             )
-        if request.constraints.get("skill_id") and not capability_snapshot.get(
+        if planning_request.constraints.get("skill_id") and not capability_snapshot.get(
             "explicit_skill_available",
             False,
         ):
@@ -2179,27 +3094,44 @@ class TaskEngine:
             blocked_actions.append(
                 {
                     "type": "skill_run",
-                    "skill_id": request.constraints.get("skill_id"),
+                    "skill_id": planning_request.constraints.get("skill_id"),
                     "reason": "skill_not_enabled_or_bundle_unavailable",
+                    "execution_created": False,
+                }
+            )
+        if code_hosting_profile["enabled"] and not code_hosting_binding.get("ready"):
+            blocked_actions.append(
+                {
+                    "type": "skill_run",
+                    "skill_id": resolved_constraints.get("code_hosting_skill_id"),
+                    "reason": str(
+                        code_hosting_binding.get("blocked_reason")
+                        or "code_hosting_skill_binding_unavailable"
+                    ),
                     "execution_created": False,
                 }
             )
 
         required_capabilities = _required_capabilities_for_steps(steps)
-        required_assets = list(request.resource_handle_ids)
+        required_assets = list(planning_request.resource_handle_ids)
         required_approvals = [step for step in steps if _risk_order(step["risk_level"]) >= 3]
         preflight = {
-            "required_handles": request.resource_handle_ids,
+            "required_handles": planning_request.resource_handle_ids,
             "required_approvals": required_approvals,
             "blocked_actions": blocked_actions,
             "capability_snapshot": capability_snapshot,
             "skill_match_refs": capability_snapshot.get("skill_match_refs", []),
             "mcp_tool_refs": capability_snapshot.get("mcp_tool_refs", []),
-            "planner_context": redact(request.planner_context),
-            "brain_decision_id": request.brain_decision_id,
+            "planner_context": redact(planning_request.planner_context),
+            "brain_decision_id": planning_request.brain_decision_id,
+            "repo_execution": repo_profile,
+            "code_hosting": {
+                **code_hosting_profile,
+                "skill_binding": code_hosting_binding,
+            },
         }
         planner_type = _planner_type(mode)
-        assumptions = _planner_assumptions(request, mode, capability_snapshot)
+        assumptions = _planner_assumptions(planning_request, mode, capability_snapshot)
         await self._end_span(
             span_id,
             output_data={
@@ -2217,7 +3149,7 @@ class TaskEngine:
             owner_member_id=request.owner_member_id,
             host_member_id=request.owner_member_id if mode == TaskMode.SUPERVISOR else None,
             success_criteria=request.success_criteria or ["任务产生可回放结果"],
-            constraints=redact(request.constraints),
+            constraints=redact(resolved_constraints),
             assumptions=assumptions,
             required_capabilities=required_capabilities,
             required_assets=required_assets,
@@ -2549,6 +3481,10 @@ class TaskEngine:
 def _select_mode(request: TaskCreateRequest) -> TaskMode:
     if request.mode_hint is not None:
         return request.mode_hint
+    if _code_hosting_profile_for_request(request)["enabled"]:
+        return TaskMode.AGENT
+    if _repo_profile_for_request(request)["enabled"]:
+        return TaskMode.AGENT
     text = request.goal.lower()
     if any(word in text for word in ["调研", "研究", "搜索", "竞品", "网页", "research"]):
         return TaskMode.AGENT
@@ -2579,6 +3515,8 @@ def _planner_reason_codes(
         reasons.append("high_risk_plan_first")
     if _goal_mentions_skill(request.goal) or request.constraints.get("skill_id"):
         reasons.append("skill_considered")
+    if _code_hosting_profile_for_request(request)["enabled"]:
+        reasons.append("code_hosting_considered")
     if _goal_mentions_mcp(request.goal) or request.constraints.get("mcp_tool_name"):
         reasons.append("mcp_considered")
     if request.brain_decision_id:
@@ -2594,6 +3532,17 @@ def _planner_assumptions(
     capability_snapshot: dict[str, Any],
 ) -> list[str]:
     assumptions = ["规则优先 planner；未启用模型辅助规划。"]
+    repo_profile = _repo_profile_for_request(request)
+    code_hosting_profile = _code_hosting_profile_for_request(request)
+    if repo_profile["enabled"]:
+        assumptions.append("代码仓任务以 Task/Agent 主链为权威执行入口。")
+        if repo_profile.get("requires_verification"):
+            assumptions.append("出现代码改动时默认必须完成目标验证。")
+        if repo_profile.get("allow_auto_repair"):
+            assumptions.append("验证失败后只允许一次局部自动修复。")
+    if code_hosting_profile["enabled"]:
+        assumptions.append("远程工程协作通过 ClawHub 中的 GitHub Skill 进入受控 Skill 主链。")
+        assumptions.append("若未绑定到可用 GitHub Skill，任务只会留下阻断证据，不会伪造远程执行。")
     if mode == TaskMode.AGENT:
         assumptions.append("Agent loop 只按预算执行当前任务步骤，不做后台自主动作。")
     if not request.resource_handle_ids:
@@ -2826,6 +3775,326 @@ def _steps_for_goal(
     return steps
 
 
+def _code_hosting_profile_for_request(request: TaskCreateRequest) -> dict[str, Any]:
+    request_type = _code_hosting_request_type(request)
+    enabled = request_type is not None
+    return {
+        "enabled": enabled,
+        "request_type": request_type,
+        "provider_type": str(request.constraints.get("forge_provider_type") or "github"),
+        "tracks_workspace": enabled,
+    }
+
+
+def _code_hosting_request_type(request: TaskCreateRequest) -> str | None:
+    explicit = str(request.constraints.get("code_hosting_request_type") or "").strip()
+    if explicit in {
+        "code_hosting_readonly_request",
+        "code_hosting_sync_request",
+        "code_hosting_pr_request",
+        "code_hosting_review_request",
+        "code_hosting_release_request",
+    }:
+        return explicit
+    planner_context = dict(request.planner_context or {})
+    route_intent = str(planner_context.get("route_intent") or planner_context.get("intent") or "")
+    if route_intent in {
+        "code_hosting_readonly_request",
+        "code_hosting_sync_request",
+        "code_hosting_pr_request",
+        "code_hosting_review_request",
+        "code_hosting_release_request",
+    }:
+        return route_intent
+    text = f"{request.goal} {' '.join(str(item) for item in request.success_criteria)}".lower()
+    has_provider = any(marker in text for marker in ["github", "代码托管", "远程仓库", "github.com"])
+    has_hosting_action = any(
+        marker in text
+        for marker in ["pull request", "merge", "release", "push", "branch", "issue", "sync"]
+    ) or bool(re.search(r"\bpr\b", text))
+    if not has_provider and not has_hosting_action:
+        return None
+    if any(marker in text for marker in ["状态", "看看", "查看", "list", "read-only", "readonly", "只读"]):
+        return "code_hosting_readonly_request"
+    if any(marker in text for marker in ["release", "发布", "release note"]):
+        return "code_hosting_release_request"
+    if any(marker in text for marker in ["review", "评审", "审查", "comment", "评论"]):
+        return "code_hosting_review_request"
+    if any(marker in text for marker in ["pull request", "pr", "合并请求"]):
+        return "code_hosting_pr_request"
+    if any(marker in text for marker in ["push", "branch", "同步", "sync", "merge"]):
+        return "code_hosting_sync_request"
+    if any(marker in text for marker in ["github", "issue", "只读", "readonly", "read only"]):
+        return "code_hosting_readonly_request"
+    return None
+
+
+def _code_hosting_steps_for_request(
+    request: TaskCreateRequest,
+    repo_profile: dict[str, Any],
+    code_hosting_profile: dict[str, Any],
+    code_hosting_binding: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if repo_profile.get("enabled"):
+        steps = _repo_steps_for_request(request, repo_profile)
+        steps = [step for step in steps if step.get("step_key") != "compose_report"]
+    else:
+        steps = [
+            {
+                "step_key": "repo_explore",
+                "step_type": "tool_call",
+                "title": "扫描代码仓工作区",
+                "risk_level": "R1",
+                "input": {"tool_name": "file.list", "args": {"path": "."}},
+                "metadata": {
+                    "repo_step_role": "explore",
+                    "code_hosting_step_role": "local_state",
+                },
+            }
+        ]
+    skill_id = str(request.constraints.get("code_hosting_skill_id") or "").strip()
+    if code_hosting_binding.get("ready") and skill_id:
+        steps.append(
+            {
+                "step_key": "code_hosting_skill_run",
+                "step_type": "skill_run",
+                "title": "执行 Git 托管协作 Skill",
+                "risk_level": _code_hosting_risk_level(code_hosting_profile.get("request_type")),
+                "input": {
+                    "skill_id": skill_id,
+                    "input": _code_hosting_skill_input(request),
+                    "matched_reason": str(
+                        code_hosting_binding.get("selection_reason")
+                        or "code_hosting_clawhub_binding"
+                    ),
+                    "confidence": 1.0,
+                },
+                "metadata": {
+                    "code_hosting_step_role": "remote_execution",
+                    "code_hosting_request_type": code_hosting_profile.get("request_type"),
+                },
+            }
+        )
+    steps.append(
+        {
+            "step_key": "compose_report",
+            "step_type": "compose",
+            "title": "生成远程工程协作结果摘要",
+            "risk_level": "R1",
+            "input": {},
+            "metadata": {"code_hosting_step_role": "summarize"},
+        }
+    )
+    return steps
+
+
+def _repo_profile_for_request(request: TaskCreateRequest) -> dict[str, Any]:
+    request_type = _repo_request_type(request)
+    enabled = request_type is not None
+    verification_scope = str(
+        request.constraints.get("verification_scope")
+        or ("targeted" if enabled else "")
+    ).strip() or "targeted"
+    requires_approval = bool(request.constraints.get("requires_approval"))
+    allow_write = request_type in {
+        "repo_patch_request",
+        "repo_fix_after_failure",
+        "repo_refactor_request",
+    }
+    requires_verification = request_type in {
+        "repo_patch_request",
+        "repo_test_request",
+        "repo_fix_after_failure",
+        "repo_refactor_request",
+    }
+    return {
+        "enabled": enabled,
+        "request_type": request_type,
+        "allow_write": allow_write,
+        "requires_verification": requires_verification,
+        "allow_auto_repair": enabled and request_type == "repo_fix_after_failure",
+        "requires_approval": requires_approval,
+        "verification_scope": verification_scope,
+    }
+
+
+def _repo_request_type(request: TaskCreateRequest) -> str | None:
+    explicit = str(request.constraints.get("repo_request_type") or "").strip()
+    if explicit in {
+        "repo_readonly_request",
+        "repo_patch_request",
+        "repo_test_request",
+        "repo_fix_after_failure",
+        "repo_refactor_request",
+    }:
+        return explicit
+    planner_context = dict(request.planner_context or {})
+    route_intent = str(planner_context.get("route_intent") or planner_context.get("intent") or "")
+    if route_intent in {
+        "repo_readonly_request",
+        "repo_patch_request",
+        "repo_test_request",
+        "repo_fix_after_failure",
+        "repo_refactor_request",
+    }:
+        return route_intent
+    text = f"{request.goal} {' '.join(str(item) for item in request.success_criteria)}".lower()
+    if not any(
+        marker in text
+        for marker in [
+            "repo",
+            "仓库",
+            "代码",
+            "测试",
+            "pytest",
+            "bug",
+            "修复",
+            "refactor",
+            "补丁",
+            "patch",
+            "代码库",
+        ]
+    ):
+        return None
+    if any(marker in text for marker in ["只读", "read only", "readonly", "阅读代码", "看代码"]):
+        return "repo_readonly_request"
+    if any(marker in text for marker in ["修复失败", "fix after failure", "失败后修", "修复测试"]):
+        return "repo_fix_after_failure"
+    if any(marker in text for marker in ["重构", "refactor"]):
+        return "repo_refactor_request"
+    if any(marker in text for marker in ["测试", "pytest", "验证", "typecheck", "lint"]):
+        return "repo_test_request"
+    if any(marker in text for marker in ["修改", "补丁", "patch", "写代码", "改代码", "bugfix", "修复"]):
+        return "repo_patch_request"
+    return None
+
+
+def _repo_steps_for_request(
+    request: TaskCreateRequest,
+    repo_profile: dict[str, Any],
+) -> list[dict[str, Any]]:
+    constraints = dict(request.constraints or {})
+    steps: list[dict[str, Any]] = [
+        {
+            "step_key": "repo_explore",
+            "step_type": "tool_call",
+            "title": "扫描代码仓工作区",
+            "risk_level": "R1",
+            "input": {"tool_name": "file.list", "args": {"path": "."}},
+            "metadata": {"repo_step_role": "explore"},
+        }
+    ]
+    patch_path = str(constraints.get("repo_patch_path") or "").strip()
+    patch_content = constraints.get("repo_patch_content")
+    if repo_profile.get("allow_write") and patch_path and patch_content is not None:
+        steps.append(
+            {
+                "step_key": "repo_patch_apply",
+                "step_type": "tool_call",
+                "title": "应用代码修改",
+                "risk_level": "R2",
+                "input": {
+                    "tool_name": "file.write",
+                    "args": {
+                        "path": patch_path,
+                        "content": str(patch_content),
+                        "overwrite": True,
+                    },
+                },
+                "metadata": {"repo_step_role": "patch"},
+            }
+        )
+    extra_writes = constraints.get("repo_patch_writes") or []
+    if isinstance(extra_writes, list):
+        for index, item in enumerate(extra_writes, start=1):
+            if not isinstance(item, dict):
+                continue
+            path = str(item.get("path") or "").strip()
+            if not path:
+                continue
+            steps.append(
+                {
+                    "step_key": f"repo_patch_apply_{index}",
+                    "step_type": "tool_call",
+                    "title": f"应用代码修改 {index}",
+                    "risk_level": "R2",
+                    "input": {
+                        "tool_name": "file.write",
+                        "args": {
+                            "path": path,
+                            "content": str(item.get("content") or ""),
+                            "overwrite": True,
+                        },
+                    },
+                    "metadata": {"repo_step_role": "patch"},
+                }
+            )
+    verify_read_path = str(constraints.get("verify_read_path") or "").strip()
+    verify_contains_text = constraints.get("verify_contains_text")
+    verify_command = str(constraints.get("verify_command") or "").strip()
+    if (
+        repo_profile.get("requires_verification")
+        and verify_read_path
+        and verify_contains_text is not None
+    ):
+        steps.append(
+            {
+                "step_key": "repo_verify_targeted",
+                "step_type": "tool_call",
+                "title": "运行目标验证",
+                "risk_level": "R1",
+                "input": {
+                    "tool_name": "file.read",
+                    "args": {
+                        "path": verify_read_path,
+                    },
+                },
+                "metadata": {
+                    "repo_step_role": "verify",
+                    "repo_verify_kind": str(constraints.get("verify_kind") or "test"),
+                    "repo_verify_mode": "content_contains",
+                    "repo_verify_expected_text": str(verify_contains_text),
+                    "repo_repair_path": constraints.get("repair_patch_path"),
+                    "repo_repair_content": constraints.get("repair_patch_content"),
+                    "repo_repair_writes": constraints.get("repair_patch_writes") or [],
+                },
+            }
+        )
+    elif repo_profile.get("requires_verification") and verify_command:
+        steps.append(
+            {
+                "step_key": "repo_verify_targeted",
+                "step_type": "tool_call",
+                "title": "运行目标验证",
+                "risk_level": "R2",
+                "input": {
+                    "tool_name": "terminal.run",
+                    "args": {
+                        "command": verify_command,
+                    },
+                },
+                "metadata": {
+                    "repo_step_role": "verify",
+                    "repo_verify_kind": str(constraints.get("verify_kind") or "test"),
+                    "repo_repair_path": constraints.get("repair_patch_path"),
+                    "repo_repair_content": constraints.get("repair_patch_content"),
+                    "repo_repair_writes": constraints.get("repair_patch_writes") or [],
+                },
+            }
+        )
+    steps.append(
+        {
+            "step_key": "compose_report",
+            "step_type": "compose",
+            "title": "生成工程代理结果摘要",
+            "risk_level": "R1",
+            "input": {},
+            "metadata": {"repo_step_role": "summarize"},
+        }
+    )
+    return steps
+
+
 def _normalize_plan_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     normalized: list[dict[str, Any]] = []
     for index, step in enumerate(steps, start=1):
@@ -2837,9 +4106,56 @@ def _normalize_plan_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "title": str(step.get("title") or _title_for_step(step, index)),
                 "risk_level": str(step.get("risk_level") or "R1"),
                 "input": step.get("input") if isinstance(step.get("input"), dict) else {},
+                "metadata": step.get("metadata") if isinstance(step.get("metadata"), dict) else {},
             }
         )
     return normalized
+
+
+def _repo_profile_from_task(task: dict[str, Any]) -> dict[str, Any]:
+    preflight = dict(task.get("preflight") or {})
+    repo_execution = dict(preflight.get("repo_execution") or {})
+    if "enabled" not in repo_execution:
+        repo_execution["enabled"] = False
+    return repo_execution
+
+
+def _code_hosting_profile_from_task(task: dict[str, Any]) -> dict[str, Any]:
+    preflight = dict(task.get("preflight") or {})
+    code_hosting = dict(preflight.get("code_hosting") or {})
+    if "enabled" not in code_hosting:
+        code_hosting["enabled"] = False
+    return code_hosting
+
+
+def _repo_step_role(step: dict[str, Any]) -> str | None:
+    metadata = dict(step.get("metadata") or {})
+    role = str(metadata.get("repo_step_role") or "").strip()
+    return role or None
+
+
+def _workspace_snapshot(root: Path) -> dict[str, str]:
+    if not root.exists():
+        return {}
+    snapshot: dict[str, str] = {}
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        rel = path.relative_to(root).as_posix()
+        snapshot[rel] = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    return snapshot
+
+
+def _workspace_diff_files(
+    baseline: dict[str, str],
+    current: dict[str, str],
+) -> list[str]:
+    ignored_prefixes = ("logs/", "outputs/")
+    changed = [
+        path
+        for path in sorted(set(baseline) | set(current))
+        if not path.startswith(ignored_prefixes)
+        if baseline.get(path) != current.get(path)
+    ]
+    return changed
 
 
 def _title_for_step(step: dict[str, Any], index: int) -> str:
@@ -2859,6 +4175,13 @@ def _title_for_step(step: dict[str, Any], index: int) -> str:
         return "执行匹配 Skill"
     if step_type == "skill_match":
         return "匹配可用 Skill"
+    repo_role = _repo_step_role(step)
+    if repo_role == "explore":
+        return "扫描代码仓工作区"
+    if repo_role == "patch":
+        return "应用代码修改"
+    if repo_role == "verify":
+        return "运行目标验证"
     if step_key != f"step_{index}":
         return step_key.replace("_", " ")
     return "生成任务报告"
@@ -2930,6 +4253,42 @@ def _office_skill_input(request: TaskCreateRequest) -> dict[str, Any]:
     if request.constraints.get("source_artifact_id"):
         skill_input.setdefault("source_artifact_id", request.constraints["source_artifact_id"])
     return skill_input
+
+
+def _code_hosting_skill_input(request: TaskCreateRequest) -> dict[str, Any]:
+    skill_input = dict(request.constraints.get("skill_input") or {})
+    skill_input.setdefault("goal", request.goal)
+    skill_input.setdefault(
+        "code_hosting_request_type",
+        request.constraints.get("code_hosting_request_type"),
+    )
+    skill_input.setdefault(
+        "forge_provider_type",
+        request.constraints.get("forge_provider_type") or "github",
+    )
+    for key in (
+        "remote_repo_ref",
+        "base_branch",
+        "target_branch",
+        "pr_ref",
+        "issue_ref",
+        "review_action",
+        "release_kind",
+    ):
+        if request.constraints.get(key) is not None:
+            skill_input.setdefault(key, request.constraints.get(key))
+    return skill_input
+
+
+def _code_hosting_risk_level(request_type: Any) -> str:
+    mapping = {
+        "code_hosting_readonly_request": "R1",
+        "code_hosting_sync_request": "R3",
+        "code_hosting_pr_request": "R3",
+        "code_hosting_review_request": "R3",
+        "code_hosting_release_request": "R4",
+    }
+    return mapping.get(str(request_type or ""), "R2")
 
 
 def _is_office_artifact(artifact: TaskArtifact) -> bool:
@@ -3026,6 +4385,32 @@ def _next_pending_step_key(steps: list[dict[str, Any]]) -> str | None:
     for step in steps:
         if step.get("status") not in {"completed", "failed"}:
             return str(step.get("step_key"))
+    return None
+
+
+def _phase96_stop_reason(raw_reason: str | None, task_status: str | None) -> str | None:
+    reason = str(raw_reason or "").strip()
+    if reason == "approval_required":
+        return "approval_waiting"
+    if reason == "blocked_by_safety":
+        return "boundary_blocked"
+    if reason == "failed":
+        return "recovery_exhausted"
+    if reason == "completed":
+        return "goal_satisfied"
+    if reason:
+        return reason
+    status = str(task_status or "").strip()
+    if status == TaskStatus.COMPLETED.value:
+        return "goal_satisfied"
+    if status == TaskStatus.WAITING_APPROVAL.value:
+        return "approval_waiting"
+    if status == TaskStatus.CANCELLED.value:
+        return "cancelled"
+    if status == TaskStatus.PAUSED.value:
+        return "budget_exhausted"
+    if status == TaskStatus.FAILED.value:
+        return "recovery_exhausted"
     return None
 
 

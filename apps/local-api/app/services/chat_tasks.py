@@ -156,6 +156,16 @@ class ChatTaskCoordinator:
             "skill_request",
             "mcp_request",
             "asset_management",
+            "repo_readonly_request",
+            "repo_patch_request",
+            "repo_test_request",
+            "repo_fix_after_failure",
+            "repo_refactor_request",
+            "code_hosting_readonly_request",
+            "code_hosting_sync_request",
+            "code_hosting_pr_request",
+            "code_hosting_review_request",
+            "code_hosting_release_request",
         }
 
     def present_task_status(self, task: Any) -> TaskStatusPresentation:

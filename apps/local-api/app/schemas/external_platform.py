@@ -87,6 +87,13 @@ class ExternalPlatformActionPlanCreateRequest(ApiModel):
     execution_mode: str = "fake_provider"
     member_id: EntityId | None = None
     conversation_id: EntityId | None = None
+    publish_text: str | None = None
+    comment_text: str | None = None
+    target_post_hint: str | None = None
+    target_post_selector: str | None = None
+    target_post_url: str | None = None
+    published_post_ref: str | None = None
+    provider_mode: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

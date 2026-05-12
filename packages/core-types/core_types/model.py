@@ -60,6 +60,9 @@ class IntentDecision(ApiModel):
     confidence: float = 0.0
     reason_codes: list[str] = Field(default_factory=list)
     rule_hits: list[str] = Field(default_factory=list)
+    interaction_class: str = "direct_explanation"
+    execution_policy: str = "no_task"
+    direct_only_requested: bool = False
     model_hint: dict[str, Any] = Field(default_factory=dict)
 
 

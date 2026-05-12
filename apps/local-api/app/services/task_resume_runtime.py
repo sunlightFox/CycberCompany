@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core_types import ErrorCode, TaskStatus
+from core_types import ErrorCode, TaskMode, TaskStatus
 
 from app.core.errors import AppError
 from app.core.time import utc_now_iso
@@ -21,12 +21,16 @@ class TaskResumeRuntime:
             )
         reset_count = await self._engine._reset_recoverable_failed_steps(task, trace_id=trace_id)
         if reset_count == 0:
-            raise AppError(
-                ErrorCode.TASK_RETRY_EXHAUSTED,
-                "没有可自动重试的失败步骤",
-                status_code=409,
-                details={"task_id": task_id},
-            )
+            if not (
+                task["mode"] == TaskMode.AGENT.value
+                and task["status"] == TaskStatus.PAUSED.value
+            ):
+                raise AppError(
+                    ErrorCode.TASK_RETRY_EXHAUSTED,
+                    "没有可自动重试的失败步骤",
+                    status_code=409,
+                    details={"task_id": task_id},
+                )
         await self._engine._repo.update_task(
             task_id,
             {
@@ -36,7 +40,14 @@ class TaskResumeRuntime:
             },
         )
         await self._engine._mark_run_job(task_id, "running")
-        await self._engine._run_task(task_id, trace_id=trace_id)
+        if task["mode"] == TaskMode.AGENT.value:
+            await self._engine._agent_runtime.resume_after_pause(
+                task_id,
+                pause_reason=str(task.get("failure_reason") or ""),
+                trace_id=trace_id,
+            )
+        else:
+            await self._engine._run_task(task_id, trace_id=trace_id)
         await self._engine._sync_run_job_to_task(task_id)
         return await self._engine.detail(task_id)
 
@@ -52,10 +63,11 @@ class TaskResumeRuntime:
         task_id = approval["task_id"]
         task = await self._engine._get_task(task_id)
         if approval["status"] == "denied":
-            if (
-                task.get("current_approval_id") != approval_id
-                and task["status"] != TaskStatus.WAITING_APPROVAL.value
-            ):
+            if task["status"] in {
+                TaskStatus.COMPLETED.value,
+                TaskStatus.CANCELLED.value,
+                TaskStatus.FAILED.value,
+            }:
                 return await self._engine.detail(task_id)
             if approval.get("step_id"):
                 await self._engine._repo.update_step(
@@ -115,7 +127,14 @@ class TaskResumeRuntime:
                 trace_id=trace_id,
                 extra={"current_approval_id": None},
             )
-            await self._engine._run_task(task_id, trace_id=trace_id)
+            if task["mode"] == TaskMode.AGENT.value:
+                await self._engine._agent_runtime.resume_after_pause(
+                    task_id,
+                    pause_reason="approval_waiting",
+                    trace_id=trace_id,
+                )
+            else:
+                await self._engine._run_task(task_id, trace_id=trace_id)
             await self._engine._sync_run_job_to_task(task_id)
             await self._engine._event(
                 task_id,

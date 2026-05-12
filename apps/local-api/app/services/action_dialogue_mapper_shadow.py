@@ -65,7 +65,7 @@ class ActionDialogueMapperShadowService:
                     quality_dimensions=sorted(set(dimensions + ["anti_false_completion"])),
                     risk_notes=["task_waiting_approval_should_not_sound_done"],
                 )
-            if status in {"executing", "planned"}:
+            if status in {"executing", "planned", "paused"}:
                 return ActionDialogueMappingShadow(
                     action_status=status,
                     narration_style="brief_progress",

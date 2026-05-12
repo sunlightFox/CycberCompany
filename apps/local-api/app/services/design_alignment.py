@@ -1186,13 +1186,18 @@ class RuntimeContractService:
             _contract(
                 "AgentLoopRunner",
                 "implemented",
-                "bounded observe-plan-act-evaluate loop with persisted iterations",
-                details={"max_loop_steps_default": 8, "background_autonomy": False},
+                "authoritative observe-decide-act-evaluate-replan loop with persisted iterations",
+                details={
+                    "max_loop_steps_default": 8,
+                    "background_autonomy": False,
+                    "authoritative_runtime": True,
+                    "runtime_owner": "task_agent_runtime",
+                },
             ),
             _contract(
                 "TaskObservationService",
                 "implemented",
-                "redacted task observations with untrusted content markers",
+                "redacted task observations with source refs, trust markers and replay linkage",
             ),
             _contract(
                 "TaskReflectionService",
@@ -1282,13 +1287,14 @@ class RuntimeContractService:
                 "persists bounded next-action decisions for agent loop iterations",
                 details={
                     "actions": [
-                        "act",
+                        "continue_step",
                         "revise_plan",
-                        "ask_user",
-                        "request_approval",
+                        "pause_for_approval",
+                        "pause_for_budget",
+                        "handoff",
                         "retry_tool",
-                        "stop_blocked",
-                        "stop_budget",
+                        "stop_failed",
+                        "stop_completed",
                     ]
                 },
             ),

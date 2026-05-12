@@ -258,6 +258,21 @@
         "uri": "config/skill-repositories/fixtures/clawhub-ppt-edit"
       },
       "trust_level": "curated"
+    },
+    {
+      "package_ref": "official/github/pr-workflow",
+      "bundle_id": "clawhub-github-pr-workflow",
+      "display_name": "ClawHub GitHub PR Workflow",
+      "description": "生成 GitHub PR、review、release 协作请求的受控结果工件，不直接暴露凭据。",
+      "version": "0.1.0",
+      "author": "clawhub",
+      "tags": ["github", "code-hosting", "pr", "review", "release"],
+      "keywords": ["GitHub", "pull request", "PR", "review", "release", "merge", "push"],
+      "source": {
+        "type": "local_directory",
+        "uri": "config/skill-repositories/fixtures/clawhub-github-pr-workflow"
+      },
+      "trust_level": "curated"
     }
   ]
 }

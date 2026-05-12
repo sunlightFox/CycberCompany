@@ -30,6 +30,26 @@ FAKE_PROVIDER_TARGET: dict[str, Any] = {
     },
 }
 
+XIAOHONGSHU_BROWSER_TARGET: dict[str, Any] = {
+    "platform_key": "social_xiaohongshu",
+    "display_name": "小红书",
+    "aliases": ["小红书", "xhs", "rednote"],
+    "supported_actions": ["publish_content", "comment_content", "read_status"],
+    "required_asset_types": ["account"],
+    "execution_modes": ["browser"],
+    "risk_defaults": {
+        "publish_content": "R4",
+        "comment_content": "R3",
+        "read_status": "R1",
+    },
+    "metadata": {
+        "seeded_for": "phase_xiaohongshu_browser_flow",
+        "real_provider": True,
+        "provider_registry_owned": True,
+        "real_external_platform_integration": True,
+    },
+}
+
 
 @dataclass(frozen=True)
 class ProviderInfo:

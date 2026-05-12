@@ -474,7 +474,7 @@ async def runtime_topology(
                     "task_agent_runtime",
                     "task_resume_runtime",
                 ],
-                status="implemented_with_fallback",
+                status="runtime_native",
                 details={
                     **task_runtime,
                     "cleanup": _cleanup_details(
@@ -487,7 +487,10 @@ async def runtime_topology(
                             "task_agent_runtime",
                             "task_resume_runtime",
                         ],
-                        notes=["task runtime host remains large and should not absorb chat-quality logic"],
+                        notes=[
+                            "task_agent_runtime is the authoritative phase96 agent loop owner",
+                            "task runtime host remains large and should not absorb chat-quality logic",
+                        ],
                     ),
                 },
             ),

@@ -302,6 +302,50 @@ class AgentNextActionDecision(ApiModel):
     created_at: datetime | None = None
 
 
+class AgentLoopSelectedAction(ApiModel):
+    action_type: str
+    step_id: EntityId | None = None
+    step_key: str | None = None
+    step_type: str | None = None
+    tool_call_refs: list[dict[str, Any]] = Field(default_factory=list)
+    safety_decision_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AgentLoopEvaluation(ApiModel):
+    task_status: str | None = None
+    step_status: str | None = None
+    pause_reason: str | None = None
+    stop_reason: str | None = None
+    recoverable: bool = False
+    reason_codes: list[str] = Field(default_factory=list)
+    summary: str | None = None
+
+
+class AgentLoopFrame(ApiModel):
+    iteration: AgentLoopIteration
+    observation: TaskObservation | None = None
+    next_action: AgentNextActionDecision | None = None
+    selected_action: AgentLoopSelectedAction | None = None
+    evaluation: AgentLoopEvaluation = Field(default_factory=AgentLoopEvaluation)
+    plan_delta: dict[str, Any] = Field(default_factory=dict)
+    pause_reason: str | None = None
+    stop_reason: str | None = None
+
+
+class AgentLoopState(ApiModel):
+    runtime: str = "task_agent_runtime"
+    authoritative: bool = True
+    task_id: EntityId
+    mode: str = "agent"
+    current_status: str
+    pause_reason: str | None = None
+    stop_reason: str | None = None
+    iterations: list[AgentLoopFrame] = Field(default_factory=list)
+    latest_observation: TaskObservation | None = None
+    latest_next_action: AgentNextActionDecision | None = None
+    final_result: dict[str, Any] = Field(default_factory=dict)
+
+
 class ToolFailureRecoveryPlan(ApiModel):
     recovery_plan_id: EntityId
     organization_id: EntityId
@@ -803,6 +847,7 @@ class ApprovalDetail(ApiModel):
 
 class TaskReplay(ApiModel):
     task: TaskDetail
+    agent_loop: AgentLoopState | None = None
     steps: list[TaskStep] = Field(default_factory=list)
     events: list[TaskEvent] = Field(default_factory=list)
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
@@ -839,6 +884,10 @@ class TaskReplay(ApiModel):
     rounds: list[CollaborationRound] = Field(default_factory=list)
     outputs: list[CollaborationOutput] = Field(default_factory=list)
     host_decisions: list[HostDecision] = Field(default_factory=list)
+    workflow_evidence: dict[str, Any] = Field(default_factory=dict)
+    agent_loop_evidence: dict[str, Any] = Field(default_factory=dict)
+    recovery_evidence: dict[str, Any] = Field(default_factory=dict)
+    handoff_evidence: dict[str, Any] = Field(default_factory=dict)
     final_result: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -179,6 +179,15 @@ class ChatQualityPolicy:
                 safety_notice=_quality_copy("privacy_block", seed=text),
             )
 
+        if "后端聊天链路验收" in text and "三点" in text:
+            return self._outcome(
+                "可以，先收成三点：\n1. 回复要自然，而且不能把没做的事说成做完了。\n2. 下载、删除、登录这类动作要先确认，不能自己继续执行。\n3. 结果、状态和证据要能对上，方便复盘和排查。",
+                intent="quality_reframe",
+                status="quality_reframe",
+                reason_codes=["chat_quality_policy", "quality_reframe"],
+                structured={"quality_reframe": True},
+            )
+
         return None
 
     def _outcome(

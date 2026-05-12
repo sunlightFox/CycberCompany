@@ -205,6 +205,44 @@ class BrainDecisionService:
             clarification = review_outcome.clarification
             review = review_outcome.review
             semantic_review = review_outcome.semantic_review
+        if intent.direct_only_requested and intent.execution_policy == "no_task":
+            intent = intent.model_copy(
+                update={
+                    "primary_intent": (
+                        intent.primary_intent
+                        if intent.primary_intent
+                        not in {"task_request", "tool_request", "skill_request", "mcp_request"}
+                        else "simple_question"
+                    ),
+                    "needs_tool": False,
+                    "needs_task": False,
+                    "needs_skill": False,
+                    "needs_mcp": False,
+                    "interaction_class": "direct_explanation",
+                    "execution_policy": "no_task",
+                    "reason_codes": [
+                        *list(intent.reason_codes),
+                        "direct_only_fail_closed",
+                    ],
+                }
+            )
+            if mode.mode not in {
+                TaskMode.DIRECT.value,
+                TaskMode.DIRECT_WITH_MEMORY.value,
+                "ask_clarification",
+            }:
+                mode = mode.model_copy(
+                    update={
+                        "mode": TaskMode.DIRECT.value,
+                        "submode": "simple_answer",
+                        "planner_hint": None,
+                        "requires_approval_before_execute": False,
+                        "reason_codes": [
+                            *list(mode.reason_codes),
+                            "direct_only_fail_closed",
+                        ],
+                    }
+                )
         confidence = round(min(intent.confidence, mode.confidence), 2)
         bundle = BrainDecisionBundle(
             brain_decision_id=decision_id,

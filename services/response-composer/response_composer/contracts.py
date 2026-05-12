@@ -1901,6 +1901,15 @@ def _compose_action_status_text(facts: dict[str, Any]) -> str:
                 f"{label}这一步先落成了方案，还没有发生实际动作。",
             ),
         )
+    if status == "paused":
+        return pick_variant(
+            seed,
+            (
+                f"{label}这一步已经停下来了，当前不会继续往前执行。",
+                f"{label}现在处于暂停状态，后面只有在你重新推进时才会继续。",
+                f"{label}这一步我已经按下暂停，不会把它说成已经完成。",
+            ),
+        )
     if status == "blocked_by_boundary":
         reason = str(facts.get("failure_reason") or facts.get("safe_next_step") or "").strip()
         return opening_copy(
@@ -2032,6 +2041,8 @@ def _action_status_title(status: str) -> str | None:
         return "等待确认"
     if status == "planned":
         return "已计划"
+    if status == "paused":
+        return "已暂停"
     if status == "executing":
         return "执行中"
     if status == "partially_completed":

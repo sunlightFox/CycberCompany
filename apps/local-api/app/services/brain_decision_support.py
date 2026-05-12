@@ -70,7 +70,24 @@ def confidence(primary: str, rule_hits: list[str], risks: list[str], text: str) 
 
 
 def safe_plan_only(text: str) -> bool:
-    return any(marker in text for marker in ["只做分析", "只给方案", "不要执行", "先别执行"])
+    return any(
+        marker in text
+        for marker in [
+            "只做分析",
+            "只给方案",
+            "不要执行",
+            "先别执行",
+            "不要创建任务",
+            "不创建任务",
+            "不要使用工具",
+            "不要调用工具",
+            "不使用工具",
+            "只解释",
+            "只输出",
+            "只要结果",
+            "先给方案",
+        ]
+    )
 
 
 def multimodal_attachment_context(text: str) -> bool:
@@ -128,7 +145,22 @@ def needs_live_skill_mcp_snapshot(text: str) -> bool:
 
 
 def persona_boundary_question(text: str) -> bool:
-    return any(marker in text for marker in ["你能做什么", "你不能做什么", "边界", "权限"])
+    return any(
+        marker in text
+        for marker in [
+            "你能做什么",
+            "你不能做什么",
+            "边界",
+            "权限",
+            "系统提示",
+            "隐藏账号",
+            "绕过审批",
+            "直接登录",
+            "private key",
+            "私钥",
+            "助记词",
+        ]
+    )
 
 
 def explicit_task_creation(text: str) -> bool:
@@ -136,17 +168,35 @@ def explicit_task_creation(text: str) -> bool:
 
 
 def real_task_request(text: str) -> bool:
+    if safe_plan_only(text):
+        return False
     return explicit_task_creation(text) or any(
         marker in text for marker in ["帮我做", "去执行", "帮我处理", "跑一下", "装一下"]
     )
 
 
 def tool_request(text: str) -> bool:
+    if safe_plan_only(text):
+        return False
     return any(marker in text for marker in ["调用工具", "打开网页", "下载", "截图", "安装"])
 
 
 def advice_strategy_direct(text: str) -> bool:
     return any(marker in text for marker in ["建议", "方案", "取舍", "优化思路"])
+
+
+def concept_explanation_request(text: str) -> bool:
+    return any(marker in text for marker in ["解释", "区别", "为什么", "作用", "模板"]) and any(
+        marker in text
+        for marker in [
+            "网页快照",
+            "截图",
+            "浏览器任务",
+            "下载",
+            "确认",
+            "结果",
+        ]
+    )
 
 
 def filesystem_scope_action(text: str) -> bool:

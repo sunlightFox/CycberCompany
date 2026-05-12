@@ -75,6 +75,7 @@ from app.services.chat_prompt_options import (
     phase89_heuristic_runtime as _phase89_heuristic_runtime,
 )
 from app.services.chat_runtime_host_helpers import (
+    browser_capability_explanation_reply as _browser_capability_explanation_reply,
     browser_read_page_error_reply as _browser_read_page_error_reply,
     browser_read_page_payload as _browser_read_page_payload,
     browser_read_page_reply as _browser_read_page_reply,
@@ -134,6 +135,7 @@ from app.services.chat_safety import ChatTurnAccessPolicy
 from app.services.chat_steering import ChatSteeringCoordinator
 from app.services.chat_tasks import ChatTaskCoordinator, ChatTurnOrchestrator
 from app.services.chat_direct_routes_runtime import ChatDirectRoutesRuntime
+from app.services.chat_action_state import normalize_chat_action_state
 from app.services.chat_turn_execution import ChatTurnExecutionOrchestrator
 from app.services.chat_turn_finalize import ChatTurnFinalizeService
 from app.services.chat_turn_input_facts import (
@@ -901,6 +903,7 @@ class ChatService:
         clarification_decision: ClarificationDecision | None = None,
         response_filter: dict[str, Any] | None = None,
         prompt_metadata: dict[str, Any] | None = None,
+        emit_final_delta: bool = False,
     ) -> AsyncIterator[ChatEvent]:
         text = self._style_visible_text(turn, text, response_plan=response_plan)
         filtered_text, final_filter = self._response_coordinator.filter_text(text)
@@ -1067,6 +1070,17 @@ class ChatService:
             response_filter=merged_filter,
         )
         text = response_plan.plain_text
+        if emit_final_delta and text:
+            yield await self._emit_and_record(
+                turn["turn_id"],
+                turn["trace_id"],
+                events,
+                ChatEventType.RESPONSE_DELTA,
+                {
+                    "text": text,
+                    "response_filter": merged_filter,
+                },
+            )
         compose_span = await self._trace.start_span(
             turn["trace_id"],
             span_type=TraceSpanType.RESPONSE_COMPOSE,
@@ -1643,7 +1657,19 @@ class ChatService:
         response_policy, session_context, _ = self._presence_runtime_inputs(turn)
         return self._composer.response_plan_for_action_status(
             facts=facts,
-            task_status=task_status,
+            task_status=(
+                {
+                    **dict(task_status or {}),
+                    "status": canonical_action_status(
+                        dict(task_status or {}).get("status"),
+                        default=dict(task_status or {}).get("status") or "requested",
+                    )
+                    if dict(task_status or {}).get("status") not in {"paused", "waiting_approval"}
+                    else dict(task_status or {}).get("status"),
+                }
+                if task_status
+                else None
+            ),
             trace_refs=trace_refs,
             response_policy=response_policy,
             session_context=session_context,
@@ -2470,7 +2496,7 @@ class ChatService:
     def _model_failure_type(self, error: ModelAdapterError | None) -> str:
         return _model_failure_type(error)
 
-    def _context_redaction_summary(
+    def _redaction_summary(
         self,
         context: ContextPacket,
         *,
@@ -2483,6 +2509,9 @@ class ChatService:
 
     def _deterministic_boundary_reply_text(self, user_text: str) -> str | None:
         return _deterministic_boundary_reply(user_text)
+
+    def _browser_capability_explanation_reply_text(self, user_text: str) -> str | None:
+        return _browser_capability_explanation_reply(user_text)
 
     def _direct_route_reply_for_decision(
         self,
@@ -2568,6 +2597,7 @@ class ChatService:
                         brain_decision.brain_decision_id if brain_decision else None
                     ),
                     planner_context={
+                        "route_intent": intent,
                         "intent": brain_decision.intent.model_dump(mode="json")
                         if brain_decision
                         else {},
@@ -2606,16 +2636,24 @@ class ChatService:
             )
             recovery = await self._recover_task_in_turn(turn, events, task, root_span_id)
             task = recovery.task
-            if task.status.value == "waiting_approval":
-                presentation = self._task_coordinator.present_task_status(task)
-                pending_action = None
-                if self._approval_service is not None and task.current_approval_id:
-                    approval = await self._approval_service.get(task.current_approval_id)
-                    pending_action = pending_action_from_approval(
-                        approval,
-                        session_id=session_id,
-                        source_turn_id=turn_id,
-                    )
+            presentation = self._task_coordinator.present_task_status(task)
+            pending_action = None
+            approval = None
+            if self._approval_service is not None and task.current_approval_id:
+                approval = await self._approval_service.get(task.current_approval_id)
+                pending_action = pending_action_from_approval(
+                    approval,
+                    session_id=session_id,
+                    source_turn_id=turn_id,
+                )
+            normalized_state = normalize_chat_action_state(
+                task=task,
+                approval=approval,
+                route_kind=intent,
+                recovery_payload=recovery.recovery_payload,
+                pending_action=pending_action,
+            )
+            if normalized_state["task_status"] == "waiting_approval":
                 yield await emit(
                     ChatEventType.APPROVAL_REQUIRED,
                     {
@@ -2650,7 +2688,7 @@ class ChatService:
                         turn,
                         facts=self._action_status_facts_for_turn(
                             turn,
-                            status="pending_action",
+                            status="waiting_for_approval",
                             route=intent,
                             action_label=str(task.title or "这一步任务"),
                             target=str(task.title or ""),
@@ -2662,7 +2700,7 @@ class ChatService:
                         ),
                         task_status={
                             "task_id": task.task_id,
-                            "status": task.status.value,
+                            "status": normalized_state["task_status"],
                             "mode": task.mode.value,
                         },
                     )
@@ -2677,18 +2715,13 @@ class ChatService:
                         }
                     )
             else:
-                presentation = self._task_coordinator.present_task_status(task)
                 if presentation.event_type is not None:
                     yield await emit(
                         presentation.event_type,
                         presentation.event_payload,
                     )
                 text = f"{recovery.response_prefix}{presentation.text}"
-                terminal_status = (
-                    "failed"
-                    if task.status.value in {"failed", "error", "cancelled"}
-                    else ("completed" if task.status.value == "completed" else task.status.value)
-                )
+                terminal_status = normalized_state["action_status"]
                 response_plan = self._response_plan_for_action_status(
                     turn,
                     facts=self._action_status_facts_for_turn(
@@ -2697,7 +2730,7 @@ class ChatService:
                         route=intent,
                         action_label=str(task.title or "这一步任务"),
                         target=str(task.title or ""),
-                        detail_status=task.status.value,
+                        detail_status=normalized_state["task_status"],
                         failure_reason=str(
                             presentation.safety_notice or presentation.tool_notice or ""
                         ),
@@ -2720,12 +2753,15 @@ class ChatService:
                     update={
                         "structured_payload": {
                             **response_plan.structured_payload,
-                            "task_status_semantics": presentation.task_status,
+                            "task_status_semantics": {
+                                **presentation.task_status,
+                                "status": normalized_state["task_status"],
+                            },
                             "recovery": recovery.recovery_payload,
                         },
                     }
                 )
-                if recovery.recovery_payload.get("status") == "exhausted":
+                if normalized_state["should_fail_turn"]:
                     async for event in self._fail_turn(
                         turn,
                         events,

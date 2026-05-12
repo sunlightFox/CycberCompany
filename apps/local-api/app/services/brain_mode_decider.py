@@ -12,7 +12,15 @@ def mode_decision(intent: IntentDecision, capability_snapshot: dict[str, object]
     planner_hint = None
     fallback = None
     approval_first = bool(execution_risks(intent.risk_signals))
-    if intent.primary_intent in {"memory_query", "memory_update", "memory_correction"}:
+    if intent.execution_policy == "approval_only":
+        submode = "approval_resolution"
+        approval_first = False
+        reasons.append("approval_only_resolution")
+    elif intent.execution_policy == "readonly_tool":
+        submode = "readonly_tool"
+        approval_first = False
+        reasons.append("readonly_tool_supported")
+    elif intent.primary_intent in {"memory_query", "memory_update", "memory_correction"}:
         mode = TaskMode.DIRECT_WITH_MEMORY.value
         submode = "memory_answer"
         reasons.append("memory_visible_scope")

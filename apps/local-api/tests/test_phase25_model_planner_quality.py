@@ -271,7 +271,9 @@ def test_phase25_agent_loop_budget_stop_records_replan_and_recovery(
     ).json()["items"]
 
     assert task["status"] == "paused"
-    stop_budget = next(item for item in next_actions if item["next_action_type"] == "stop_budget")
+    stop_budget = next(
+        item for item in next_actions if item["next_action_type"] == "pause_for_budget"
+    )
     assert stop_budget["plan_delta"]["trigger_reason"] == "budget_near_limit"
     assert stop_budget["plan_delta"]["model_assist"]["fallback"] == "rule_observation_replanner"
     assert any(item["failure_type"] == "budget_exhausted" for item in recovery)

@@ -2605,7 +2605,17 @@ class ReleaseGateService:
                 "approval_stops": await self._repo.count_rows(
                     "agent_loop_iterations",
                     "WHERE stop_reason = ?",
-                    ("approval_required",),
+                    ("approval_waiting",),
+                ),
+                "phase96_pause_for_budget": await self._repo.count_rows(
+                    "agent_next_action_decisions",
+                    "WHERE next_action_type = ?",
+                    ("pause_for_budget",),
+                ),
+                "phase96_pause_for_approval": await self._repo.count_rows(
+                    "agent_next_action_decisions",
+                    "WHERE next_action_type = ?",
+                    ("pause_for_approval",),
                 ),
                 "capability_removed_steps": await self._repo.count_rows(
                     "task_planner_decisions",
@@ -3772,8 +3782,15 @@ class ReleaseGateService:
             ),
             "replan_count": await self._repo.count_rows(
                 "agent_next_action_decisions",
-                "WHERE next_action_type IN (?, ?, ?, ?, ?)",
-                ("revise_plan", "ask_user", "retry_tool", "request_approval", "stop_budget"),
+                "WHERE next_action_type IN (?, ?, ?, ?, ?, ?)",
+                (
+                    "revise_plan",
+                    "retry_tool",
+                    "pause_for_approval",
+                    "pause_for_budget",
+                    "handoff",
+                    "stop_failed",
+                ),
             ),
             "recovery_count": await self._repo.count_rows("tool_failure_recovery_plans"),
             "skill_mcp_ranked_candidates": await self._repo.count_rows(
@@ -6613,8 +6630,15 @@ class ReleaseGateService:
             },
             "replan_count": await self._repo.count_rows(
                 "agent_next_action_decisions",
-                "WHERE next_action_type IN (?, ?, ?, ?, ?)",
-                ("revise_plan", "ask_user", "retry_tool", "request_approval", "stop_budget"),
+                "WHERE next_action_type IN (?, ?, ?, ?, ?, ?)",
+                (
+                    "revise_plan",
+                    "retry_tool",
+                    "pause_for_approval",
+                    "pause_for_budget",
+                    "handoff",
+                    "stop_failed",
+                ),
             ),
             "recovery_count": await self._repo.count_rows("tool_failure_recovery_plans"),
             "skill_mcp_ranked_candidates": await self._repo.count_rows(
@@ -12477,7 +12501,17 @@ class ReleaseGateService:
                 "approval_stops": await self._repo.count_rows(
                     "agent_loop_iterations",
                     "WHERE stop_reason = ?",
-                    ("approval_required",),
+                    ("approval_waiting",),
+                ),
+                "phase96_pause_for_budget": await self._repo.count_rows(
+                    "agent_next_action_decisions",
+                    "WHERE next_action_type = ?",
+                    ("pause_for_budget",),
+                ),
+                "phase96_pause_for_approval": await self._repo.count_rows(
+                    "agent_next_action_decisions",
+                    "WHERE next_action_type = ?",
+                    ("pause_for_approval",),
                 ),
                 "capability_removed_steps": await self._repo.count_rows(
                     "task_planner_decisions",
@@ -13110,6 +13144,8 @@ def _phase45_refactor_boundaries(root_dir: Path) -> dict[str, Any]:
     service_dir = root_dir / "apps" / "local-api" / "app" / "services"
     chat_text = (service_dir / "chat.py").read_text(encoding="utf-8")
     quality_text = (service_dir / "chat_quality.py").read_text(encoding="utf-8")
+    task_text = (service_dir / "chat_tasks.py").read_text(encoding="utf-8")
+    memory_text = (service_dir / "chat_memory.py").read_text(encoding="utf-8")
     coordinator_files = [
         "chat_model.py",
         "chat_privacy.py",
@@ -13125,17 +13161,18 @@ def _phase45_refactor_boundaries(root_dir: Path) -> dict[str, Any]:
         "model_messages_delegated": "self._model_coordinator.model_messages" in chat_text,
         "privacy_routing_delegated": "self._privacy.classify" in chat_text
         and "self._privacy.model_route_error" in chat_text,
-        "scheduled_task_intent_delegated": "scheduled_intents.parse" in chat_text
-        and "def _parse_scheduled_task_request" not in chat_text,
-        "task_policy_delegated": "parse_media_task_request" in chat_text
-        and "def _parse_media_task_request" not in chat_text,
+        "scheduled_task_intent_delegated": "ScheduledTaskIntentCoordinator" in task_text
+        and "self.scheduled_intents = ScheduledTaskIntentCoordinator()" in task_text,
+        "task_policy_delegated": "class ChatTaskCoordinator" in task_text
+        and "def present_task_status" in task_text,
         "task_status_presenter_delegated": "ChatTaskStatusPresenter" not in chat_text
         and "present_task_status" in chat_text,
         "context_redaction_delegated": "context_redaction_summary" not in chat_text
         and "self._context_coordinator.redaction_summary" in chat_text,
         "response_filter_delegated": "ChatVisibleOutputFilter" not in chat_text
         and "self._response_coordinator.filter_text" in chat_text,
-        "memory_policy_delegated": "self._memory_coordinator.allow_direct_command" in chat_text,
+        "memory_policy_delegated": "class ChatMemoryCoordinator" in memory_text
+        and "allow_direct_command" in memory_text,
         "quality_policy_generic_payload": "quality_case" not in quality_text
         and "chat_quality_policy" in quality_text,
     }

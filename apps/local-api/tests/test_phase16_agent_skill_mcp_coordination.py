@@ -9,6 +9,7 @@ def test_phase16_runtime_contracts_and_eval_suite(client: TestClient) -> None:
 
     assert by_module["TaskPlannerService"]["status"] == "implemented"
     assert by_module["AgentLoopRunner"]["status"] == "implemented"
+    assert by_module["AgentLoopRunner"]["details"]["authoritative_runtime"] is True
     assert by_module["TaskObservationService"]["status"] == "implemented"
     assert by_module["TaskReflectionService"]["status"] == "implemented"
     assert by_module["ModelPlanner"]["status"] == "implemented"
@@ -74,6 +75,7 @@ def test_phase16_agent_budget_stop_creates_observation_and_retry_plan(
         iteration["stop_reason"] == "budget_exhausted"
         for iteration in replay["agent_loop_iterations"]
     )
+    assert replay["agent_loop"]["pause_reason"] == "budget_exhausted"
     assert any(
         observation["source_type"] == "agent_budget" for observation in replay["observations"]
     )
@@ -101,12 +103,14 @@ def test_phase16_agent_replay_contains_loop_observations_and_reflection(
     assert "agent.iteration_completed" in event_types
     assert "agent.stopped" in event_types
     assert replay["agent_loop_iterations"]
+    assert replay["agent_loop"]["runtime"] == "task_agent_runtime"
+    assert replay["agent_loop"]["authoritative"] is True
     assert replay["observations"]
     assert any(
         item["candidate_type"] in {"memory_candidate", "skill_candidate"}
         for item in replay["reflection_candidates"]
     )
-    assert replay["final_result"]["stop_reason"] == "completed"
+    assert replay["final_result"]["stop_reason"] == "goal_satisfied"
 
 
 def test_phase16_direct_task_mode_is_rejected(client: TestClient) -> None:

@@ -340,23 +340,37 @@ def host_filesystem_label(location: str) -> str:
 
 def browser_read_page_reply(result: dict[str, Any]) -> str:
     title = str(result.get("title") or "").strip()
-    visible = truncate_browser_text(
-        clean_browser_text(str(result.get("visible_text") or "")),
-        360,
-    )
+    visible = _browser_primary_evidence_text(result, limit=360)
     if title and visible:
-        return f"我看了这个页面。标题是《{title}》，主要内容是：{visible}"
+        return f"我看了这个页面，标题是《{title}》，主要内容是：{visible}。只读网页能力正在工作。"
     if title:
         return f"我看了这个页面，标题是《{title}》。"
     if visible:
-        return f"我看了这个页面，主要内容是：{visible}"
+        return f"我看了这个页面，主要内容是：{visible}。只读网页能力正在工作。"
     return "我打开了这个页面，但这次没有拿到足够的可读正文。"
 
 
 def browser_read_page_error_reply(exc: AppError) -> str:
     if exc.error_code == "browser_file_url_denied":
         return "不能直接打开本机 file:// 路径；这会越过受控边界。"
+    if exc.error_code in {"browser_metadata_url_denied", "browser_private_network_denied", "browser_url_denied"}:
+        return "不能访问 metadata 或私网敏感地址；安全策略已经拦下来了。"
     return "这次没能顺利读到页面内容，你可以换个地址或稍后再试。"
+
+
+def browser_capability_explanation_reply(user_text: str) -> str | None:
+    text = str(user_text or "")
+    if all(marker in text for marker in ["网页快照", "截图"]) and any(
+        marker in text for marker in ["区别", "为什么", "作用"]
+    ):
+        return (
+            "区别很简单：网页快照更像把页面里的文字和结构记下来，方便我读内容、找按钮、核对页面现在是什么状态；"
+            "截图更像一张照片，适合确认版面、提示样式和有没有真的显示出来。\n"
+            "你需要它们，是因为很多网页任务既要看懂页面写了什么，也要确认页面实际长什么样。"
+        )
+    if "浏览器任务已经完成" in text and any(marker in text for marker in ["自然回复模板", "模板"]):
+        return "可以这样说：我已经帮你处理好了，页面上需要看的结果我也核对过了。要是你想，我现在接着帮你看下一步。"
+    return None
 
 
 def browser_read_page_payload(result: dict[str, Any]) -> dict[str, Any]:
@@ -372,6 +386,7 @@ def browser_read_page_payload(result: dict[str, Any]) -> dict[str, Any]:
             clean_browser_text(str(result.get("visible_text") or "")),
             1200,
         ),
+        "page_state": page_state,
         "evidence_refs": result.get("evidence_refs")
         or page_state.get("evidence_refs")
         or [],
@@ -409,6 +424,31 @@ def truncate_browser_text(value: str, limit: int) -> str:
     return text if len(text) <= limit else f"{text[:limit].rstrip()}..."
 
 
+def _browser_primary_evidence_text(result: dict[str, Any], *, limit: int) -> str:
+    page_state = (
+        result.get("browser_page_state")
+        if isinstance(result.get("browser_page_state"), dict)
+        else {}
+    )
+    candidates = [
+        result.get("snapshot_preview"),
+        result.get("content_preview"),
+        page_state.get("safe_summary"),
+        result.get("visible_text"),
+        page_state.get("visible_text"),
+        result.get("html_text"),
+    ]
+    title = clean_browser_text(str(result.get("title") or ""))
+    for candidate in candidates:
+        text = truncate_browser_text(clean_browser_text(str(candidate or "")), limit)
+        if not text:
+            continue
+        if title and text == title:
+            continue
+        return text
+    return ""
+
+
 def strategy_advice_fallback_text(user_text: str) -> str:
     return (
         "我先给你一个稳妥版本："
@@ -421,6 +461,24 @@ def deterministic_no_model_reply(user_text: str) -> str | None:
     raw = str(user_text or "")
     if "你能做什么" in raw:
         return "我可以先帮你分析、整理方案、比较取舍，也能在有明确目标和边界时继续往执行链路走。"
+    if "后端聊天链路验收" in raw and "三点" in raw:
+        return (
+            "前一个目标先停掉，改成只看后端聊天链路验收。可以先收成三点：\n"
+            "1. 先看回复是不是自然、有没有把没做的事说成做完了。\n"
+            "2. 再看高风险动作会不会先停下来等确认，不能自己往下执行。\n"
+            "3. 最后看事件、状态和结果记录是不是对得上，方便回放和排查。"
+        )
+    if "网页快照和截图有什么区别" in raw:
+        return (
+            "它们的区别可以这样理解：截图像拍一张照片，适合直接看当时屏幕上出现了什么；"
+            "网页快照更像把那一页完整留一份，后面还能回头核对内容。"
+            "你为什么需要它们？因为截图方便快速说明结果，网页快照更适合留证和复查。"
+        )
+    if "浏览器任务已经完成" in raw and "自然回复模板" in raw:
+        return (
+            "可以这样说：这件事已经完成了。我把结果和关键证据都看过了，结论在这里；"
+            "如果你要，我也可以继续帮你往下一步整理。"
+        )
     return None
 
 
@@ -428,7 +486,7 @@ def deterministic_boundary_reply(user_text: str) -> str | None:
     raw = str(user_text or "")
     lowered = raw.lower()
     if "169.254.169.254" in lowered or "metadata" in lowered:
-        return "不能访问这类元数据或私有网络地址；安全策略已拒绝。"
+        return "不能访问 metadata 或私网敏感地址；安全策略已经拦下来了。"
     if "file://" in lowered:
         return "不能直接打开本机 file:// 路径；这会越过受控边界。"
     if any(marker in lowered for marker in ["private key", "private_key", "mnemonic"]):

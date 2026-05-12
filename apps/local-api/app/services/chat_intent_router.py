@@ -127,6 +127,27 @@ class ChatIntentRouter:
                     "require_citation": require_citation,
                 },
             )
+        code_hosting = code_hosting_route(clean)
+        if code_hosting is not None:
+            return ChatRouteDecision(
+                route_type=code_hosting,
+                confidence=0.9,
+                reason_code=f"{code_hosting}_detected",
+                requires_confirmation=False,
+                task_goal=clean,
+                safe_user_summary=_safe_summary(clean),
+                metadata={"forge_provider_type": "github"},
+            )
+        repo_route = repo_execution_route(clean)
+        if repo_route is not None:
+            return ChatRouteDecision(
+                route_type=repo_route,
+                confidence=0.88,
+                reason_code=f"{repo_route}_detected",
+                requires_confirmation=False,
+                task_goal=clean,
+                safe_user_summary=_safe_summary(clean),
+            )
         if is_desktop_native_request(clean):
             return ChatRouteDecision(
                 route_type="desktop_native_request",
@@ -180,6 +201,22 @@ class ChatIntentRouter:
                 safe_user_summary=_safe_summary(clean),
             )
         return ChatRouteDecision("default", 0.5, "fallback_to_existing_chat_chain")
+
+
+def direct_only_requested(text: str) -> bool:
+    return _direct_only(_clean(text))
+
+
+def is_readonly_route_request(text: str) -> bool:
+    clean = _clean(text)
+    return any(
+        (
+            is_webpage_read_request(clean),
+            is_browser_search_request(clean),
+            is_host_filesystem_list_request(clean),
+            terminal_command(clean) is not None,
+        )
+    )
 
 
 def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
@@ -309,6 +346,78 @@ def is_skill_install_context(text: str) -> bool:
             "安装与授权",
         ]
     )
+
+
+def repo_execution_route(text: str) -> str | None:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if _direct_only(clean):
+        return None
+    if not any(
+        marker in clean or marker in lowered
+        for marker in [
+            "repo",
+            "仓库",
+            "代码",
+            "代码仓",
+            "代码库",
+            "pytest",
+            "测试",
+            "重构",
+            "patch",
+            "bugfix",
+            "改代码",
+            "修复",
+        ]
+    ):
+        return None
+    if any(
+        marker in clean or marker in lowered
+        for marker in ["只读", "readonly", "read only", "看看代码", "阅读代码", "读一下", "读读"]
+    ):
+        return "repo_readonly_request"
+    if any(marker in clean or marker in lowered for marker in ["修复失败", "fix after failure", "失败后修", "测试失败"]):
+        return "repo_fix_after_failure"
+    if any(marker in clean or marker in lowered for marker in ["重构", "refactor"]):
+        return "repo_refactor_request"
+    if any(marker in clean or marker in lowered for marker in ["pytest", "测试", "验证", "typecheck", "lint"]):
+        return "repo_test_request"
+    if any(marker in clean or marker in lowered for marker in ["patch", "bugfix", "改代码", "修改代码", "修复 bug", "修 bug", "补丁"]):
+        return "repo_patch_request"
+    return None
+
+
+def code_hosting_route(text: str) -> str | None:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if _direct_only(clean):
+        return None
+    has_provider = any(
+        marker in clean or marker in lowered
+        for marker in ["github", "代码托管", "远程仓库", "github.com"]
+    )
+    has_hosting_action = any(
+        marker in clean or marker in lowered
+        for marker in ["pull request", "merge", "release", "push", "branch", "issue", "sync"]
+    ) or re.search(r"\bpr\b", lowered)
+    has_review_action = any(
+        marker in clean or marker in lowered for marker in ["review", "评审", "审查", "comment", "评论"]
+    )
+    if not has_provider and not has_hosting_action:
+        return None
+    if has_review_action and not (has_provider or has_hosting_action):
+        return None
+    if any(marker in clean or marker in lowered for marker in ["状态", "看看", "查看", "list", "read-only", "readonly", "只读"]):
+        return "code_hosting_readonly_request"
+    if any(marker in clean or marker in lowered for marker in ["release", "发布", "release note"]):
+        return "code_hosting_release_request"
+    if any(marker in clean or marker in lowered for marker in ["review", "评审", "审查", "comment", "评论"]):
+        return "code_hosting_review_request"
+    if any(marker in clean or marker in lowered for marker in ["pull request", "合并请求"]) or re.search(r"\bpr\b", lowered):
+        return "code_hosting_pr_request"
+    if any(marker in clean or marker in lowered for marker in ["push", "branch", "同步", "sync", "merge"]):
+        return "code_hosting_sync_request"
+    return "code_hosting_readonly_request"
 
 
 def is_explicit_download_request(text: str) -> bool:

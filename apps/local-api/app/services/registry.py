@@ -495,6 +495,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     )
     task_engine.set_extension_services(
         skill_plugin_service=skill_plugin_service,
+        skill_governance_service=skill_governance_service,
+        skill_repository_service=skill_repository_service,
         mcp_service=mcp_service,
     )
     task_engine.set_browser_evidence_provider(browser_session_service.list_task_evidence)
@@ -731,6 +733,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         tool_runtime=tool_runtime,
         approval_service=approval_service,
         audit_service=audit_service,
+        asset_broker=asset_broker_service,
     )
     autonomous_browser_workflow_legacy_service = AutonomousBrowserWorkflowService(
         repo=browser_workflow_repo,

@@ -137,7 +137,7 @@ class MemoryRepository:
     async def insert_memory_item(self, data: dict[str, Any]) -> None:
         await self._db.execute(
             """
-            INSERT INTO memory_items (
+            INSERT OR IGNORE INTO memory_items (
               memory_id, organization_id, member_id, user_id, layer, kind, scope_type,
               scope_id, memory_class, scope_policy, summary_text, payload_json, source_json,
               confidence, importance, sensitivity, durability, freshness_state, valid_from,

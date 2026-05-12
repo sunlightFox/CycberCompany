@@ -228,7 +228,16 @@ async def task_agent_loop(
     task_id: str,
     registry: ServiceRegistry = Depends(get_registry),
 ) -> AgentLoopListResponse:
-    return AgentLoopListResponse(items=await registry.task_engine.agent_loop(task_id))
+    loop_state = await registry.task_engine.agent_loop_state(task_id)
+    return AgentLoopListResponse(
+        runtime=loop_state.runtime,
+        authoritative=loop_state.authoritative,
+        task_id=loop_state.task_id,
+        current_status=loop_state.current_status,
+        pause_reason=loop_state.pause_reason,
+        stop_reason=loop_state.stop_reason,
+        items=loop_state.iterations,
+    )
 
 
 @router.get("/{task_id}/observations", response_model=TaskObservationListResponse)
@@ -237,6 +246,7 @@ async def task_observations(
     registry: ServiceRegistry = Depends(get_registry),
 ) -> TaskObservationListResponse:
     return TaskObservationListResponse(
+        task_id=task_id,
         items=await registry.task_engine.observations(task_id)
     )
 
@@ -314,6 +324,7 @@ async def task_agent_next_actions(
     registry: ServiceRegistry = Depends(get_registry),
 ) -> AgentNextActionDecisionListResponse:
     return AgentNextActionDecisionListResponse(
+        task_id=task_id,
         items=await registry.task_engine.agent_next_actions(task_id)
     )
 

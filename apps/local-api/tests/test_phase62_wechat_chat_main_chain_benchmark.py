@@ -203,6 +203,7 @@ def test_phase62_wechat_complex_model_reply_delivers_single_revised_message(
     assert len(same_turn_bindings) == 1
     assert len(response_deltas) == 1
     assert response_deltas[0]["payload"]["payload"]["text"] == sent
+    assert _response_completed_plain_text(response_completed) == sent
     if len(calls) == 2:
         assert continuation.get("enabled") is True
         assert continuation.get("iterations") == 1
@@ -394,6 +395,12 @@ def _latest_reply(client: TestClient, turn_id: str) -> str:
         for item in events
         if item["event_type"] == "response.delta"
     )
+
+
+def _response_completed_plain_text(event: dict[str, Any]) -> str:
+    payload = dict(event.get("payload", {}).get("payload", {}) or {})
+    plan = dict(payload.get("response_plan") or {})
+    return str(plan.get("plain_text") or "")
 
 
 def _parse_local_sse(raw: str) -> str:

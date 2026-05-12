@@ -42,6 +42,7 @@ from app.services.asset_broker import AssetBrokerService
 from app.services.audit import AuditEventService
 from app.services.external_platform_providers import (
     FAKE_PROVIDER_TARGET,
+    XIAOHONGSHU_BROWSER_TARGET,
     ExternalPlatformProviderRegistry,
     ProviderExecutionRequest,
     ProviderInfo,
@@ -51,6 +52,7 @@ from app.services.safety_policy import RuntimeSafetyPolicyService
 from app.services.tasks import TaskEngine
 
 ACTION_MARKERS = {
+    "comment_content": ["评论", "留言", "回复", "comment", "reply"],
     "publish_content": [
         "发布",
         "发一篇文章",
@@ -77,7 +79,13 @@ CONTENT_MARKERS = [
     "文章:",
 ]
 
-HIGH_RISK_ACTIONS = {"publish_content", "send_message", "edit_content", "delete_content"}
+HIGH_RISK_ACTIONS = {
+    "publish_content",
+    "comment_content",
+    "send_message",
+    "edit_content",
+    "delete_content",
+}
 
 
 class ExternalPlatformActionService:
@@ -105,20 +113,24 @@ class ExternalPlatformActionService:
         self._safety_policy = safety_policy_service
 
     async def ensure_seeded_targets(self, *, trace_id: str | None = None) -> None:
-        existing = await self._repo.get_target_by_key(str(FAKE_PROVIDER_TARGET["platform_key"]))
-        if existing is not None:
-            return
         now = utc_now_iso()
-        target = {
-            **FAKE_PROVIDER_TARGET,
-            "target_id": "ept_fake_platform",
-            "organization_id": "org_default",
-            "status": "active",
-            "trace_id": trace_id,
-            "created_at": now,
-            "updated_at": now,
-        }
-        await self._repo.upsert_target(target)
+        for target_seed, target_id in (
+            (FAKE_PROVIDER_TARGET, "ept_fake_platform"),
+            (XIAOHONGSHU_BROWSER_TARGET, "ept_social_xiaohongshu"),
+        ):
+            existing = await self._repo.get_target_by_key(str(target_seed["platform_key"]))
+            if existing is not None:
+                continue
+            target = {
+                **target_seed,
+                "target_id": target_id,
+                "organization_id": "org_default",
+                "status": "active",
+                "trace_id": trace_id,
+                "created_at": now,
+                "updated_at": now,
+            }
+            await self._repo.upsert_target(target)
 
     def list_providers(self) -> list[ProviderInfo]:
         return self._providers.list()
@@ -197,7 +209,7 @@ class ExternalPlatformActionService:
                 missing_fields.append("platform")
             if action_type == "unknown":
                 missing_fields.append("action_type")
-            if action_type in {"publish_content", "send_message"} and not content:
+            if action_type in {"publish_content", "comment_content", "send_message"} and not content:
                 missing_fields.append("content")
             confidence = round(
                 0.25
@@ -361,6 +373,7 @@ class ExternalPlatformActionService:
         trace_id: str | None = None,
     ) -> ExternalPlatformActionPlanResponse:
         intent = await self._get_intent(request.intent_id)
+        request_metadata = {**request.metadata, **_plan_create_metadata(request)}
         if intent.status != "resolved":
             plan = await self._insert_plan_for_intent(
                 intent,
@@ -369,7 +382,7 @@ class ExternalPlatformActionService:
                 trace_id=trace_id,
                 failure_reason="intent_missing_fields",
                 evidence={"missing_fields": intent.missing_fields},
-                metadata=request.metadata,
+                metadata=request_metadata,
             )
             return await self._response_for_plan(
                 plan.plan_id,
@@ -387,7 +400,7 @@ class ExternalPlatformActionService:
                     "blocked_by": "redaction_policy",
                     "redaction": intent.constraints.get("redaction", {}),
                 },
-                metadata=request.metadata,
+                metadata=request_metadata,
             )
             await self._plan_event(
                 plan.plan_id,
@@ -408,7 +421,7 @@ class ExternalPlatformActionService:
                 execution_mode=request.execution_mode,
                 trace_id=trace_id,
                 failure_reason="target_not_found",
-                metadata=request.metadata,
+                metadata=request_metadata,
             )
             return await self._response_for_plan(
                 plan.plan_id,
@@ -423,7 +436,7 @@ class ExternalPlatformActionService:
                 trace_id=trace_id,
                 failure_reason="unsupported_action",
                 evidence={"supported_actions": target.supported_actions},
-                metadata=request.metadata,
+                metadata=request_metadata,
             )
             return await self._response_for_plan(
                 plan.plan_id,
@@ -445,7 +458,7 @@ class ExternalPlatformActionService:
                 trace_id=trace_id,
                 failure_reason="no_account_asset_candidate",
                 evidence={"account_candidates": []},
-                metadata=request.metadata,
+                metadata=request_metadata,
             )
             await self._plan_event(
                 plan.plan_id,
@@ -474,7 +487,7 @@ class ExternalPlatformActionService:
                         item.model_dump(mode="json") for item in candidates
                     ]
                 },
-                metadata=request.metadata,
+                metadata=request_metadata,
             )
             await self._plan_event(
                 plan.plan_id,
@@ -500,7 +513,7 @@ class ExternalPlatformActionService:
             selected=selected,
             risk_level=_risk_for_action(target, intent.action_type),
             evidence={"account_candidates": [item.model_dump(mode="json") for item in candidates]},
-            metadata=request.metadata,
+            metadata=request_metadata,
         )
         return await self._bind_selected_account(
             plan.plan_id,
@@ -796,6 +809,12 @@ class ExternalPlatformActionService:
             risk_level=plan.risk_level,
             execution_mode=plan.execution_mode,
         )
+        browser_task_required = plan.execution_mode == "browser"
+        skip_approval = _should_skip_test_account_approval(
+            selected=selected,
+            target=target,
+            action_type=plan.action_type,
+        )
         update: dict[str, Any] = {
             "selected_asset_id": selected.asset_id,
             "selected_handle_id": selected.handle_id,
@@ -803,14 +822,56 @@ class ExternalPlatformActionService:
             "evidence": {
                 **plan.evidence,
                 "selected_candidate": selected.model_dump(mode="json"),
+                "selected_account_summary": _selected_account_summary(selected),
                 "safety": {
                     "external_state_change": plan.action_type in HIGH_RISK_ACTIONS,
-                    "requires_approval": _risk_order(plan.risk_level) >= 3,
-                    "approval_before_submit": True,
+                    "requires_approval": _risk_order(plan.risk_level) >= 3 and not skip_approval,
+                    "approval_before_submit": not skip_approval,
                 },
             },
             "updated_at": utc_now_iso(),
         }
+        if skip_approval:
+            task_id = await self._ensure_plan_task_id(
+                plan=plan,
+                target=target,
+                selected=selected,
+                trace_id=trace_id,
+            )
+            update.update(
+                {
+                    "task_id": task_id,
+                    "status": "ready",
+                    "metadata": {
+                        **plan.metadata,
+                        "test_account_approval_bypass": True,
+                    },
+                    "evidence": {
+                        **update["evidence"],
+                        "approval_bypass": {
+                            "policy_source": "test_account_whitelist",
+                            "selected_asset_id": selected.asset_id,
+                            "provider_key": selected.provider_key,
+                        },
+                    },
+                }
+            )
+            await self._repo.update_plan(plan.plan_id, update)
+            await self._plan_event(
+                plan.plan_id,
+                "plan.ready",
+                {
+                    "risk_level": plan.risk_level,
+                    "approval_profile": "test_account_whitelist",
+                    "task_id": task_id,
+                },
+                trace_id=trace_id,
+            )
+            return await self._response_for_plan(
+                plan.plan_id,
+                message="测试账号命中外部平台白名单，已跳过审批并准备自动执行。",
+                next_step="execute_action_plan",
+            )
         if _risk_order(plan.risk_level) >= 3:
             approval_required = True
             if self._safety_policy is not None:
@@ -829,6 +890,13 @@ class ExternalPlatformActionService:
                     },
                 )
             if not approval_required:
+                if browser_task_required and not plan.task_id:
+                    update["task_id"] = await self._ensure_plan_task_id(
+                        plan=plan,
+                        target=target,
+                        selected=selected,
+                        trace_id=trace_id,
+                    )
                 update["status"] = "ready"
                 await self._repo.update_plan(plan.plan_id, update)
                 await self._plan_event(
@@ -842,35 +910,14 @@ class ExternalPlatformActionService:
                     message="外部平台动作计划已准备好，当前个人审批策略不要求额外确认。",
                     next_step="execute_action_plan",
                 )
-            task = await self._tasks.create_task(
-                TaskCreateRequest(
-                    conversation_id=plan.conversation_id,
-                    owner_member_id=plan.member_id,
-                    goal=f"外部平台动作计划：{target.display_name} {plan.action_type}",
-                    mode_hint=TaskMode.WORKFLOW,
-                    success_criteria=["只在审批通过后推进外部平台动作", "所有证据必须脱敏"],
-                    constraints={
-                        "external_platform_action": True,
-                        "plan_id": plan.plan_id,
-                        "platform_key": plan.platform_key,
-                        "action_type": plan.action_type,
-                        "selected_asset_id": selected.asset_id,
-                    },
-                    resource_handle_ids=[selected.handle_id] if selected.handle_id else [],
-                    planner_context={
-                        "external_platform_action": {
-                            "plan_id": plan.plan_id,
-                            "platform_key": plan.platform_key,
-                            "action_type": plan.action_type,
-                            "privacy": "redacted_content_only",
-                        }
-                    },
-                    auto_start=False,
-                ),
+            task_id = await self._ensure_plan_task_id(
+                plan=plan,
+                target=target,
+                selected=selected,
                 trace_id=trace_id,
             )
             approval = await self._approvals.create_approval(
-                task_id=task.task_id,
+                task_id=task_id,
                 organization_id=plan.organization_id,
                 requested_action=f"external_platform.{plan.action_type}",
                 risk_level=_risk_enum(plan.risk_level),
@@ -893,7 +940,7 @@ class ExternalPlatformActionService:
             )
             update.update(
                 {
-                    "task_id": task.task_id,
+                    "task_id": task_id,
                     "approval_id": approval.approval_id,
                     "status": "awaiting_approval",
                 }
@@ -904,7 +951,7 @@ class ExternalPlatformActionService:
                 "approval.required",
                 {
                     "approval_id": approval.approval_id,
-                    "task_id": task.task_id,
+                    "task_id": task_id,
                     "risk_level": plan.risk_level,
                 },
                 trace_id=trace_id,
@@ -915,6 +962,13 @@ class ExternalPlatformActionService:
                 next_step="approve_or_deny_pending_action",
             )
         update["status"] = "ready"
+        if browser_task_required and not plan.task_id:
+            update["task_id"] = await self._ensure_plan_task_id(
+                plan=plan,
+                target=target,
+                selected=selected,
+                trace_id=trace_id,
+            )
         await self._repo.update_plan(plan.plan_id, update)
         await self._plan_event(
             plan.plan_id,
@@ -927,6 +981,45 @@ class ExternalPlatformActionService:
             message="低风险外部平台动作计划已准备好。",
             next_step="execute_action_plan",
         )
+
+    async def _ensure_plan_task_id(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        target: ExternalPlatformTarget,
+        selected: AccountAssetCandidate,
+        trace_id: str | None,
+    ) -> str:
+        if plan.task_id:
+            return plan.task_id
+        task = await self._tasks.create_task(
+            TaskCreateRequest(
+                conversation_id=plan.conversation_id,
+                owner_member_id=plan.member_id,
+                goal=f"外部平台动作计划：{target.display_name} {plan.action_type}",
+                mode_hint=TaskMode.WORKFLOW,
+                success_criteria=["外部平台动作按受控流程执行", "所有证据必须脱敏"],
+                constraints={
+                    "external_platform_action": True,
+                    "plan_id": plan.plan_id,
+                    "platform_key": plan.platform_key,
+                    "action_type": plan.action_type,
+                    "selected_asset_id": selected.asset_id,
+                },
+                resource_handle_ids=[selected.handle_id] if selected.handle_id else [],
+                planner_context={
+                    "external_platform_action": {
+                        "plan_id": plan.plan_id,
+                        "platform_key": plan.platform_key,
+                        "action_type": plan.action_type,
+                        "privacy": "redacted_content_only",
+                    }
+                },
+                auto_start=False,
+            ),
+            trace_id=trace_id,
+        )
+        return task.task_id
 
     async def _account_candidates(
         self,
@@ -943,7 +1036,7 @@ class ExternalPlatformActionService:
             subject_id=member_id,
             conversation_id=conversation_id,
             asset_type=AssetCategory.ACCOUNT,
-            requested_actions=[action_type],
+            requested_actions=_requested_actions_for_account_query(action_type),
             keywords=[platform_key, *(keywords or [])],
             context={
                 "external_platform_action": True,
@@ -1150,14 +1243,15 @@ def _match_target(text: str, targets: list[dict[str, Any]]) -> dict[str, Any] | 
 
 def _detect_action_type(text: str) -> tuple[str, float]:
     lowered = text.lower()
-    for action_type, markers in ACTION_MARKERS.items():
+    for action_type in ("comment_content", "publish_content", "send_message", "read_status"):
+        markers = ACTION_MARKERS[action_type]
         if any(marker.lower() in lowered for marker in markers):
             return action_type, 0.25
     return "unknown", 0.0
 
 
 def _extract_content(text: str, action_type: str) -> str | None:
-    if action_type not in {"publish_content", "send_message"}:
+    if action_type not in {"publish_content", "comment_content", "send_message"}:
         return None
     for marker in CONTENT_MARKERS:
         if marker in text:
@@ -1228,6 +1322,30 @@ def _steps_for_action(
                 "required_capability": "publish_content",
             }
         )
+    elif action_type == "comment_content":
+        base.extend(
+            [
+                {
+                    "step_type": "locate_post",
+                    "risk": "R2",
+                    "executor": "browser",
+                    "requires_approval": False,
+                },
+                {
+                    "step_type": "open_comment_box",
+                    "risk": "R2",
+                    "executor": "browser",
+                    "requires_approval": False,
+                },
+                {
+                    "step_type": "submit_comment",
+                    "risk": risk_level,
+                    "executor": execution_mode,
+                    "requires_approval": _risk_order(risk_level) >= 3,
+                    "required_capability": "comment_content",
+                },
+            ]
+        )
     elif action_type == "send_message":
         base.append(
             {
@@ -1282,6 +1400,7 @@ def _candidate_from_asset_and_handle(
             "asset_handle_id": handle.handle_id,
             "platform_key": platform_key,
             "has_secret": bool(asset.get("secret_ref")),
+            "asset_metadata": redact(asset.get("metadata") or {}),
             "secret_material_visible": False,
         },
     )
@@ -1320,9 +1439,82 @@ def _risk_for_action(target: ExternalPlatformTarget | None, action_type: str) ->
             return _normalize_risk(value)
     if action_type == "publish_content":
         return "R4"
+    if action_type == "comment_content":
+        return "R3"
     if action_type == "send_message":
         return "R3"
     return "R1"
+
+
+def _requested_actions_for_account_query(action_type: str) -> list[str]:
+    if action_type in {"publish_content", "comment_content"}:
+        return ["login", action_type]
+    return [action_type]
+
+
+def _plan_create_metadata(request: ExternalPlatformActionPlanCreateRequest) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    if request.publish_text:
+        metadata["publish_text"] = request.publish_text
+    if request.comment_text:
+        metadata["comment_text"] = request.comment_text
+    if request.target_post_hint:
+        metadata["target_post_hint"] = request.target_post_hint
+    if request.target_post_selector:
+        metadata["target_post_selector"] = request.target_post_selector
+    if request.target_post_url:
+        metadata["target_post_url"] = request.target_post_url
+    if request.published_post_ref:
+        metadata["published_post_ref"] = request.published_post_ref
+    if request.provider_mode:
+        metadata["provider_mode"] = request.provider_mode
+    if request.publish_text or request.comment_text:
+        metadata["verification_mode"] = "visible_text"
+    return metadata
+
+
+def _should_skip_test_account_approval(
+    *,
+    selected: AccountAssetCandidate,
+    target: ExternalPlatformTarget,
+    action_type: str,
+) -> bool:
+    if action_type not in {"publish_content", "comment_content"}:
+        return False
+    evidence = selected.evidence if isinstance(selected.evidence, dict) else {}
+    metadata = evidence.get("asset_metadata") if isinstance(evidence.get("asset_metadata"), dict) else {}
+    if metadata.get("test_account_auto_approve_external_actions") is True:
+        return True
+    provider_key = str(selected.provider_key or "").lower()
+    display_name = str(selected.display_name or "")
+    return (
+        str(target.platform_key or "").lower() == "social_xiaohongshu"
+        and provider_key in {"xiaohongshu", "social_xiaohongshu"}
+        and "测试" in display_name
+        and str(selected.owner_scope or "") == "member"
+    )
+
+
+def _selected_account_summary(selected: AccountAssetCandidate) -> dict[str, Any]:
+    provider_key = str(selected.provider_key or "")
+    display_name = str(selected.display_name or "")
+    masked_name = display_name[:1] + "***" if display_name else ""
+    evidence = selected.evidence if isinstance(selected.evidence, dict) else {}
+    asset_metadata = (
+        evidence.get("asset_metadata") if isinstance(evidence.get("asset_metadata"), dict) else {}
+    )
+    return {
+        "asset_id": selected.asset_id,
+        "handle_id": selected.handle_id,
+        "provider_key": provider_key,
+        "display_name_masked": masked_name,
+        "owner_scope": selected.owner_scope,
+        "platform": asset_metadata.get("platform") or provider_key,
+        "login_mode": asset_metadata.get("login_mode") or "password",
+        "account_role": asset_metadata.get("account_role"),
+        "environment": asset_metadata.get("environment"),
+        "secret_material_visible": False,
+    }
 
 
 def _normalize_risk(value: str) -> str:

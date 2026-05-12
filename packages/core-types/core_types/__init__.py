@@ -263,7 +263,11 @@ from core_types.skill_governance import (
     SkillStaticAnalysisReport,
 )
 from core_types.task import (
+    AgentLoopEvaluation,
+    AgentLoopFrame,
     AgentLoopIteration,
+    AgentLoopSelectedAction,
+    AgentLoopState,
     AgentNextActionDecision,
     ApprovalDetail,
     CollaborationContextBoundary,
@@ -317,7 +321,11 @@ from core_types.trace import AuditEvent, Trace, TraceSpan
 __all__ = [
     "ApiModel",
     "AgentNextActionDecision",
+    "AgentLoopEvaluation",
+    "AgentLoopFrame",
     "AgentLoopIteration",
+    "AgentLoopSelectedAction",
+    "AgentLoopState",
     "AccountAssetCandidate",
     "ApprovalStatus",
     "ApprovalDetail",

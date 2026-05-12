@@ -13,7 +13,7 @@ risk:
     - ~/.gnupg/**
     - ~/.config/*/secrets/**
     - browser_profile://default/**
-  approval_profile: strict
+  approval_profile: balanced_personal
   chat_visible_redaction: strict
   approval_policy:
     balanced_personal:

@@ -206,7 +206,9 @@ class SettingsService:
                         "task_artifact_sandbox",
                     )
                 ),
-                "approval_profile": str(safety_risk.get("approval_profile") or "strict"),
+                "approval_profile": str(
+                    safety_risk.get("approval_profile") or "balanced_personal"
+                ),
                 "chat_visible_redaction": str(
                     safety_risk.get("chat_visible_redaction") or "strict"
                 ),

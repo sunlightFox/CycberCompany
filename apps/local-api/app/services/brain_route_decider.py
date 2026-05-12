@@ -5,6 +5,7 @@ from core_types import DialogueState, IntentDecision, PrivacyLevel, SemanticInte
 from app.services.brain_decision_support import (
     advice_strategy_direct,
     capability_available,
+    concept_explanation_request,
     confidence,
     continuation_reference,
     complexity,
@@ -28,8 +29,10 @@ from app.services.brain_decision_support import (
     unknown_input,
 )
 from app.services.chat_intent_router import (
+    direct_only_requested,
     is_explicit_download_request,
     is_file_mutation_request,
+    is_readonly_route_request,
     is_host_filesystem_list_request,
     is_host_software_install_request,
     is_office_document_request,
@@ -57,6 +60,9 @@ def intent_decision(
     needs_mcp = False
     needs_task = False
     primary = "casual_chat"
+    direct_only = direct_only_requested(clean)
+    has_pending_confirmation = _has_pending_confirmation(working_state)
+    readonly_route = is_readonly_route_request(clean)
     if unknown_input(clean):
         primary = "unknown"
         rule_hits.append("low_information_input")
@@ -88,6 +94,10 @@ def intent_decision(
         primary = "complex_dialogue"
         secondary.append("make_plan")
         rule_hits.append("phase51_advice_strategy_direct")
+    elif concept_explanation_request(clean):
+        primary = "simple_question"
+        secondary.append("explain_concept")
+        rule_hits.append("concept_explanation_request")
     elif is_office_document_request(clean):
         skill_available = capability_available(capability_snapshot, "skill_engine")
         primary = "skill_request" if skill_available else "task_request"
@@ -122,7 +132,7 @@ def intent_decision(
     elif system_settings(clean):
         primary = "system_settings"
         rule_hits.append("settings_keyword")
-    elif "审批" in clean or "确认这次" in clean:
+    elif _approval_response(clean, has_pending_confirmation):
         primary = "approval_response"
         rule_hits.append("approval_response")
     elif "取消" in clean or "重试" in clean:
@@ -196,7 +206,18 @@ def intent_decision(
     if semantic is not None:
         secondary.extend(semantic.secondary_intents)
         risks.extend(semantic.risk_intents)
-        if semantic.tool_intents and not safe_plan_only(clean) and not persona_boundary_question(clean) and not advice_strategy_direct(clean) and not is_office_document_request(clean) and not is_host_filesystem_list_request(clean) and not is_webpage_read_request(clean):
+        if (
+            semantic.tool_intents
+            and not direct_only
+            and not readonly_route
+            and not safe_plan_only(clean)
+            and not persona_boundary_question(clean)
+            and not advice_strategy_direct(clean)
+            and not concept_explanation_request(clean)
+            and not is_office_document_request(clean)
+            and not is_host_filesystem_list_request(clean)
+            and not is_webpage_read_request(clean)
+        ):
             primary = "task_request"
             needs_tool = True
             needs_task = True
@@ -206,6 +227,13 @@ def intent_decision(
             rule_hits.append("semantic_context_conflict")
         if semantic.conflicts:
             rule_hits.extend(semantic.conflicts)
+    interaction_class, execution_policy = _interaction_contract(
+        primary_intent=primary,
+        needs_task=needs_task,
+        direct_only_requested=direct_only,
+        readonly_route=readonly_route,
+        has_pending_confirmation=has_pending_confirmation,
+    )
     return IntentDecision(
         primary_intent=primary,
         secondary_intents=dedupe(secondary),
@@ -228,5 +256,50 @@ def intent_decision(
         confidence=confidence(primary, rule_hits, risks, clean),
         reason_codes=dedupe([*rule_hits, *risks]),
         rule_hits=rule_hits,
+        interaction_class=interaction_class,
+        execution_policy=execution_policy,
+        direct_only_requested=direct_only,
         model_hint={"enabled": False, "source": "rule_first_phase18"},
     )
+
+
+def _has_pending_confirmation(working_state: dict[str, object] | None) -> bool:
+    if not isinstance(working_state, dict):
+        return False
+    pending = working_state.get("pending_confirmation")
+    return isinstance(pending, dict) and bool(pending)
+
+
+def _approval_response(text: str, has_pending_confirmation: bool) -> bool:
+    if not has_pending_confirmation:
+        return False
+    if "确认这次" in text:
+        return True
+    stripped = text.strip()
+    if stripped in {"同意", "批准", "拒绝", "deny", "approve"}:
+        return True
+    return any(marker in text for marker in ["我批准", "我拒绝", "确认执行", "只允许这一次", "本会话内同类操作都允许"])
+
+
+def _interaction_contract(
+    *,
+    primary_intent: str,
+    needs_task: bool,
+    direct_only_requested: bool,
+    readonly_route: bool,
+    has_pending_confirmation: bool,
+) -> tuple[str, str]:
+    if primary_intent == "boundary_question":
+        return "boundary_block", "no_task"
+    if primary_intent == "approval_response":
+        return "approval_resolution", "approval_only"
+    if readonly_route or primary_intent in {
+        "browser_read",
+        "system_filesystem_read",
+    }:
+        return "direct_readonly", "readonly_tool"
+    if needs_task or primary_intent in {"task_request", "skill_request", "mcp_request", "system_settings"}:
+        return "workflow_action", "task_required"
+    if direct_only_requested or has_pending_confirmation:
+        return "direct_explanation", "no_task"
+    return "direct_explanation", "no_task"
