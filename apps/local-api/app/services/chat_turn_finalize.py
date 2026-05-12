@@ -94,6 +94,23 @@ class ChatTurnFinalizeService:
                 base_plan=response_plan,
                 recovery=recovery_payload,
             )
+        if getattr(facade, "_failure_experience", None) is not None:
+            await facade._failure_experience.record_failure(
+                member_id=turn["member_id"],
+                failure_class="runtime_failure",
+                summary_text=message,
+                reason_code=code.value,
+                conversation_id=turn.get("conversation_id"),
+                turn_id=turn.get("turn_id"),
+                trace_id=turn.get("trace_id"),
+                impact_scope="chat_runtime",
+                severity="high" if code == ErrorCode.CHAT_RUNTIME_FAILED else "medium",
+                evidence_refs=[
+                    {"type": "turn", "turn_id": turn.get("turn_id")},
+                    {"type": "trace", "trace_id": turn.get("trace_id")},
+                ],
+                source_payload={"error_code": code.value, "turn_status": "failed"},
+            )
         response_plan = facade._with_experience_payload(turn, response_plan)
         response_plan = await facade._decorate_chat_payloads(turn, response_plan)
         response_plan = await facade._decorate_response_plan(

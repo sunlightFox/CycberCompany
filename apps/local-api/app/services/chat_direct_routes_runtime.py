@@ -57,6 +57,7 @@ class ChatDirectRoutesRuntime:
         browser_read_page_payload: Callable[[dict[str, Any]], dict[str, Any]],
         terminal_command_reply: Callable[[str, dict[str, Any]], str],
         terminal_command_error_reply: Callable[[str, AppError], str],
+        record_failure_experience: Callable[..., Awaitable[Any]] | None = None,
     ) -> None:
         self._composer = composer
         self._tool_runtime = tool_runtime
@@ -87,6 +88,7 @@ class ChatDirectRoutesRuntime:
         self._browser_read_page_payload = browser_read_page_payload
         self._terminal_command_reply = terminal_command_reply
         self._terminal_command_error_reply = terminal_command_error_reply
+        self._record_failure_experience = record_failure_experience
 
     def _tool_call_value(self, tool_call: Any, field: str, default: Any = None) -> Any:
         if tool_call is None:
@@ -166,6 +168,18 @@ class ChatDirectRoutesRuntime:
                 )
             else:
                 tool_evidence_refs = []
+        if source_type == "browser_snapshot":
+            browser_evidence_id = str(result.get("browser_evidence_id") or "").strip()
+            if browser_evidence_id:
+                normalized_refs: list[dict[str, Any]] = []
+                for item in list(tool_evidence_refs or []):
+                    if isinstance(item, dict):
+                        normalized = dict(item)
+                        normalized.setdefault("browser_evidence_id", browser_evidence_id)
+                        normalized_refs.append(normalized)
+                tool_evidence_refs = normalized_refs or [
+                    {"type": "browser_evidence", "browser_evidence_id": browser_evidence_id}
+                ]
         execution_semantics = dict(result.get("execution_semantics") or {})
         if not execution_semantics:
             execution_semantics = {
@@ -1037,6 +1051,24 @@ class ChatDirectRoutesRuntime:
             )
         except AppError as exc:
             text = self._terminal_command_error_reply(command, exc)
+            if self._record_failure_experience is not None:
+                await self._record_failure_experience(
+                    member_id=turn["member_id"],
+                    failure_class="tool_execution_error",
+                    summary_text=text,
+                    reason_code=exc.code,
+                    conversation_id=turn.get("conversation_id"),
+                    turn_id=turn.get("turn_id"),
+                    task_id=task.task_id,
+                    trace_id=trace_id,
+                    impact_scope="direct_route_terminal",
+                    severity="medium",
+                    evidence_refs=[
+                        {"type": "task", "task_id": task.task_id},
+                        {"type": "tool", "tool_name": "terminal.run"},
+                    ],
+                    source_payload={"command": command, "details": exc.details},
+                )
             response_plan = self._response_plan_for_status(
                 turn,
                 summary=text,

@@ -20,6 +20,10 @@ PHASE88_FAILURE_REASON_CODES = (
     "turn_completed_but_delivery_binding_missing",
     "delivery_binding_pending_timeout",
     "delivery_failed_after_turn_completed",
+    "active_run_not_found",
+    "stale_steering_target",
+    "duplicate_control_event",
+    "control_session_mismatch",
 )
 
 

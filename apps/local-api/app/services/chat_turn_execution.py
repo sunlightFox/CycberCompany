@@ -51,10 +51,18 @@ class ChatTurnExecutionOrchestrator:
             yield event
         if completed:
             return
+        if facade._events.token_for(turn["turn_id"]).cancelled:
+            async for event in facade._cancel_turn_during_stream(turn, events, ctx.root_span_id):
+                yield event
+            return
         async for event in self._run_route_dispatch_chain(facade, ctx):
             completed = True
             yield event
         if completed:
+            return
+        if facade._events.token_for(turn["turn_id"]).cancelled:
+            async for event in facade._cancel_turn_during_stream(turn, events, ctx.root_span_id):
+                yield event
             return
         async for event in self._run_model_execution_chain(facade, ctx):
             yield event
@@ -178,7 +186,15 @@ class ChatTurnExecutionOrchestrator:
         async def emit(event_type: ChatEventType, payload: dict[str, Any] | None = None) -> ChatEvent:
             return await facade._emit_and_record(turn_id, trace_id, events, event_type, payload)
 
-        quality_outcome = facade._quality.handle(user_text=user_text, privacy_level=privacy.privacy_level, sensitivity_hits=getattr(privacy, "sensitivity_hits", []), brain_intent=brain_decision.intent.primary_intent if brain_decision is not None else None)
+        quality_outcome = facade._quality.handle(
+            user_text=user_text,
+            privacy_level=privacy.privacy_level,
+            sensitivity_hits=getattr(privacy, "sensitivity_hits", []),
+            brain_intent=brain_decision.intent.primary_intent if brain_decision is not None else None,
+            failure_advisories=list(
+                ((context.context_diagnostics or {}).get("failure_advisories") or [])
+            ),
+        )
         if quality_outcome is not None:
             await facade._chat_repo.update_turn(turn_id, intent=quality_outcome.intent, mode=quality_outcome.mode, privacy_level=privacy.privacy_level, updated_at=utc_now_iso())
             yield await emit(ChatEventType.INTENT_DETECTED, {"intent": quality_outcome.intent, "reason_codes": ["chat_quality_policy"]})

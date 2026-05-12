@@ -56,6 +56,7 @@ from core_types.chat import (
     ChatIngressMetadata,
     ChatInput,
     ChatMessageEnvelope,
+    ChatSteeringMetadata,
     ChatTurnQueueItem,
     ChatTurnRecoveryAttempt,
     ChatTurnRequest,
@@ -153,6 +154,7 @@ from core_types.media import (
     MediaSpeechTranscript,
 )
 from core_types.memory import (
+    FailureExperienceRecord,
     MemoryCandidate,
     MemoryConflictRecord,
     MemoryExperienceRecord,
@@ -164,6 +166,7 @@ from core_types.memory import (
     MemorySearchRequest,
     MemorySearchResponse,
     MemorySource,
+    RegressionCandidateRecord,
 )
 from core_types.model import (
     BrainDecisionBundle,
@@ -374,6 +377,7 @@ __all__ = [
     "ChatInput",
     "ChatIngressMetadata",
     "ChatMessageEnvelope",
+    "ChatSteeringMetadata",
     "ChatTurnQueueItem",
     "ChatTurnRequest",
     "ChatTurnRecoveryAttempt",
@@ -423,6 +427,7 @@ __all__ = [
     "ExternalPlatformTarget",
     "FindingSeverity",
     "FindingStatus",
+    "FailureExperienceRecord",
     "FinishReason",
     "FullHealthResponse",
     "HeartSummary",
@@ -476,6 +481,7 @@ __all__ = [
     "ModelPlanGenerationResult",
     "ModelPlanRequest",
     "ModelRecoverySuggestion",
+    "RegressionCandidateRecord",
     "ModelRoute",
     "ModelRouteDecision",
     "ModelRouteName",

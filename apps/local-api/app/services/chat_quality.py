@@ -51,6 +51,7 @@ class ChatQualityPolicy:
         privacy_level: str,
         sensitivity_hits: list[str] | tuple[str, ...],
         brain_intent: str | None = None,
+        failure_advisories: list[dict[str, Any]] | None = None,
     ) -> ChatQualityOutcome | None:
         text = user_text.strip()
         if not text:
@@ -65,6 +66,7 @@ class ChatQualityPolicy:
                 status="desktop_capability_boundary",
                 reason_codes=["chat_quality_policy", "desktop_native_not_supported"],
                 structured={
+                    "failure_advisories": list(failure_advisories or []),
                     "capability_boundary": boundary,
                 },
                 tool_notice=(
@@ -83,6 +85,7 @@ class ChatQualityPolicy:
                     "no_task_or_tool_created",
                 ],
                 structured={
+                    "failure_advisories": list(failure_advisories or []),
                     "task_created": False,
                     "tool_created": False,
                     "approval_created": False,
@@ -103,6 +106,7 @@ class ChatQualityPolicy:
                     "no_task_or_tool_created",
                 ],
                 structured={
+                    "failure_advisories": list(failure_advisories or []),
                     "task_created": False,
                     "tool_created": False,
                     "approval_created": False,
@@ -142,6 +146,7 @@ class ChatQualityPolicy:
                     "no_unconditional_dosage_or_guarantee",
                 ],
                 structured={
+                    "failure_advisories": list(failure_advisories or []),
                     "task_created": False,
                     "tool_created": False,
                     "professional_boundary": True,
@@ -162,6 +167,7 @@ class ChatQualityPolicy:
                 status="recoverable_privacy_block",
                 reason_codes=["chat_quality_policy", "sensitive_input_recoverable_block"],
                 structured={
+                    "failure_advisories": list(failure_advisories or []),
                     "privacy_level": privacy_level,
                     "sensitivity_hits_summary": {
                         "count": len(sensitivity_hits),

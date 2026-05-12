@@ -60,6 +60,7 @@ from app.services.chat_capability_boundary import ChatCapabilityBoundaryService
 from app.services.chat_context import ChatContextCoordinator
 from app.services.chat_continuation import ChatContinuationCoordinator, ContinuationEvaluation
 from app.services.chat_experience import ChatExperienceService, ClarificationDecision
+from app.services.failure_experience import FailureExperienceService
 from app.services.chat_hook_runtime import ChatHookRuntime
 from app.services.chat_ingress import ChatContentNormalizer, ChatIngressService
 from app.services.chat_intent_router import (
@@ -130,6 +131,7 @@ from app.services.chat_readonly_execution import ChatReadonlyExecutionService
 from app.services.chat_response import ChatResponseCoordinator
 from app.services.chat_route_resolution import ChatRouteResolutionService
 from app.services.chat_safety import ChatTurnAccessPolicy
+from app.services.chat_steering import ChatSteeringCoordinator
 from app.services.chat_tasks import ChatTaskCoordinator, ChatTurnOrchestrator
 from app.services.chat_direct_routes_runtime import ChatDirectRoutesRuntime
 from app.services.chat_turn_execution import ChatTurnExecutionOrchestrator
@@ -204,6 +206,7 @@ class ChatService:
         action_dialogue_mapper_service: ActionDialogueMapperService | None = None,
         silent_continuity_service: SilentContinuityService | None = None,
         chat_run_ledger_service: Any | None = None,
+        failure_experience_service: FailureExperienceService | None = None,
         chat_hook_runtime: ChatHookRuntime | None = None,
     ) -> None:
         self._db = db
@@ -238,6 +241,7 @@ class ChatService:
         self._action_dialogue_mapper = action_dialogue_mapper_service
         self._silent_continuity = silent_continuity_service
         self._chat_run_ledger_service = chat_run_ledger_service
+        self._failure_experience = failure_experience_service
         self._chat_hook_runtime = chat_hook_runtime
         self._context_budget_runtime = ContextBudgetService()
         self._context_visibility_runtime = ContextVisibilityService()
@@ -266,6 +270,7 @@ class ChatService:
         self._task_coordinator = ChatTaskCoordinator()
         self._context_coordinator = ChatContextCoordinator()
         self._continuation = ChatContinuationCoordinator()
+        self._steering = ChatSteeringCoordinator()
         self._response_coordinator = ChatResponseCoordinator()
         self._turn_orchestrator = ChatTurnOrchestrator()
         self._turn_execution_orchestrator = ChatTurnExecutionOrchestrator()
@@ -304,6 +309,7 @@ class ChatService:
             persona_heart_service=persona_heart_service,
             chat_experience_service=chat_experience_service,
             agent_workbench_service=agent_workbench_service,
+            failure_experience_service=failure_experience_service,
             context_budget_service=self._context_budget_runtime,
             context_visibility_service=self._context_visibility_runtime,
         )
@@ -339,6 +345,11 @@ class ChatService:
             browser_read_page_payload=_browser_read_page_payload,
             terminal_command_reply=_terminal_command_reply,
             terminal_command_error_reply=_terminal_command_error_reply,
+            record_failure_experience=(
+                failure_experience_service.record_failure
+                if failure_experience_service is not None
+                else None
+            ),
         )
         self._execution = TurnExecutionManager(self._runtime_impl.run_turn)
         self._runtime_impl._bind_context(self)

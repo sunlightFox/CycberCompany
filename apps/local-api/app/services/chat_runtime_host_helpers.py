@@ -57,6 +57,7 @@ def content_payload(envelope: dict[str, Any]) -> dict[str, Any]:
         "context_refs": envelope.get("context_refs") or [],
         "normalized_summary": envelope.get("normalized_summary") or {},
         "model_safe_text_chars": envelope.get("model_safe_text_chars"),
+        "steering": dict((envelope.get("ingress_metadata") or {}).get("steering") or {}),
     }
 
 
@@ -67,6 +68,7 @@ def queue_payload(queue_item: dict[str, Any]) -> dict[str, Any]:
         "session_id": queue_item.get("session_id"),
         "queue_policy": queue_item.get("queue_policy"),
         "position": queue_item.get("position"),
+        "steering_diagnostics": dict(queue_item.get("steering_diagnostics") or {}),
     }
 
 
@@ -281,6 +283,8 @@ def session_id_from_message(message: dict[str, Any] | None) -> str | None:
     if not isinstance(message, dict):
         return None
     session_id = message.get("session_id")
+    if not session_id and isinstance(message.get("content"), dict):
+        session_id = message["content"].get("session_id")
     return str(session_id) if session_id else None
 
 
@@ -382,9 +386,10 @@ def terminal_command_reply(command: str, result: dict[str, Any]) -> str:
 
 
 def terminal_command_error_reply(command: str, exc: AppError) -> str:
-    if exc.error_code == "permission_denied":
-        return f"命令 `{command}` 这次没有通过权限边界。"
-    return f"命令 `{command}` 这次没跑通。"
+    error_code = str(getattr(exc, "error_code", None) or getattr(exc, "code", "") or "")
+    if error_code == "permission_denied":
+        return f"命令 `{command}` 这次没有通过权限边界，所以还没有执行。"
+    return f"命令 `{command}` 这次没跑通，我还没有拿到结果。"
 
 
 def clean_terminal_output(value: str) -> str:

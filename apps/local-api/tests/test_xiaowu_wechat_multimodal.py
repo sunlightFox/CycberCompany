@@ -335,7 +335,7 @@ def test_xiaowu_wechat_audio_reply_is_naturalized_through_continuation(
         del self, cancel_token
         captured_messages.append(request.messages)
         if len(captured_messages) == 1:
-            text = "收到语音，我来继续处理。"
+            text = "我听到你这段语音在说，先把图片识别和文件识别串起来，回复口吻也要更自然一点。"
         else:
             text = (
                 "我听到你说想先把图片识别和文件识别串起来，重点其实是两步："
@@ -414,9 +414,7 @@ def test_xiaowu_wechat_audio_reply_is_naturalized_through_continuation(
 
     stream = client.get(f"/api/chat/stream/{turn_id}")
     assert stream.status_code == 200, stream.text
-    events = _parse_sse(stream.text)
-    response_completed = next(event for event in events if event["event"] == "response.completed")
-    structured_payload = response_completed["payload"]["response_plan"]["structured_payload"]
+    _parse_sse(stream.text)
     sent_text = XiaowuWechatClient.send_calls[-1]["text"]
     envelope = client.get(f"/api/chat/turns/{turn_id}/envelope").json()
 
@@ -427,8 +425,8 @@ def test_xiaowu_wechat_audio_reply_is_naturalized_through_continuation(
     assert "语音转成文字：今天先把图片识别和文件识别串起来，回复口吻自然一点" in (
         captured_messages[0][-1]["content"]
     )
-    assert sent_text == "收到语音，我来继续处理。"
-    assert "continuation" not in structured_payload
+    assert sent_text == "我听到你这段语音在说，先把图片识别和文件识别串起来，回复口吻也要更自然一点。"
+    assert "continuation" not in json.dumps(envelope, ensure_ascii=False)
 
 
 def test_xiaowu_wechat_collect_and_fail_closed_paths(

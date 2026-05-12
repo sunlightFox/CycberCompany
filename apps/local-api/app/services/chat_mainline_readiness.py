@@ -275,6 +275,7 @@ class ChatMainlineReadinessService:
         "phase90_compat_cleanup_release_gate": "docs/开发计划/90-第九十阶段-主链路兼容逻辑删除窗口与封版门禁收尾.md",
         "phase91_host_decomposition_governance": "docs/开发计划/91-第九十一阶段-ChatRuntime物理拆分与宿主瘦身收尾.md",
         "phase92_long_term_memory_recall_governance": "docs/开发计划/92-第九十二阶段-长期记忆检索成熟化与跨会话召回闭环.md",
+        "phase94_failure_experience_governance": "docs/开发计划/94-第九十四阶段-失败经验记忆治理与回归候选闭环.md",
         "phase78_session_channel_semantics": "docs/开发计划/78-第七十八阶段-会话与渠道语义统一.md",
         "phase79_context_gateway_enhancement": "docs/开发计划/79-第七十九阶段-ContextGateway能力化增强.md",
         "phase80_tool_loop": "docs/开发计划/80-第八十阶段-聊天内工具调用闭环.md",
@@ -299,6 +300,7 @@ class ChatMainlineReadinessService:
         "phase90_compat_cleanup_release_gate": "apps/local-api/tests/test_phase90_compat_cleanup_release_gate.py",
         "phase91_host_decomposition_governance": "apps/local-api/tests/test_phase91_host_decomposition_governance.py",
         "phase92_long_term_memory_recall_governance": "apps/local-api/tests/test_phase92_long_term_memory_recall_governance.py",
+        "phase94_failure_experience_governance": "apps/local-api/tests/test_phase94_failure_experience_governance.py",
         "phase78_session_channel_semantics": "apps/local-api/tests/test_phase78_session_channel_semantics.py",
         "phase79_context_gateway_enhancement": "apps/local-api/tests/test_phase79_context_gateway_enhancement.py",
         "phase80_chat_tool_loop": "apps/local-api/tests/test_phase80_chat_tool_loop.py",
@@ -456,6 +458,8 @@ class ChatMainlineReadinessService:
         phase_readiness["phase91_host_decomposition_governance"] = phase91
         phase92 = self._phase92()
         phase_readiness["phase92_long_term_memory_recall_governance"] = phase92
+        phase94 = self._phase94()
+        phase_readiness["phase94_failure_experience_governance"] = phase94
         blocking_gaps = [
             {
                 "phase": phase,
@@ -520,6 +524,7 @@ class ChatMainlineReadinessService:
                 },
                 "phase91_host_governance": dict(phase91.get("details") or {}),
                 "phase92_memory_governance": dict(phase92.get("details") or {}),
+                "phase94_failure_experience_governance": dict(phase94.get("details") or {}),
                 "phase_docs_present": phase_docs_present,
                 "phase_tests_present": phase_tests_present,
             },
@@ -1282,6 +1287,51 @@ class ChatMainlineReadinessService:
                     "ContextGateway is sole recall caller",
                     "phase92 regression coverage present",
                 ],
+            },
+        )
+
+    def _phase94(self) -> dict[str, Any]:
+        blockers: list[str] = []
+        failure_service = getattr(self._chat_service, "_failure_experience", None)
+        runtime_diag = (
+            failure_service.runtime_diagnostic()
+            if failure_service is not None and hasattr(failure_service, "runtime_diagnostic")
+            else {}
+        )
+        if runtime_diag.get("runtime") != "failure_experience_service":
+            blockers.append("failure_experience_service_not_bound")
+        if not self._relative_exists("apps/local-api/app/services/failure_experience.py"):
+            blockers.append("phase94_service_missing")
+        if not self._relative_exists("apps/local-api/app/db/migrations/054_phase94_failure_experience_governance.sql"):
+            blockers.append("phase94_migration_missing")
+        if not self._relative_exists(self._PHASE_DOCS["phase94_failure_experience_governance"]):
+            blockers.append("phase94_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase94_failure_experience_governance"]):
+            blockers.append("phase94_test_missing")
+        routes_text = self._read_text("apps/local-api/app/api/routes_memory.py")
+        if "/failure-experiences" not in routes_text:
+            blockers.append("phase94_failure_experience_routes_missing")
+        if "/regression-candidates" not in routes_text:
+            blockers.append("phase94_regression_candidate_routes_missing")
+        if "phase94_failure_experience_governance" not in self._read_text(
+            "apps/local-api/app/services/release.py"
+        ):
+            blockers.append("phase94_release_gate_missing")
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                "apps/local-api/app/services/failure_experience.py",
+                "apps/local-api/app/api/routes_memory.py",
+                "apps/local-api/app/db/migrations/054_phase94_failure_experience_governance.sql",
+                self._PHASE_TESTS["phase94_failure_experience_governance"],
+            ],
+            blockers=blockers,
+            next_owner="apps/local-api/app/services/failure_experience.py",
+            details={
+                "phase94_contract_version": "phase94.failure_experience_governance.v1",
+                "review_actions": runtime_diag.get("review_actions") or [],
+                "regression_threshold": runtime_diag.get("regression_threshold") or {},
             },
         )
 

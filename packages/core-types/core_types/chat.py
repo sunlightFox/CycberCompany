@@ -54,6 +54,16 @@ class ChatContextRef(ApiModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ChatSteeringMetadata(ApiModel):
+    control_intent: str | None = None
+    target_turn_id: EntityId | None = None
+    target_task_id: EntityId | None = None
+    resolution_policy: str | None = None
+    reason_codes: list[str] = Field(default_factory=list)
+    source_channel_semantics: dict[str, Any] = Field(default_factory=dict)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
 class ChatIngressMetadata(ApiModel):
     channel: str = "local"
     inbound_event_id: str | None = None
@@ -68,6 +78,7 @@ class ChatIngressMetadata(ApiModel):
     collected_message_count: int | None = None
     collected_envelope_ids: list[EntityId] = Field(default_factory=list)
     source_timestamp: str | None = None
+    steering: ChatSteeringMetadata = Field(default_factory=ChatSteeringMetadata)
     raw_payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -170,6 +181,7 @@ class ChatTurnQueueItem(ApiModel):
     locked_by: str | None = None
     locked_until: datetime | str | None = None
     dedupe_key: str | None = None
+    steering_diagnostics: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime | str
     updated_at: datetime | str
     started_at: datetime | str | None = None

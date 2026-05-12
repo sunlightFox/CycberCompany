@@ -122,6 +122,54 @@ class MemoryExperienceRecord(ApiModel):
     updated_at: datetime | None = None
 
 
+class FailureExperienceRecord(ApiModel):
+    failure_id: EntityId
+    organization_id: EntityId
+    member_id: EntityId | None = None
+    conversation_id: EntityId | None = None
+    turn_id: EntityId | None = None
+    task_id: EntityId | None = None
+    trace_id: EntityId | None = None
+    memory_id: EntityId | None = None
+    failure_class: str
+    reason_code: str | None = None
+    impact_scope: str | None = None
+    severity: str = "medium"
+    summary_text: str
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_summary: str | None = None
+    source_payload: dict[str, Any] = Field(default_factory=dict)
+    recurrence_key: str
+    recurrence_count: int = 1
+    memory_decision: str = "not_written"
+    review_status: str = "not_required"
+    advisory_status: str = "inactive"
+    human_review_required: bool = False
+    tombstone_reason: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class RegressionCandidateRecord(ApiModel):
+    candidate_id: EntityId
+    failure_id: EntityId
+    source_turn_id: EntityId | None = None
+    source_trace_id: EntityId | None = None
+    candidate_type: str = "chat_regression"
+    status: str = "open"
+    recurrence_key: str
+    recurrence_count: int = 1
+    failure_class: str
+    reason_code: str | None = None
+    summary_text: str
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    release_gate_id: EntityId | None = None
+    accepted_into_suite: str | None = None
+    accepted_case_key: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class MemoryConflictRecord(ApiModel):
     conflict_id: EntityId
     organization_id: EntityId

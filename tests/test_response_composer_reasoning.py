@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
+import response_composer.contracts as composer_contracts
 from response_composer import (
     ComposeRequest,
     ReasoningTagFilter,
@@ -104,6 +105,68 @@ def test_response_composer_adds_conversation_voice_diagnostics() -> None:
         "multimodal_grounded",
     }.issubset(guard["checks"])
     assert guard["visible_text_hash"].startswith("sha256:")
+
+
+def test_response_composer_canonicalizes_phase65_taxonomy_and_visible_contract() -> None:
+    result = asyncio.run(
+        ResponseComposer().compose(
+            ComposeRequest(
+                user_text="继续刚才的话题。",
+                result_summary="先把现在能确认的部分说清楚。",
+                scenario="direct",
+            )
+        )
+    )
+
+    plan = result.response_plan
+    payload = plan.structured_payload
+    visible = plan.visible_layer_payload()
+
+    assert payload["scenario"] == "casual_chat"
+    assert payload["scenario_id"] == "casual_chat"
+    assert payload["voice_policy_version"].startswith("chat_voice.")
+    assert visible["follow_up_options"] == []
+    assert visible["tone_metadata"]["scenario"] == "casual_chat"
+    assert visible["quality_markers"]["current_message_priority"] is True
+    assert visible["quality_markers"]["evidence_required_before_done"] is True
+
+
+def test_response_composer_compose_pipeline_order_is_stable(monkeypatch) -> None:
+    events: list[str] = []
+
+    original_redact = composer_contracts.redact_visible_text
+    original_voice = composer_contracts.apply_conversation_voice
+    original_guard = composer_contracts._response_quality_guard
+
+    def tracked_redact(text: str):
+        events.append("redact")
+        return original_redact(text)
+
+    def tracked_voice(*args, **kwargs):
+        events.append("voice")
+        return original_voice(*args, **kwargs)
+
+    def tracked_guard(*args, **kwargs):
+        events.append("guard")
+        return original_guard(*args, **kwargs)
+
+    monkeypatch.setattr(composer_contracts, "redact_visible_text", tracked_redact)
+    monkeypatch.setattr(composer_contracts, "apply_conversation_voice", tracked_voice)
+    monkeypatch.setattr(composer_contracts, "_response_quality_guard", tracked_guard)
+
+    result = asyncio.run(
+        ResponseComposer().compose(
+            ComposeRequest(
+                user_text="只返回 JSON",
+                result_summary="<think>internal</think>{\"ok\": true}",
+                scenario="direct",
+                channel_profile="wechat_chat",
+            )
+        )
+    )
+
+    assert result.response_plan.plain_text == '{"ok": true}'
+    assert events[:3] == ["redact", "voice", "guard"]
 
 
 def test_response_composer_clarification_and_boundary_copy_sound_more_natural() -> None:
@@ -238,3 +301,21 @@ def test_response_quality_guard_flags_internal_terms_and_false_done() -> None:
     assert guard["checks"]["no_internal_terms"] is True
     assert "trace_id" not in result.response_plan.plain_text
     assert "task_id" not in result.response_plan.plain_text
+
+
+def test_response_quality_guard_tracks_current_message_priority_and_evidence_gate() -> None:
+    result = asyncio.run(
+        ResponseComposer().compose(
+            ComposeRequest(
+                user_text="按我最新这句，只讨论风险，不要执行。",
+                result_summary="已经下载完成，下面继续执行。",
+                scenario="direct",
+            )
+        )
+    )
+
+    guard = result.response_plan.response_quality_guard
+
+    assert guard["checks"]["current_message_priority"] is False
+    assert guard["checks"]["evidence_required_before_done"] is False
+    assert any(item["check"] == "current_message_priority" for item in guard["violations"])

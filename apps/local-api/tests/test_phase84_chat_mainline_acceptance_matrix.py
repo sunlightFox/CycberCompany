@@ -345,6 +345,110 @@ def test_phase84_recovery_and_release_summary_acceptance(
     assert "phase89_false_interception_governance_status" in summary
 
 
+def test_phase84_active_run_followup_merges_into_existing_turn(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    registry = cast(FastAPI, client.app).state.registry
+    monkeypatch.setattr(registry.chat_service._execution, "schedule", lambda *args, **kwargs: None)
+    conversation_id = _conversation_id(client)
+    created = _create_turn(
+        client,
+        conversation_id,
+        "phase84-steering-followup",
+        "先给我整理一个执行方案",
+    )
+    _mark_turn_running(client, created["turn_id"])
+
+    followup = _create_turn(
+        client,
+        conversation_id,
+        "phase84-steering-followup",
+        "另外，再加一句：保留原步骤顺序。",
+    )
+    assert followup["turn_id"] == created["turn_id"]
+    assert followup["status"] == "steering_applied"
+
+    envelope = client.get(f"/api/chat/turns/{created['turn_id']}/envelope").json()
+    queue = client.get(f"/api/chat/turns/{created['turn_id']}/queue").json()["item"]
+    events = client.get(f"/api/chat/turns/{created['turn_id']}/events").json()["items"]
+
+    assert "保留原步骤顺序" in envelope["model_safe_text"]
+    assert envelope["ingress_metadata"]["queue_policy"] == "followup"
+    assert queue["queue_policy"] == "followup"
+    assert queue["steering_diagnostics"]["control_intent"] == "followup_append"
+    assert "turn.steering_detected" in {item["event_type"] for item in events}
+
+
+def test_phase84_active_run_steer_supersedes_old_turn_and_queues_new_turn(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    registry = cast(FastAPI, client.app).state.registry
+    monkeypatch.setattr(registry.chat_service._execution, "schedule", lambda *args, **kwargs: None)
+    conversation_id = _conversation_id(client)
+    created = _create_turn(
+        client,
+        conversation_id,
+        "phase84-steering-replace",
+        "先写一版详细说明",
+    )
+    _mark_turn_running(client, created["turn_id"])
+
+    supersede = _create_turn(
+        client,
+        conversation_id,
+        "phase84-steering-replace",
+        "停，改成给我一个三步摘要。",
+    )
+
+    assert supersede["turn_id"] != created["turn_id"]
+    assert supersede["queue_status"] == "queued"
+
+    original = client.get(f"/api/chat/turns/{created['turn_id']}").json()
+    original_events = client.get(f"/api/chat/turns/{created['turn_id']}/events").json()["items"]
+    replacement_queue = client.get(f"/api/chat/turns/{supersede['turn_id']}/queue").json()["item"]
+
+    assert original["cancel_requested"] is True
+    assert "turn.superseded" in {item["event_type"] for item in original_events}
+    assert replacement_queue["queue_policy"] == "steer"
+    assert replacement_queue["steering_diagnostics"]["target_turn_id"] == created["turn_id"]
+
+
+def test_phase84_interrupt_clears_pending_approval_and_records_resume_slot(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    registry = cast(FastAPI, client.app).state.registry
+    monkeypatch.setattr(registry.chat_service._execution, "schedule", lambda *args, **kwargs: None)
+    conversation_id = _conversation_id(client)
+    created = _create_turn(
+        client,
+        conversation_id,
+        "phase84-steering-interrupt",
+        "继续执行安装前检查",
+    )
+    _mark_turn_running(client, created["turn_id"])
+    _seed_pending_approval_state(client, conversation_id, created["turn_id"], "phase84-steering-interrupt")
+
+    paused = _create_turn(
+        client,
+        conversation_id,
+        "phase84-steering-interrupt",
+        "先别做了，暂停一下。",
+    )
+
+    assert paused["turn_id"] == created["turn_id"]
+    assert paused["status"] == "cancel_requested"
+
+    state = client.get(f"/api/chat/conversations/{conversation_id}/working-state").json()
+    events = client.get(f"/api/chat/turns/{created['turn_id']}/events").json()["items"]
+
+    assert state["pending_approval_action"] == {}
+    assert state["pending_execution_resume"]["payload"]["control_intent"] == "pause_current"
+    assert "turn.paused" in {item["event_type"] for item in events}
+
+
 def _create_turn(
     client: TestClient,
     conversation_id: str,
@@ -391,3 +495,72 @@ def _parse_sse(raw: str) -> list[dict[str, Any]]:
             if line.startswith("data: "):
                 events.append(json.loads(line[6:]))
     return events
+
+
+def _run_async(client: TestClient, func: Any, *args: Any, **kwargs: Any) -> Any:
+    portal = client.portal
+    assert portal is not None
+    if args or kwargs:
+        return portal.call(lambda: func(*args, **kwargs))
+    return portal.call(func)
+
+
+def _mark_turn_running(client: TestClient, turn_id: str) -> None:
+    registry = cast(FastAPI, client.app).state.registry
+    _run_async(
+        client,
+        registry.chat.update_queue_item,
+        turn_id,
+        status="running",
+        updated_at="2026-01-01T00:00:00+00:00",
+        started_at="2026-01-01T00:00:00+00:00",
+    )
+    _run_async(
+        client,
+        registry.chat.update_turn,
+        turn_id,
+        status="running",
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
+
+
+def _seed_pending_approval_state(
+    client: TestClient,
+    conversation_id: str,
+    turn_id: str,
+    session_id: str,
+) -> None:
+    registry = cast(FastAPI, client.app).state.registry
+    _run_async(
+        client,
+        registry.chat.upsert_working_state,
+        {
+            "conversation_id": conversation_id,
+            "organization_id": "org_default",
+            "active_topic": "phase84 approval",
+            "user_goal": "等待审批",
+            "known_constraints": [],
+            "decisions_made": [],
+            "open_questions": [],
+            "candidate_actions": [],
+            "referenced_artifacts": [],
+            "last_response_summary": "waiting approval",
+            "pending_confirmation": {},
+            "pending_clarification": {},
+            "pending_approval_action": {
+                "kind": "approval",
+                "session_id": session_id,
+                "source_turn_id": turn_id,
+                "status": "active",
+                "payload": {"approval_id": "apr_phase84", "actions": [{"approval_id": "apr_phase84"}]},
+            },
+            "pending_execution_resume": {},
+            "session_id": session_id,
+            "source_turn_id": turn_id,
+            "source_message_fingerprint": "sha256:phase84",
+            "confidence": 0.8,
+            "status": "active",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        },
+    )

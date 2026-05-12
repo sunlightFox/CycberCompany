@@ -111,6 +111,45 @@ def test_phase78_channel_ingress_runtime_writes_extended_ingress_metadata(
     assert request.ingress_metadata.source_timestamp == "2026-05-10T00:00:02+08:00"
     assert request.ingress_metadata.dedupe_key == "sha256:dedupe-phase78"
     assert request.ingress_metadata.queue_policy == "collect"
+    assert request.ingress_metadata.steering.source_channel_semantics["provider"] == "wechat"
+
+
+def test_phase78_channel_ingress_runtime_infers_steering_policy_for_interrupt_text(
+    client: TestClient,
+) -> None:
+    registry = cast(Any, client.app).state.registry
+    captured: dict[str, Any] = {}
+
+    async def fake_create_turn(request: Any, *, retry_of_turn_id: str | None = None) -> Any:
+        del retry_of_turn_id
+        captured["request"] = request
+        return {"turn_id": "turn_phase78_interrupt"}
+
+    registry.session_runtime.create_turn = fake_create_turn
+
+    result = _run_async(
+        client,
+        registry.channel_ingress_runtime.submit_channel_turn(
+            provider="wechat",
+            session={
+                "session_id": "sess_phase78_interrupt",
+                "conversation_id": "conv_phase78_interrupt",
+                "member_id": "mem_xiaoyao",
+            },
+            inbound_event_id="chevt_phase78_interrupt",
+            channel_message_id="msg_phase78_interrupt",
+            text="停一下，先别做了",
+            raw_payload={"channel_event_id": "chevt_phase78_interrupt"},
+            ui_mode="wechat_chat",
+            delivery_mode="dm",
+        ),
+    )
+
+    assert result["turn_id"] == "turn_phase78_interrupt"
+    request = captured["request"]
+    assert request.ingress_metadata.queue_policy == "interrupt"
+    assert request.ingress_metadata.steering.control_intent in {"pause_current", "cancel_current"}
+    assert request.ingress_metadata.steering.source_channel_semantics["delivery_mode"] == "dm"
 
 
 def test_phase78_wechat_gateway_uses_channel_ingress_runtime_main_path(

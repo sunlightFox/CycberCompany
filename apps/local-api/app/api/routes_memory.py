@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from core_types import ErrorCode, MemoryItem
+from core_types import ErrorCode, FailureExperienceRecord, MemoryItem
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.dependencies import get_registry
 from app.core.errors import AppError
 from app.schemas.memory import (
+    FailureExperienceListResponse,
+    FailureExperienceReviewRequest,
     MemoryConflictRecordListResponse,
     MemoryCandidateDecisionResponse,
     MemoryCandidateListResponse,
@@ -26,6 +28,7 @@ from app.schemas.memory import (
     MemorySourceMessage,
     MemorySourceResponse,
     MemoryUpdateRequest,
+    RegressionCandidateListResponse,
 )
 from app.services.registry import ServiceRegistry
 
@@ -194,6 +197,53 @@ async def list_experience_records(
             task_id=task_id,
             outcome=outcome,
             status=status,
+            limit=limit,
+        )
+    )
+
+
+@router.get("/failure-experiences", response_model=FailureExperienceListResponse)
+async def list_failure_experiences(
+    member_id: str | None = None,
+    failure_class: str | None = None,
+    review_status: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> FailureExperienceListResponse:
+    return FailureExperienceListResponse(
+        items=await registry.failure_experience_service.list_failure_experiences(
+            member_id=member_id,
+            failure_class=failure_class,
+            review_status=review_status,
+            limit=limit,
+        )
+    )
+
+
+@router.post("/failure-experiences/{failure_id}/review", response_model=FailureExperienceRecord)
+async def review_failure_experience(
+    failure_id: str,
+    payload: FailureExperienceReviewRequest,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> FailureExperienceRecord:
+    return await registry.failure_experience_service.review_failure(
+        failure_id,
+        action=payload.action,
+        tombstone_reason=payload.tombstone_reason,
+    )
+
+
+@router.get("/regression-candidates", response_model=RegressionCandidateListResponse)
+async def list_regression_candidates(
+    status: str | None = None,
+    failure_class: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> RegressionCandidateListResponse:
+    return RegressionCandidateListResponse(
+        items=await registry.failure_experience_service.list_regression_candidates(
+            status=status,
+            failure_class=failure_class,
             limit=limit,
         )
     )

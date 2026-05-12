@@ -33,6 +33,7 @@ from app.services.brain_context_decider import context_decision as _context_deci
 from app.services.brain_decision_support import summary as _summary
 from app.services.brain_mode_decider import mode_decision as _mode_decision
 from app.services.brain_route_decider import intent_decision as _intent_decision
+from app.services.failure_experience import FailureExperienceService
 from app.services.dialogue_semantics import (
     DialogueStateService,
     LowConfidenceDecisionReviewer,
@@ -56,11 +57,13 @@ class BrainDecisionService:
         design_repo: DesignAlignmentRepository,
         skill_mcp_repo: SkillMcpRepository | None = None,
         trace_service: TraceService,
+        failure_experience_service: FailureExperienceService | None = None,
     ) -> None:
         self._chat_repo = chat_repo
         self._design_repo = design_repo
         self._skill_mcp_repo = skill_mcp_repo
         self._trace = trace_service
+        self._failure_experience = failure_experience_service
         self._dialogue_states = DialogueStateService(repo=chat_repo, trace_service=trace_service)
         self._semantic_analyzer = SemanticIntentAnalyzer(trace_service=trace_service)
         self._low_confidence = LowConfidenceDecisionReviewer(trace_service=trace_service)
@@ -90,6 +93,28 @@ class BrainDecisionService:
             else None
         )
         capability_snapshot = await self._capability_snapshot(text=text)
+        failure_advisories = (
+            await self._failure_experience.recall_advisories(
+                member_id=member_id,
+                query=text,
+                limit=2,
+            )
+            if self._failure_experience is not None and text.strip()
+            else []
+        )
+        if failure_advisories:
+            capability_snapshot = {
+                **capability_snapshot,
+                "failure_advisories": [
+                    {
+                        "failure_id": item.failure_id,
+                        "failure_class": item.failure_class,
+                        "reason_code": item.reason_code,
+                        "summary_text": item.summary_text,
+                    }
+                    for item in failure_advisories
+                ],
+            }
         working_state = (
             await self._chat_repo.get_working_state(conversation_id)
             if conversation_id
@@ -145,6 +170,15 @@ class BrainDecisionService:
             dialogue_state=dialogue_state,
             semantic=semantic,
         )
+        if failure_advisories:
+            context = context.model_copy(
+                update={
+                    "selection_reason": [
+                        *list(context.selection_reason),
+                        "failure_advisory_present",
+                    ]
+                }
+            )
         review_outcome = await self._low_confidence.review(
             member_id=member_id,
             conversation_id=conversation_id,

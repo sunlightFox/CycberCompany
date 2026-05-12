@@ -1,5 +1,13 @@
 # 第六十五阶段 - ResponseComposer 与可见话术 Catalog 重构
 
+## 现状对齐说明
+
+本阶段已按当前主链路现状对齐落地，不回退到历史时期的旧结构。
+
+- `ResponsePlan` 仍沿用第八十一阶段建立的“可见层 + 内部结构层”双层契约。
+- 本阶段负责把可见话术 taxonomy、`response_quality_guard`、渠道可读性约束和 runtime 残留手写文案清理补齐到可验收状态。
+- `structured_payload.scenario` 与 `scenario_id` 统一映射到本阶段定义的一级场景集合，不再把 `direct`、`task_completed`、`memory_written` 之类历史别名当作主契约输出。
+
 ## 阶段背景
 
 当前用户可见话术分布在 `opening_copy.py`、`contracts.py`、`natural_chat.py`、`chat_quality.py`、`chat_safety.py` 和少量 `chat.py` 补丁中。虽然已有 catalog 雏形，但仍存在旧模板味、机械开头、边界回复偏系统化、场景分类不统一的问题。
@@ -202,4 +210,3 @@ rg "好的，我来|我来继续|记住了。|作为 AI|处理结果如下" serv
 ```
 
 运行时代码不得命中；测试输入和历史文档可豁免。
-

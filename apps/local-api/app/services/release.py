@@ -372,6 +372,13 @@ PHASE_MIGRATION_REQUIREMENTS: dict[str, dict[str, Any]] = {
             "memory_retrieval_logs",
         ],
     },
+    "phase94": {
+        "required_migration": "054_phase94_failure_experience_governance.sql",
+        "tables": [
+            "failure_experience_records",
+            "regression_candidates",
+        ],
+    },
     "phase53": {
         "required_migration": "036_channel_bindings_wechat.sql",
         "tables": [
@@ -520,6 +527,8 @@ class ReleaseGateService:
         phase91_details = dict(phase91.get("details") or {})
         phase92 = dict(phase_readiness.get("phase92_long_term_memory_recall_governance") or {})
         phase92_details = dict(phase92.get("details") or {})
+        phase94 = dict(phase_readiness.get("phase94_failure_experience_governance") or {})
+        phase94_details = dict(phase94.get("details") or {})
         return {
             "runtime_topology_consistent": bool(runtime_facts.get("runtime_topology_consistent")),
             "prompt_contract_coverage": bool(
@@ -673,6 +682,10 @@ class ReleaseGateService:
             "memory_retrieval_quality_gate": "pass"
             if phase92.get("status") == "ready"
             else "fail",
+            "phase94_failure_experience_governance_status": phase94.get("status"),
+            "phase94_contract_version": phase94_details.get("phase94_contract_version"),
+            "phase94_review_actions": phase94_details.get("review_actions") or [],
+            "phase94_regression_threshold": phase94_details.get("regression_threshold") or {},
             "phase_docs_present": runtime_facts.get("phase_docs_present") or {},
             "phase_tests_present": runtime_facts.get("phase_tests_present") or {},
         }
@@ -2415,6 +2428,17 @@ class ReleaseGateService:
                 chat_mainline_readiness.get("memory_retrieval_quality_gate") or "fail"
             ),
         }
+        phase94_failure_experience_governance = {
+            "status": chat_mainline_readiness.get(
+                "phase94_failure_experience_governance_status"
+            ),
+            "contract_version": chat_mainline_readiness.get("phase94_contract_version"),
+            "review_actions": chat_mainline_readiness.get("phase94_review_actions") or [],
+            "regression_threshold": chat_mainline_readiness.get(
+                "phase94_regression_threshold"
+            )
+            or {},
+        }
         phase53_summary = await self._phase53_report_summary(release_gate_id)
         phase54_summary = await self._phase54_report_summary(release_gate_id)
         phase55_summary = await self._phase55_report_summary(release_gate_id)
@@ -2664,6 +2688,7 @@ class ReleaseGateService:
             "phase90_compat_cleanup_release_gate": phase90_compat_cleanup_release_gate,
             "phase91_host_decomposition_governance": phase91_host_decomposition_governance,
             "phase92_long_term_memory_recall_governance": phase92_long_term_memory_recall_governance,
+            "phase94_failure_experience_governance": phase94_failure_experience_governance,
             "wechat_chat_main_chain": wechat_chat_main_chain_summary,
             "phase23": phase23_summary,
             "go_no_go_reason": _go_no_go_reason(decision, finding_summary, phase23_summary),

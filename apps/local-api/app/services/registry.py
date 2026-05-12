@@ -93,6 +93,7 @@ from app.services.design_alignment import (
 from app.services.execution_boundary import ExecutionBoundaryService
 from app.services.external_platform_actions import ExternalPlatformActionService
 from app.services.external_platform_adapters import ExternalPlatformAdapterService
+from app.services.failure_experience import FailureExperienceService
 from app.services.feishu_gateway import FeishuChannelGatewayService
 from app.services.knowledge import KnowledgeService
 from app.services.mcp import MCPService
@@ -146,6 +147,7 @@ class ServiceRegistry:
     channel_session_semantics_runtime: ChannelSessionSemanticsRuntime
     chat_experience_service: ChatExperienceService
     chat_run_ledger_service: ChatRunLedgerService
+    failure_experience_service: FailureExperienceService
     chat_hook_runtime: ChatHookRuntime
     agent_workbench_service: AgentWorkbenchService
     memory_service: MemoryService
@@ -330,6 +332,12 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         retrieval_repo=retrieval_repo,
         chat_run_ledger=chat_run_ledger_service,
         chat_hook_runtime=chat_hook_runtime,
+    )
+    failure_experience_service = FailureExperienceService(
+        repo=memory_repo,
+        member_repo=member_repo,
+        audit_service=audit_service,
+        memory_service=memory_service,
     )
     chat_experience_service = ChatExperienceService(
         chat_repo=chat_repo,
@@ -638,6 +646,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         design_repo=design_alignment_repo,
         skill_mcp_repo=skill_mcp_repo,
         trace_service=trace_service,
+        failure_experience_service=failure_experience_service,
     )
     chat_quality_shadow_service = ChatQualityShadowService()
     conversation_understanding_runtime_service = ConversationUnderstandingRuntimeService()
@@ -783,6 +792,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         action_dialogue_mapper_service=action_dialogue_mapper_service,
         silent_continuity_service=silent_continuity_service,
         chat_run_ledger_service=chat_run_ledger_service,
+        failure_experience_service=failure_experience_service,
         chat_hook_runtime=chat_hook_runtime,
     )
     chat_runtime = chat_service._runtime_impl
@@ -884,6 +894,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         channel_session_semantics_runtime=channel_session_semantics,
         chat_experience_service=chat_experience_service,
         chat_run_ledger_service=chat_run_ledger_service,
+        failure_experience_service=failure_experience_service,
         chat_hook_runtime=chat_hook_runtime,
         agent_workbench_service=agent_workbench_service,
         memory_service=memory_service,

@@ -47,6 +47,7 @@ class ChannelSessionContext:
             "recipient": raw_payload.get("recipient"),
             "thread_ref": raw_payload.get("thread_ref") or raw_payload.get("thread_id"),
             "ui_mode": ui_mode,
+            "steering": dict(semantics_payload.get("steering") or raw_payload.get("steering") or {}),
             "raw_payload_redacted": redact(raw_payload),
         }
 
@@ -74,5 +75,6 @@ class ChannelSessionContext:
             "thread_ref": session.get("thread_ref") or binding.get("channel_event_id"),
             "turn_id": binding.get("turn_id"),
             "message_id": message.get("message_id"),
+            "steering": dict(binding.get("steering") or session.get("steering") or {}),
             "voice_reply": dict(message.get("voice_metadata") or {}),
         }

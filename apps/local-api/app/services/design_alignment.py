@@ -2459,6 +2459,20 @@ class RuntimeContractService:
                 blocker_level="none",
                 details={"phase": "phase_61", "skill_bypasses_safety": False},
             ),
+            _contract(
+                "FailureExperienceAdvisoryRecall",
+                "implemented",
+                "repeatable failures can be recorded, reviewed, and recalled as advisory-only memory without silently changing durable user facts",
+                blocker_level="none",
+                details={"phase": "phase_94", "memory_write_requires_review_for_high_risk": True},
+            ),
+            _contract(
+                "RegressionCandidateFromFailureRecurrence",
+                "implemented",
+                "failure recurrence within the governance window opens or updates a regression candidate linked to release evidence",
+                blocker_level="none",
+                details={"phase": "phase_94", "window_days": 7, "min_recurrence_count": 2},
+            ),
         ]
         for item in contracts:
             await self._repo.upsert_runtime_contract({**item, "updated_at": now})

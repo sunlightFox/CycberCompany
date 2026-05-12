@@ -12,6 +12,8 @@ from core_types import (
     ConversationContext,
     ErrorCode,
     MemberSummary,
+    MemoryBlock,
+    MemoryBlockItem,
     PersonaSummary,
     ResourceHandleSummary,
     RiskLevel,
@@ -31,6 +33,7 @@ from app.schemas.memory import MemorySearchApiRequest
 from app.services.asset_broker import AssetBrokerService
 from app.services.context_budget import ContextBudgetService
 from app.services.context_visibility import ContextVisibilityService
+from app.services.failure_experience import FailureExperienceService
 from app.services.memory import MemoryService
 
 if TYPE_CHECKING:
@@ -52,6 +55,7 @@ class RuntimeContextGateway:
         persona_heart_service: PersonaHeartService | None = None,
         chat_experience_service: ChatExperienceService | None = None,
         agent_workbench_service: AgentWorkbenchService | None = None,
+        failure_experience_service: FailureExperienceService | None = None,
         recent_message_limit: int = 12,
         token_budget: int = 6000,
         context_budget_service: ContextBudgetService | None = None,
@@ -66,6 +70,7 @@ class RuntimeContextGateway:
         self._persona_heart = persona_heart_service
         self._chat_experience = chat_experience_service
         self._agent_workbench = agent_workbench_service
+        self._failure_experience = failure_experience_service
         self._recent_message_limit = recent_message_limit
         self._token_budget = token_budget
         self._context_budget = context_budget_service or ContextBudgetService()
@@ -157,6 +162,7 @@ class RuntimeContextGateway:
             summary_text=summary["summary_text"] if summary else None,
         )
         memory_blocks = []
+        failure_advisories: list[dict[str, Any]] = []
         memory_search_summary: dict[str, Any] = {}
         if include_memory:
             latest_override = bool(
@@ -187,6 +193,48 @@ class RuntimeContextGateway:
                 token_budget=max(300, int(layer_budget["allocations"]["memory"])),
                 trace_id=turn["trace_id"],
             )
+            if self._failure_experience is not None and query_text.strip():
+                advisories = await self._failure_experience.recall_advisories(
+                    member_id=turn["member_id"],
+                    query=query_text.strip(),
+                    limit=3,
+                )
+                if advisories:
+                    failure_advisories = [
+                        {
+                            "failure_id": item.failure_id,
+                            "failure_class": item.failure_class,
+                            "reason_code": item.reason_code,
+                            "summary_text": item.summary_text,
+                            "recurrence_count": item.recurrence_count,
+                        }
+                        for item in advisories
+                    ]
+                    memory_blocks.append(
+                        MemoryBlock(
+                            block_id=new_id("mblk"),
+                            block_type="failure_advisory",
+                            title="Failure Advisories",
+                            items=[
+                                MemoryBlockItem(
+                                    memory_id=item.failure_id,
+                                    kind=item.failure_class,
+                                    summary=item.summary_text,
+                                    confidence=min(1.0, 0.5 + (item.recurrence_count * 0.15)),
+                                    source_ref={
+                                        "reason_code": item.reason_code,
+                                        "review_status": item.review_status,
+                                        "advisory_status": item.advisory_status,
+                                    },
+                                )
+                                for item in advisories
+                            ],
+                            token_estimate=estimate_text_tokens(
+                                "\n".join(item.summary_text for item in advisories)
+                            ),
+                            selection_reason=["phase94_failure_advisory_recall"],
+                        )
+                    )
             memory_search_summary = {
                 "retrieval_id": memory_search.retrieval_id,
                 "recall_scope_applied": memory_search.recall_scope_applied,
@@ -304,6 +352,7 @@ class RuntimeContextGateway:
             },
             "resource_handle_summary": handle_summary,
             "memory_recall": memory_search_summary,
+            "failure_advisories": failure_advisories,
         }
         return ContextPacket(
             context_packet_id=new_id("ctx"),

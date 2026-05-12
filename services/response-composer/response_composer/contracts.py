@@ -8,6 +8,7 @@ from core_types import ApiModel, ErrorCode, ResponsePlan
 from core_types.voice_copy import pick_variant
 from pydantic import Field
 from response_composer.chat_voice import voice_metadata_for_scenario
+from response_composer.chat_voice import canonical_voice_scenario
 from response_composer.action_status import (
     canonical_action_status,
     normalize_action_status_semantics,
@@ -101,7 +102,7 @@ class ComposeRequest(ApiModel):
     user_text: str = ""
     result_summary: str
     style: str = "result_first"
-    scenario: str = "direct"
+    scenario: str = "knowledge_answer"
     persona: dict[str, Any] = Field(default_factory=dict)
     heart: dict[str, Any] = Field(default_factory=dict)
     risk_level: str | None = None
@@ -203,7 +204,7 @@ class ResponseComposer:
     async def compose(self, request: ComposeRequest) -> ComposeResult:
         raw_summary = strip_reasoning_tags(request.result_summary).strip()
         result_summary, redaction_summary = redact_visible_text(raw_summary)
-        scenario = request.scenario or "direct"
+        scenario = _canonical_visible_scenario(request.scenario)
         copy_seed = "|".join(
             [
                 scenario,
@@ -284,6 +285,7 @@ class ResponseComposer:
             tone_metadata=tone_metadata,
             redaction_summary=redaction_summary,
             trace_refs=request.trace_refs,
+            response_quality_guard=response_quality_guard,
             structured_payload={
                 "source": "response_composer",
                 "scenario": scenario,
@@ -511,6 +513,7 @@ class ResponseComposer:
             redaction_summary=redaction_summary,
             trace_refs=trace_refs or [],
             plain_text=visible_summary,
+            response_quality_guard=response_quality_guard,
             structured_payload={
                 "scenario": scenario,
                 "conversation_voice": conversation_voice,
@@ -631,6 +634,7 @@ class ResponseComposer:
             redaction_summary=redaction_summary,
             trace_refs=trace_refs or [],
             plain_text=visible_summary,
+            response_quality_guard=response_quality_guard,
             structured_payload={
                 "source": "response_composer",
                 "scenario": "action_status",
@@ -660,7 +664,7 @@ class ResponseComposer:
             tone_mode=_tone_mode_from_metadata(tone_metadata),
             quality_markers={
                 **_baseline_quality_markers(
-                    scenario="approval_required" if high_risk else "direct",
+                    scenario="approval_required" if high_risk else "action_status",
                     high_risk=high_risk,
                 ),
                 "natural_language": True,
@@ -1438,13 +1442,8 @@ def _title_for_scenario(scenario: str) -> str | None:
         "clarification": "需要确认",
         "tool_boundary": "能力边界",
         "approval_required": "等待确认",
-        "safety_deny": "安全边界",
         "failure_recovery": "可恢复失败",
-        "task_created": "任务已创建",
-        "task_completed": "任务完成",
-        "memory_written": "记忆已更新",
-        "memory_conflict": "记忆需要确认",
-        "complex_dialogue": "方案",
+        "knowledge_answer": "方案",
     }.get(scenario)
 
 
@@ -1453,9 +1452,8 @@ def _sections_for_scenario(scenario: str, text: str) -> list[dict[str, Any]]:
         "clarification": "clarification",
         "tool_boundary": "boundary",
         "approval_required": "approval",
-        "safety_deny": "safety_notice",
         "failure_recovery": "recovery",
-        "complex_dialogue": "summary",
+        "knowledge_answer": "summary",
     }.get(scenario, "summary")
     return [{"kind": kind, "text": text}]
 
@@ -1465,14 +1463,14 @@ def _tone_metadata(request: ComposeRequest) -> dict[str, Any]:
     persona = request.persona or {}
     high_risk = _is_high_risk(request)
     voice_metadata = _voice_metadata_payload(
-        scenario=request.scenario,
+        scenario=_canonical_visible_scenario(request.scenario),
         channel_profile=request.channel_profile or request.notices.get("channel_profile"),
         delivery_mode=request.delivery_mode,
         prompt_mode=request.prompt_mode,
         prompt_snapshot_id=request.prompt_snapshot_id,
     )
     return {
-        "scenario": request.scenario,
+        "scenario": _canonical_visible_scenario(request.scenario),
         "voice_policy_version": voice_metadata["voice_policy_version"],
         "scenario_id": voice_metadata["scenario_id"],
         "channel_profile": voice_metadata["channel_profile"],
@@ -1755,10 +1753,14 @@ def _baseline_quality_markers(*, scenario: str, high_risk: bool) -> dict[str, An
     return {
         "directness": True,
         "boundary_honesty": True,
+        "current_message_priority": True,
+        "evidence_required_before_done": True,
         "failure_recoverability": True,
         "heart_appropriateness": not high_risk
-        or scenario in {"approval_required", "safety_deny", "tool_boundary"},
+        or scenario in {"approval_required", "tool_boundary"},
         "no_leakage": True,
+        "no_internal_terms": True,
+        "strict_format_preserved": True,
     }
 
 
@@ -2064,15 +2066,18 @@ def _scenario_for_status(
     if approval_prompt:
         return "approval_required"
     if safety_notice:
-        return "safety_deny"
+        return "tool_boundary"
     if task_status:
-        status = canonical_action_status(task_status.get("status"))
-        return "task_completed" if status == "completed_with_evidence" else "task_status"
+        return "task_status"
     if memory_notice:
-        return "memory_written"
+        return "memory"
     if tool_notice:
         return "tool_boundary"
-    return "direct"
+    return "knowledge_answer"
+
+
+def _canonical_visible_scenario(scenario: str | None) -> str:
+    return canonical_voice_scenario(scenario)
 
 
 def _longest_suffix_prefix(text: str, marker: str) -> int:

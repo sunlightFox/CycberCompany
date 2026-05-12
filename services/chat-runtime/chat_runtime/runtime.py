@@ -20,6 +20,7 @@ from trace_service import redact
 
 from app.core.errors import AppError
 from app.core.time import utc_now_iso
+from app.services.chat_pending_state import build_typed_pending_state
 from app.services.natural_chat import (
     reset_visible_redaction_profile,
     set_visible_redaction_profile,
@@ -304,6 +305,77 @@ class ChatRuntime:
             )
             await self._trace.end_trace(trace_id)
             return collected
+        source_channel_semantics = dict(
+            (
+                ingress_plan.envelope.ingress_metadata.get("steering")
+                or {}
+            ).get("source_channel_semantics")
+            or {}
+        )
+        working_state = await self._chat_repo.get_working_state(conversation_id)
+        active_turn = await self._chat_repo.get_running_turn_for_session(
+            request.session_id,
+            conversation_id=conversation_id,
+        )
+        steering_decision = None
+        if getattr(self, "_steering", None) is not None:
+            steering_decision = self._steering.decide(
+                user_text=input_text,
+                queue_policy=ingress_plan.queue_policy,
+                active_turn=active_turn,
+                working_state=working_state,
+                explicit_steering=dict(ingress_plan.envelope.ingress_metadata.get("steering") or {}),
+            )
+            ingress_plan.queue_policy = steering_decision.queue_policy
+            ingress_plan.envelope.ingress_metadata["queue_policy"] = steering_decision.queue_policy
+            ingress_plan.envelope.ingress_metadata["steering"] = steering_decision.metadata(
+                source_channel_semantics=source_channel_semantics
+            )
+            if steering_decision.detected and active_turn is not None:
+                if steering_decision.resolution_policy == "merge_current":
+                    response = await self._apply_followup_steering(
+                        request=request,
+                        ingress_plan=ingress_plan,
+                        active_turn=active_turn,
+                        trace_id=trace_id,
+                        root_span_id=root_span_id,
+                        decision=steering_decision,
+                    )
+                    await self._trace.end_span(
+                        root_span_id,
+                        output_data={
+                            "status": "steering_merged",
+                            "target_turn_id": active_turn["turn_id"],
+                            "queue_policy": steering_decision.queue_policy,
+                        },
+                    )
+                    await self._trace.end_trace(trace_id)
+                    return response
+                if steering_decision.resolution_policy == "pause_then_resume":
+                    response = await self._apply_interrupt_steering(
+                        request=request,
+                        active_turn=active_turn,
+                        trace_id=trace_id,
+                        root_span_id=root_span_id,
+                        decision=steering_decision,
+                    )
+                    await self._trace.end_span(
+                        root_span_id,
+                        output_data={
+                            "status": "steering_interrupted",
+                            "target_turn_id": active_turn["turn_id"],
+                            "queue_policy": steering_decision.queue_policy,
+                        },
+                    )
+                    await self._trace.end_trace(trace_id)
+                    return response
+                if steering_decision.resolution_policy == "cancel_and_supersede":
+                    await self._apply_supersede_steering(
+                        request=request,
+                        active_turn=active_turn,
+                        trace_id=trace_id,
+                        decision=steering_decision,
+                    )
         if created_conversation_title is not None:
             title_span = await self._trace.start_span(
                 trace_id,
@@ -371,6 +443,20 @@ class ChatRuntime:
                     turn_id,
                     experience={
                         "client_context": request.client_context.model_dump(mode="json"),
+                        **(
+                            {
+                                "steering": {
+                                    "queue_policy": steering_decision.queue_policy,
+                                    "control_intent": steering_decision.control_intent,
+                                    "resolution_policy": steering_decision.resolution_policy,
+                                    "reason_codes": steering_decision.reason_codes,
+                                    "target_turn_id": steering_decision.target_turn_id,
+                                    "target_task_id": steering_decision.target_task_id,
+                                }
+                            }
+                            if steering_decision is not None and steering_decision.queue_policy != "immediate"
+                            else {}
+                        ),
                     },
                     updated_at=now,
                 )
@@ -405,6 +491,9 @@ class ChatRuntime:
                         "queue_policy": ingress_plan.queue_policy,
                         "position": 0,
                         "dedupe_key": ingress_plan.envelope.dedupe_key,
+                        "steering_diagnostics": dict(
+                            ingress_plan.envelope.ingress_metadata.get("steering") or {}
+                        ),
                         "created_at": now,
                     },
                 )
@@ -587,6 +676,345 @@ class ChatRuntime:
             self._execution.schedule(turn_id)
         async for event in self._events.subscribe(turn_id, after_sequence=last_sequence):
             yield event
+
+    async def _apply_followup_steering(
+        self,
+        *,
+        request: ChatTurnRequest,
+        ingress_plan: Any,
+        active_turn: dict[str, Any],
+        trace_id: str,
+        root_span_id: str | None,
+        decision: Any,
+    ) -> ChatTurnResponse:
+        existing_envelope = await self._chat_repo.get_message_envelope_by_turn(active_turn["turn_id"])
+        if existing_envelope is None:
+            return await self._apply_interrupt_steering(
+                request=request,
+                active_turn=active_turn,
+                trace_id=trace_id,
+                root_span_id=root_span_id,
+                decision=decision,
+            )
+        merged = self._ingress.merge_envelopes(existing_envelope, ingress_plan.envelope)
+        merged.ingress_metadata["queue_policy"] = decision.queue_policy
+        merged.ingress_metadata["steering"] = dict(
+            ingress_plan.envelope.ingress_metadata.get("steering") or {}
+        )
+        now = utc_now_iso()
+        existing_message = await self._chat_repo.get_message(active_turn["user_message_id"])
+        existing_content = dict((existing_message or {}).get("content") or {})
+        content_type = "multi_part" if len(merged.content_parts) > 1 else request.input.type
+        queue_item = await self._chat_repo.get_queue_item_by_turn(active_turn["turn_id"])
+        async with self._db.transaction():
+            await self._chat_repo.merge_message_envelope(
+                active_turn["turn_id"],
+                raw_payload_redacted=merged.raw_payload_redacted,
+                content_parts=merged.content_parts,
+                context_refs=merged.context_refs,
+                model_safe_text=merged.model_safe_text,
+                normalized_summary=merged.normalized_summary,
+                ingress_metadata=merged.ingress_metadata,
+                status="normalized",
+                updated_at=now,
+            )
+            await self._chat_repo.update_user_message_content(
+                active_turn["user_message_id"],
+                content_type=content_type,
+                content_text=merged.model_safe_text,
+                content={
+                    **existing_content,
+                    "type": content_type,
+                    "text": merged.model_safe_text,
+                    "session_id": request.session_id,
+                    "content_parts": merged.content_parts,
+                    "context_refs": merged.context_refs,
+                    "attachments": [item.model_dump(mode="json") for item in request.attachments],
+                    "ingress_metadata": merged.ingress_metadata,
+                    "normalized_summary": merged.normalized_summary,
+                    "steering": dict(merged.ingress_metadata.get("steering") or {}),
+                },
+            )
+            if queue_item is not None:
+                await self._chat_repo.update_queue_policy(
+                    active_turn["turn_id"],
+                    status=queue_item["status"],
+                    queue_policy=decision.queue_policy,
+                    updated_at=now,
+                    locked_until=queue_item.get("locked_until"),
+                    steering_diagnostics=dict(merged.ingress_metadata.get("steering") or {}),
+                )
+            await self._chat_repo.update_turn(
+                active_turn["turn_id"],
+                experience=self._append_steering_history(
+                    active_turn,
+                    steering=dict(merged.ingress_metadata.get("steering") or {}),
+                    state="merged",
+                ),
+                updated_at=now,
+            )
+            await self._chat_repo.touch_conversation(active_turn["conversation_id"], now)
+        await self._record_steering_events(
+            active_turn=active_turn,
+            trace_id=trace_id,
+            decision=decision,
+            applied_event=ChatEventType.TURN_STEERING_APPLIED,
+            payload_extra={"merged_into_turn_id": active_turn["turn_id"]},
+        )
+        await self._store_steering_resume(
+            conversation_id=active_turn["conversation_id"],
+            session_id=request.session_id,
+            source_turn_id=active_turn["turn_id"],
+            source_text=self._request_text_from_request(request),
+            decision=decision,
+        )
+        del root_span_id
+        return ChatTurnResponse(
+            turn_id=active_turn["turn_id"],
+            conversation_id=active_turn["conversation_id"],
+            message_id=active_turn["user_message_id"],
+            assistant_message_id=active_turn["assistant_message_id"],
+            task_id=None,
+            trace_id=active_turn["trace_id"],
+            status="steering_applied",
+            stream_url=f"/api/chat/stream/{active_turn['turn_id']}",
+            queue_status="running",
+            envelope_id=merged.envelope_id,
+        )
+
+    async def _apply_interrupt_steering(
+        self,
+        *,
+        request: ChatTurnRequest,
+        active_turn: dict[str, Any],
+        trace_id: str,
+        root_span_id: str | None,
+        decision: Any,
+    ) -> ChatTurnResponse:
+        now = utc_now_iso()
+        self._events.cancel(active_turn["turn_id"])
+        await self._chat_repo.request_cancel(active_turn["turn_id"], now)
+        queue_item = await self._chat_repo.get_queue_item_by_turn(active_turn["turn_id"])
+        steering = decision.metadata(source_channel_semantics={})
+        if queue_item is not None:
+            await self._chat_repo.update_queue_policy(
+                active_turn["turn_id"],
+                status=queue_item["status"],
+                queue_policy=decision.queue_policy,
+                updated_at=now,
+                locked_until=queue_item.get("locked_until"),
+                steering_diagnostics=steering,
+            )
+        await self._chat_repo.update_turn(
+            active_turn["turn_id"],
+            experience=self._append_steering_history(
+                active_turn,
+                steering=steering,
+                state="interrupted",
+            ),
+            updated_at=now,
+        )
+        await self._record_steering_events(
+            active_turn=active_turn,
+            trace_id=trace_id,
+            decision=decision,
+            applied_event=ChatEventType.TURN_PAUSED,
+            payload_extra={"interrupt_turn_id": active_turn["turn_id"]},
+        )
+        await self._store_steering_resume(
+            conversation_id=active_turn["conversation_id"],
+            session_id=request.session_id,
+            source_turn_id=active_turn["turn_id"],
+            source_text=self._request_text_from_request(request),
+            decision=decision,
+        )
+        del root_span_id
+        return ChatTurnResponse(
+            turn_id=active_turn["turn_id"],
+            conversation_id=active_turn["conversation_id"],
+            message_id=active_turn["user_message_id"],
+            assistant_message_id=active_turn["assistant_message_id"],
+            task_id=None,
+            trace_id=active_turn["trace_id"],
+            status="cancel_requested",
+            stream_url=f"/api/chat/stream/{active_turn['turn_id']}",
+            queue_status="running",
+        )
+
+    async def _apply_supersede_steering(
+        self,
+        *,
+        request: ChatTurnRequest,
+        active_turn: dict[str, Any],
+        trace_id: str,
+        decision: Any,
+    ) -> None:
+        now = utc_now_iso()
+        self._events.cancel(active_turn["turn_id"])
+        await self._chat_repo.request_cancel(active_turn["turn_id"], now)
+        steering = decision.metadata(source_channel_semantics={})
+        queue_item = await self._chat_repo.get_queue_item_by_turn(active_turn["turn_id"])
+        if queue_item is not None:
+            await self._chat_repo.update_queue_policy(
+                active_turn["turn_id"],
+                status=queue_item["status"],
+                queue_policy=decision.queue_policy,
+                updated_at=now,
+                locked_until=queue_item.get("locked_until"),
+                steering_diagnostics=steering,
+            )
+        await self._chat_repo.update_turn(
+            active_turn["turn_id"],
+            experience=self._append_steering_history(
+                active_turn,
+                steering=steering,
+                state="superseded",
+            ),
+            updated_at=now,
+        )
+        await self._record_steering_events(
+            active_turn=active_turn,
+            trace_id=trace_id,
+            decision=decision,
+            applied_event=ChatEventType.TURN_SUPERSEDED,
+            payload_extra={"replacement_requested": True},
+        )
+        await self._store_steering_resume(
+            conversation_id=active_turn["conversation_id"],
+            session_id=request.session_id,
+            source_turn_id=active_turn["turn_id"],
+            source_text=self._request_text_from_request(request),
+            decision=decision,
+        )
+
+    async def _record_steering_events(
+        self,
+        *,
+        active_turn: dict[str, Any],
+        trace_id: str,
+        decision: Any,
+        applied_event: ChatEventType,
+        payload_extra: dict[str, Any] | None = None,
+    ) -> None:
+        payload = {
+            "queue_policy": decision.queue_policy,
+            "control_intent": decision.control_intent,
+            "resolution_policy": decision.resolution_policy,
+            "reason_codes": list(decision.reason_codes),
+            "target_turn_id": decision.target_turn_id,
+            "target_task_id": decision.target_task_id,
+            "diagnostics": dict(decision.diagnostics),
+            **dict(payload_extra or {}),
+        }
+        detected = self.event(
+            ChatEventType.TURN_STEERING_DETECTED,
+            turn_id=active_turn["turn_id"],
+            trace_id=active_turn["trace_id"],
+            payload=payload,
+        )
+        sequence = await self._record_event(detected, [])
+        await self._events.append(active_turn["turn_id"], sequence, detected)
+        applied = self.event(
+            applied_event,
+            turn_id=active_turn["turn_id"],
+            trace_id=active_turn["trace_id"],
+            payload=payload,
+        )
+        sequence = await self._record_event(applied, [])
+        await self._events.append(active_turn["turn_id"], sequence, applied)
+        if applied_event != ChatEventType.TURN_STEERING_APPLIED:
+            steering_applied = self.event(
+                ChatEventType.TURN_STEERING_APPLIED,
+                turn_id=active_turn["turn_id"],
+                trace_id=active_turn["trace_id"],
+                payload=payload,
+            )
+            sequence = await self._record_event(steering_applied, [])
+            await self._events.append(active_turn["turn_id"], sequence, steering_applied)
+        del trace_id
+
+    def _append_steering_history(
+        self,
+        turn: dict[str, Any],
+        *,
+        steering: dict[str, Any],
+        state: str,
+    ) -> dict[str, Any]:
+        experience = dict(turn.get("experience") or {})
+        history = list((experience.get("steering") or {}).get("history") or [])
+        history.append(
+            {
+                "state": state,
+                "updated_at": utc_now_iso(),
+                **dict(steering or {}),
+            }
+        )
+        experience["steering"] = {
+            "latest": dict(steering or {}),
+            "history": history[-10:],
+        }
+        return experience
+
+    async def _store_steering_resume(
+        self,
+        *,
+        conversation_id: str,
+        session_id: str,
+        source_turn_id: str,
+        source_text: str,
+        decision: Any,
+    ) -> None:
+        current = await self._chat_repo.get_working_state(conversation_id) or {}
+        typed = build_typed_pending_state(
+            conversation_id=conversation_id,
+            session_id=session_id,
+            source_turn_id=source_turn_id,
+            source_text=source_text,
+            execution_resume={
+                "reason": "steering_control",
+                "control_intent": decision.control_intent,
+                "resolution_policy": decision.resolution_policy,
+                "target_turn_id": decision.target_turn_id,
+                "target_task_id": decision.target_task_id,
+                "reason_codes": list(decision.reason_codes),
+                "latest_user_instruction": source_text,
+            },
+        )
+        now = utc_now_iso()
+        state = {
+            "conversation_id": conversation_id,
+            "organization_id": current.get("organization_id") or "org_default",
+            "session_id": session_id,
+            "active_topic": current.get("active_topic"),
+            "user_goal": current.get("user_goal"),
+            "known_constraints": list(current.get("known_constraints") or []),
+            "decisions_made": list(current.get("decisions_made") or []),
+            "open_questions": list(current.get("open_questions") or []),
+            "candidate_actions": list(current.get("candidate_actions") or []),
+            "referenced_artifacts": list(current.get("referenced_artifacts") or []),
+            "last_response_summary": current.get("last_response_summary"),
+            "pending_confirmation": (
+                {}
+                if decision.control_intent in {"steer_replace", "cancel_current", "pause_current"}
+                else dict(current.get("pending_confirmation") or {})
+            ),
+            "pending_clarification": dict(current.get("pending_clarification") or {}),
+            "pending_approval_action": (
+                {}
+                if decision.control_intent in {"steer_replace", "cancel_current", "pause_current"}
+                else dict(current.get("pending_approval_action") or {})
+            ),
+            "pending_execution_resume": typed.get("pending_execution_resume", {}),
+            "source_turn_id": source_turn_id,
+            "source_message_fingerprint": typed.get("pending_execution_resume", {}).get(
+                "source_message_fingerprint"
+            ),
+            "confidence": float(current.get("confidence") or 0.72),
+            "status": current.get("status") or "active",
+            "created_at": current.get("created_at") or now,
+            "updated_at": now,
+        }
+        await self._chat_repo.upsert_working_state(state)
 
     async def cancel_turn(self, turn_id: str) -> ChatTurnResponse:
         self._require_service("cancel_turn")

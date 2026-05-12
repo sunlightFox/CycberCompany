@@ -544,6 +544,225 @@ class MemoryRepository:
         )
         return [_experience_from_row(dict(row)) for row in rows]
 
+    async def insert_failure_experience_record(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO failure_experience_records (
+              failure_id, organization_id, member_id, conversation_id, turn_id, task_id,
+              trace_id, memory_id, failure_class, reason_code, impact_scope, severity,
+              summary_text, evidence_refs_json, evidence_summary, source_payload_json,
+              recurrence_key, recurrence_count, memory_decision, review_status,
+              advisory_status, human_review_required, tombstone_reason, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["failure_id"],
+                data["organization_id"],
+                data.get("member_id"),
+                data.get("conversation_id"),
+                data.get("turn_id"),
+                data.get("task_id"),
+                data.get("trace_id"),
+                data.get("memory_id"),
+                data["failure_class"],
+                data.get("reason_code"),
+                data.get("impact_scope"),
+                data.get("severity", "medium"),
+                data["summary_text"],
+                _json(data.get("evidence_refs", [])),
+                data.get("evidence_summary"),
+                _json(data.get("source_payload", {})),
+                data["recurrence_key"],
+                data.get("recurrence_count", 1),
+                data.get("memory_decision", "not_written"),
+                data.get("review_status", "not_required"),
+                data.get("advisory_status", "inactive"),
+                1 if bool(data.get("human_review_required")) else 0,
+                data.get("tombstone_reason"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def get_failure_experience_record(self, failure_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM failure_experience_records WHERE failure_id = ?",
+            (failure_id,),
+        )
+        return _failure_experience_from_row(dict(row)) if row else None
+
+    async def list_failure_experience_records(
+        self,
+        *,
+        member_id: str | None = None,
+        failure_class: str | None = None,
+        review_status: str | None = None,
+        advisory_status: str | None = None,
+        recurrence_key: str | None = None,
+        query: str | None = None,
+        created_after: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if member_id:
+            where.append("member_id = ?")
+            params.append(member_id)
+        if failure_class:
+            where.append("failure_class = ?")
+            params.append(failure_class)
+        if review_status:
+            if "," in review_status:
+                values = [item.strip() for item in review_status.split(",") if item.strip()]
+                if values:
+                    where.append(f"review_status IN ({','.join('?' for _ in values)})")
+                    params.extend(values)
+            else:
+                where.append("review_status = ?")
+                params.append(review_status)
+        if advisory_status:
+            where.append("advisory_status = ?")
+            params.append(advisory_status)
+        if recurrence_key:
+            where.append("recurrence_key = ?")
+            params.append(recurrence_key)
+        if query:
+            where.append("summary_text LIKE ?")
+            params.append(f"%{query}%")
+        if created_after:
+            where.append("created_at >= ?")
+            params.append(created_after)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM failure_experience_records
+            {clause}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [_failure_experience_from_row(dict(row)) for row in rows]
+
+    async def update_failure_experience_record(
+        self,
+        failure_id: str,
+        fields: dict[str, Any],
+    ) -> None:
+        if not fields:
+            return
+        assignments = []
+        values: list[Any] = []
+        for key, value in fields.items():
+            column = {
+                "evidence_refs": "evidence_refs_json",
+                "source_payload": "source_payload_json",
+                "human_review_required": "human_review_required",
+            }.get(key, key)
+            assignments.append(f"{column} = ?")
+            if key in {"evidence_refs", "source_payload"}:
+                values.append(_json(value))
+            elif key == "human_review_required":
+                values.append(1 if bool(value) else 0)
+            else:
+                values.append(value)
+        values.append(failure_id)
+        await self._db.execute(
+            f"UPDATE failure_experience_records SET {', '.join(assignments)} WHERE failure_id = ?",
+            tuple(values),
+        )
+
+    async def insert_regression_candidate(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO regression_candidates (
+              candidate_id, failure_id, source_turn_id, source_trace_id, candidate_type,
+              status, recurrence_key, recurrence_count, failure_class, reason_code,
+              summary_text, evidence_refs_json, release_gate_id, accepted_into_suite,
+              accepted_case_key, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["candidate_id"],
+                data["failure_id"],
+                data.get("source_turn_id"),
+                data.get("source_trace_id"),
+                data.get("candidate_type", "chat_regression"),
+                data.get("status", "open"),
+                data["recurrence_key"],
+                data.get("recurrence_count", 1),
+                data["failure_class"],
+                data.get("reason_code"),
+                data["summary_text"],
+                _json(data.get("evidence_refs", [])),
+                data.get("release_gate_id"),
+                data.get("accepted_into_suite"),
+                data.get("accepted_case_key"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def get_regression_candidate_by_recurrence_key(
+        self,
+        recurrence_key: str,
+    ) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM regression_candidates
+            WHERE recurrence_key = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (recurrence_key,),
+        )
+        return _regression_candidate_from_row(dict(row)) if row else None
+
+    async def list_regression_candidates(
+        self,
+        *,
+        status: str | None = None,
+        failure_class: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if status:
+            where.append("status = ?")
+            params.append(status)
+        if failure_class:
+            where.append("failure_class = ?")
+            params.append(failure_class)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM regression_candidates
+            {clause}
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [_regression_candidate_from_row(dict(row)) for row in rows]
+
+    async def update_regression_candidate(self, candidate_id: str, fields: dict[str, Any]) -> None:
+        if not fields:
+            return
+        assignments = []
+        values: list[Any] = []
+        for key, value in fields.items():
+            column = "evidence_refs_json" if key == "evidence_refs" else key
+            assignments.append(f"{column} = ?")
+            values.append(_json(value) if key == "evidence_refs" else value)
+        values.append(candidate_id)
+        await self._db.execute(
+            f"UPDATE regression_candidates SET {', '.join(assignments)} WHERE candidate_id = ?",
+            tuple(values),
+        )
+
     async def insert_conflict_record(self, data: dict[str, Any]) -> None:
         await self._db.execute(
             """
@@ -1023,6 +1242,18 @@ def _experience_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["source"] = json.loads(row.pop("source_json") or "{}")
     row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
     row["score"] = json.loads(row.pop("score_json") or "{}")
+    return row
+
+
+def _failure_experience_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["evidence_refs"] = json.loads(row.pop("evidence_refs_json") or "[]")
+    row["source_payload"] = json.loads(row.pop("source_payload_json") or "{}")
+    row["human_review_required"] = bool(row.get("human_review_required"))
+    return row
+
+
+def _regression_candidate_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["evidence_refs"] = json.loads(row.pop("evidence_refs_json") or "[]")
     return row
 
 

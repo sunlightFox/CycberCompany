@@ -27,6 +27,8 @@ class ChannelStreamBridge:
 
     def deliver_chat_events(self, message: dict[str, Any]) -> dict[str, Any]:
         content = message.get("content") if isinstance(message.get("content"), dict) else {}
+        structured_payload = dict(content.get("response_plan", {}).get("structured_payload") or {})
+        steering = dict(structured_payload.get("steering") or content.get("steering") or {})
         final_text = self.final_text_details(message)
         return {
             "plain_text": str(final_text.get("plain_text") or ""),
@@ -35,5 +37,6 @@ class ChannelStreamBridge:
             "final_text_source": final_text.get("source"),
             "fallback_used": bool(final_text.get("fallback_used")),
             "response_plan": dict(content.get("response_plan") or {}),
+            "steering": steering,
             "voice_reply": dict(message.get("voice_metadata") or {}),
         }

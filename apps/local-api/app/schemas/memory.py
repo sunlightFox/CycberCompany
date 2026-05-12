@@ -5,6 +5,7 @@ from typing import Any
 from core_types import (
     ApiModel,
     EntityId,
+    FailureExperienceRecord,
     MemoryConflictRecord,
     MemoryCandidate,
     MemoryExperienceRecord,
@@ -13,6 +14,7 @@ from core_types import (
     MemoryReuseFeedback,
     MemorySearchHit,
     MemorySearchResponse,
+    RegressionCandidateRecord,
 )
 from pydantic import Field
 
@@ -135,6 +137,19 @@ class MemoryRelationsResponse(ApiModel):
 
 class MemoryExperienceRecordListResponse(ApiModel):
     items: list[MemoryExperienceRecord] = Field(default_factory=list)
+
+
+class FailureExperienceListResponse(ApiModel):
+    items: list[FailureExperienceRecord] = Field(default_factory=list)
+
+
+class FailureExperienceReviewRequest(ApiModel):
+    action: str = Field(pattern="^(approve|reject|tombstone|suppress_advisory)$")
+    tombstone_reason: str | None = None
+
+
+class RegressionCandidateListResponse(ApiModel):
+    items: list[RegressionCandidateRecord] = Field(default_factory=list)
 
 
 class MemoryConflictRecordListResponse(ApiModel):

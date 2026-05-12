@@ -46,6 +46,8 @@ SCENE_CATALOG: dict[str, dict[str, Any]] = {
             "no_false_done",
             "boundary_honesty",
             "privacy_redacted",
+            "current_message_priority",
+            "evidence_required_before_done",
             "strict_format_preserved",
         ],
         "forbidden_visible_terms": [
@@ -73,8 +75,8 @@ COPY_CATALOG: dict[str, VisibleCopyEntry] = {
     "notice.tool_boundary": VisibleCopyEntry(
         "tool_boundary",
         (
-            "这一步得看真实执行结果，我不会提前把结论说满。",
-            "这里先按真实结果来，我不先演一个已经收尾的版本。",
+            "这一步得看真实执行结果；工具没真正跑完前，我不把结果说满。",
+            "这里先按真实结果来，对应工具没落地前，我不先演一个已经收尾的版本，也不把结果说满。",
         ),
         tone_strategy="boundary",
     ),
@@ -609,6 +611,7 @@ _MECHANICAL_OPENERS = (
     "结论：",
     "这点我不绕弯：",
     "这点我不绕：",
+    "这块我先坦白一句：",
 )
 
 _STRICT_FORMAT_RE = re.compile(r"```|^\s*[{[]")

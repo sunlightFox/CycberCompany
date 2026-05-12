@@ -771,8 +771,8 @@ class ChatRepository:
             INSERT INTO chat_turn_queue (
               queue_id, organization_id, turn_id, session_id, conversation_id,
               member_id, status, queue_policy, position, locked_by, locked_until,
-              dedupe_key, created_at, updated_at, started_at, completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              dedupe_key, steering_diagnostics_json, created_at, updated_at, started_at, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["queue_id"],
@@ -787,6 +787,7 @@ class ChatRepository:
                 data.get("locked_by"),
                 data.get("locked_until"),
                 data.get("dedupe_key"),
+                json.dumps(data.get("steering_diagnostics") or {}, ensure_ascii=False),
                 data["created_at"],
                 data.get("updated_at") or data["created_at"],
                 data.get("started_at"),
@@ -804,6 +805,7 @@ class ChatRepository:
         completed_at: str | None = None,
         locked_by: str | None = None,
         locked_until: str | None = None,
+        steering_diagnostics: dict[str, Any] | None = None,
     ) -> None:
         await self._db.execute(
             """
@@ -813,10 +815,24 @@ class ChatRepository:
                 started_at = COALESCE(?, started_at),
                 completed_at = COALESCE(?, completed_at),
                 locked_by = ?,
-                locked_until = ?
+                locked_until = ?,
+                steering_diagnostics_json = COALESCE(?, steering_diagnostics_json)
             WHERE turn_id = ?
             """,
-            (status, updated_at, started_at, completed_at, locked_by, locked_until, turn_id),
+            (
+                status,
+                updated_at,
+                started_at,
+                completed_at,
+                locked_by,
+                locked_until,
+                (
+                    json.dumps(steering_diagnostics, ensure_ascii=False)
+                    if steering_diagnostics is not None
+                    else None
+                ),
+                turn_id,
+            ),
         )
 
     async def update_queue_policy(
@@ -827,6 +843,7 @@ class ChatRepository:
         queue_policy: str,
         updated_at: str,
         locked_until: str | None = None,
+        steering_diagnostics: dict[str, Any] | None = None,
     ) -> None:
         await self._db.execute(
             """
@@ -834,10 +851,22 @@ class ChatRepository:
             SET status = ?,
                 queue_policy = ?,
                 updated_at = ?,
-                locked_until = ?
+                locked_until = ?,
+                steering_diagnostics_json = COALESCE(?, steering_diagnostics_json)
             WHERE turn_id = ?
             """,
-            (status, queue_policy, updated_at, locked_until, turn_id),
+            (
+                status,
+                queue_policy,
+                updated_at,
+                locked_until,
+                (
+                    json.dumps(steering_diagnostics, ensure_ascii=False)
+                    if steering_diagnostics is not None
+                    else None
+                ),
+                turn_id,
+            ),
         )
 
     async def get_queue_item_by_turn(self, turn_id: str) -> dict[str, Any] | None:
@@ -860,6 +889,38 @@ class ChatRepository:
             (session_id, exclude_turn_id),
         )
         return row is not None
+
+    async def get_running_turn_for_session(
+        self,
+        session_id: str,
+        *,
+        conversation_id: str | None = None,
+        exclude_turn_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        clauses = [
+            "queue.session_id = ?",
+            "queue.status = 'running'",
+            "turn.status IN ('created', 'running')",
+        ]
+        params: list[Any] = [session_id]
+        if conversation_id is not None:
+            clauses.append("queue.conversation_id = ?")
+            params.append(conversation_id)
+        if exclude_turn_id is not None:
+            clauses.append("queue.turn_id != ?")
+            params.append(exclude_turn_id)
+        row = await self._db.fetch_one(
+            f"""
+            SELECT turn.*
+            FROM chat_turn_queue queue
+            JOIN chat_turns turn ON turn.turn_id = queue.turn_id
+            WHERE {' AND '.join(clauses)}
+            ORDER BY queue.updated_at DESC, queue.created_at DESC
+            LIMIT 1
+            """,
+            tuple(params),
+        )
+        return self._turn_from_row(dict(row)) if row else None
 
     async def claim_turn_for_session(
         self,
@@ -1843,6 +1904,9 @@ class ChatRepository:
         return row
 
     def _queue_item_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        row["steering_diagnostics"] = json.loads(
+            row.pop("steering_diagnostics_json", None) or "{}"
+        )
         return row
 
     def _context_compaction_from_row(self, row: dict[str, Any]) -> dict[str, Any]:

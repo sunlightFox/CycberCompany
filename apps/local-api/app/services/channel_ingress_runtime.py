@@ -5,6 +5,7 @@ from typing import Any
 from core_types import Attachment, ChatContentPart, ChatContextRef, ChatTurnResponse
 
 from app.services.channel_session_router import ChannelSessionRouter
+from app.services.chat_steering import ChatSteeringCoordinator
 
 
 class ChannelIngressRuntime:
@@ -19,6 +20,7 @@ class ChannelIngressRuntime:
         self._channel_session_semantics = channel_session_semantics
         self._chat_hook_runtime = chat_hook_runtime
         self._router = ChannelSessionRouter()
+        self._steering = ChatSteeringCoordinator()
 
     async def submit_channel_turn(
         self,
@@ -41,6 +43,7 @@ class ChannelIngressRuntime:
         delivery_mode: str | None = None,
         source_timestamp: str | None = None,
         dedupe_key: str | None = None,
+        steering: dict[str, Any] | None = None,
     ) -> ChatTurnResponse:
         if self._chat_hook_runtime is not None:
             hook_result = await self._chat_hook_runtime.run_before_ingress(
@@ -78,6 +81,29 @@ class ChannelIngressRuntime:
             delivery_mode = rewritten.get("delivery_mode", delivery_mode)
             source_timestamp = rewritten.get("source_timestamp", source_timestamp)
             dedupe_key = rewritten.get("dedupe_key", dedupe_key)
+            steering = dict(rewritten.get("steering") or steering or {})
+        source_channel_semantics = {
+            "provider": provider,
+            "delivery_mode": delivery_mode,
+            "channel_thread_id": channel_thread_id,
+            "channel_account_id": channel_account_id,
+        }
+        steering_payload = dict(steering or {})
+        if "source_channel_semantics" not in steering_payload:
+            steering_payload["source_channel_semantics"] = source_channel_semantics
+        if queue_policy == "immediate":
+            decision = self._steering.decide(
+                user_text=text,
+                queue_policy=queue_policy,
+                active_turn=None,
+                working_state={},
+                explicit_steering=steering_payload,
+            )
+            if decision.queue_policy in {"followup", "steer", "interrupt"}:
+                queue_policy = decision.queue_policy
+                steering_payload = decision.metadata(
+                    source_channel_semantics=source_channel_semantics
+                )
         route = self._router.route(
             provider=provider,
             session=session,
@@ -97,6 +123,7 @@ class ChannelIngressRuntime:
             delivery_mode=delivery_mode,
             source_timestamp=source_timestamp,
             dedupe_key=dedupe_key,
+            steering=steering_payload,
         )
         return await self._session_runtime.create_turn(route.to_turn_request())
 

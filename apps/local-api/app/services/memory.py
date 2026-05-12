@@ -280,6 +280,54 @@ class MemoryService:
             raise AppError(ErrorCode.MEMORY_NOT_FOUND, "记忆不存在", status_code=404)
         return _memory_item(row)
 
+    async def write_failure_advisory_memory(
+        self,
+        *,
+        member_id: str,
+        summary_text: str,
+        source: dict[str, Any],
+        payload: dict[str, Any],
+        trace_id: str | None = None,
+    ) -> MemoryItem:
+        member = await self._members.get_member(member_id)
+        if member is None:
+            raise AppError(ErrorCode.NOT_FOUND, "成员不存在", status_code=404)
+        now = utc_now_iso()
+        breakdown = {
+            "value": 0.76,
+            "clarity": 0.72,
+            "stability": 0.68,
+            "sensitivity": 0.88,
+            "reuse": 0.71,
+            "conflict_risk": 0.18,
+        }
+        candidate = await self._insert_candidate(
+            organization_id=member["organization_id"],
+            member_id=member_id,
+            source=source,
+            proposed_layer=MemoryLayer.PROCEDURAL.value,
+            proposed_kind="failure_advisory",
+            proposed_scope_type="member",
+            proposed_scope_id=member_id,
+            summary_text=summary_text,
+            payload=payload,
+            score={"quality_breakdown": breakdown, "quality_score": 0.72},
+            final_score=0.72,
+            sensitivity="low",
+            decision="auto_written",
+            decision_reason="phase94_failure_advisory",
+            now=now,
+        )
+        return await self._insert_memory_from_candidate(
+            _candidate_row(candidate),
+            decision="auto_written",
+            trace_id=trace_id,
+            now=now,
+            quality_score=0.72,
+            quality_breakdown=breakdown,
+            retention_policy="standard",
+        )
+
     async def update_memory(
         self,
         memory_id: str,

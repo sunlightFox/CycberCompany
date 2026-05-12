@@ -8,6 +8,7 @@ from core_types import (
     ChatContentPart,
     ChatContextRef,
     ChatIngressMetadata,
+    ChatSteeringMetadata,
     ChatInput,
     ChatTurnRequest,
     ClientContext,
@@ -36,6 +37,7 @@ class ChannelSessionRoute:
     delivery_mode: str | None = None
     source_timestamp: str | None = None
     dedupe_key: str | None = None
+    steering: dict[str, Any] = field(default_factory=dict)
 
     def to_turn_request(self) -> ChatTurnRequest:
         return ChatTurnRequest(
@@ -60,6 +62,7 @@ class ChannelSessionRoute:
                 queue_policy=self.queue_policy,
                 dedupe_key=self.dedupe_key,
                 source_timestamp=self.source_timestamp,
+                steering=ChatSteeringMetadata(**self.steering),
                 raw_payload=self.raw_payload,
             ),
             client_context=ClientContext(
@@ -92,6 +95,7 @@ class ChannelSessionRouter:
         delivery_mode: str | None = None,
         source_timestamp: str | None = None,
         dedupe_key: str | None = None,
+        steering: dict[str, Any] | None = None,
     ) -> ChannelSessionRoute:
         normalized_text = text.strip() or f"收到一条来自 {provider} 的消息。"
         return ChannelSessionRoute(
@@ -115,4 +119,5 @@ class ChannelSessionRouter:
             delivery_mode=delivery_mode,
             source_timestamp=source_timestamp,
             dedupe_key=dedupe_key,
+            steering=dict(steering or {}),
         )
