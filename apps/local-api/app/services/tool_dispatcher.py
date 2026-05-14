@@ -118,6 +118,11 @@ class ToolDispatcher:
                 organization_id=envelope.organization_id,
                 risk_level=envelope.risk_level,
                 terminal_command_policy=envelope.terminal_command_policy,
+                boundary_required_controls=(
+                    envelope.boundary_decision.required_controls
+                    if envelope.boundary_decision is not None
+                    else None
+                ),
                 trace_id=trace_id,
             )
             if approval is not None:

@@ -24,6 +24,7 @@ from app.db.repositories.external_platform_adapter_repo import (
 )
 from app.db.repositories.external_platform_repo import ExternalPlatformRepository
 from app.schemas.assets import AssetResolveForToolRequest
+from app.schemas.browser import BrowserSessionHealthCheckRequest
 from app.schemas.external_platform_adapters import (
     ExternalPlatformAdapterCompileRequest,
     ExternalPlatformAdapterCreateRequest,
@@ -38,6 +39,13 @@ from app.schemas.tasks import ToolExecuteRequest
 from app.services.approvals import ApprovalService
 from app.services.asset_broker import AssetBrokerService
 from app.services.audit import AuditEventService
+from app.services.browser_policy import (
+    browser_action_policy,
+    browser_backend_capabilities,
+    browser_execution_summary,
+    browser_session_preflight,
+)
+from app.services.browser_sessions import BrowserSessionService
 from app.services.external_platform_discovery import (
     DiscoveryCandidate,
     ExternalPlatformDiscoveryService,
@@ -59,6 +67,24 @@ SENSITIVE_VALUE_PATTERN = re.compile(
     r"(token|password|cookie|private[_-]?key|mnemonic)\s*[:=]|sk-[A-Za-z0-9_-]{12,}",
     re.IGNORECASE,
 )
+DEFAULT_CHALLENGE_AUTO_CHECK_SELECTORS = (
+    "input[type='checkbox'][name*='agree' i]",
+    "input[type='checkbox'][id*='agree' i]",
+    "input[type='checkbox'][name*='protocol' i]",
+    "input[type='checkbox'][id*='protocol' i]",
+)
+DEFAULT_CHALLENGE_AUTO_CLICK_SELECTORS = (
+    "button:has-text('同意')",
+    "button:has-text('同意并继续')",
+    "button:has-text('确认')",
+    "button:has-text('继续')",
+    "button:has-text('我知道了')",
+    "button:has-text('知道了')",
+    "button:has-text('开始验证')",
+    "button:has-text('去验证')",
+    "label:has-text('同意')",
+    "[role='button']:has-text('同意')",
+)
 
 
 class ExternalPlatformAdapterService:
@@ -71,6 +97,7 @@ class ExternalPlatformAdapterService:
         approval_service: ApprovalService,
         audit_service: AuditEventService,
         asset_broker: AssetBrokerService,
+        browser_session_service: BrowserSessionService,
     ) -> None:
         self._repo = repo
         self._platform_repo = platform_repo
@@ -78,6 +105,7 @@ class ExternalPlatformAdapterService:
         self._approvals = approval_service
         self._audit = audit_service
         self._asset_broker = asset_broker
+        self._browser_sessions = browser_session_service
         self._discovery = ExternalPlatformDiscoveryService(
             platform_repo=platform_repo,
             tool_runtime=tool_runtime,
@@ -128,6 +156,10 @@ class ExternalPlatformAdapterService:
                         request.metadata.get("real_platform_integration")
                     ),
                     "playwright_required": bool(request.metadata.get("playwright_required")),
+                    "human_challenge_resume": bool(request.metadata.get("human_challenge_resume")),
+                    "auto_execute_whitelisted_real_accounts": bool(
+                        request.metadata.get("auto_execute_whitelisted_real_accounts")
+                    ),
                     "secret_material_visible": False,
                 }
             ),
@@ -320,6 +352,16 @@ class ExternalPlatformAdapterService:
     ) -> ExternalPlatformAdapterPlanResponse:
         request = request or ExternalPlatformAdapterExecuteRequest()
         plan = await self._plan(plan_id)
+        requested_provider_mode = str(request.provider_mode or "").strip().lower()
+        if requested_provider_mode and requested_provider_mode != str(
+            plan.metadata.get("provider_mode") or ""
+        ).strip().lower():
+            updated_metadata = {**plan.metadata, "provider_mode": requested_provider_mode}
+            await self._repo.update_plan(
+                plan.plan_id,
+                {"metadata": _redacted_dict(updated_metadata), "updated_at": utc_now_iso()},
+            )
+            plan = await self._plan(plan_id)
         if plan.status in {
             "awaiting_account",
             "awaiting_clarification",
@@ -363,6 +405,7 @@ class ExternalPlatformAdapterService:
                 ExternalPlatformAdapterCompileRequest(
                     adapter_id=adapter["adapter_id"],
                     adapter_type=adapter["adapter_type"],
+                    force_recompile=bool(requested_provider_mode),
                 ),
                 trace_id=trace_id,
             )
@@ -388,13 +431,55 @@ class ExternalPlatformAdapterService:
         evidence_items: list[dict[str, Any]] = []
         current_url: str | None = None
         approval_id = request.approval_id or plan.approval_id
+        runtime_flags = {
+            "session_handle_present": bool(
+                plan.metadata.get("browser_session_handle_id")
+                or plan.metadata.get("session_handle_id")
+            ),
+            "session_authenticated": False,
+            "login_attempted": False,
+        }
         try:
             for step in steps:
                 if step.status == "completed":
                     evidence_items.append(step.evidence)
                     current_url = _evidence_url(step.evidence) or current_url
+                    if _step_marked_session_authenticated(step.evidence):
+                        runtime_flags["session_authenticated"] = True
                     continue
                 if step.status in STEP_TERMINAL_STATUSES and not request.force:
+                    continue
+                if (
+                    runtime_flags["session_authenticated"]
+                    and step.step_name
+                    in {
+                        "open_login_page",
+                        "fill_login_username",
+                        "fill_login_password",
+                        "submit_login",
+                        "detect_login_challenge",
+                        "handoff_for_login",
+                        "resume_after_login",
+                    }
+                ):
+                    skipped = {
+                        **step.evidence,
+                        "status": "completed",
+                        "step_name": step.step_name,
+                        "skipped": True,
+                        "skip_reason": "session_already_authenticated",
+                        "session_authenticated": True,
+                    }
+                    await self._repo.update_step(
+                        step.step_id,
+                        {
+                            "status": "completed",
+                            "evidence": _redacted_dict(skipped),
+                            "updated_at": utc_now_iso(),
+                        },
+                    )
+                    evidence_items.append(_redacted_dict(skipped))
+                    completed_step_ids.append(step.step_id)
                     continue
                 if step.requires_approval:
                     approval_status = await self._approval_status(approval_id)
@@ -477,15 +562,134 @@ class ExternalPlatformAdapterService:
                     step.step_id,
                     {"status": "running", "updated_at": utc_now_iso()},
                 )
+                if step.step_name == "submit_login":
+                    runtime_flags["login_attempted"] = True
                 result = await self._execute_step(
                     plan=plan,
                     adapter=adapter,
                     step=step,
                     approval_id=approval_id if step.requires_approval else None,
                     current_url=current_url,
+                    evidence_items=evidence_items,
                     trace_id=trace_id,
                 )
                 result = _enrich_step_result(plan=plan, adapter=adapter, step=step, result=result)
+                session_probe_state = _session_probe_state(step=step, result=result)
+                if session_probe_state == "authenticated":
+                    runtime_flags["session_authenticated"] = True
+                    result = await self._mark_browser_session_health(
+                        plan=plan,
+                        result=result,
+                        observed_status="ready",
+                        failure_reason=None,
+                        recovery_hint=None,
+                    )
+                elif session_probe_state == "login_required":
+                    if step.step_name != "check_login_state":
+                        result = await self._mark_browser_session_health(
+                            plan=plan,
+                            result=result,
+                            observed_status="login_required",
+                            failure_reason="session_not_authenticated",
+                            recovery_hint="fallback_to_password_login",
+                        )
+                if step.step_name == "handoff_for_login":
+                    await self._finish_execution(
+                        execution.adapter_execution_id,
+                        status="awaiting_human",
+                        evidence={
+                            "step_id": step.step_id,
+                            "login_handoff": True,
+                            "human_intervention_required": True,
+                            "resume_token": plan.plan_id,
+                            "resume_action": "resume_after_login",
+                        },
+                        error_code="LOGIN_HANDOFF_REQUIRED",
+                        error_summary="Continue login in the bound local browser, then resume.",
+                    )
+                    await self._repo.update_step(
+                        step.step_id,
+                        {
+                            "status": "awaiting_human",
+                            "tool_call_id": result.get("tool_call_id"),
+                            "mcp_call_id": result.get("mcp_call_id"),
+                            "evidence": result,
+                            "updated_at": utc_now_iso(),
+                        },
+                    )
+                    await self._platform_repo.update_plan(
+                        plan.plan_id,
+                        {
+                            "status": "awaiting_human",
+                            "failure_reason": "login_handoff_required",
+                            "updated_at": utc_now_iso(),
+                        },
+                    )
+                    return await self._response(
+                        plan.plan_id,
+                        adapter=adapter,
+                        version=version,
+                        execution=await self._execution(execution.adapter_execution_id),
+                        discovery=_discovery_with_status(
+                            discovery,
+                            status="awaiting_human",
+                            failure_reason="login_handoff_required",
+                            message="The bound browser is ready for manual login. Finish login there, then resume.",
+                        ),
+                        message="The bound browser is ready for manual login. Finish login there, then resume.",
+                        next_step="resume_after_login",
+                    )
+                identity_problem = _missing_real_xiaohongshu_post_identity(
+                    plan=plan,
+                    adapter=adapter,
+                    step=step,
+                    result=result,
+                )
+                if identity_problem is not None:
+                    await self._finish_execution(
+                        execution.adapter_execution_id,
+                        status="awaiting_human",
+                        evidence={
+                            "step_id": step.step_id,
+                            "identity_problem": identity_problem,
+                            "human_intervention_required": True,
+                            "resume_token": plan.plan_id,
+                            "resume_action": "human_resume_real_browser_flow",
+                        },
+                        error_code="PUBLISHED_POST_IDENTITY_MISSING",
+                        error_summary=identity_problem["message"],
+                    )
+                    await self._platform_repo.update_plan(
+                        plan.plan_id,
+                        {
+                            "status": "awaiting_human",
+                            "failure_reason": identity_problem["reason_code"],
+                            "evidence": {
+                                **plan.evidence,
+                                "adapter_execution": {
+                                    "status": "awaiting_human",
+                                    "reason_code": identity_problem["reason_code"],
+                                    "human_intervention_required": True,
+                                    "resume_token": plan.plan_id,
+                                },
+                            },
+                            "updated_at": utc_now_iso(),
+                        },
+                    )
+                    return await self._response(
+                        plan.plan_id,
+                        adapter=adapter,
+                        version=version,
+                        execution=await self._execution(execution.adapter_execution_id),
+                        discovery=_discovery_with_status(
+                            discovery,
+                            status="awaiting_human",
+                            failure_reason=identity_problem["reason_code"],
+                            message=identity_problem["message"],
+                        ),
+                        message=identity_problem["message"],
+                        next_step="human_resume_real_browser_flow",
+                    )
                 backend_problem = _browser_backend_failure(
                     plan=plan,
                     adapter=adapter,
@@ -493,11 +697,12 @@ class ExternalPlatformAdapterService:
                     result=result,
                 )
                 if backend_problem is not None:
+                    required_backend = str(backend_problem.get("required_backend") or "browser").lower()
                     await self._record_drift_or_challenge(
                         plan=plan,
                         adapter=adapter,
                         step=step,
-                        drift_type="playwright_required",
+                        drift_type=f"{required_backend}_required",
                         status="failed",
                         evidence={**result, "backend_requirement": backend_problem},
                         trace_id=trace_id,
@@ -506,14 +711,14 @@ class ExternalPlatformAdapterService:
                         execution.adapter_execution_id,
                         status="failed",
                         evidence={"step_id": step.step_id, "backend_requirement": backend_problem},
-                        error_code="PLAYWRIGHT_REQUIRED",
+                        error_code=f"{required_backend.upper()}_REQUIRED",
                         error_summary=backend_problem["message"],
                     )
                     await self._platform_repo.update_plan(
                         plan.plan_id,
                         {
                             "status": "failed",
-                            "failure_reason": "playwright_required",
+                            "failure_reason": f"{required_backend}_required",
                             "updated_at": utc_now_iso(),
                         },
                     )
@@ -525,15 +730,72 @@ class ExternalPlatformAdapterService:
                         discovery=_discovery_with_status(
                             discovery,
                             status="failed",
-                            failure_reason="playwright_required",
+                            failure_reason=f"{required_backend}_required",
                             message=backend_problem["message"],
                         ),
                         message=backend_problem["message"],
-                        next_step="retry_with_playwright",
+                        next_step=f"retry_with_{required_backend}",
                     )
                 current_url = _evidence_url(result) or current_url
                 challenge = self._detect_challenge(adapter["manifest"], result, step=step)
                 if challenge is not None:
+                    remediated = await self._attempt_challenge_auto_remediation(
+                        plan=plan,
+                        adapter=adapter,
+                        step=step,
+                        result=result,
+                        challenge=challenge,
+                        trace_id=trace_id,
+                    )
+                    if remediated is not None:
+                        result = remediated
+                        challenge = self._detect_challenge(adapter["manifest"], result, step=step)
+                        current_url = _evidence_url(result) or current_url
+                    if challenge is None:
+                        await self._repo.update_step(
+                            step.step_id,
+                            {
+                                "status": "completed",
+                                "approval_id": approval_id if step.requires_approval else step.approval_id,
+                                "tool_call_id": result.get("tool_call_id"),
+                                "mcp_call_id": result.get("mcp_call_id"),
+                                "evidence": result,
+                                "updated_at": utc_now_iso(),
+                            },
+                        )
+                        completed_step_ids.append(step.step_id)
+                        evidence_items.append(result)
+                        continue
+                    if step.step_name == "check_login_state" and challenge.get(
+                        "reason_code"
+                    ) in {"login_verification_required", "login_required"}:
+                        result = _annotate_result(
+                            result,
+                            {
+                                "login_state_detected": "login_required",
+                                "login_fallback_required": True,
+                                "session_reused": False,
+                            },
+                        )
+                        evidence_items.append(result)
+                        await self._repo.update_step(
+                            step.step_id,
+                            {
+                                "status": "completed",
+                                "tool_call_id": result.get("tool_call_id"),
+                                "mcp_call_id": result.get("mcp_call_id"),
+                                "evidence": result,
+                                "updated_at": utc_now_iso(),
+                            },
+                        )
+                        completed_step_ids.append(step.step_id)
+                        continue
+                    if runtime_flags["login_attempted"] and challenge.get("reason_code") == "login_verification_required":
+                        challenge = {
+                            **challenge,
+                            "reason_code": "password_login_failed",
+                            "message": "Password login did not reach an authenticated publish state.",
+                        }
                     if _challenge_waits_for_human(plan=plan, adapter=adapter):
                         await self._record_drift_or_challenge(
                             plan=plan,
@@ -696,25 +958,28 @@ class ExternalPlatformAdapterService:
                 evidence_items=evidence_items,
                 completed_step_ids=completed_step_ids,
             )
-            final_status = (
-                "completed" if final_evidence["verification_evidence_present"] else "degraded"
+            final_status, final_failure_reason, next_step = _final_plan_outcome(
+                plan=plan,
+                adapter=adapter,
+                final_evidence=final_evidence,
             )
             await self._finish_execution(
                 execution.adapter_execution_id,
                 status=final_status,
                 evidence=final_evidence,
-                error_code=None if final_status == "completed" else "ADAPTER_VERIFY_DEGRADED",
+                error_code=None if final_status == "completed" else "ADAPTER_VERIFY_INCOMPLETE",
             )
             await self._platform_repo.update_plan(
                 plan.plan_id,
                 {
                     "status": final_status,
-                    "failure_reason": (
-                        None if final_status == "completed" else "verification_missing"
-                    ),
+                    "failure_reason": final_failure_reason,
                     "evidence": {
                         **plan.evidence,
                         "adapter_execution": final_evidence,
+                        "deliverable": final_evidence.get("deliverable", {}),
+                        "engagement_snapshot": final_evidence.get("engagement_snapshot", {}),
+                        "recovery_evidence": final_evidence.get("recovery_evidence", {}),
                     },
                     "updated_at": utc_now_iso(),
                 },
@@ -740,7 +1005,7 @@ class ExternalPlatformAdapterService:
                     if final_status == "completed"
                     else "草稿流程执行完毕，但缺少足够的发布验证证据，已标记 degraded。"
                 ),
-                next_step=None if final_status == "completed" else "manual_verify_external_state",
+                next_step=next_step,
             )
         except Exception as exc:
             await self._finish_execution(
@@ -801,12 +1066,14 @@ class ExternalPlatformAdapterService:
             adapter_id=request.adapter_id,
             adapter_type=request.adapter_type,
         )
+        login_completed = bool(request.human_resolution.get("login_completed"))
         for step in await self._steps(plan.plan_id, adapter["adapter_id"]):
             if step.status in {"awaiting_human", "challenge_detected", "drift_detected"}:
+                status = "completed" if login_completed and step.step_name == "handoff_for_login" else "planned"
                 await self._repo.update_step(
                     step.step_id,
                     {
-                        "status": "planned",
+                        "status": status,
                         "evidence": {
                             **step.evidence,
                             "human_resolution": _redacted_dict(request.human_resolution),
@@ -1036,16 +1303,20 @@ class ExternalPlatformAdapterService:
         adapter: dict[str, Any],
     ) -> list[dict[str, Any]]:
         if adapter["adapter_type"] == "browser":
-            return self._compile_browser_steps(plan, adapter)
+            return await self._compile_browser_steps(plan, adapter)
         return await self._compile_mcp_steps(adapter)
 
-    def _compile_browser_steps(
+    async def _compile_browser_steps(
         self,
         plan: ExternalPlatformActionPlan,
         adapter: dict[str, Any],
     ) -> list[dict[str, Any]]:
         if _is_real_xiaohongshu_flow(plan, adapter) and plan.action_type == "publish_content":
-            return _compile_real_xiaohongshu_steps(plan, adapter)
+            return await _compile_real_xiaohongshu_steps(
+                plan,
+                adapter,
+                browser_sessions=self._browser_sessions,
+            )
         manifest = adapter["manifest"]
         flow = _action_flow(manifest, plan.action_type)
         selectors = _manifest_selectors(flow)
@@ -1058,7 +1329,7 @@ class ExternalPlatformAdapterService:
                 details={"reason_code": "adapter_start_url_missing"},
             )
         content = _content_for_plan(plan, flow)
-        session_handle_id = _browser_session_handle(flow, manifest)
+        session_handle_id = _browser_session_handle(plan, flow, manifest)
 
         def browser_input(values: dict[str, Any]) -> dict[str, Any]:
             if session_handle_id:
@@ -1258,6 +1529,11 @@ class ExternalPlatformAdapterService:
             if plan.action_type == "comment_content"
             else "external_platform_publish_submit"
         )
+        submit_selector = (
+            selectors.get("comment_submit") or selectors.get("comment_form")
+            if plan.action_type == "comment_content"
+            else selectors.get("submit") or selectors.get("form")
+        )
         steps.extend(
             [
                 {
@@ -1275,7 +1551,7 @@ class ExternalPlatformAdapterService:
                     "input": browser_input(
                         {
                             "url": action_url,
-                            "selector": selectors.get("submit") or selectors.get("form"),
+                            "selector": submit_selector,
                             "action": submit_action,
                         }
                     ),
@@ -1445,6 +1721,7 @@ class ExternalPlatformAdapterService:
         step: ExternalPlatformAdapterStep,
         approval_id: str | None,
         current_url: str | None,
+        evidence_items: list[dict[str, Any]],
         trace_id: str | None,
     ) -> dict[str, Any]:
         if not step.tool_name:
@@ -1455,6 +1732,7 @@ class ExternalPlatformAdapterService:
             )
         args = dict(step.input_redacted)
         if adapter["adapter_type"] == "browser":
+            args = _resolve_runtime_browser_refs(args, evidence_items=evidence_items)
             args = self._browser_args(args, current_url=current_url)
             args = await self._inject_runtime_browser_values(
                 plan=plan,
@@ -1546,6 +1824,165 @@ class ExternalPlatformAdapterService:
             updated["value"] = resolved.secret_value or ""
         updated.pop("value_from", None)
         return updated
+
+    async def _mark_browser_session_health(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        result: dict[str, Any],
+        observed_status: str,
+        failure_reason: str | None,
+        recovery_hint: str | None,
+    ) -> dict[str, Any]:
+        browser_session_id = str(plan.metadata.get("browser_session_id") or "").strip()
+        if not browser_session_id:
+            return result
+        try:
+            health = await self._browser_sessions.health_check_session(
+                browser_session_id,
+                BrowserSessionHealthCheckRequest(
+                    probe_type="adapter_runtime",
+                    observed_status=observed_status,
+                    failure_reason=failure_reason,
+                    recovery_hint=recovery_hint,
+                    evidence={
+                        "step_name": result.get("step_name"),
+                        "action_status": (
+                            (result.get("output_redacted") or {}).get("action_status")
+                            if isinstance(result.get("output_redacted"), dict)
+                            else None
+                        ),
+                    },
+                ),
+                trace_id=plan.trace_id,
+            )
+        except Exception:
+            return result
+        return _annotate_result(
+            result,
+            {
+                "browser_session_health": {
+                    "browser_session_id": browser_session_id,
+                    "health_status": health.browser_session.health_status,
+                    "login_state": health.browser_session.login_state,
+                    "probe_id": health.probe.probe_id,
+                }
+            },
+        )
+
+    async def _attempt_challenge_auto_remediation(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        adapter: dict[str, Any],
+        step: ExternalPlatformAdapterStep,
+        result: dict[str, Any],
+        challenge: dict[str, str],
+        trace_id: str | None,
+    ) -> dict[str, Any] | None:
+        if not _auto_challenge_remediation_enabled(plan=plan, adapter=adapter, challenge=challenge):
+            return None
+        current_url = _evidence_url(result) or str(step.input_redacted.get("url") or "").strip()
+        if not current_url:
+            return None
+        attempts: list[dict[str, Any]] = []
+        for action in _challenge_auto_actions(adapter["manifest"], current_url=current_url):
+            remediation_result = await self._execute_browser_remediation_action(
+                plan=plan,
+                step=step,
+                action=action,
+                trace_id=trace_id,
+            )
+            attempts.append(remediation_result)
+            output = remediation_result.get("output_redacted") if isinstance(remediation_result, dict) else {}
+            if isinstance(output, dict) and str(output.get("action_status") or "").lower() == "completed":
+                probe = await self._execute_browser_remediation_action(
+                    plan=plan,
+                    step=step,
+                    action={
+                        "tool_name": "browser.snapshot",
+                        "args": {
+                            "url": current_url,
+                            "challenge_check": True,
+                            "provider_mode": step.input_redacted.get("provider_mode"),
+                            "playwright_required": step.input_redacted.get("playwright_required"),
+                            "session_handle_id": step.input_redacted.get("session_handle_id"),
+                            "success_selectors": step.input_redacted.get("success_selectors", []),
+                            "authenticated_if_url_contains": step.input_redacted.get(
+                                "authenticated_if_url_contains", []
+                            ),
+                            "not_authenticated_if_url_contains": step.input_redacted.get(
+                                "not_authenticated_if_url_contains", []
+                            ),
+                        },
+                    },
+                    trace_id=trace_id,
+                )
+                probe = _annotate_result(
+                    probe,
+                    {
+                        "challenge_auto_remediation": {
+                            "attempted": True,
+                            "resolved": self._detect_challenge(adapter["manifest"], probe, step=step)
+                            is None,
+                            "attempts": attempts,
+                        }
+                    },
+                )
+                if self._detect_challenge(adapter["manifest"], probe, step=step) is None:
+                    return probe
+        if attempts:
+            return _annotate_result(
+                result,
+                {
+                    "challenge_auto_remediation": {
+                        "attempted": True,
+                        "resolved": False,
+                        "attempts": attempts,
+                    }
+                },
+            )
+        return None
+
+    async def _execute_browser_remediation_action(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        step: ExternalPlatformAdapterStep,
+        action: dict[str, Any],
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        tool_name = str(action.get("tool_name") or "browser.click").strip() or "browser.click"
+        args = dict(action.get("args") or {})
+        args = self._browser_args(args, current_url=str(step.input_redacted.get("url") or "").strip())
+        response = await self._tools.execute(
+            ToolExecuteRequest(
+                task_id=plan.task_id,
+                member_id=plan.member_id,
+                tool_name=tool_name,
+                args=args,
+                approval_id=plan.approval_id,
+                idempotency_key=f"phase50:challenge-remediation:{plan.plan_id}:{step.step_id}:{_stable_json(args)}",
+            ),
+            trace_id=trace_id or plan.trace_id,
+        )
+        tool_call = response.tool_call
+        result = _redacted_dict(response.result)
+        return {
+            "plan_id": plan.plan_id,
+            "adapter_id": step.adapter_id,
+            "step_id": step.step_id,
+            "step_name": f"{step.step_name}:challenge_remediation",
+            "executor": "browser",
+            "tool_name": tool_name,
+            "tool_call_id": tool_call.tool_call_id,
+            "approval_id": None,
+            "input_redacted": _redacted_dict(args),
+            "output_redacted": result,
+            "artifact_refs": [item.artifact_id for item in response.artifacts],
+            "evidence_refs": _evidence_refs(result),
+            "secret_material_visible": False,
+        }
 
     async def _record_drift_or_challenge(
         self,
@@ -1716,6 +2153,22 @@ class ExternalPlatformAdapterService:
             selectors = _manifest_selectors(flow)
             if not (selectors.get("submit") or selectors.get("form")):
                 issues.append({"severity": "error", "code": "submit_selector_missing"})
+            if (
+                action_type == "publish_content"
+                and bool(manifest.get("real_site_flow"))
+            ):
+                comment_flow = manifest.get("comment_flow")
+                if isinstance(comment_flow, dict):
+                    comment_selectors = _manifest_selectors(comment_flow)
+                    if not (
+                        comment_selectors.get("comment_submit")
+                        or comment_selectors.get("comment_form")
+                        or comment_selectors.get("submit")
+                        or comment_selectors.get("form")
+                    ):
+                        issues.append(
+                            {"severity": "warning", "code": "comment_submit_selector_missing"}
+                        )
         if adapter_type == "mcp":
             tool_map = manifest.get("tool_map") or {}
             if not isinstance(tool_map, dict) or not tool_map.get("submit"):
@@ -1800,8 +2253,17 @@ def _manifest_allowed_domains(manifest: dict[str, Any]) -> list[str]:
     return [str(item).lower() for item in domains if str(item).strip()]
 
 
-def _browser_session_handle(flow: dict[str, Any], manifest: dict[str, Any]) -> str | None:
-    for source in (flow, manifest):
+_PUBLISHED_POST_URL_REF = "__published_post_url__"
+
+
+def _browser_session_handle(
+    plan: ExternalPlatformActionPlan,
+    flow: dict[str, Any],
+    manifest: dict[str, Any],
+) -> str | None:
+    for source in (plan.metadata, plan.evidence, flow, manifest):
+        if not isinstance(source, dict):
+            continue
         value = str(
             source.get("session_handle_id")
             or source.get("browser_session_handle_id")
@@ -1810,6 +2272,55 @@ def _browser_session_handle(flow: dict[str, Any], manifest: dict[str, Any]) -> s
         if value:
             return value
     return None
+
+
+async def _browser_session_authenticated(
+    plan: ExternalPlatformActionPlan,
+    browser_sessions: BrowserSessionService,
+) -> bool:
+    browser_session_id = str(plan.metadata.get("browser_session_id") or "").strip()
+    if not browser_session_id:
+        return False
+    try:
+        session = await browser_sessions.get_session(browser_session_id)
+    except AppError:
+        return False
+    return session.status == "active" and session.login_state == "authenticated"
+
+
+async def _browser_session_preflight_for_plan(
+    plan: ExternalPlatformActionPlan,
+    browser_sessions: BrowserSessionService,
+) -> dict[str, Any]:
+    browser_session_id = str(plan.metadata.get("browser_session_id") or "").strip()
+    if not browser_session_id:
+        return browser_session_preflight(
+            session_status=None,
+            health_status=None,
+            login_state=None,
+            execution_backend=str(plan.metadata.get("provider_mode") or "playwright_ephemeral"),
+            identity_binding_status=str(plan.metadata.get("identity_binding_status") or "unbound"),
+            login_capture_mode=str(plan.metadata.get("login_capture_mode") or "manual_handoff"),
+        )
+    try:
+        session = await browser_sessions.get_session(browser_session_id)
+    except AppError:
+        return browser_session_preflight(
+            session_status="degraded",
+            health_status="identity_unavailable",
+            login_state="unknown",
+            execution_backend=str(plan.metadata.get("provider_mode") or "playwright_ephemeral"),
+            identity_binding_status=str(plan.metadata.get("identity_binding_status") or "unbound"),
+            login_capture_mode=str(plan.metadata.get("login_capture_mode") or "manual_handoff"),
+        )
+    return browser_session_preflight(
+        session_status=session.status,
+        health_status=session.health_status,
+        login_state=session.login_state,
+        execution_backend=session.execution_backend,
+        identity_binding_status=session.identity_binding_status,
+        login_capture_mode=session.login_capture_mode,
+    )
 
 
 def _content_for_plan(plan: ExternalPlatformActionPlan, flow: dict[str, Any]) -> dict[str, Any]:
@@ -1833,16 +2344,32 @@ def _approval_required_for_plan(plan: ExternalPlatformActionPlan) -> bool:
     return not bool(plan.metadata.get("test_account_approval_bypass"))
 
 
+def _workflow_skill_spec(
+    plan: ExternalPlatformActionPlan,
+    adapter: dict[str, Any],
+) -> dict[str, Any] | None:
+    for key in ("external_platform_skill", "content_platform_skill"):
+        evidence = plan.evidence.get(key) if isinstance(plan.evidence, dict) else None
+        if not isinstance(evidence, dict):
+            continue
+        workflow = evidence.get("workflow_spec")
+        if isinstance(workflow, dict):
+            return dict(workflow)
+    manifest = adapter.get("manifest") if isinstance(adapter.get("manifest"), dict) else {}
+    workflow = manifest.get("workflow_spec") if isinstance(manifest, dict) else None
+    return dict(workflow) if isinstance(workflow, dict) else None
+
+
 def _is_real_xiaohongshu_flow(plan: ExternalPlatformActionPlan, adapter: dict[str, Any]) -> bool:
-    if str(plan.platform_key or "") != "social_xiaohongshu":
-        return False
     metadata = adapter.get("metadata") if isinstance(adapter.get("metadata"), dict) else {}
     manifest = adapter.get("manifest") if isinstance(adapter.get("manifest"), dict) else {}
+    workflow = _workflow_skill_spec(plan, adapter)
     return bool(
         plan.metadata.get("provider_mode") == "playwright"
         or metadata.get("real_platform_integration")
         or metadata.get("playwright_required")
         or manifest.get("real_site_flow")
+        or (isinstance(workflow, dict) and workflow.get("real_browser_workflow"))
     )
 
 
@@ -1851,13 +2378,23 @@ def _challenge_waits_for_human(plan: ExternalPlatformActionPlan, adapter: dict[s
     return _is_real_xiaohongshu_flow(plan, adapter) or bool(metadata.get("human_challenge_resume"))
 
 
-def _compile_real_xiaohongshu_steps(
+async def _compile_real_xiaohongshu_steps(
     plan: ExternalPlatformActionPlan,
     adapter: dict[str, Any],
+    *,
+    browser_sessions: BrowserSessionService,
 ) -> list[dict[str, Any]]:
     manifest = adapter["manifest"]
-    flow = _action_flow(manifest, plan.action_type)
-    login_flow = _login_flow(manifest, flow)
+    workflow = _workflow_skill_spec(plan, adapter) or {}
+    flow = dict(workflow.get("publish_flow") or _action_flow(manifest, plan.action_type))
+    comment_flow = workflow.get("comment_flow")
+    if isinstance(comment_flow, dict):
+        comment_flow = dict(comment_flow)
+    else:
+        manifest_comment_flow = manifest.get("comment_flow")
+        comment_flow = dict(manifest_comment_flow) if isinstance(manifest_comment_flow, dict) else {}
+    login_flow = workflow.get("login_flow")
+    login_flow = dict(login_flow) if isinstance(login_flow, dict) else _login_flow(manifest, flow)
     content = _content_for_plan(plan, flow)
     login_url = str(login_flow.get("login_url") or flow.get("login_url") or "").strip()
     start_url = str(flow.get("start_url") or manifest.get("start_url") or "").strip()
@@ -1869,7 +2406,29 @@ def _compile_real_xiaohongshu_steps(
     ).strip()
     login_selectors = _manifest_selectors(login_flow)
     selectors = _manifest_selectors(flow)
-    provider_mode = str(plan.metadata.get("provider_mode") or "playwright").strip() or "playwright"
+    comment_selectors = {**selectors, **_manifest_selectors(comment_flow)}
+    comment_entry_url = str(
+        comment_flow.get("start_url")
+        or comment_flow.get("target_post_url")
+        or (comment_flow.get("verify") or {}).get("expected_url")
+        or target_post_url
+    ).strip() or target_post_url
+    comment_recheck_url = str(
+        comment_flow.get("recheck_url")
+        or comment_flow.get("target_post_url")
+        or (comment_flow.get("verify") or {}).get("expected_url")
+        or comment_entry_url
+    ).strip() or target_post_url
+    require_comment_flow = bool(
+        plan.metadata.get("require_full_comment_flow")
+        or plan.metadata.get("publish_and_comment_both_required")
+    )
+    if require_comment_flow and not target_post_url:
+        if comment_entry_url == start_url:
+            comment_entry_url = ""
+        if comment_recheck_url == start_url:
+            comment_recheck_url = ""
+    provider_mode = str(plan.metadata.get("provider_mode") or "local_cdp").strip() or "local_cdp"
     if not login_url or not start_url:
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
@@ -1878,48 +2437,223 @@ def _compile_real_xiaohongshu_steps(
             details={"reason_code": "xiaohongshu_real_flow_missing_url"},
         )
 
-    def step(step_name: str, tool_name: str, values: dict[str, Any], *, risk: str = "R2", approval: bool = False) -> dict[str, Any]:
+    session_handle_id = _browser_session_handle(plan, flow, manifest)
+    session_authenticated = await _browser_session_authenticated(plan, browser_sessions)
+    session_preflight = await _browser_session_preflight_for_plan(plan, browser_sessions)
+    session_bootstrap_status = str(plan.metadata.get("session_bootstrap_status") or "").strip()
+
+    def step(
+        step_name: str,
+        tool_name: str,
+        values: dict[str, Any],
+        *,
+        risk: str | None = None,
+        approval: bool | None = None,
+    ) -> dict[str, Any]:
+        browser_policy = browser_action_policy(tool_name, values)
         payload = {
             **values,
             "provider_mode": provider_mode,
-            "playwright_required": True,
+            "playwright_required": provider_mode == "playwright",
+            "required_backend_capabilities": list(browser_policy.backend_capabilities),
+            "session_state": session_preflight["session_state"],
+            "login_reuse_allowed": session_preflight["login_reuse_allowed"],
         }
+        if step_name in {
+            "open_login_page",
+            "fill_login_username",
+            "fill_login_password",
+            "submit_login",
+            "detect_login_challenge",
+        }:
+            payload["allow_login_recovery"] = True
+        if session_handle_id:
+            payload["session_handle_id"] = session_handle_id
+        step_risk = risk or browser_policy.default_risk_level.value
+        step_requires_approval = (
+            approval
+            if approval is not None
+            else (
+                _approval_required_for_plan(plan)
+                and any(
+                    control in {"approval", "strong_approval"}
+                    for control in browser_policy.required_controls
+                )
+            )
+        )
         return {
             "step_name": step_name,
             "tool_name": tool_name,
-            "risk_level": risk,
-            "requires_approval": approval,
+            "risk_level": step_risk,
+            "requires_approval": step_requires_approval,
             "input": payload,
         }
 
-    steps: list[dict[str, Any]] = [
-        step("open_login_page", "browser.open", {"url": login_url}),
-        step(
-            "fill_login_username",
-            "browser.fill",
-            {"url": login_url, "selector": login_selectors.get("username"), "value_from": "account_username"},
-        ),
-        step(
-            "fill_login_password",
-            "browser.fill",
-            {"url": login_url, "selector": login_selectors.get("password"), "value_from": "account_secret"},
-        ),
-        step(
-            "submit_login",
-            "browser.submit",
-            {
-                "url": login_url,
-                "selector": login_selectors.get("submit") or login_selectors.get("form"),
-                "action": "external_platform_login_submit",
-            },
-        ),
-        step("detect_login_challenge", "browser.snapshot", {"url": login_url, "challenge_check": True}),
-        step("open_publish_entry", "browser.open", {"url": start_url}),
+    publish_health_selectors = [
+        value
+        for value in (
+            selectors.get("title"),
+            selectors.get("body"),
+            selectors.get("submit") or selectors.get("form"),
+        )
+        if value
     ]
+    steps: list[dict[str, Any]] = []
+    if session_handle_id and session_bootstrap_status == "reused":
+        steps.extend(
+            [
+                step(
+                    "resolve_browser_identity",
+                    "browser.open",
+                    {
+                        "url": start_url,
+                        "wait_until": str(flow.get("wait_until") or "domcontentloaded"),
+                    },
+                ),
+                step(
+                    "check_login_state",
+                    "browser.snapshot",
+                    {
+                        "url": start_url,
+                        "challenge_check": True,
+                        "login_state_probe": True,
+                        "success_selectors": publish_health_selectors,
+                        "authenticated_if_url_contains": ["/publish", "/creator", "/notes"],
+                        "not_authenticated_if_url_contains": ["/login"],
+                        "session_authenticated_hint": session_authenticated,
+                    },
+                ),
+            ]
+        )
+    if provider_mode == "local_cdp":
+        steps.extend(
+            [
+                step("handoff_for_login", "browser.open", {"url": login_url}),
+                step(
+                    "resume_after_login",
+                    "browser.snapshot",
+                    {
+                        "url": start_url,
+                        "challenge_check": True,
+                        "login_state_probe": True,
+                        "success_selectors": publish_health_selectors,
+                        "authenticated_if_url_contains": ["/publish", "/creator", "/notes"],
+                        "not_authenticated_if_url_contains": ["/login"],
+                    },
+                ),
+                step(
+                    "open_publish_entry",
+                    "browser.open",
+                    {
+                        "url": start_url,
+                        "wait_until": str(flow.get("wait_until") or "domcontentloaded"),
+                    },
+                ),
+                step(
+                    "verify_publish_editor_loaded",
+                    "browser.snapshot",
+                    {
+                        "url": start_url,
+                        "selector_healthcheck": publish_health_selectors,
+                        "publish_editor_check": True,
+                    },
+                ),
+            ]
+        )
+    else:
+        steps.extend(
+            [
+                step("open_login_page", "browser.open", {"url": login_url}),
+                step(
+                    "fill_login_username",
+                    "browser.fill",
+                    {
+                        "url": login_url,
+                        "selector": login_selectors.get("username"),
+                        "value_from": "account_username",
+                    },
+                ),
+                step(
+                    "fill_login_password",
+                    "browser.fill",
+                    {
+                        "url": login_url,
+                        "selector": login_selectors.get("password"),
+                        "value_from": "account_secret",
+                    },
+                ),
+                step(
+                    "submit_login",
+                    "browser.submit",
+                    {
+                        "url": login_url,
+                        "selector": login_selectors.get("submit") or login_selectors.get("form"),
+                        "action": "external_platform_login_submit",
+                        "wait_for_url": str(login_flow.get("post_login_wait_url") or "").strip() or None,
+                        "wait_for_text": str(login_flow.get("post_login_wait_text") or "").strip() or None,
+                    },
+                ),
+                step(
+                    "detect_login_challenge",
+                    "browser.snapshot",
+                    {
+                        "url": start_url,
+                        "challenge_check": True,
+                        "success_selectors": publish_health_selectors,
+                    },
+                ),
+                step(
+                    "open_publish_entry",
+                    "browser.open",
+                    {
+                        "url": start_url,
+                        "wait_until": str(flow.get("wait_until") or "domcontentloaded"),
+                    },
+                ),
+                step(
+                    "verify_publish_editor_loaded",
+                    "browser.snapshot",
+                    {
+                        "url": start_url,
+                        "selector_healthcheck": publish_health_selectors,
+                        "publish_editor_check": True,
+                    },
+                ),
+            ]
+        )
     if selectors.get("title"):
         steps.append(step("fill_title", "browser.fill", {"url": start_url, "selector": selectors.get("title"), "value": content["title"]}))
     if selectors.get("body"):
         steps.append(step("fill_publish_content", "browser.fill", {"url": start_url, "selector": selectors.get("body"), "value": content["body"]}))
+    upload_selector = selectors.get("upload") or selectors.get("image_upload")
+    for index, artifact_id in enumerate(content.get("media_artifact_ids", []), start=1):
+        if not upload_selector:
+            break
+        steps.append(
+            step(
+                f"upload_media_{index}",
+                "browser.upload",
+                {
+                    "url": start_url,
+                    "selector": upload_selector,
+                    "artifact_id": artifact_id,
+                    "proof_kind": "image_upload",
+                },
+                risk="R5",
+                approval=False,
+            )
+        )
+        steps.append(
+            step(
+                f"verify_media_upload_{index}",
+                "browser.snapshot",
+                {
+                    "url": start_url,
+                    "proof_kind": "image_upload",
+                    "expected_text": str(flow.get("upload_success_text") or "upload complete"),
+                },
+            )
+        )
     steps.extend(
         [
             step(
@@ -1929,6 +2663,8 @@ def _compile_real_xiaohongshu_steps(
                     "url": start_url,
                     "selector": selectors.get("submit") or selectors.get("form"),
                     "action": "external_platform_publish_submit",
+                    "wait_for_url": str((flow.get("verify") or {}).get("expected_url") or "").strip() or None,
+                    "wait_for_text": str(flow.get("publish_success_text") or "").strip() or None,
                 },
                 risk="R5",
                 approval=_approval_required_for_plan(plan),
@@ -1936,45 +2672,88 @@ def _compile_real_xiaohongshu_steps(
             step(
                 "capture_post_url_or_post_id",
                 "browser.snapshot",
-                {"url": target_post_url or start_url, "capture_post_identity": True},
+                {"url": target_post_url or None, "capture_post_identity": True},
             ),
             step(
                 "reopen_post_for_publish_recheck",
                 "browser.open",
-                {"url": target_post_url or start_url},
+                {"url": _PUBLISHED_POST_URL_REF},
             ),
             step(
                 "assert_post_content_visible",
                 "browser.snapshot",
-                {"url": target_post_url or start_url, "expected_text": content["body"], "proof_kind": "publish_recheck"},
-            ),
-        ]
-    )
-    if selectors.get("comment_box"):
-        steps.append(step("open_comment_box", "browser.click", {"url": target_post_url or start_url, "selector": selectors.get("comment_box")}))
-    if selectors.get("comment_input"):
-        steps.append(step("fill_comment_content", "browser.fill", {"url": target_post_url or start_url, "selector": selectors.get("comment_input"), "value": content["comment_text"]}))
-    steps.extend(
-        [
-            step(
-                "submit_comment",
-                "browser.submit",
                 {
-                    "url": target_post_url or start_url,
-                    "selector": selectors.get("submit") or selectors.get("form"),
-                    "action": "external_platform_comment_submit",
+                    "url": _PUBLISHED_POST_URL_REF,
+                    "expected_text": content["body"],
+                    "proof_kind": "publish_recheck",
                 },
-                risk="R3",
-                approval=_approval_required_for_plan(plan),
-            ),
-            step("reopen_post_for_comment_recheck", "browser.open", {"url": target_post_url or start_url}),
-            step(
-                "assert_comment_visible",
-                "browser.snapshot",
-                {"url": target_post_url or start_url, "expected_text": content["comment_text"], "proof_kind": "comment_recheck"},
             ),
         ]
     )
+    if require_comment_flow and comment_selectors.get("comment_box"):
+        steps.append(
+            step(
+                "open_comment_box",
+                "browser.click",
+                {
+                    "url": comment_entry_url or _PUBLISHED_POST_URL_REF,
+                    "selector": comment_selectors.get("comment_box"),
+                },
+            )
+        )
+    if require_comment_flow and comment_selectors.get("comment_input"):
+        steps.append(
+            step(
+                "fill_comment_content",
+                "browser.fill",
+                {
+                    "url": comment_entry_url or _PUBLISHED_POST_URL_REF,
+                    "selector": comment_selectors.get("comment_input"),
+                    "value": content["comment_text"],
+                },
+            )
+        )
+    if require_comment_flow:
+        steps.extend(
+            [
+                step(
+                    "submit_comment",
+                    "browser.submit",
+                    {
+                        "url": comment_entry_url or _PUBLISHED_POST_URL_REF,
+                        "selector": comment_selectors.get("comment_submit")
+                        or comment_selectors.get("comment_form")
+                        or selectors.get("comment_submit")
+                        or selectors.get("comment_form")
+                        or selectors.get("submit")
+                        or selectors.get("form"),
+                        "action": "external_platform_comment_submit",
+                        "wait_for_text": str(comment_flow.get("comment_success_text") or "").strip() or None,
+                        "wait_for_url": str((comment_flow.get("verify") or {}).get("expected_url") or "").strip() or None,
+                    },
+                    risk="R3",
+                    approval=_approval_required_for_plan(plan),
+                ),
+                step(
+                    "reopen_post_for_comment_recheck",
+                    "browser.open",
+                    {
+                        "url": comment_recheck_url or _PUBLISHED_POST_URL_REF,
+                        "wait_until": str(comment_flow.get("recheck_wait_until") or "domcontentloaded"),
+                    },
+                ),
+                step(
+                    "assert_comment_visible",
+                    "browser.snapshot",
+                    {
+                        "url": comment_recheck_url or _PUBLISHED_POST_URL_REF,
+                        "expected_text": content["comment_text"],
+                        "proof_kind": "comment_recheck",
+                        "wait_for_text": str(comment_flow.get("recheck_wait_text") or "").strip() or None,
+                    },
+                ),
+            ]
+        )
     return steps
 
 
@@ -2010,7 +2789,11 @@ def _enrich_step_result(
     if step.step_name == "capture_post_url_or_post_id":
         current_url = str(output.get("url") or "").strip()
         post_id_match = re.search(r"(?:note-|explore/|notes/)([A-Za-z0-9_-]+)", content)
-        verification["published_post_url"] = current_url or str(plan.metadata.get("target_post_url") or "")
+        published_post_url = str(plan.metadata.get("target_post_url") or "").strip()
+        if not published_post_url and _looks_like_published_post_url(current_url):
+            published_post_url = current_url
+        if published_post_url:
+            verification["published_post_url"] = published_post_url
         if post_id_match:
             verification["published_post_id"] = post_id_match.group(1)
     if _is_real_xiaohongshu_flow(plan, adapter):
@@ -2018,6 +2801,171 @@ def _enrich_step_result(
     if verification:
         updated["verification"] = _redacted_dict(verification)
     return updated
+
+
+def _annotate_result(result: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
+    updated = dict(result)
+    output = updated.get("output_redacted")
+    if isinstance(output, dict):
+        updated["output_redacted"] = {**output, **values}
+    else:
+        updated["output_redacted"] = dict(values)
+    return updated
+
+
+def _resolve_runtime_browser_refs(
+    args: dict[str, Any],
+    *,
+    evidence_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    published_post_url = _published_post_url_from_evidence(evidence_items)
+    if not published_post_url:
+        return args
+    updated = dict(args)
+    for key in ("url", "wait_for_url"):
+        if str(updated.get(key) or "").strip() == _PUBLISHED_POST_URL_REF:
+            updated[key] = published_post_url
+    return updated
+
+
+def _published_post_url_from_evidence(evidence_items: list[dict[str, Any]]) -> str | None:
+    for item in reversed(evidence_items):
+        if not isinstance(item, dict):
+            continue
+        verification = item.get("verification")
+        if not isinstance(verification, dict):
+            continue
+        value = str(verification.get("published_post_url") or "").strip()
+        if value:
+            return value
+    return None
+
+
+def _step_marked_session_authenticated(evidence: dict[str, Any]) -> bool:
+    output = evidence.get("output_redacted") if isinstance(evidence, dict) else {}
+    return isinstance(output, dict) and str(output.get("login_state_detected") or "") == "authenticated"
+
+
+def _session_probe_state(
+    *,
+    step: ExternalPlatformAdapterStep,
+    result: dict[str, Any],
+) -> str | None:
+    relevant = step.step_name in {
+        "check_login_state",
+        "resume_after_login",
+        "detect_login_challenge",
+        "verify_publish_editor_loaded",
+    }
+    if not relevant:
+        return None
+    output = result.get("output_redacted")
+    if not isinstance(output, dict):
+        return None
+    content = json.dumps(output, ensure_ascii=False).lower()
+    url = str(output.get("url") or "").lower()
+    input_data = step.input_redacted if isinstance(step.input_redacted, dict) else {}
+    not_authenticated_urls = [
+        str(item).lower()
+        for item in input_data.get("not_authenticated_if_url_contains", [])
+        if str(item).strip()
+    ]
+    if any(marker in url for marker in not_authenticated_urls):
+        return "login_required"
+    if output.get("challenge_detected") or output.get("login_required"):
+        return "login_required"
+    success_selectors = [
+        str(item) for item in input_data.get("success_selectors", []) if str(item).strip()
+    ]
+    if any(_selector_visible_in_content(selector, content) for selector in success_selectors):
+        return "authenticated"
+    authenticated_urls = [
+        str(item).lower()
+        for item in input_data.get("authenticated_if_url_contains", [])
+        if str(item).strip()
+    ]
+    if any(marker in url for marker in authenticated_urls):
+        return "authenticated"
+    return "authenticated" if input_data.get("session_authenticated_hint") else None
+
+
+def _selector_visible_in_content(selector: str, content: str) -> bool:
+    value = selector.strip().lower()
+    if not value:
+        return False
+    if value in content:
+        return True
+    if value.startswith("#"):
+        ident = value[1:]
+        return f'id="{ident}"' in content or f"id='{ident}'" in content
+    if value.startswith("."):
+        klass = value[1:]
+        return f'class="{klass}"' in content or f"class='{klass}'" in content
+    return False
+
+
+def _stable_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _auto_challenge_remediation_enabled(
+    *,
+    plan: ExternalPlatformActionPlan,
+    adapter: dict[str, Any],
+    challenge: dict[str, str],
+) -> bool:
+    if challenge.get("drift_type") != "challenge_detected":
+        return False
+    manifest = adapter.get("manifest") if isinstance(adapter, dict) else {}
+    manifest = manifest if isinstance(manifest, dict) else {}
+    detection = manifest.get("challenge_detection") if isinstance(manifest.get("challenge_detection"), dict) else {}
+    metadata = adapter.get("metadata") if isinstance(adapter, dict) else {}
+    metadata = metadata if isinstance(metadata, dict) else {}
+    if "auto_remediation" in detection:
+        return bool(detection.get("auto_remediation"))
+    if "auto_challenge_remediation" in metadata:
+        return bool(metadata.get("auto_challenge_remediation"))
+    return _is_real_xiaohongshu_flow(plan, adapter)
+
+
+def _challenge_auto_actions(
+    manifest: dict[str, Any],
+    *,
+    current_url: str,
+) -> list[dict[str, Any]]:
+    detection = manifest.get("challenge_detection") if isinstance(manifest.get("challenge_detection"), dict) else {}
+    actions: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(tool_name: str, selector: str, *, value: str | None = None) -> None:
+        normalized = f"{tool_name}|{selector}|{value or ''}"
+        if not selector or normalized in seen:
+            return
+        seen.add(normalized)
+        args: dict[str, Any] = {"url": current_url, "selector": selector}
+        if tool_name == "browser.check":
+            args["value"] = value or "true"
+        actions.append({"tool_name": tool_name, "args": args})
+
+    for selector in DEFAULT_CHALLENGE_AUTO_CHECK_SELECTORS:
+        add("browser.check", selector, value="true")
+    for selector in DEFAULT_CHALLENGE_AUTO_CLICK_SELECTORS:
+        add("browser.click", selector)
+    for selector in detection.get("auto_check_selectors", []) or []:
+        add("browser.check", str(selector).strip(), value="true")
+    for selector in detection.get("auto_click_selectors", []) or []:
+        add("browser.click", str(selector).strip())
+    for raw_action in detection.get("auto_actions", []) or []:
+        if not isinstance(raw_action, dict):
+            continue
+        tool_name = str(raw_action.get("tool_name") or "browser.click").strip() or "browser.click"
+        args = raw_action.get("args") if isinstance(raw_action.get("args"), dict) else {}
+        selector = str(args.get("selector") or raw_action.get("selector") or "").strip()
+        if not selector:
+            continue
+        value = str(args.get("value") or raw_action.get("value") or "").strip() or None
+        add(tool_name, selector, value=value)
+    return actions
 
 
 def _browser_backend_failure(
@@ -2029,10 +2977,10 @@ def _browser_backend_failure(
 ) -> dict[str, Any] | None:
     if adapter.get("adapter_type") != "browser":
         return None
-    requires_playwright = _is_real_xiaohongshu_flow(plan, adapter) or bool(
-        step.input_redacted.get("playwright_required")
-    )
-    if not requires_playwright:
+    required_backend = str(plan.metadata.get("provider_mode") or "").strip().lower()
+    if not required_backend:
+        required_backend = "local_cdp" if _is_real_xiaohongshu_flow(plan, adapter) else ""
+    if required_backend not in {"playwright", "local_cdp"}:
         return None
     output = result.get("output_redacted") if isinstance(result, dict) else {}
     if not isinstance(output, dict):
@@ -2040,13 +2988,39 @@ def _browser_backend_failure(
     backend = str(output.get("backend") or "").lower()
     backend_status = str(output.get("backend_status") or "").lower()
     action_status = str(output.get("action_status") or "").lower()
-    if backend == "playwright" and backend_status == "available" and action_status == "completed":
+    if backend == required_backend and backend_status == "available" and action_status == "completed":
         return None
     return {
-        "required_backend": "playwright",
+        "required_backend": required_backend,
         "actual_backend": backend or "unknown",
-        "message": "小红书真实站点链路要求 Playwright 真实浏览器执行，当前执行未满足。",
+        "message": f"Real Xiaohongshu execution requires {required_backend}; current browser backend did not match.",
     }
+
+
+def _missing_real_xiaohongshu_post_identity(
+    *,
+    plan: ExternalPlatformActionPlan,
+    adapter: dict[str, Any],
+    step: ExternalPlatformAdapterStep,
+    result: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not _is_real_xiaohongshu_flow(plan, adapter) or step.step_name != "capture_post_url_or_post_id":
+        return None
+    verification = result.get("verification")
+    verification = verification if isinstance(verification, dict) else {}
+    published_post_url = str(verification.get("published_post_url") or "").strip()
+    published_post_id = str(verification.get("published_post_id") or "").strip()
+    if published_post_url or published_post_id:
+        return None
+    return {
+        "reason_code": "published_post_identity_missing",
+        "message": "The publish step completed, but the system could not confirm the post URL or post id for comment follow-up.",
+    }
+
+
+def _looks_like_published_post_url(url: str) -> bool:
+    normalized = str(url or "").strip().lower()
+    return "/notes/" in normalized or "/explore/" in normalized or "note-" in normalized
 
 
 def _manifest_checksum(manifest: dict[str, Any]) -> str:
@@ -2143,14 +3117,39 @@ def _final_execution_evidence(
     completed_step_ids: list[str],
 ) -> dict[str, Any]:
     refs: list[dict[str, Any]] = []
+    completed_step_names = {
+        str(item.get("step_name") or "")
+        for item in evidence_items
+        if isinstance(item, dict) and item.get("step_name")
+    }
+    step_outcome_counts: dict[str, int] = {}
     publish_recheck = {"status": "missing", "visible_excerpt": None}
     comment_recheck = {"status": "missing", "visible_excerpt": None}
     published_post_url: str | None = None
     published_post_id: str | None = None
+    latest_session_state = "active"
+    latest_backend = str(plan.metadata.get("provider_mode") or "playwright_ephemeral")
+    challenge_signal: dict[str, Any] | None = None
     for item in evidence_items:
         raw_refs = item.get("evidence_refs")
         if isinstance(raw_refs, dict):
             refs.append({key: value for key, value in raw_refs.items() if value is not None})
+        output = item.get("output_redacted") if isinstance(item, dict) else {}
+        if isinstance(output, dict):
+            status_key = str(output.get("action_status") or item.get("status") or "completed")
+            step_outcome_counts[status_key] = step_outcome_counts.get(status_key, 0) + 1
+            latest_backend = str(output.get("backend") or latest_backend or "playwright_ephemeral")
+            if output.get("session_state"):
+                latest_session_state = str(output.get("session_state"))
+            if output.get("challenge_detected") or output.get("login_required"):
+                challenge_signal = {
+                    "status": "challenge_detected",
+                    "reason_code": str(
+                        output.get("challenge_reason_code")
+                        or output.get("degraded_reason")
+                        or "login_verification_required"
+                    ),
+                }
         verification_payload = item.get("verification")
         verification_data = (
             verification_payload if isinstance(verification_payload, dict) else {}
@@ -2181,17 +3180,109 @@ def _final_execution_evidence(
                     "visible_excerpt": verification_data.get("visible_excerpt"),
                 }
     serialized = json.dumps({"refs": refs, "items": evidence_items}, ensure_ascii=False).lower()
+    require_comment_flow = bool(
+        plan.metadata.get("require_full_comment_flow")
+        or plan.metadata.get("publish_and_comment_both_required")
+    )
     if _is_real_xiaohongshu_flow(plan, adapter):
         verification = (
             publish_recheck["status"] == "confirmed"
-            and comment_recheck["status"] == "confirmed"
+            and bool(published_post_url or published_post_id)
+            and (
+                not require_comment_flow
+                or comment_recheck["status"] == "confirmed"
+            )
         )
     else:
         verification = (
             publish_recheck["status"] == "confirmed"
             or comment_recheck["status"] == "confirmed"
-            or any(marker in serialized for marker in ("published post_id", "comment success", "publish success"))
+            or any(
+                marker in serialized
+                for marker in (
+                    "published post_id",
+                    "post_id=",
+                    "comment success",
+                    "publish success",
+                )
+            )
         )
+    publish_and_comment_both_confirmed = (
+        publish_recheck["status"] == "confirmed" and comment_recheck["status"] == "confirmed"
+    )
+    deliverable = {
+        "status": "completed" if verification else "incomplete",
+        "post_draft": {
+            "title": str(plan.metadata.get("title") or ""),
+            "body": str(plan.metadata.get("publish_text") or plan.content_summary or ""),
+            "tags": [str(item) for item in plan.metadata.get("tags", []) if str(item).strip()],
+            "media_artifact_ids": [
+                str(item) for item in plan.metadata.get("media_artifact_ids", []) if str(item).strip()
+            ],
+        },
+        "publish_candidate": {
+            "published_post_url": published_post_url,
+            "published_post_id": published_post_id,
+            "requires_playwright": _is_real_xiaohongshu_flow(plan, adapter),
+        },
+    }
+    engagement_snapshot = {
+        "status": "completed" if comment_recheck["status"] == "confirmed" else "pending",
+        "comment_text": str(plan.metadata.get("comment_text") or "").strip() or None,
+        "comment_visible_text_confirmed": comment_recheck["status"] == "confirmed",
+    }
+    recovery_reasons: list[str] = []
+    if publish_recheck["status"] != "confirmed":
+        recovery_reasons.append("publish_recheck_missing")
+    if _is_real_xiaohongshu_flow(plan, adapter) and not (published_post_url or published_post_id):
+        recovery_reasons.append("published_post_identity_missing")
+    if require_comment_flow and _is_real_xiaohongshu_flow(plan, adapter) and "submit_comment" not in completed_step_names:
+        recovery_reasons.append("comment_submit_missing")
+    if require_comment_flow and plan.metadata.get("comment_text") and comment_recheck["status"] != "confirmed":
+        recovery_reasons.append("comment_recheck_missing")
+    verification_evidence = {
+        "visible_text_confirmation": {
+            "publish": publish_recheck,
+            "comment": comment_recheck,
+        },
+        "url_identity_confirmation": {
+            "published_post_url": published_post_url,
+            "published_post_id": published_post_id,
+            "status": "confirmed" if (published_post_url or published_post_id) else "missing",
+        },
+        "artifact_confirmation": {
+            "artifact_refs_present": bool(refs),
+            "status": "confirmed" if refs else "missing",
+        },
+        "challenge_signal": challenge_signal or {"status": "not_detected"},
+        "recovery_evidence": {
+            "status": "not_triggered" if verification else "required",
+            "reason_codes": recovery_reasons,
+            "resume_token": plan.plan_id if _is_real_xiaohongshu_flow(plan, adapter) else None,
+        },
+    }
+    execution_summary = browser_execution_summary(
+        session_context={"session_state": latest_session_state},
+        action_status="completed" if verification else ("awaiting_human" if _is_real_xiaohongshu_flow(plan, adapter) else "degraded"),
+        degraded_reason=None if verification else (recovery_reasons[0] if recovery_reasons else "verification_missing"),
+        challenge_reason_code=(
+            str((challenge_signal or {}).get("reason_code"))
+            if isinstance(challenge_signal, dict) and challenge_signal.get("reason_code")
+            else None
+        ),
+        verification_evidence={
+            "status": "confirmed" if verification else "missing",
+            "present": verification,
+        },
+        next_step="human_resume_real_browser_flow"
+        if _is_real_xiaohongshu_flow(plan, adapter) and not verification
+        else "manual_verify_external_state"
+        if not verification
+        else None,
+    )
+    execution_summary["step_outcome_counts"] = step_outcome_counts or {"completed": len(completed_step_ids)}
+    execution_summary["backend"] = latest_backend
+    execution_summary["backend_capabilities"] = browser_backend_capabilities(latest_backend)
     return _redacted_dict(
         {
             "plan_id": plan.plan_id,
@@ -2207,13 +3298,74 @@ def _final_execution_evidence(
             "comment_recheck": comment_recheck,
             "publish_visible_text_confirmed": publish_recheck["status"] == "confirmed",
             "comment_visible_text_confirmed": comment_recheck["status"] == "confirmed",
+            "publish_and_comment_both_confirmed": publish_and_comment_both_confirmed,
             "proof_source": "page_text",
             "playwright_backend_required": _is_real_xiaohongshu_flow(plan, adapter),
-            "human_intervention_required": False,
+            "human_intervention_required": _is_real_xiaohongshu_flow(plan, adapter) and not verification,
             "resume_token": plan.plan_id if _is_real_xiaohongshu_flow(plan, adapter) else None,
             "verification_evidence_present": verification,
+            "verification_evidence": verification_evidence,
+            "browser_execution_summary": execution_summary,
+            "session_state": latest_session_state,
+            "backend_capabilities": browser_backend_capabilities(latest_backend),
+            "deliverable": deliverable,
+            "engagement_snapshot": engagement_snapshot,
+            "recovery_evidence": {
+                "status": "not_triggered" if verification else "required",
+                "reason_codes": recovery_reasons,
+                "resume_token": plan.plan_id if _is_real_xiaohongshu_flow(plan, adapter) else None,
+            },
             "external_state_change": True,
             "secret_material_visible": False,
             "redaction_policy": "trace_service.redact",
         }
     )
+
+
+def _final_plan_outcome(
+    *,
+    plan: ExternalPlatformActionPlan,
+    adapter: dict[str, Any],
+    final_evidence: dict[str, Any],
+) -> tuple[str, str | None, str | None]:
+    if final_evidence.get("verification_evidence_present"):
+        return "completed", None, None
+    if _is_real_xiaohongshu_flow(plan, adapter):
+        recovery = final_evidence.get("recovery_evidence")
+        reason_codes = recovery.get("reason_codes") if isinstance(recovery, dict) else []
+        failure_reason = next(
+            (str(code) for code in reason_codes if str(code).strip()),
+            "verification_missing",
+        )
+        return "awaiting_human", failure_reason, "human_resume_real_browser_flow"
+    if plan.action_type == "publish_content":
+        return "degraded", "publish_recheck_missing", "manual_verify_external_state"
+    if plan.action_type == "comment_content":
+        return "degraded", "comment_recheck_missing", "manual_verify_external_state"
+    return "degraded", "verification_missing", "manual_verify_external_state"
+
+
+def _content_for_plan(plan: ExternalPlatformActionPlan, flow: dict[str, Any]) -> dict[str, Any]:
+    body = str(
+        plan.metadata.get("publish_text") or plan.content_summary or "external platform publish content"
+    ).strip()
+    title = str(
+        plan.metadata.get("title") or flow.get("default_title") or body[:60] or "external platform publish"
+    ).strip()
+    tags = plan.metadata.get("tags") or flow.get("default_tags") or []
+    comment_text = str(
+        plan.metadata.get("comment_text")
+        or plan.content_summary
+        or flow.get("default_comment")
+        or "verified"
+    ).strip()
+    return {
+        "title": title,
+        "body": body,
+        "tags": [str(item) for item in tags],
+        "comment_text": comment_text,
+        "publish_surface": str(plan.metadata.get("publish_surface") or "text_note"),
+        "media_artifact_ids": [
+            str(item) for item in plan.metadata.get("media_artifact_ids", []) if str(item).strip()
+        ],
+    }

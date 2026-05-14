@@ -8,6 +8,7 @@ from typing import Any
 from core_types import RiskLevel
 
 from app.db.repositories.settings_repo import SettingsRepository
+from app.services.browser_policy import classify_browser_action_category
 
 PROFILE_STRICT = "strict"
 PROFILE_BALANCED_PERSONAL = "balanced_personal"
@@ -17,7 +18,6 @@ VISIBLE_REDACTION_RELAXED = "relaxed"
 APPROVAL_CONTROLS = {"approval", "strong_approval"}
 
 _DEFAULT_PERSONAL_AUTO_APPROVE_ACTIONS = {
-    "browser.download",
     "browser.screenshot",
     "browser.vision_snapshot",
     "file.write",
@@ -31,12 +31,12 @@ _DEFAULT_PERSONAL_AUTO_APPROVE_ACTIONS = {
     "media.export_artifact",
 }
 _DEFAULT_PERSONAL_AUTO_APPROVE_CATEGORIES = {
-    "browser_download",
     "browser_read",
     "file_write",
     "project_clone",
 }
 _DEFAULT_EXPLICIT_APPROVAL_ACTIONS = {
+    "browser.download",
     "file.delete",
     "browser.submit",
     "browser.upload",
@@ -51,6 +51,7 @@ _DEFAULT_EXPLICIT_APPROVAL_ACTIONS = {
     "payment.send",
 }
 _DEFAULT_EXPLICIT_APPROVAL_CATEGORIES = {
+    "browser_download",
     "browser_submit",
     "browser_upload",
     "payment",
@@ -245,14 +246,11 @@ def classify_action_category(
     normalized_tool = _normalize_key(tool_name or "")
     normalized_object = _normalize_key(object_type or "")
     normalized_destination = _normalize_key(destination or "")
+    browser_category = classify_browser_action_category(normalized_tool, {"action": normalized_action, "url": normalized_destination})
+    if browser_category is not None:
+        return browser_category
     if normalized_tool == "terminal.run" or normalized_action in {"terminal.run", "shell", "command"}:
         return "terminal_command"
-    if normalized_tool == "browser.download" or "download" in normalized_action or "download" in normalized_tool:
-        return "browser_download"
-    if normalized_tool == "browser.upload" or "upload" in normalized_action or "upload" in normalized_tool:
-        return "browser_upload"
-    if normalized_tool in {"browser.submit", "browser.click", "browser.fill", "browser.type"}:
-        return "browser_submit" if normalized_tool == "browser.submit" else "browser_read"
     if any(marker in f"{normalized_action} {normalized_tool} {normalized_destination}" for marker in ("publish", "post", "send", "external")):
         return "network_write"
     if normalized_object in {"payment", "wallet"}:

@@ -5,6 +5,36 @@
   "updated_at": "2026-05-01T00:00:00Z",
   "packages": [
     {
+      "package_ref": "community/openclaw/xiaohongshu-publish",
+      "bundle_id": "clawhub-openclaw-xiaohongshu-publish",
+      "display_name": "ClawHub OpenClaw Xiaohongshu Publish",
+      "description": "Controlled translation of the OpenClaw xiaohongshu-publish skill into review artifacts and a browser workflow spec.",
+      "version": "0.1.0",
+      "author": "clawhub",
+      "tags": ["social", "xiaohongshu", "publish", "openclaw", "browser"],
+      "keywords": ["xiaohongshu", "xhs", "rednote", "publish", "openclaw", "browser"],
+      "source": {
+        "type": "local_directory",
+        "uri": "config/skill-repositories/fixtures/clawhub-openclaw-xiaohongshu-publish"
+      },
+      "trust_level": "curated"
+    },
+    {
+      "package_ref": "official/social/xiaohongshu-content-platform",
+      "bundle_id": "clawhub-xiaohongshu-content-platform",
+      "display_name": "ClawHub Xiaohongshu Content Platform",
+      "description": "Generates controlled Xiaohongshu publish drafts, media-aware review artifacts, and comment plans.",
+      "version": "0.1.0",
+      "author": "clawhub",
+      "tags": ["social", "xiaohongshu", "content", "publish"],
+      "keywords": ["xiaohongshu", "xhs", "rednote", "publish", "social", "content"],
+      "source": {
+        "type": "local_directory",
+        "uri": "config/skill-repositories/fixtures/clawhub-xiaohongshu-content-platform"
+      },
+      "trust_level": "curated"
+    },
+    {
       "package_ref": "official/content/local-draft",
       "bundle_id": "clawhub-local-draft",
       "display_name": "ClawHub Local Draft",

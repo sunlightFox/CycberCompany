@@ -131,6 +131,49 @@ class _MockAsyncClient:
         )
 
 
+class _FallbackAsyncClient(_MockAsyncClient):
+    async def post(self, url: str, *, headers: dict[str, str], json: dict[str, Any]) -> _MockResponse:
+        del headers, json
+        return _MockResponse(
+            json_data={
+                "id": "resp_chat_empty",
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 3, "completion_tokens": 4},
+            }
+        )
+
+    def stream(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, Any],
+    ) -> _MockResponse:
+        del method, url, headers, json
+        return _MockResponse(
+            lines=[
+                "event: response.created",
+                'data: {"type":"response.created","response":{"id":"resp_fallback"}}',
+                "",
+                "event: response.output_text.delta",
+                'data: {"type":"response.output_text.delta","delta":"pong"}',
+                "",
+                "event: response.completed",
+                'data: {"type":"response.completed","status":"completed","usage":{"output_tokens":1}}',
+            ],
+            content_type="text/event-stream",
+        )
+
+
 @pytest.mark.anyio
 async def test_openai_compatible_chat_completion_accepts_reasoning_content(
     monkeypatch: pytest.MonkeyPatch,
@@ -188,3 +231,20 @@ async def test_openai_compatible_responses_modes_are_supported(
     assert result.text == "pong-from-responses"
     assert any(event.event == "delta" and event.text == "pong" for event in events)
     assert any(event.event == "completed" for event in events)
+
+
+@pytest.mark.anyio
+async def test_openai_compatible_chat_completion_falls_back_to_stream_for_codex_proxy_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("brain.adapters.openai_compatible.httpx.AsyncClient", _FallbackAsyncClient)
+    client = OpenAICompatibleClient(
+        "https://example.com/v1",
+        "secret",
+        protocol_family="chat_completions",
+    )
+
+    result = await client.complete_chat(_request(stream=False), CancelToken())
+
+    assert result.text == "pong"
+    assert result.metadata["fallback"] == "stream_completion"

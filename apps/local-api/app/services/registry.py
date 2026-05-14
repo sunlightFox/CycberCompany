@@ -719,13 +719,21 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     )
     external_platform_action_service = ExternalPlatformActionService(
         repo=external_platform_repo,
+        adapter_repo=external_platform_adapter_repo,
         asset_repo=asset_repo,
+        asset_service=asset_service,
         asset_broker=asset_broker_service,
+        capability_service=capability_service,
+        browser_session_service=browser_session_service,
+        artifact_store=artifact_store,
         task_engine=task_engine,
         approval_service=approval_service,
         trace_service=trace_service,
         audit_service=audit_service,
         safety_policy_service=safety_policy_service,
+        skill_plugin_service=skill_plugin_service,
+        skill_governance_service=skill_governance_service,
+        skill_repository_service=skill_repository_service,
     )
     external_platform_adapter_service = ExternalPlatformAdapterService(
         repo=external_platform_adapter_repo,
@@ -734,6 +742,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         approval_service=approval_service,
         audit_service=audit_service,
         asset_broker=asset_broker_service,
+        browser_session_service=browser_session_service,
     )
     autonomous_browser_workflow_legacy_service = AutonomousBrowserWorkflowService(
         repo=browser_workflow_repo,

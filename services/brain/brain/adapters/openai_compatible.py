@@ -185,7 +185,16 @@ class OpenAICompatibleClient:
             data = response.json()
         except json.JSONDecodeError as exc:
             raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "模型响应不是合法 JSON") from exc
-        text, finish_reason, usage, metadata = self._extract_completion(data)
+        try:
+            text, finish_reason, usage, metadata = self._extract_completion(data)
+        except ModelAdapterError as exc:
+            if (
+                exc.code == ErrorCode.MODEL_PROTOCOL_ERROR
+                and self._supports_stream
+                and not cancel_token.cancelled
+            ):
+                return await self._complete_via_stream(request, cancel_token)
+            raise
         return ModelChatResult(
             text=text,
             usage=usage,
@@ -289,10 +298,41 @@ class OpenAICompatibleClient:
             read=float(request.timeout_seconds),
         )
 
+    async def _complete_via_stream(
+        self,
+        request: ModelChatRequest,
+        cancel_token: CancelToken,
+    ) -> ModelChatResult:
+        parts: list[str] = []
+        usage: dict[str, Any] = {}
+        finish_reason = "stop"
+        async for event in self.stream_chat(request, cancel_token):
+            if event.event == "delta" and event.text:
+                parts.append(event.text)
+            if event.usage:
+                usage = event.usage
+            if event.event == "completed":
+                finish_reason = event.finish_reason or finish_reason
+        text = "".join(parts).strip()
+        if not text:
+            raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "模型没有返回可用文本")
+        return ModelChatResult(
+            text=text,
+            usage=usage,
+            finish_reason=finish_reason,
+            metadata={
+                "protocol_family": self._selected_protocol_family(),
+                "response_format": self._response_format,
+                "fallback": "stream_completion",
+            },
+        )
+
 
 def _extract_chat_completion(
     data: Any,
 ) -> tuple[str, str, dict[str, Any], dict[str, Any]]:
+    if _looks_like_responses_completion(data):
+        return _extract_responses_completion(data)
     try:
         choice = data["choices"][0]
         message = choice.get("message") or {}
@@ -362,6 +402,8 @@ def _parse_chat_stream_line(line: str) -> ModelStreamEvent | None:
         return ModelStreamEvent(event="completed", finish_reason="stop")
     try:
         data = json.loads(payload)
+        if _looks_like_responses_stream_event(data):
+            return _parse_responses_stream_event(data)
         choice = data.get("choices", [{}])[0]
         delta = choice.get("delta") or {}
         usage = data.get("usage") or {}
@@ -388,6 +430,10 @@ def _parse_responses_stream_line(line: str) -> ModelStreamEvent | None:
         data = json.loads(payload)
     except json.JSONDecodeError as exc:
         raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "responses 流式响应格式不合法") from exc
+    return _parse_responses_stream_event(data)
+
+
+def _parse_responses_stream_event(data: dict[str, Any]) -> ModelStreamEvent | None:
     event_type = str(data.get("type") or "")
     if event_type in {"response.completed", "completed"}:
         return ModelStreamEvent(
@@ -440,12 +486,23 @@ def _extract_responses_stream_text(data: dict[str, Any]) -> str:
 
 
 def _sse_payload(line: str) -> str | None:
-    if not line or line.startswith(":"):
+    if not line or line.startswith(":") or line.startswith("event:"):
         return None
     if not line.startswith("data:"):
         raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "模型流式响应不是 SSE data 行")
     payload = line[5:].strip()
     return payload or None
+
+
+def _looks_like_responses_completion(data: Any) -> bool:
+    return isinstance(data, dict) and isinstance(data.get("output"), list)
+
+
+def _looks_like_responses_stream_event(data: Any) -> bool:
+    if not isinstance(data, dict):
+        return False
+    event_type = str(data.get("type") or "")
+    return event_type.startswith("response.")
 
 
 async def _next_stream_line(

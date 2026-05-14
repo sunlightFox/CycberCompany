@@ -20,6 +20,7 @@ from trace_service import TraceService, redact
 
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.execution_boundary_repo import ExecutionBoundaryRepository
+from app.services.browser_policy import browser_action_policy, classify_browser_action_category
 from app.services.safety_policy import RuntimeSafetyPolicyService
 from app.services.terminal_sandbox import (
     TerminalSandboxRequest,
@@ -281,6 +282,7 @@ class ExecutionBoundaryService:
             else None
         )
         readonly_chat_terminal = bool(args.get("chat_readonly_command"))
+        browser_policy = browser_action_policy(tool_name, args) if tool_name.startswith("browser.") else None
         action_category = _action_category_for_request(tool_name, args, policy)
         terminal_network = (
             command_network_policy(str(args.get("command") or ""))
@@ -343,7 +345,13 @@ class ExecutionBoundaryService:
         ):
             decision = "deny"
             reason_codes.append("policy_deny_pattern")
-        if action_category in {"browser_submit", "browser_upload", "payment", "network_write"}:
+        if action_category in {
+            "browser_download",
+            "browser_submit",
+            "browser_upload",
+            "payment",
+            "network_write",
+        }:
             effective_risk = _max_risk(effective_risk, RiskLevel.R5)
             required_controls.append("approval")
             reason_codes.append(f"{action_category}_requires_approval")
@@ -366,6 +374,7 @@ class ExecutionBoundaryService:
         if (
             active_policy is not None
             and decision == "approval_required"
+            and action_category != "browser_download"
             and active_policy.should_skip_approval(
                 action=tool_name,
                 risk_level=effective_risk,
@@ -400,6 +409,9 @@ class ExecutionBoundaryService:
             sandbox_status = self._sandbox_runner.status(sandbox_profile)
         snapshot = {
             "action_category": action_category,
+            "browser_action_policy": (
+                browser_policy.as_dict() if browser_policy is not None else None
+            ),
             "policy_id": policy.policy_id,
             "required_capabilities": policy.required_capabilities,
             "required_assets": policy.required_asset_kinds,
@@ -862,14 +874,11 @@ def _action_category_for_request(
     args: dict[str, Any],
     policy: ToolActionPolicy,
 ) -> str:
+    browser_category = classify_browser_action_category(tool_name, args)
+    if browser_category is not None:
+        return browser_category
     action = str(args.get("action") or args.get("intent") or "").lower()
     destination = str(args.get("destination") or args.get("url") or "").lower()
-    if tool_name in {"browser.open", "browser.search", "browser.snapshot", "browser.screenshot"}:
-        return policy.action_category
-    if tool_name == "browser.download":
-        return "browser_download"
-    if tool_name == "browser.submit":
-        return "browser_submit"
     if tool_name.startswith("browser.") and any(
         marker in f"{action} {destination}"
         for marker in ("submit", "upload", "login", "payment", "pay", "checkout")

@@ -31,6 +31,12 @@ class BrowserProfile(ApiModel):
     last_probe_at: datetime | None = None
     recovery_hint: str | None = None
     reuse_policy: dict[str, Any] = Field(default_factory=dict)
+    execution_backend: str = "playwright_ephemeral"
+    cdp_endpoint: str | None = None
+    browser_family: str | None = None
+    browser_profile_name: str | None = None
+    identity_binding_status: str = "unbound"
+    login_capture_mode: str = "manual_handoff"
 
 
 class BrowserSession(ApiModel):
@@ -58,6 +64,13 @@ class BrowserSession(ApiModel):
     recovery_hint: str | None = None
     reuse_policy: dict[str, Any] = Field(default_factory=dict)
     restore_context_ref: str | None = None
+    execution_backend: str = "playwright_ephemeral"
+    identity_source: str | None = None
+    cdp_endpoint: str | None = None
+    browser_family: str | None = None
+    browser_profile_name: str | None = None
+    identity_binding_status: str = "unbound"
+    login_capture_mode: str = "manual_handoff"
 
 
 class BrowserProfileEvent(ApiModel):

@@ -22,6 +22,13 @@ def test_phase56_office_tools_are_registered(client: TestClient) -> None:
         "office.excel.edit",
         "office.ppt.generate",
         "office.ppt.edit",
+        "office.mail.draft",
+        "office.mail.send",
+        "office.calendar.plan",
+        "office.document.share",
+        "office.document.delete",
+        "office.document.overwrite",
+        "office.document.modify_shared",
     }.issubset(names)
 
 

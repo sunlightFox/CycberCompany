@@ -17,6 +17,7 @@ from app.schemas.tasks import ToolExecuteRequest
 from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
 from app.services.model_routing import ModelRoutingService
+from app.services.office_productivity import LOCAL_OFFICE_PROVIDER, office_governance_result
 from app.services.secrets import SecretStore
 
 DOCX_IMPORT_ERROR: ImportError | None
@@ -307,6 +308,7 @@ class OfficeToolService:
                 "Office 工具必须绑定任务",
                 status_code=422,
             )
+        self._require_supported_provider(request)
         if request.tool_name == "office.word.generate":
             return await self._generate_word(
                 request,
@@ -349,7 +351,53 @@ class OfficeToolService:
                 organization_id=organization_id,
                 trace_id=trace_id,
             )
+        if request.tool_name == "office.mail.draft":
+            return await self._mail_draft(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                trace_id=trace_id,
+            )
+        if request.tool_name == "office.mail.send":
+            return await self._mail_send(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                trace_id=trace_id,
+            )
+        if request.tool_name == "office.calendar.plan":
+            return await self._calendar_plan(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                trace_id=trace_id,
+            )
+        if request.tool_name in {
+            "office.document.share",
+            "office.document.delete",
+            "office.document.overwrite",
+            "office.document.modify_shared",
+        }:
+            return await self._governed_document_action(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                trace_id=trace_id,
+            )
         raise AppError(ErrorCode.TOOL_NOT_FOUND, "Office 工具不存在", status_code=404)
+
+    def _require_supported_provider(self, request: ToolExecuteRequest) -> None:
+        provider_ref = str(request.args.get("provider_ref") or LOCAL_OFFICE_PROVIDER.provider_ref)
+        if provider_ref != LOCAL_OFFICE_PROVIDER.provider_ref:
+            raise AppError(
+                ErrorCode.TOOL_SCHEMA_INVALID,
+                "Office provider is unavailable or not authorized",
+                status_code=422,
+                details={
+                    "provider_ref": provider_ref,
+                    "blocked_reason": "provider_unavailable_or_not_authorized",
+                },
+            )
 
     async def _generate_word(
         self,
@@ -681,6 +729,171 @@ class OfficeToolService:
             trace_id=trace_id,
         )
         return _office_result("ppt_presentation", artifact, source=source), [artifact]
+
+    async def _mail_draft(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> tuple[dict[str, Any], list[TaskArtifact]]:
+        del tool_call_id
+        args = request.args
+        subject = str(args.get("title") or "mail-draft")
+        recipients = [str(item) for item in list(args.get("recipients") or []) if str(item).strip()]
+        body = str(args.get("content") or args.get("summary") or "")
+        content = "\n".join(
+            [
+                f"Subject: {subject}",
+                f"To: {', '.join(recipients) if recipients else '(none)'}",
+                "",
+                body,
+            ]
+        ).strip()
+        artifact = await self._artifacts.write_text(
+            task_id=request.task_id or "",
+            organization_id=organization_id,
+            step_id=request.step_id,
+            display_name=_ensure_suffix(str(args.get("filename") or "mail-draft.md"), ".md"),
+            content=content,
+            artifact_type="mail_draft",
+            metadata={
+                "office_kind": "mail",
+                "office_operation": "draft",
+                "recipients": recipients,
+                "provider_ref": str(args.get("provider_ref") or "local.office_suite"),
+            },
+            trace_id=trace_id,
+        )
+        return {
+            **office_governance_result(tool_name=request.tool_name, args=args, artifact=artifact),
+            "subject": subject,
+            "recipients": recipients,
+            "draft_artifact": artifact.model_dump(mode="json"),
+        }, [artifact]
+
+    async def _mail_send(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> tuple[dict[str, Any], list[TaskArtifact]]:
+        del tool_call_id
+        args = request.args
+        artifact = await self._artifacts.write_text(
+            task_id=request.task_id or "",
+            organization_id=organization_id,
+            step_id=request.step_id,
+            display_name=_ensure_suffix(str(args.get("filename") or "mail-send-record.md"), ".md"),
+            content="\n".join(
+                [
+                    f"Action: {request.tool_name}",
+                    f"Subject: {str(args.get('title') or 'mail-send')}",
+                    f"To: {', '.join(str(item) for item in list(args.get('recipients') or []))}",
+                    "",
+                    str(args.get("content") or args.get("summary") or ""),
+                ]
+            ).strip(),
+            artifact_type="mail_send_record",
+            metadata={
+                "office_kind": "mail",
+                "office_operation": "send",
+                "provider_ref": str(args.get("provider_ref") or "local.office_suite"),
+                "high_risk_actions": list(args.get("high_risk_actions") or []),
+            },
+            trace_id=trace_id,
+        )
+        return {
+            **office_governance_result(tool_name=request.tool_name, args=args, artifact=artifact),
+            "subject": str(args.get("title") or "mail-send"),
+            "recipients": [str(item) for item in list(args.get("recipients") or []) if str(item).strip()],
+        }, [artifact]
+
+    async def _calendar_plan(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> tuple[dict[str, Any], list[TaskArtifact]]:
+        del tool_call_id
+        args = request.args
+        title = str(args.get("title") or "calendar-plan")
+        attendees = [str(item) for item in list(args.get("attendees") or []) if str(item).strip()]
+        scheduled_time = str(args.get("scheduled_time") or "")
+        content = "\n".join(
+            [
+                f"Title: {title}",
+                f"When: {scheduled_time or '(unscheduled)'}",
+                f"Attendees: {', '.join(attendees) if attendees else '(none)'}",
+                "",
+                str(args.get("summary") or args.get("content") or ""),
+            ]
+        ).strip()
+        artifact = await self._artifacts.write_text(
+            task_id=request.task_id or "",
+            organization_id=organization_id,
+            step_id=request.step_id,
+            display_name=_ensure_suffix(str(args.get("filename") or "calendar-plan.md"), ".md"),
+            content=content,
+            artifact_type="calendar_plan",
+            metadata={
+                "office_kind": "calendar",
+                "office_operation": "plan",
+                "attendees": attendees,
+                "scheduled_time": scheduled_time,
+                "provider_ref": str(args.get("provider_ref") or "local.office_suite"),
+            },
+            trace_id=trace_id,
+        )
+        return {
+            **office_governance_result(tool_name=request.tool_name, args=args, artifact=artifact),
+            "title": title,
+            "attendees": attendees,
+            "scheduled_time": scheduled_time or None,
+            "calendar_artifact": artifact.model_dump(mode="json"),
+        }, [artifact]
+
+    async def _governed_document_action(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> tuple[dict[str, Any], list[TaskArtifact]]:
+        del tool_call_id
+        args = request.args
+        title = str(args.get("title") or request.tool_name)
+        artifact = await self._artifacts.write_text(
+            task_id=request.task_id or "",
+            organization_id=organization_id,
+            step_id=request.step_id,
+            display_name=_ensure_suffix(str(args.get("filename") or "office-governed-action.md"), ".md"),
+            content="\n".join(
+                [
+                    f"Action: {request.tool_name}",
+                    f"Title: {title}",
+                    f"Source Artifact: {str(args.get('source_artifact_id') or '(none)')}",
+                    f"Share Targets: {', '.join(str(item) for item in list(args.get('share_targets') or []))}",
+                    "",
+                    str(args.get("summary") or args.get("content") or ""),
+                ]
+            ).strip(),
+            artifact_type="office_action_record",
+            metadata={
+                "office_kind": str(args.get("request_type") or "document"),
+                "office_operation": str(args.get("operation") or request.tool_name),
+                "provider_ref": str(args.get("provider_ref") or "local.office_suite"),
+                "high_risk_actions": list(args.get("high_risk_actions") or []),
+            },
+            trace_id=trace_id,
+        )
+        return office_governance_result(tool_name=request.tool_name, args=args, artifact=artifact), [artifact]
 
     async def _source_artifact(self, request: ToolExecuteRequest) -> TaskArtifact:
         artifact_id = str(request.args.get("source_artifact_id") or "").strip()

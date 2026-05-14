@@ -258,3 +258,28 @@ async def resume_action_plan_adapter(
         payload,
         trace_id=getattr(request.state, "trace_id", None),
     )
+
+
+@router.post(
+    "/action-plans/{plan_id}/resume-after-login",
+    response_model=ExternalPlatformAdapterPlanResponse,
+)
+async def resume_action_plan_adapter_after_login(
+    plan_id: str,
+    request: Request,
+    payload: ExternalPlatformAdapterResumeRequest | None = None,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> ExternalPlatformAdapterPlanResponse:
+    resume_payload = payload or ExternalPlatformAdapterResumeRequest()
+    if "login_completed" not in resume_payload.human_resolution:
+        resume_payload = ExternalPlatformAdapterResumeRequest(
+            adapter_id=resume_payload.adapter_id,
+            adapter_type=resume_payload.adapter_type,
+            approval_id=resume_payload.approval_id,
+            human_resolution={**resume_payload.human_resolution, "login_completed": True},
+        )
+    return await registry.external_platform_adapter_service.resume_after_human(
+        plan_id,
+        resume_payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )

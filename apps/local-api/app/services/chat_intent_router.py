@@ -61,6 +61,24 @@ class ChatIntentRouter:
         if not clean:
             return ChatRouteDecision("empty", 0.0, "empty_text")
         office_request = parse_office_chat_request(clean)
+        if office_request is None:
+            document_type = office_document_type(clean)
+            if (
+                document_type is not None
+                and not _direct_only(clean)
+                and not _negative_office_generation_constraint(clean)
+                and not is_skill_or_mcp_concept_request(clean)
+                and not is_host_filesystem_list_request(clean)
+            ):
+                office_request = OfficeChatRequest(
+                    document_type=document_type,
+                    operation="edit" if _is_office_edit(clean) else "generate",
+                    topic=_office_topic(clean, document_type),
+                    content=clean,
+                    requested_pages_or_sheets=_requested_count(clean, document_type),
+                    edit_target_artifact_id=_extract_artifact_id(clean),
+                    reason_codes=["office_marker", "office_type_fallback"],
+                )
         if office_request is not None:
             return ChatRouteDecision(
                 route_type="office_document",
@@ -223,6 +241,8 @@ def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
     clean = _clean(text)
     if _direct_only(clean):
         return None
+    if is_host_filesystem_list_request(clean):
+        return None
     if _negative_office_generation_constraint(clean):
         return None
     document_type = office_document_type(clean)
@@ -230,7 +250,7 @@ def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
         return None
     if is_skill_or_mcp_concept_request(clean) and not _has_office_action(clean):
         return None
-    if not _has_office_action(clean):
+    if not _has_office_action(clean) and not _has_implied_office_action(clean, document_type):
         return None
     operation = "edit" if _is_office_edit(clean) else "generate"
     return OfficeChatRequest(
@@ -242,6 +262,36 @@ def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
         edit_target_artifact_id=_extract_artifact_id(clean),
         reason_codes=["office_marker", "office_action_marker"],
     )
+
+
+def _has_implied_office_action(text: str, document_type: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    informational_markers = [
+        "?",
+        "\uff1f",
+        "what is",
+        "how to",
+        "explain",
+        "difference",
+        "\u662f\u4ec0\u4e48",
+        "\u600e\u4e48\u7528",
+        "\u89e3\u91ca",
+        "\u4ecb\u7ecd",
+        "\u539f\u7406",
+        "\u533a\u522b",
+        "鏄粈涔?",
+        "鎬庝箞鐢?",
+        "瑙ｉ噴",
+        "浠嬬粛",
+        "鍘熺悊",
+        "鍖哄埆",
+    ]
+    if any(marker in clean or marker in lowered for marker in informational_markers):
+        return False
+    if document_type in {"word", "excel", "ppt"}:
+        return True
+    return False
 
 
 def office_document_type(text: str) -> str | None:
@@ -808,6 +858,66 @@ def _has_office_action(text: str) -> bool:
 
 def _is_office_edit(text: str) -> bool:
     return any(marker in text for marker in ["编辑", "修改", "追加", "增加", "替换", "完善", "改"])
+
+
+def _has_office_action(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    ascii_markers = ["generate", "create", "edit", "modify", "export", "office skill"]
+    unicode_markers = [
+        "\u751f\u6210",
+        "\u521b\u5efa",
+        "\u505a\u4e00\u4e2a",
+        "\u505a\u4e00\u4efd",
+        "\u505a\u6210",
+        "\u5199\u4e00\u4efd",
+        "\u7f16\u8f91",
+        "\u4fee\u6539",
+        "\u8ffd\u52a0",
+        "\u589e\u52a0",
+        "\u5b8c\u5584",
+        "\u6574\u7406\u6210",
+        "\u5bfc\u51fa",
+    ]
+    legacy_markers = [
+        "鐢熸垚",
+        "鍒涘缓",
+        "鍋?",
+        "鍐?",
+        "缂栬緫",
+        "淇敼",
+        "杩藉姞",
+        "澧炲姞",
+        "瀹屽杽",
+        "鏁寸悊鎴?",
+        "鍋氭垚",
+        "瀵煎嚭",
+    ]
+    return any(marker in lowered for marker in ascii_markers) or any(
+        marker in clean for marker in [*unicode_markers, *legacy_markers]
+    )
+
+
+def _is_office_edit(text: str) -> bool:
+    return any(
+        marker in text
+        for marker in [
+            "\u7f16\u8f91",
+            "\u4fee\u6539",
+            "\u8ffd\u52a0",
+            "\u589e\u52a0",
+            "\u66ff\u6362",
+            "\u5b8c\u5584",
+            "\u6539",
+            "缂栬緫",
+            "淇敼",
+            "杩藉姞",
+            "澧炲姞",
+            "鏇挎崲",
+            "瀹屽杽",
+            "鏀?",
+        ]
+    )
 
 
 def _requested_count(text: str, document_type: str) -> int | None:

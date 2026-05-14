@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from core_types import (
     AccountAssetCandidate,
@@ -23,8 +26,11 @@ from trace_service import TraceService, redact
 from app.core.errors import AppError
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.asset_repo import AssetRepository
+from app.db.repositories.external_platform_adapter_repo import ExternalPlatformAdapterRepository
 from app.db.repositories.external_platform_repo import ExternalPlatformRepository
 from app.schemas.assets import AssetHandleValidateRequest, AssetQueryRequest
+from app.schemas.assets import AssetCreateRequest, CapabilityGrantCreateRequest
+from app.schemas.browser import BrowserProfileCreateRequest, BrowserSessionCreateRequest
 from app.schemas.external_platform import (
     ExternalPlatformAccountCandidatesRequest,
     ExternalPlatformAccountCandidatesResponse,
@@ -36,10 +42,16 @@ from app.schemas.external_platform import (
     ExternalPlatformPlanExecuteRequest,
     ExternalPlatformTargetCreateRequest,
 )
+from app.schemas.skill_governance import SkillGrantCreateRequest
+from app.schemas.skills import BundleInstallRequest
 from app.schemas.tasks import TaskCreateRequest
 from app.services.approvals import ApprovalService
+from app.services.asset import AssetService
 from app.services.asset_broker import AssetBrokerService
+from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
+from app.services.browser_sessions import BrowserSessionService
+from app.services.capability import CapabilityGraphService
 from app.services.external_platform_providers import (
     FAKE_PROVIDER_TARGET,
     XIAOHONGSHU_BROWSER_TARGET,
@@ -49,6 +61,9 @@ from app.services.external_platform_providers import (
     default_external_platform_provider_registry,
 )
 from app.services.safety_policy import RuntimeSafetyPolicyService
+from app.services.skill_governance import SkillGovernanceService
+from app.services.skill_plugin import SkillPluginService
+from app.services.skill_repositories import SkillRepositoryService
 from app.services.tasks import TaskEngine
 
 ACTION_MARKERS = {
@@ -93,24 +108,40 @@ class ExternalPlatformActionService:
         self,
         *,
         repo: ExternalPlatformRepository,
+        adapter_repo: ExternalPlatformAdapterRepository,
         asset_repo: AssetRepository,
+        asset_service: AssetService,
         asset_broker: AssetBrokerService,
+        capability_service: CapabilityGraphService,
+        browser_session_service: BrowserSessionService,
+        artifact_store: ArtifactStore,
         task_engine: TaskEngine,
         approval_service: ApprovalService,
         trace_service: TraceService,
         audit_service: AuditEventService,
         provider_registry: ExternalPlatformProviderRegistry | None = None,
         safety_policy_service: RuntimeSafetyPolicyService | None = None,
+        skill_plugin_service: SkillPluginService | None = None,
+        skill_governance_service: SkillGovernanceService | None = None,
+        skill_repository_service: SkillRepositoryService | None = None,
     ) -> None:
         self._repo = repo
+        self._adapter_repo = adapter_repo
         self._asset_repo = asset_repo
+        self._assets = asset_service
         self._asset_broker = asset_broker
+        self._capability = capability_service
+        self._browser_sessions = browser_session_service
+        self._artifacts = artifact_store
         self._tasks = task_engine
         self._approvals = approval_service
         self._trace = trace_service
         self._audit = audit_service
         self._providers = provider_registry or default_external_platform_provider_registry()
         self._safety_policy = safety_policy_service
+        self._skills = skill_plugin_service
+        self._skill_governance = skill_governance_service
+        self._skill_repositories = skill_repository_service
 
     async def ensure_seeded_targets(self, *, trace_id: str | None = None) -> None:
         now = utc_now_iso()
@@ -443,6 +474,29 @@ class ExternalPlatformActionService:
                 message="这个平台 target 暂不支持该动作。",
                 next_step="choose_supported_action",
             )
+        phase99_validation = _phase99_real_xiaohongshu_validation(
+            intent=intent,
+            execution_mode=request.execution_mode,
+            metadata=request_metadata,
+        )
+        if phase99_validation is not None:
+            plan = await self._insert_plan_for_intent(
+                intent,
+                status="awaiting_clarification",
+                execution_mode=request.execution_mode,
+                trace_id=trace_id,
+                failure_reason=phase99_validation["failure_reason"],
+                evidence={
+                    "missing_fields": phase99_validation["missing_fields"],
+                    "phase99_real_xiaohongshu_required": True,
+                },
+                metadata=request_metadata,
+            )
+            return await self._response_for_plan(
+                plan.plan_id,
+                message=phase99_validation["message"],
+                next_step="ask_user_for_missing_fields",
+            )
         candidates = await self._account_candidates(
             platform_key=str(intent.platform_key),
             action_type=intent.action_type,
@@ -764,6 +818,12 @@ class ExternalPlatformActionService:
                 {
                     "intent_ref": intent.intent_id,
                     "redaction": intent.constraints.get("redaction", {}),
+                    **_phase99_plan_bootstrap(
+                        intent=intent,
+                        selected=selected,
+                        risk_level=risk,
+                        metadata=metadata or {},
+                    ),
                     **(evidence or {}),
                 }
             ),
@@ -810,6 +870,27 @@ class ExternalPlatformActionService:
             execution_mode=plan.execution_mode,
         )
         browser_task_required = plan.execution_mode == "browser"
+        phase99_context = await self._ensure_phase99_content_platform_context(
+            plan=plan,
+            target=target,
+            selected=selected,
+            trace_id=trace_id,
+        )
+        metadata_update = {
+            **plan.metadata,
+            **{
+                key: value
+                for key, value in phase99_context.items()
+                if key
+                in {
+                    "browser_session_handle_id",
+                    "browser_profile_id",
+                    "browser_session_id",
+                    "session_bootstrap_status",
+                    "login_path",
+                }
+            },
+        }
         skip_approval = _should_skip_test_account_approval(
             selected=selected,
             target=target,
@@ -828,22 +909,25 @@ class ExternalPlatformActionService:
                     "requires_approval": _risk_order(plan.risk_level) >= 3 and not skip_approval,
                     "approval_before_submit": not skip_approval,
                 },
+                **{
+                    key: value
+                    for key, value in phase99_context.items()
+                    if key not in {"task_id", "browser_session_handle_id", "browser_profile_id", "browser_session_id", "session_bootstrap_status", "login_path"}
+                },
             },
+            "metadata": metadata_update,
             "updated_at": utc_now_iso(),
         }
+        if phase99_context.get("task_id"):
+            update["task_id"] = phase99_context["task_id"]
         if skip_approval:
-            task_id = await self._ensure_plan_task_id(
-                plan=plan,
-                target=target,
-                selected=selected,
-                trace_id=trace_id,
-            )
+            task_id = str(update.get("task_id") or "")
             update.update(
                 {
                     "task_id": task_id,
                     "status": "ready",
                     "metadata": {
-                        **plan.metadata,
+                        **metadata_update,
                         "test_account_approval_bypass": True,
                     },
                     "evidence": {
@@ -890,7 +974,7 @@ class ExternalPlatformActionService:
                     },
                 )
             if not approval_required:
-                if browser_task_required and not plan.task_id:
+                if browser_task_required and not update.get("task_id"):
                     update["task_id"] = await self._ensure_plan_task_id(
                         plan=plan,
                         target=target,
@@ -910,12 +994,14 @@ class ExternalPlatformActionService:
                     message="外部平台动作计划已准备好，当前个人审批策略不要求额外确认。",
                     next_step="execute_action_plan",
                 )
-            task_id = await self._ensure_plan_task_id(
-                plan=plan,
-                target=target,
-                selected=selected,
-                trace_id=trace_id,
-            )
+            task_id = str(update.get("task_id") or "")
+            if not task_id:
+                task_id = await self._ensure_plan_task_id(
+                    plan=plan,
+                    target=target,
+                    selected=selected,
+                    trace_id=trace_id,
+                )
             approval = await self._approvals.create_approval(
                 task_id=task_id,
                 organization_id=plan.organization_id,
@@ -962,7 +1048,7 @@ class ExternalPlatformActionService:
                 next_step="approve_or_deny_pending_action",
             )
         update["status"] = "ready"
-        if browser_task_required and not plan.task_id:
+        if browser_task_required and not update.get("task_id"):
             update["task_id"] = await self._ensure_plan_task_id(
                 plan=plan,
                 target=target,
@@ -1020,6 +1106,522 @@ class ExternalPlatformActionService:
             trace_id=trace_id,
         )
         return task.task_id
+
+    async def _ensure_phase99_content_platform_context(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        target: ExternalPlatformTarget,
+        selected: AccountAssetCandidate,
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        if plan.execution_mode != "browser" or plan.action_type != "publish_content":
+            return {}
+        adapter = await self._adapter_repo.find_active_adapter(
+            organization_id="org_default",
+            platform_key=str(plan.platform_key or ""),
+            action_type=plan.action_type,
+            adapter_type="browser",
+        )
+        task_id = await self._ensure_plan_task_id(
+            plan=plan,
+            target=target,
+            selected=selected,
+            trace_id=trace_id,
+        )
+        binding = await self._resolve_external_platform_skill_binding(
+            owner_member_id=plan.member_id,
+            adapter=adapter,
+            trace_id=trace_id,
+        )
+        requires_real_browser = _phase99_real_xiaohongshu_required(plan)
+        result: dict[str, Any] = {
+            "task_id": task_id,
+            "content_platform": {
+                "provider_type": "social_platform_provider",
+                "request_type": _content_platform_request_type(plan.action_type),
+                "platform_key": plan.platform_key,
+                "publish_surface": str(plan.metadata.get("publish_surface") or "text_note"),
+                "session_strategy": "persistent_session_preferred",
+                "secret_material_visible": False,
+            },
+            "post_draft": _phase99_post_draft(plan),
+            "publish_candidate": _phase99_publish_candidate(
+                plan=plan,
+                target=target,
+                selected=selected,
+            ),
+            "deliverable": {
+                "status": "planned",
+                "requires_visible_proof": True,
+                "requires_comment_visible_proof": requires_real_browser,
+            },
+            "recovery_evidence": {
+                "status": "not_triggered",
+                "resume_strategy": "human_resume_real_browser_flow",
+            },
+        }
+        if requires_real_browser:
+            result.update(
+                await self._ensure_browser_session_context(
+                    plan=plan,
+                    selected=selected,
+                    adapter=adapter,
+                    trace_id=trace_id,
+                )
+            )
+        if not binding.get("ready"):
+            result["external_platform_skill"] = binding
+            result["content_platform_skill"] = binding
+            return result
+        skill_run = await self._run_external_platform_skill(
+            skill_id=str(binding["skill_id"]),
+            task_id=task_id,
+            owner_member_id=plan.member_id,
+            input_data=_phase99_skill_input(plan=plan, selected=selected, target=target, adapter=adapter),
+            trace_id=trace_id,
+        )
+        workflow_spec = await self._extract_external_platform_workflow_spec(
+            skill_run_artifact_ids=list(skill_run.artifact_ids),
+            trace_id=trace_id,
+        )
+        skill_result = {
+            **binding,
+            "skill_run_id": skill_run.skill_run_id,
+            "status": skill_run.status,
+            "artifact_ids": list(skill_run.artifact_ids),
+            "workflow_spec": workflow_spec,
+        }
+        result["external_platform_skill"] = skill_result
+        result["content_platform_skill"] = skill_result
+        result["skill_run"] = {
+            "skill_run_id": skill_run.skill_run_id,
+            "status": skill_run.status,
+            "artifact_ids": list(skill_run.artifact_ids),
+            "output_redacted": redact(skill_run.output_redacted),
+        }
+        return result
+
+    async def _resolve_external_platform_skill_binding(
+        self,
+        *,
+        owner_member_id: str,
+        adapter: dict[str, Any] | None,
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        manifest = adapter.get("manifest") if isinstance(adapter, dict) else {}
+        manifest = manifest if isinstance(manifest, dict) else {}
+        binding = manifest.get("skill_binding") if isinstance(manifest.get("skill_binding"), dict) else {}
+        repository_id = str(binding.get("repository_id") or "clawhub").strip() or "clawhub"
+        package_ref = str(binding.get("package_ref") or "").strip()
+        source_policy = str(binding.get("source_policy") or "").strip() or "repository_with_fixture_fallback"
+        capabilities = [str(item) for item in binding.get("capabilities", []) if str(item).strip()]
+        if not package_ref:
+            return {
+                "enabled": True,
+                "ready": False,
+                "provider_type": "external_platform_skill",
+                "repository_id": repository_id,
+                "package_ref": package_ref or None,
+                "capabilities": capabilities,
+                "blocked_reason": "external_platform_skill_binding_missing",
+            }
+        if self._skills is None or self._skill_governance is None or self._skill_repositories is None:
+            return {
+                "enabled": True,
+                "ready": False,
+                "provider_type": "external_platform_skill",
+                "repository_id": repository_id,
+                "package_ref": package_ref,
+                "capabilities": capabilities,
+                "blocked_reason": "external_platform_skill_services_unavailable",
+            }
+        fixture_path = _fixture_path_for_skill_binding(repository_id=repository_id, binding=binding)
+        source_uri = f"{repository_id}:{package_ref}"
+        try:
+            await self._skill_repositories.ensure_configured(trace_id=trace_id)
+            try:
+                await self._skill_repositories.refresh_repository(repository_id, trace_id=trace_id)
+            except Exception:
+                pass
+            prefer_fixture = (
+                source_policy == "repository_with_fixture_fallback"
+                and fixture_path is not None
+                and fixture_path.exists()
+            )
+            install_request = BundleInstallRequest(
+                source_type="local_directory" if prefer_fixture else "repository_ref",
+                source_uri=str(fixture_path) if prefer_fixture else source_uri,
+                requested_by_member_id=owner_member_id,
+                idempotency_key=(
+                    f"phase99:external-platform-skill:{fixture_path.name}"
+                    if prefer_fixture
+                    else f"phase99:external-platform-skill:{source_uri}"
+                ),
+            )
+            bundle, skills, _preview = await self._skills.install_bundle(
+                install_request,
+                trace_id=trace_id,
+            )
+            if bundle.status != "enabled":
+                bundle = await self._skills.enable_bundle(
+                    bundle.bundle_id,
+                    actor_member_id=owner_member_id,
+                    trace_id=trace_id,
+                )
+            bound_skill = skills[0] if skills else None
+            if bound_skill is None:
+                return {
+                    "enabled": True,
+                    "ready": False,
+                    "provider_type": "external_platform_skill",
+                    "repository_id": repository_id,
+                    "package_ref": package_ref,
+                    "capabilities": capabilities,
+                    "bundle_id": bundle.bundle_id,
+                    "blocked_reason": "external_platform_bundle_has_no_skills",
+                }
+            skill = await self._skills.get_skill(bound_skill.skill_id)
+            grants = await self._skill_governance.list_grants(skill.skill_id)
+            if not any(item.status == "active" and item.subject_id == owner_member_id for item in grants):
+                await self._skill_governance.create_grant(
+                    skill.skill_id,
+                    SkillGrantCreateRequest(
+                        subject_id=owner_member_id,
+                        created_by_member_id=owner_member_id,
+                    ),
+                    trace_id=trace_id,
+                )
+            return {
+                "enabled": True,
+                "ready": True,
+                "provider_type": "external_platform_skill",
+                "repository_id": repository_id,
+                "package_ref": package_ref,
+                "capabilities": capabilities,
+                "bundle_id": bundle.bundle_id,
+                "skill_id": skill.skill_id,
+                "selection_reason": "manifest_skill_binding",
+                "source_policy": source_policy,
+            }
+        except Exception as exc:
+            return {
+                "enabled": True,
+                "ready": False,
+                "provider_type": "external_platform_skill",
+                "repository_id": repository_id,
+                "package_ref": package_ref,
+                "capabilities": capabilities,
+                "blocked_reason": str(getattr(exc, "code", "skill_binding_failed")),
+                "error_summary": str(redact(str(exc)))[:160],
+                "source_policy": source_policy,
+            }
+
+    async def _ensure_browser_session_context(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        selected: AccountAssetCandidate,
+        adapter: dict[str, Any] | None,
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        existing = await self._find_browser_session_context(
+            account_asset_id=selected.asset_id
+        )
+        if existing is not None:
+            try:
+                session = await self._browser_sessions.get_session(existing["browser_session_id"])
+            except Exception:
+                session = None
+            if session is not None and (
+                session.health_status in {"login_required", "session_expired", "recovery_required", "degraded"}
+                or session.login_state in {"login_required", "expired", "recovery_required", "degraded"}
+                or session.status in {"expired", "recovery_required", "degraded", "revoked", "cleared"}
+            ):
+                existing = None
+        if existing is None:
+            existing = await self._create_browser_session_context(
+                plan=plan,
+                selected=selected,
+                adapter=adapter,
+                trace_id=trace_id,
+            )
+            bootstrap_status = "created"
+        else:
+            existing["handle_id"] = await self._issue_browser_session_handle(
+                plan=plan,
+                session_asset_id=existing["asset_id"],
+                selected=selected,
+                trace_id=trace_id,
+            )
+            bootstrap_status = "reused"
+        return {
+            "browser_session_handle_id": existing["handle_id"],
+            "browser_profile_id": existing["browser_profile_id"],
+            "browser_session_id": existing["browser_session_id"],
+            "session_bootstrap_status": bootstrap_status,
+            "login_path": "session_reuse",
+            "browser_session": {
+                "asset_id": existing["asset_id"],
+                "handle_id": existing["handle_id"],
+                "browser_profile_id": existing["browser_profile_id"],
+                "browser_session_id": existing["browser_session_id"],
+                "bootstrap_status": bootstrap_status,
+                "login_domain": existing["login_domain"],
+                "secret_material_visible": False,
+            },
+        }
+
+    async def _find_browser_session_context(
+        self,
+        *,
+        account_asset_id: str,
+    ) -> dict[str, str] | None:
+        assets = await self._asset_repo.list_assets(
+            organization_id="org_default",
+            asset_type=AssetCategory.ACCOUNT.value,
+            status="active",
+            limit=200,
+        )
+        for asset in assets:
+            if asset.get("provider") != "browser_session":
+                continue
+            metadata = asset.get("metadata") if isinstance(asset.get("metadata"), dict) else {}
+            config = asset.get("config") if isinstance(asset.get("config"), dict) else {}
+            linked_account_id = str(
+                metadata.get("linked_account_asset_id")
+                or config.get("linked_account_asset_id")
+                or ""
+            ).strip()
+            browser_profile_id = str(
+                config.get("browser_profile_id") or config.get("profile_id") or ""
+            ).strip()
+            browser_session_id = str(config.get("browser_session_id") or "").strip()
+            if (
+                linked_account_id == account_asset_id
+                and browser_profile_id
+                and browser_session_id
+            ):
+                return {
+                    "asset_id": str(asset["asset_id"]),
+                    "handle_id": "",
+                    "browser_profile_id": browser_profile_id,
+                    "browser_session_id": browser_session_id,
+                    "login_domain": str(config.get("login_domain") or "").strip(),
+                }
+        return None
+
+    async def _create_browser_session_context(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        selected: AccountAssetCandidate,
+        adapter: dict[str, Any] | None,
+        trace_id: str | None,
+    ) -> dict[str, str]:
+        account_asset = await self._asset_repo.get_asset(selected.asset_id)
+        if account_asset is None:
+            raise AppError(
+                ErrorCode.ASSET_NOT_FOUND,
+                "selected account asset missing while bootstrapping browser session",
+                status_code=404,
+        )
+        account_config = (
+            account_asset.get("config") if isinstance(account_asset.get("config"), dict) else {}
+        )
+        username = str(
+            account_config.get("username") or selected.display_name or "external_platform_browser_user"
+        ).strip()
+        login_domain = _browser_login_domain(plan=plan, adapter=adapter)
+        session_asset = await self._assets.create_asset(
+            AssetCreateRequest(
+                asset_type=AssetCategory.ACCOUNT,
+                display_name=f"{selected.display_name} browser session",
+                provider="browser_session",
+                sensitivity="high",
+                config={
+                    "platform": plan.platform_key,
+                    "username": username,
+                    "auth_type": "cookie_session",
+                    "login_domain": login_domain,
+                    "linked_account_asset_id": selected.asset_id,
+                },
+                owner_scope_type="member",
+                owner_scope_id=plan.member_id,
+                visibility="private",
+                risk_level=RiskLevel.R3,
+                summary_text=f"Persistent browser session for {selected.display_name}",
+                capabilities=["read", "interact", "capture", "download"],
+                metadata={
+                    "platform": plan.platform_key,
+                    "linked_account_asset_id": selected.asset_id,
+                    "linked_account_handle_id": selected.handle_id,
+                    "session_role": "persistent_browser_session",
+                },
+            ),
+            trace_id=trace_id,
+        )
+        for action in ("read", "interact"):
+            await self._capability.create_grant(
+                CapabilityGrantCreateRequest(
+                    subject_type="member",
+                    subject_id=plan.member_id,
+                    object_type="asset",
+                    object_id=session_asset.asset_id,
+                    action=action,
+                    effect="allow",
+                    risk_level=RiskLevel.R2 if action == "read" else RiskLevel.R3,
+                    source_type="external_platform_session_bootstrap",
+                    source_id=plan.plan_id,
+                ),
+                trace_id=trace_id,
+            )
+        profile = await self._browser_sessions.create_profile(
+            BrowserProfileCreateRequest(
+                display_name=f"{selected.display_name} browser profile",
+                profile_type="task_isolated",
+                storage_backend="local_encrypted",
+                sensitivity="high",
+                allowed_domains=[],
+                execution_backend=(
+                    "local_cdp"
+                    if str(plan.metadata.get("provider_mode") or "").strip().lower() == "local_cdp"
+                    else "playwright_ephemeral"
+                ),
+                browser_family="edge",
+                identity_binding_status=(
+                    "pending"
+                    if str(plan.metadata.get("provider_mode") or "").strip().lower() == "local_cdp"
+                    else "unbound"
+                ),
+                login_capture_mode="manual_handoff",
+                metadata={
+                    "platform": plan.platform_key,
+                    "linked_account_asset_id": selected.asset_id,
+                    "linked_account_handle_id": selected.handle_id,
+                    "bootstrap_plan_id": plan.plan_id,
+                },
+                created_by_member_id=plan.member_id,
+            ),
+            trace_id=trace_id,
+        )
+        session = await self._browser_sessions.create_session(
+            profile.browser_profile_id,
+            BrowserSessionCreateRequest(
+                asset_id=session_asset.asset_id,
+                login_domain=login_domain,
+                auth_type="cookie_session",
+                sensitivity="high",
+                session_metadata={
+                    "platform": plan.platform_key,
+                    "linked_account_asset_id": selected.asset_id,
+                    "bootstrap_plan_id": plan.plan_id,
+                },
+                created_by_member_id=plan.member_id,
+                reuse_policy={"strategy": "persistent_session_preferred"},
+                execution_backend=(
+                    "local_cdp"
+                    if str(plan.metadata.get("provider_mode") or "").strip().lower() == "local_cdp"
+                    else "playwright_ephemeral"
+                ),
+                identity_source=(
+                    "local_edge_cdp"
+                    if str(plan.metadata.get("provider_mode") or "").strip().lower() == "local_cdp"
+                    else "playwright_ephemeral"
+                ),
+                browser_family="edge",
+                identity_binding_status=(
+                    "pending"
+                    if str(plan.metadata.get("provider_mode") or "").strip().lower() == "local_cdp"
+                    else "unbound"
+                ),
+                login_capture_mode="manual_handoff",
+            ),
+            trace_id=trace_id,
+        )
+        return {
+            "asset_id": session_asset.asset_id,
+            "handle_id": await self._issue_browser_session_handle(
+                plan=plan,
+                session_asset_id=session_asset.asset_id,
+                selected=selected,
+                trace_id=trace_id,
+            ),
+            "browser_profile_id": profile.browser_profile_id,
+            "browser_session_id": session.browser_session_id,
+            "login_domain": login_domain,
+        }
+
+    async def _issue_browser_session_handle(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        session_asset_id: str,
+        selected: AccountAssetCandidate,
+        trace_id: str | None,
+    ) -> str:
+        response = await self._asset_broker.query(
+            AssetQueryRequest(
+                subject_type="member",
+                subject_id=plan.member_id,
+                task_id=plan.task_id,
+                asset_type=AssetCategory.ACCOUNT,
+                requested_actions=["read", "interact"],
+                keywords=["browser session", selected.display_name, str(plan.platform_key or "")],
+                context={
+                    "external_platform_action": True,
+                    "platform_key": plan.platform_key,
+                    "browser_session_asset_id": session_asset_id,
+                    "linked_account_asset_id": selected.asset_id,
+                    "secret_material_requested": False,
+                },
+            ),
+            trace_id=trace_id,
+        )
+        issued = next((item for item in response.handles if item.asset_id == session_asset_id), None)
+        if issued is None:
+            raise AppError(
+                ErrorCode.INTERNAL_ERROR,
+                "browser session handle bootstrap failed",
+                status_code=500,
+            )
+        return issued.handle_id
+
+    async def _run_external_platform_skill(
+        self,
+        *,
+        skill_id: str,
+        task_id: str,
+        owner_member_id: str,
+        input_data: dict[str, Any],
+        trace_id: str | None,
+    ):
+        assert self._skills is not None
+        return await self._skills.run_skill(
+            skill_id,
+            task_id=task_id,
+            step_id=new_id("epskill"),
+            owner_member_id=owner_member_id,
+            input_data=input_data,
+            matched_reason="external_platform_skill_binding",
+            confidence=1.0,
+            trace_id=trace_id,
+        )
+
+    async def _extract_external_platform_workflow_spec(
+        self,
+        *,
+        skill_run_artifact_ids: list[str],
+        trace_id: str | None,
+    ) -> dict[str, Any] | None:
+        del trace_id
+        for artifact_id in skill_run_artifact_ids:
+            artifact, path = await self._artifacts.open_download(artifact_id)
+            if not str(artifact.display_name).endswith(".workflow.json"):
+                continue
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            return payload if isinstance(payload, dict) else None
+        return None
 
     async def _account_candidates(
         self,
@@ -1452,10 +2054,333 @@ def _requested_actions_for_account_query(action_type: str) -> list[str]:
     return [action_type]
 
 
+def _content_platform_request_type(action_type: str) -> str:
+    if action_type in {"publish_content", "comment_content"}:
+        return "content_platform_publish_request"
+    if action_type == "read_status":
+        return "content_platform_insight_request"
+    return "content_platform_review_request"
+
+
+def _phase99_post_draft(plan: ExternalPlatformActionPlan) -> dict[str, Any]:
+    body = str(plan.metadata.get("publish_text") or plan.content_summary or "").strip()
+    title = str(plan.metadata.get("title") or body[:30] or "小红书内容草稿").strip()
+    tags = [str(item) for item in plan.metadata.get("tags", []) if str(item).strip()]
+    media_artifact_ids = [
+        str(item) for item in plan.metadata.get("media_artifact_ids", []) if str(item).strip()
+    ]
+    return {
+        "title": title,
+        "body": body,
+        "tags": tags,
+        "publish_surface": str(plan.metadata.get("publish_surface") or "text_note"),
+        "media_artifact_ids": media_artifact_ids,
+        "comment_text": str(plan.metadata.get("comment_text") or "").strip() or None,
+        "provider_mode": str(plan.metadata.get("provider_mode") or "").strip() or None,
+    }
+
+
+def _phase99_publish_candidate(
+    *,
+    plan: ExternalPlatformActionPlan,
+    target: ExternalPlatformTarget,
+    selected: AccountAssetCandidate,
+) -> dict[str, Any]:
+    media_artifact_ids = [
+        str(item) for item in plan.metadata.get("media_artifact_ids", []) if str(item).strip()
+    ]
+    return {
+        "platform_key": plan.platform_key,
+        "platform_profile": "social_platform_provider",
+        "action_type": plan.action_type,
+        "publish_surface": str(plan.metadata.get("publish_surface") or "text_note"),
+        "requires_playwright": plan.execution_mode == "browser",
+        "requires_visible_proof": True,
+        "requires_comment_visible_proof": bool(plan.metadata.get("comment_text")),
+        "media_upload_required": bool(media_artifact_ids),
+        "media_artifact_ids": media_artifact_ids,
+        "risk_level": plan.risk_level,
+        "approval_required": _risk_order(plan.risk_level) >= 3,
+        "selected_account": _selected_account_summary(selected),
+        "target_display_name": target.display_name,
+    }
+
+
+def _phase99_skill_input(
+    *,
+    plan: ExternalPlatformActionPlan,
+    selected: AccountAssetCandidate,
+    target: ExternalPlatformTarget,
+    adapter: dict[str, Any] | None,
+) -> dict[str, Any]:
+    draft = _phase99_post_draft(plan)
+    manifest = adapter.get("manifest") if isinstance(adapter, dict) else {}
+    manifest = manifest if isinstance(manifest, dict) else {}
+    publish_flow = manifest.get("publish_flow") if isinstance(manifest.get("publish_flow"), dict) else {}
+    publish_flow = dict(publish_flow)
+    comment_flow = manifest.get("comment_flow") if isinstance(manifest.get("comment_flow"), dict) else {}
+    comment_flow = dict(comment_flow)
+    login_flow = manifest.get("login_flow") if isinstance(manifest.get("login_flow"), dict) else {}
+    login_flow = dict(login_flow)
+    publish_selectors = publish_flow.get("selectors") if isinstance(publish_flow.get("selectors"), dict) else {}
+    comment_selectors = comment_flow.get("selectors") if isinstance(comment_flow.get("selectors"), dict) else {}
+    login_selectors = login_flow.get("selectors") if isinstance(login_flow.get("selectors"), dict) else {}
+    skill_binding = manifest.get("skill_binding") if isinstance(manifest.get("skill_binding"), dict) else {}
+    capabilities = [str(item) for item in skill_binding.get("capabilities", []) if str(item).strip()]
+    adapter_metadata = adapter.get("metadata") if isinstance(adapter, dict) else {}
+    adapter_metadata = adapter_metadata if isinstance(adapter_metadata, dict) else {}
+    real_browser_workflow = bool(
+        adapter_metadata.get("real_platform_integration") or manifest.get("real_site_flow")
+    )
+    return {
+        "platform_key": plan.platform_key,
+        "platform_display_name": target.display_name,
+        "request_type": _content_platform_request_type(plan.action_type),
+        "action_type": plan.action_type,
+        "account_display_name": selected.display_name,
+        "publish_surface": draft["publish_surface"],
+        "title": draft["title"],
+        "body": draft["body"],
+        "tags": draft["tags"],
+        "comment_text": draft["comment_text"],
+        "media_artifact_ids": draft["media_artifact_ids"],
+        "selected_asset_id": selected.asset_id,
+        "selected_handle_id": selected.handle_id,
+        "workflow_capabilities_json": json.dumps(capabilities or ["publish_browser"], ensure_ascii=False),
+        "real_browser_workflow_json": "true" if real_browser_workflow else "false",
+        "login_url": str(login_flow.get("login_url") or publish_flow.get("login_url") or ""),
+        "post_login_wait_text": str(login_flow.get("post_login_wait_text") or ""),
+        "post_login_wait_url": str(login_flow.get("post_login_wait_url") or ""),
+        "login_username_selector": str(login_selectors.get("username") or ""),
+        "login_password_selector": str(login_selectors.get("password") or ""),
+        "login_submit_selector": str(login_selectors.get("submit") or login_selectors.get("form") or ""),
+        "publish_url": str(publish_flow.get("start_url") or manifest.get("start_url") or ""),
+        "publish_wait_until": str(publish_flow.get("wait_until") or "domcontentloaded"),
+        "publish_success_text": str(publish_flow.get("publish_success_text") or ""),
+        "upload_success_text": str(publish_flow.get("upload_success_text") or "upload complete"),
+        "publish_title_selector": str(publish_selectors.get("title") or ""),
+        "publish_body_selector": str(publish_selectors.get("body") or ""),
+        "publish_submit_selector": str(publish_selectors.get("submit") or ""),
+        "publish_form_selector": str(publish_selectors.get("form") or ""),
+        "publish_upload_selector": str(publish_selectors.get("upload") or publish_selectors.get("image_upload") or ""),
+        "target_post_url": str(
+            plan.metadata.get("target_post_url")
+            or publish_flow.get("target_post_url")
+            or ((publish_flow.get("verify") or {}).get("expected_url") if isinstance(publish_flow.get("verify"), dict) else "")
+            or ""
+        ),
+        "comment_start_url": str(
+            comment_flow.get("start_url")
+            or comment_flow.get("target_post_url")
+            or (((comment_flow.get("verify") or {}).get("expected_url")) if isinstance(comment_flow.get("verify"), dict) else "")
+            or ""
+        ),
+        "comment_success_text": str(comment_flow.get("comment_success_text") or ""),
+        "comment_recheck_wait_text": str(comment_flow.get("recheck_wait_text") or ""),
+        "comment_box_selector": str(comment_selectors.get("comment_box") or ""),
+        "comment_input_selector": str(comment_selectors.get("comment_input") or ""),
+        "comment_submit_selector": str(comment_selectors.get("comment_submit") or ""),
+        "comment_form_selector": str(comment_selectors.get("comment_form") or ""),
+    }
+
+
+def _phase99_plan_bootstrap(
+    *,
+    intent: ExternalPlatformActionIntent,
+    selected: AccountAssetCandidate | None,
+    risk_level: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    body = str(metadata.get("publish_text") or intent.content_summary or "").strip()
+    title = str(metadata.get("title") or body[:30] or "小红书内容草稿").strip()
+    tags = [str(item) for item in metadata.get("tags", []) if str(item).strip()]
+    media_artifact_ids = [
+        str(item) for item in metadata.get("media_artifact_ids", []) if str(item).strip()
+    ]
+    requires_real_completion = _phase99_real_xiaohongshu_metadata(
+        platform_key=intent.platform_key,
+        action_type=intent.action_type,
+        execution_mode="browser",
+        metadata=metadata,
+    )
+    return {
+        "content_platform_request": {
+            "request_type": _content_platform_request_type(intent.action_type),
+            "platform_key": intent.platform_key,
+            "publish_surface": str(metadata.get("publish_surface") or "text_note"),
+        },
+        "post_draft": {
+            "title": title,
+            "body": body,
+            "tags": tags,
+            "publish_surface": str(metadata.get("publish_surface") or "text_note"),
+            "media_artifact_ids": media_artifact_ids,
+            "comment_text": str(metadata.get("comment_text") or "").strip() or None,
+        },
+        "publish_candidate": {
+            "platform_key": intent.platform_key,
+            "action_type": intent.action_type,
+            "risk_level": risk_level,
+            "selected_asset_id": selected.asset_id if selected else None,
+            "requires_playwright": metadata.get("provider_mode") == "playwright",
+            "media_upload_required": bool(media_artifact_ids),
+        },
+        "engagement_snapshot": {
+            "status": "pending",
+            "comment_requested": bool(metadata.get("comment_text")),
+        },
+        "recovery_evidence": {
+            "status": "not_triggered",
+            "known_failure_reasons": [
+                "login_required",
+                "login_verification_required",
+                "playwright_required",
+                "session_expired",
+                "selector_drift",
+                "image_upload_failed",
+                "published_post_identity_missing",
+                "publish_recheck_missing",
+                "comment_submit_missing",
+                "comment_recheck_missing",
+            ],
+        },
+        "deliverable": {
+            "status": "planned",
+            "phase": "phase99",
+            "requires_comment_visible_proof": requires_real_completion,
+        },
+    }
+
+
+def _phase99_real_xiaohongshu_validation(
+    *,
+    intent: ExternalPlatformActionIntent,
+    execution_mode: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not _phase99_real_xiaohongshu_metadata(
+        platform_key=intent.platform_key,
+        action_type=intent.action_type,
+        execution_mode=execution_mode,
+        metadata=metadata,
+    ):
+        return None
+    provider_mode = str(metadata.get("provider_mode") or "").strip().lower()
+    if provider_mode and provider_mode not in {"playwright", "local_cdp"}:
+        return {
+            "failure_reason": "browser_provider_mode_invalid",
+            "missing_fields": ["provider_mode"],
+            "message": "phase99 xiaohongshu real publishing requires provider_mode=local_cdp or playwright.",
+        }
+    require_full_comment_flow = bool(
+        metadata.get("require_full_comment_flow")
+        or metadata.get("publish_and_comment_both_required")
+    )
+    comment_text = str(metadata.get("comment_text") or "").strip()
+    if require_full_comment_flow and not comment_text:
+        return {
+            "failure_reason": "comment_text_required",
+            "missing_fields": ["comment_text"],
+            "message": "phase99 xiaohongshu full publish+comment flow requires a first-comment draft.",
+        }
+    return None
+
+
+def _browser_login_domain(
+    *,
+    plan: ExternalPlatformActionPlan,
+    adapter: dict[str, Any] | None,
+) -> str:
+    manifest = adapter.get("manifest") if isinstance(adapter, dict) else {}
+    manifest = manifest if isinstance(manifest, dict) else {}
+    login_flow = manifest.get("login_flow") if isinstance(manifest.get("login_flow"), dict) else {}
+    publish_flow = manifest.get("publish_flow") if isinstance(manifest.get("publish_flow"), dict) else {}
+    for value in (
+        str(plan.metadata.get("target_post_url") or "").strip(),
+        str(login_flow.get("login_url") or "").strip(),
+        str(publish_flow.get("start_url") or manifest.get("start_url") or "").strip(),
+    ):
+        if not value:
+            continue
+        host = urlsplit(value).hostname
+        if host:
+            return host
+    return "www.xiaohongshu.com"
+
+
+def _fixture_path_for_skill_binding(
+    *,
+    repository_id: str,
+    binding: dict[str, Any],
+) -> Path | None:
+    fixture_bundle_id = str(binding.get("fixture_bundle_id") or "").strip()
+    if fixture_bundle_id:
+        return (
+            Path.cwd()
+            / "config"
+            / "skill-repositories"
+            / "fixtures"
+            / fixture_bundle_id
+        )
+    package_ref = str(binding.get("package_ref") or "").strip()
+    if not package_ref:
+        return None
+    slug = package_ref.replace("/", "-").replace(":", "-")
+    return (
+        Path.cwd()
+        / "config"
+        / "skill-repositories"
+        / "fixtures"
+        / f"{repository_id}-{slug}"
+    )
+
+
+def _phase99_real_xiaohongshu_metadata(
+    *,
+    platform_key: str | None,
+    action_type: str | None,
+    execution_mode: str,
+    metadata: dict[str, Any],
+) -> bool:
+    if (
+        str(platform_key or "") != "social_xiaohongshu"
+        or str(action_type or "") != "publish_content"
+        or execution_mode != "browser"
+    ):
+        return False
+    return any(
+        [
+            str(metadata.get("provider_mode") or "").strip().lower() == "playwright",
+            bool(str(metadata.get("title") or "").strip()),
+            bool(metadata.get("tags")),
+            bool(str(metadata.get("publish_surface") or "").strip()),
+            bool(metadata.get("media_artifact_ids")),
+            "comment_text" in metadata,
+        ]
+    )
+
+
+def _phase99_real_xiaohongshu_required(plan: ExternalPlatformActionPlan) -> bool:
+    return _phase99_real_xiaohongshu_metadata(
+        platform_key=plan.platform_key,
+        action_type=plan.action_type,
+        execution_mode=plan.execution_mode,
+        metadata=plan.metadata,
+    )
+
+
 def _plan_create_metadata(request: ExternalPlatformActionPlanCreateRequest) -> dict[str, Any]:
     metadata: dict[str, Any] = {}
     if request.publish_text:
         metadata["publish_text"] = request.publish_text
+    if request.title:
+        metadata["title"] = request.title
+    if request.tags:
+        metadata["tags"] = [str(item) for item in request.tags if str(item).strip()]
+    if request.publish_surface:
+        metadata["publish_surface"] = request.publish_surface
+    if request.media_artifact_ids:
+        metadata["media_artifact_ids"] = [str(item) for item in request.media_artifact_ids]
     if request.comment_text:
         metadata["comment_text"] = request.comment_text
     if request.target_post_hint:
@@ -1468,7 +2393,9 @@ def _plan_create_metadata(request: ExternalPlatformActionPlanCreateRequest) -> d
         metadata["published_post_ref"] = request.published_post_ref
     if request.provider_mode:
         metadata["provider_mode"] = request.provider_mode
-    if request.publish_text or request.comment_text:
+    if request.require_full_comment_flow:
+        metadata["require_full_comment_flow"] = True
+    if request.publish_text or request.comment_text or request.title or request.media_artifact_ids:
         metadata["verification_mode"] = "visible_text"
     return metadata
 
@@ -1483,6 +2410,13 @@ def _should_skip_test_account_approval(
         return False
     evidence = selected.evidence if isinstance(selected.evidence, dict) else {}
     metadata = evidence.get("asset_metadata") if isinstance(evidence.get("asset_metadata"), dict) else {}
+    if metadata.get("auto_execute_whitelisted_real_accounts") is True:
+        return True
+    whitelist = metadata.get("real_platform_auto_execute_whitelist")
+    if isinstance(whitelist, list) and str(target.platform_key or "") in {
+        str(item) for item in whitelist if str(item).strip()
+    }:
+        return True
     if metadata.get("test_account_auto_approve_external_actions") is True:
         return True
     provider_key = str(selected.provider_key or "").lower()

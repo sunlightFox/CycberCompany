@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from trace_service import redact
@@ -560,10 +560,15 @@ class PlaywrightBrowserExecutor:
                 )
             page = state.page
             response = None
-            should_navigate = (
-                request.action not in {"submit", "tabs", "dialog"}
-                or state.current_url != request.url
-            )
+            should_navigate = state.current_url != request.url or request.action in {
+                "open",
+                "snapshot",
+                "wait",
+                "extract",
+                "screenshot",
+                "vision_snapshot",
+                "download",
+            }
             if should_navigate:
                 response = await page.goto(
                     request.url,
@@ -666,6 +671,9 @@ class PlaywrightBrowserExecutor:
                     "context_reused": True,
                     "provider_mode": _provider_mode(request),
                     "viewport_profile": request.viewport_profile,
+                    "identity_source": state.identity_source,
+                    "attached_existing_tab": state.attached_existing_tab,
+                    "login_state_observed": request.session_context.get("login_state"),
                 },
                 network_summary=_network_summary(state),
                 console_summary=_console_summary(state),
@@ -714,7 +722,7 @@ class PlaywrightBrowserExecutor:
             else:
                 browser = await playwright.chromium.launch(**_browser_launch_options())
                 context = await browser.new_context(**_context_options(request))
-            page = await context.new_page()
+            page, attached_existing_tab = await _resolve_context_page(context, request)
             console_events: list[dict[str, Any]] = []
             network_events: list[dict[str, Any]] = []
             _attach_observers(page, console_events, network_events)
@@ -724,8 +732,15 @@ class PlaywrightBrowserExecutor:
                 browser=browser,
                 context=context,
                 page=page,
+                current_url=page.url or None,
                 provider_mode=provider_mode,
                 viewport_profile=request.viewport_profile,
+                attached_existing_tab=attached_existing_tab,
+                identity_source=str(
+                    request.session_context.get("identity_source")
+                    or request.session_context.get("execution_backend")
+                    or provider_mode
+                ),
                 console_events=console_events,
                 network_events=network_events,
             )
@@ -755,6 +770,8 @@ class _PlaywrightContextState:
     current_url: str | None = None
     provider_mode: str = "playwright"
     viewport_profile: str = "desktop"
+    attached_existing_tab: bool = False
+    identity_source: str | None = None
     console_events: list[dict[str, Any]] = field(default_factory=list)
     network_events: list[dict[str, Any]] = field(default_factory=list)
 
@@ -1028,6 +1045,16 @@ async def _quiet_load_state(page: Any) -> None:
 def _provider_mode(request: BrowserExecutionRequest) -> str:
     mode = (request.provider_mode or "auto").strip().lower()
     if mode == "auto":
+        session_mode = str(
+            request.session_context.get("provider_mode")
+            or request.session_context.get("execution_backend")
+            or ""
+        ).strip().lower()
+        if session_mode in {"local_cdp", "remote_cdp", "playwright"}:
+            return session_mode
+        if session_mode == "playwright_ephemeral":
+            return "playwright"
+    if mode == "auto":
         return "playwright"
     return mode
 
@@ -1036,6 +1063,8 @@ def _playwright_context_key(request: BrowserExecutionRequest) -> str:
     return ":".join(
         [
             request.context_key,
+            str(request.session_context.get("browser_profile_id") or "no-profile"),
+            str(request.session_context.get("browser_session_id") or "no-session"),
             _provider_mode(request),
             (request.viewport_profile or "desktop").strip().lower(),
         ]
@@ -1060,8 +1089,15 @@ def _context_options(request: BrowserExecutionRequest) -> dict[str, Any]:
 
 
 def _cdp_endpoint(request: BrowserExecutionRequest, *, remote: bool) -> str | None:
-    key = "remote_cdp_endpoint" if remote else "local_cdp_endpoint"
-    value = str(request.session_context.get(key) or "").strip()
+    if remote:
+        candidates = ("remote_cdp_endpoint",)
+    else:
+        candidates = ("cdp_endpoint", "local_cdp_endpoint")
+    value = ""
+    for key in candidates:
+        value = str(request.session_context.get(key) or "").strip()
+        if value:
+            break
     if value:
         return value
     env_name = _BROWSER_REMOTE_CDP_ENDPOINT_ENV if remote else _BROWSER_CDP_ENDPOINT_ENV
@@ -1186,6 +1222,39 @@ async def _click_maybe_new_page(
         if not clicked:
             await locator.click(timeout=5000)
         return None
+
+
+async def _resolve_context_page(context: Any, request: BrowserExecutionRequest) -> tuple[Any, bool]:
+    if _provider_mode(request) in {"local_cdp", "remote_cdp"}:
+        existing = await _adopt_existing_page(context, request)
+        if existing is not None:
+            return existing, True
+    return await context.new_page(), False
+
+
+async def _adopt_existing_page(context: Any, request: BrowserExecutionRequest) -> Any | None:
+    preferred_hosts: list[str] = []
+    for raw in (
+        request.url,
+        request.session_context.get("current_url"),
+        request.session_context.get("login_domain"),
+    ):
+        value = str(raw or "").strip()
+        if not value:
+            continue
+        host = urlsplit(value).hostname if "://" in value else value
+        if host:
+            preferred_hosts.append(host.lower())
+    for page in context.pages:
+        try:
+            page_host = urlsplit(page.url).hostname.lower() if page.url else ""
+        except Exception:
+            page_host = ""
+        if not page_host:
+            continue
+        if any(page_host == host or page_host.endswith(f".{host}") for host in preferred_hosts):
+            return page
+    return context.pages[0] if context.pages else None
 
 
 async def _handle_dialog_action(page: Any, request: BrowserExecutionRequest) -> None:

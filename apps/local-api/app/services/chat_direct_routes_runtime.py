@@ -20,6 +20,7 @@ from app.services.chat_intent_router import (
     office_skill_input,
     preferred_office_tool_name,
 )
+from app.services.office_productivity import office_request_from_chat_request
 
 
 class ChatDirectRoutesRuntime:
@@ -287,7 +288,7 @@ class ChatDirectRoutesRuntime:
         return response_plan.model_copy(
             update={
                 "structured_payload": {
-                    **response_plan.structured_payload,
+                    **dict(response_plan.structured_payload or {}),
                     "tool_result_context": tool_result_context,
                     "action_status_semantics": action_status_semantics,
                     "tool_status_semantics": mirrored_status_payload(
@@ -354,7 +355,7 @@ class ChatDirectRoutesRuntime:
         return response_plan.model_copy(
             update={
                 "structured_payload": {
-                    **response_plan.structured_payload,
+                    **dict(response_plan.structured_payload or {}),
                     "tool_result_context": tool_result_context,
                     "action_status_semantics": semantics,
                     "tool_status_semantics": mirrored_status_payload(
@@ -455,7 +456,7 @@ class ChatDirectRoutesRuntime:
             response_plan = response_plan.model_copy(
                 update={
                     "structured_payload": {
-                        **response_plan.structured_payload,
+                        **dict(response_plan.structured_payload or {}),
                         "host_filesystem_list": {
                             "location": location,
                             "status": "blocked",
@@ -636,7 +637,7 @@ class ChatDirectRoutesRuntime:
             response_plan = response_plan.model_copy(
                 update={
                     "structured_payload": {
-                        **response_plan.structured_payload,
+                        **dict(response_plan.structured_payload or {}),
                         "browser_read_page": {
                             "status": "blocked_by_boundary",
                             "error_code": exc.code,
@@ -852,7 +853,7 @@ class ChatDirectRoutesRuntime:
             response_plan = response_plan.model_copy(
                 update={
                     "structured_payload": {
-                        **response_plan.structured_payload,
+                        **dict(response_plan.structured_payload or {}),
                         "browser_workflow_result": result.model_dump(mode="json"),
                         "evidence_refs": result.evidence_refs,
                         "route_semantics": {
@@ -905,7 +906,7 @@ class ChatDirectRoutesRuntime:
         response_plan = response_plan.model_copy(
             update={
                 "structured_payload": {
-                    **response_plan.structured_payload,
+                    **dict(response_plan.structured_payload or {}),
                     "capability_boundary": boundary.model_dump(mode="json"),
                     "route_semantics": {
                         "route": route_decision.route_type,
@@ -1271,7 +1272,7 @@ class ChatDirectRoutesRuntime:
             response_plan = response_plan.model_copy(
                 update={
                     "structured_payload": {
-                        **response_plan.structured_payload,
+                        **dict(response_plan.structured_payload or {}),
                         "office_route": {
                             "document_type": office_request.document_type,
                             "operation": office_request.operation,
@@ -1314,13 +1315,23 @@ class ChatDirectRoutesRuntime:
                 conversation_id=turn["conversation_id"],
                 owner_member_id=turn["member_id"],
                 goal=user_text,
-                mode_hint=TaskMode.WORKFLOW,
+                domain="productivity",
+                domain_request=office_request_from_chat_request(
+                    office_request,
+                    goal=user_text,
+                ).model_dump(mode="json"),
+                mode_hint=TaskMode.AGENT,
+                office_request=office_request_from_chat_request(office_request, goal=user_text),
                 constraints={
                     "skill_id": skill_id,
                     "skill_input": office_skill_input(
                         office_request,
                         source_artifact_id=source_artifact_id,
                     ),
+                    "office_request": office_request_from_chat_request(
+                        office_request,
+                        goal=user_text,
+                    ).model_dump(mode="json"),
                     "office_chat_request": office_request.__dict__,
                 },
                 planner_context={
@@ -1390,7 +1401,7 @@ class ChatDirectRoutesRuntime:
             update={
                 "artifact_refs": office_artifact_refs,
                 "structured_payload": {
-                    **response_plan.structured_payload,
+                    **dict(response_plan.structured_payload or {}),
                     "office_route": {
                         "document_type": office_request.document_type,
                         "operation": office_request.operation,

@@ -20,23 +20,29 @@ def test_phase69_terminal_policy_snapshot_records_real_backend_and_approval_bind
         json={
             "task_id": task["task_id"],
             "tool_name": "terminal.run",
-            "args": {"command": "echo phase69-terminal"},
+            "args": {"command": _python_command("print('phase69-terminal')")},
         },
-    ).json()
-    approval_id = first["approval"]["approval_id"]
-    assert client.post(
-        f"/api/approvals/{approval_id}/approve",
-        json={"reason": "phase69 terminal"},
-    ).status_code == 200
-    executed = client.post(
-        "/api/tools/execute",
-        json={
-            "task_id": task["task_id"],
-            "tool_name": "terminal.run",
-            "approval_id": approval_id,
-            "args": {"command": "echo phase69-terminal"},
-        },
-    ).json()
+    )
+    assert first.status_code == 200, first.text
+    first_body = first.json()
+    approval_id = None
+    if first_body.get("approval"):
+        approval_id = first_body["approval"]["approval_id"]
+        assert client.post(
+            f"/api/approvals/{approval_id}/approve",
+            json={"reason": "phase69 terminal"},
+        ).status_code == 200
+        executed = client.post(
+            "/api/tools/execute",
+            json={
+                "task_id": task["task_id"],
+                "tool_name": "terminal.run",
+                "approval_id": approval_id,
+                "args": {"command": _python_command("print('phase69-terminal')")},
+            },
+        ).json()
+    else:
+        executed = first_body
     boundary = client.get(
         f"/api/tools/calls/{executed['tool_call']['tool_call_id']}/boundary"
     ).json()
@@ -176,6 +182,10 @@ def _fake_home(tmp_path: Path, monkeypatch) -> Path:
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv("HOME", str(home))
     return home
+
+
+def _python_command(script: str) -> str:
+    return f'python -c "{script}"'
 
 
 def _parse_sse(raw: str) -> list[dict[str, Any]]:

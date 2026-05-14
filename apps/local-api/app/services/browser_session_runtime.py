@@ -77,6 +77,7 @@ class BrowserSessionRuntime:
                 member_id=member_id,
                 task_id=task_id,
                 url=str(args.get("url") or args.get("current_url") or "") or None,
+                allow_login_recovery=bool(args.get("allow_login_recovery")),
             )
             return self._merge_browser_page_args(
                 {
@@ -96,6 +97,7 @@ class BrowserSessionRuntime:
                 member_id=member_id,
                 task_id=task_id,
                 url=str(args.get("url") or args.get("current_url") or "") or None,
+                allow_login_recovery=bool(args.get("allow_login_recovery")),
             )
             return self._merge_browser_page_args(context, args)
         return self._merge_browser_page_args({}, args)
@@ -216,10 +218,13 @@ class BrowserSessionRuntime:
             "session_reuse": "task_scoped_with_handle_support",
             "restore_context_supported": self._browser_sessions is not None,
             "health_gate": "fail_closed",
+            "session_preflight": "browser_sessions.validate_session_context",
         }
 
     def _asset_action_for_tool(self, tool_name: str) -> str:
-        if tool_name in {"browser.download", "browser.snapshot", "browser.open", "browser.extract"}:
+        if tool_name == "browser.download":
+            return "download"
+        if tool_name in {"browser.snapshot", "browser.open", "browser.extract"}:
             return "read"
         return "interact"
 

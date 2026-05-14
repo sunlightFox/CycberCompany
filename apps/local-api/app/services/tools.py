@@ -44,6 +44,11 @@ from app.services.browser_executor import (
     BrowserExecutionResult,
     BrowserExecutor,
 )
+from app.services.browser_policy import (
+    browser_action_policy,
+    browser_backend_capabilities,
+    browser_execution_summary,
+)
 from app.services.checkpoints import rollback_availability_for_tool
 from app.services.design_alignment import SafetyDecisionService
 from app.services.knowledge import KnowledgeService
@@ -424,6 +429,7 @@ class ToolRuntime:
         organization_id: str,
         risk_level: RiskLevel,
         terminal_command_policy: dict[str, Any] | None,
+        boundary_required_controls: list[str] | tuple[str, ...] | None,
         trace_id: str | None,
     ) -> ApprovalDetail | None:
         return await self._safety_bridge.approval_if_required(
@@ -433,6 +439,7 @@ class ToolRuntime:
             organization_id=organization_id,
             risk_level=risk_level,
             terminal_command_policy=terminal_command_policy,
+            boundary_required_controls=boundary_required_controls,
             trace_id=trace_id,
         )
 
@@ -1587,6 +1594,24 @@ class ToolRuntime:
             )
         )
         result = execution.public_result()
+        challenge_reason_code = None
+        if execution.action_status in {"failed", "degraded"} and execution.degraded_reason:
+            challenge_reason_code = execution.degraded_reason
+        verification_evidence = {
+            "status": "confirmed" if execution.action_status == "completed" else "missing",
+            "present": execution.action_status == "completed",
+            "proof_source": "browser_tool_execution",
+        }
+        result["session_state"] = str(session_context.get("session_state") or "active")
+        result["backend_capabilities"] = browser_backend_capabilities(execution.backend)
+        result["verification_evidence"] = verification_evidence
+        result["browser_execution_summary"] = browser_execution_summary(
+            session_context=session_context,
+            action_status=execution.action_status,
+            degraded_reason=execution.degraded_reason,
+            challenge_reason_code=challenge_reason_code,
+            verification_evidence=verification_evidence,
+        )
         result["browser_page_state"] = self._browser_page_state_runtime.build_page_state(
             action=action,
             result={**result, "url": url},
@@ -2180,8 +2205,14 @@ def _risk_for(tool: ToolDefinition, args: dict[str, Any]) -> RiskLevel:
         return RiskLevel("R3")
     if tool.tool_name == "file.write" and args.get("overwrite"):
         return RiskLevel(policy.get("overwrite_true", "R3"))
-    if tool.tool_name == "browser.download" and args.get("workflow_low_risk_download"):
-        return RiskLevel("R2")
+    if tool.tool_name == "office.word.edit" and args.get("overwrite_source"):
+        return RiskLevel(policy.get("overwrite_true", "R4"))
+    if tool.tool_name == "office.excel.edit" and args.get("overwrite_source"):
+        return RiskLevel(policy.get("overwrite_true", "R4"))
+    if tool.tool_name == "office.ppt.edit" and args.get("overwrite_source"):
+        return RiskLevel(policy.get("overwrite_true", "R4"))
+    if tool.tool_name.startswith("browser."):
+        return browser_action_policy(tool.tool_name, args).default_risk_level
     return RiskLevel(policy.get("default", "R1"))
 
 
@@ -2607,6 +2638,7 @@ def _browser_artifact_metadata(execution: BrowserExecutionResult) -> dict[str, A
         "url": str(redact(execution.url)),
         "http_status": execution.http_status,
         "browser_backend": execution.backend,
+        "backend_capabilities": browser_backend_capabilities(execution.backend),
         "backend_status": execution.backend_status,
         "fallback_chain": execution.fallback_chain,
         "degraded_reason": execution.degraded_reason,
@@ -2666,7 +2698,9 @@ def _browser_task_checkpoint(
         "action": request.tool_name,
         "action_status": result.get("action_status"),
         "recoverable": bool(result.get("recoverable")),
+        "session_state": result.get("session_state"),
         "browser_backend": result.get("backend"),
+        "backend_capabilities": result.get("backend_capabilities"),
         "backend_status": result.get("backend_status"),
         "fallback_chain": result.get("fallback_chain"),
     }
@@ -2954,6 +2988,13 @@ BUILTIN_TOOLS: list[dict[str, Any]] = [
             "office.excel.edit": "R2",
             "office.ppt.generate": "R2",
             "office.ppt.edit": "R2",
+            "office.mail.draft": "R2",
+            "office.mail.send": "R4",
+            "office.calendar.plan": "R2",
+            "office.document.share": "R4",
+            "office.document.delete": "R5",
+            "office.document.overwrite": "R4",
+            "office.document.modify_shared": "R4",
             "hardware.query_status": "R1",
         }.items()
     ],

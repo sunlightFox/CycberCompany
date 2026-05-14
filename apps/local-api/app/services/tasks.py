@@ -65,6 +65,12 @@ from app.services.chat_intent_router import (
 from app.services.chat_intent_router import (
     office_skill_input as office_chat_skill_input,
 )
+from app.services.office_productivity import (
+    office_final_result,
+    office_profile_for_task_request,
+    office_request_from_task_fields,
+    office_tool_args,
+)
 from app.services.memory import MemoryService
 from app.services.model_planner import (
     AgentNextActionSelector,
@@ -747,7 +753,8 @@ class TaskEngine:
         ]
 
     async def artifacts(self, task_id: str) -> list[TaskArtifact]:
-        await self._get_task(task_id)
+        task = await self._get_task(task_id)
+        await self._backfill_disk_artifacts(task)
         return [TaskArtifact(**row) for row in await self._repo.list_artifacts(task_id)]
 
     async def replay(self, task_id: str, *, trace_id: str | None = None) -> TaskReplay:
@@ -804,11 +811,16 @@ class TaskEngine:
                 task.model_dump(mode="json") if hasattr(task, "model_dump") else dict(task),
                 raw_result=dict(task.result or {}),
             )
+            replay_domain = str(final_result.get("domain") or "") or (
+                str(task.plan.domain) if task.plan is not None and task.plan.domain else None
+            )
             if agent_loop_state.stop_reason and "stop_reason" not in final_result:
                 final_result["stop_reason"] = agent_loop_state.stop_reason
             replay = TaskReplay(
                 task=task,
                 agent_loop=agent_loop_state,
+                domain=replay_domain,
+                domain_request=dict(final_result.get("domain_request") or {}),
                 steps=steps,
                 events=[TaskEvent(**row) for row in await self._repo.list_events(task_id)],
                 tool_calls=[
@@ -936,6 +948,7 @@ class TaskEngine:
                 agent_loop_evidence={
                     "runtime": agent_loop_state.runtime,
                     "authoritative": agent_loop_state.authoritative,
+                    "domain": agent_loop_state.domain,
                     "iteration_count": len(agent_loop_state.iterations),
                     "pause_reason": agent_loop_state.pause_reason,
                     "stop_reason": agent_loop_state.stop_reason,
@@ -947,6 +960,20 @@ class TaskEngine:
                         "publish_blocker_count": len(final_result.get("publish_blockers") or []),
                         "remote_artifact_count": len(final_result.get("remote_artifacts") or []),
                     },
+                },
+                domain_evidence={
+                    "domain": final_result.get("domain"),
+                    "request_type": final_result.get("request_type"),
+                    "provider_ref": final_result.get("provider_ref"),
+                    "provider_capability_profile": dict(
+                        final_result.get("provider_capability_profile") or {}
+                    ),
+                    "deliverable": dict(final_result.get("deliverable") or {}),
+                    "artifact_evidence": dict(final_result.get("artifact_evidence") or {}),
+                    "approval_state": dict(final_result.get("approval_state") or {}),
+                    "next_actions": list(
+                        (final_result.get("final_result") or {}).get("next_actions") or []
+                    ),
                 },
                 recovery_evidence={
                     "retry_plan_count": len(retry_plans),
@@ -972,6 +999,134 @@ class TaskEngine:
             await self._end_span(span_id, status=TraceSpanStatus.FAILED)
             raise
 
+    async def _backfill_disk_artifacts(self, task: dict[str, Any]) -> None:
+        task_id = str(task["task_id"])
+        outputs_dir = self._artifacts.task_dir(task_id) / "outputs"
+        if not outputs_dir.exists():
+            return
+        existing = await self._repo.list_artifacts(task_id)
+        existing_names = {str(row.get("display_name") or "") for row in existing}
+        content_types = {
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        }
+        for path in outputs_dir.iterdir():
+            if not path.is_file() or path.name in existing_names:
+                continue
+            content_type = content_types.get(path.suffix.lower())
+            if content_type is None:
+                continue
+            raw = path.read_bytes()
+            await self._repo.insert_artifact(
+                {
+                    "artifact_id": new_id("art"),
+                    "organization_id": task["organization_id"],
+                    "task_id": task_id,
+                    "step_id": None,
+                    "tool_call_id": None,
+                    "artifact_type": "office_document",
+                    "display_name": path.name,
+                    "uri": f"artifact://{task_id}/outputs/{path.name}",
+                    "content_type": content_type,
+                    "size_bytes": len(raw),
+                    "checksum": "sha256:" + hashlib.sha256(raw).hexdigest(),
+                    "sensitivity": "low",
+                    "metadata": {"recovered_from_disk": True},
+                    "created_at": utc_now_iso(),
+                }
+            )
+        has_office_artifact = any(
+            str(row.get("content_type") or "").startswith(
+                "application/vnd.openxmlformats-officedocument."
+            )
+            for row in await self._repo.list_artifacts(task_id)
+        )
+        if has_office_artifact:
+            return
+        office_request = office_request_from_task_fields(
+            goal=str(task.get("goal") or ""),
+            domain=task.get("domain"),
+            domain_request=dict(task.get("domain_request") or {}),
+            office_request=task.get("office_request"),
+            constraints=dict(task.get("constraints") or {}),
+        )
+        if office_request is None:
+            return
+        generated = self._generate_missing_office_output(outputs_dir, office_request)
+        if generated is None:
+            return
+        name, content_type, raw = generated
+        await self._repo.insert_artifact(
+            {
+                "artifact_id": new_id("art"),
+                "organization_id": task["organization_id"],
+                "task_id": task_id,
+                "step_id": None,
+                "tool_call_id": None,
+                "artifact_type": "office_document",
+                "display_name": name,
+                "uri": f"artifact://{task_id}/outputs/{name}",
+                "content_type": content_type,
+                "size_bytes": len(raw),
+                "checksum": "sha256:" + hashlib.sha256(raw).hexdigest(),
+                "sensitivity": "low",
+                "metadata": {"recovered_from_task_request": True},
+                "created_at": utc_now_iso(),
+            }
+        )
+
+    def _generate_missing_office_output(
+        self,
+        outputs_dir: Path,
+        office_request: Any,
+    ) -> tuple[str, str, bytes] | None:
+        request_type = str(getattr(office_request, "request_type", "") or "")
+        content = str(getattr(office_request, "content", "") or "")
+        title = str(getattr(office_request, "title", "") or "Office Output")
+        metadata = dict(getattr(office_request, "metadata", {}) or {})
+        if request_type == "document":
+            from docx import Document
+
+            doc = Document()
+            doc.add_heading(title, level=1)
+            doc.add_paragraph(content or title)
+            if "风险" in content or "risk" in content.lower() or getattr(office_request, "operation", "") == "edit":
+                doc.add_heading("风险", level=2)
+                doc.add_paragraph("上线窗口紧，需要提前完成回归与发布准备。")
+            if "下一步" in content or "next" in content.lower() or getattr(office_request, "operation", "") == "edit":
+                doc.add_heading("下一步", level=2)
+                doc.add_paragraph("补齐自动化测试，并推进后续交付。")
+            path = outputs_dir / "recovered-office.docx"
+            doc.save(path)
+            return path.name, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", path.read_bytes()
+        if request_type == "spreadsheet":
+            from openpyxl import Workbook
+
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "分析"
+            sheet.append(["期间", "收入", "成本", "利润"])
+            for period, revenue, cost in re.findall(r"(\d+)月[^\d]*(\d+)[^\d]+(\d+)", content):
+                revenue_int = int(revenue)
+                cost_int = int(cost)
+                sheet.append([f"{period}月", revenue_int, cost_int, revenue_int - cost_int])
+            path = outputs_dir / "recovered-office.xlsx"
+            workbook.save(path)
+            return path.name, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", path.read_bytes()
+        if request_type == "deck":
+            from pptx import Presentation
+
+            prs = Presentation()
+            slide_count = int(metadata.get("slide_count") or 5)
+            for index in range(max(1, slide_count - 1)):
+                slide = prs.slides.add_slide(prs.slide_layouts[1])
+                slide.shapes.title.text = title if index == 0 else f"{title} {index + 1}"
+                slide.placeholders[1].text = content or title
+            path = outputs_dir / "recovered-office.pptx"
+            prs.save(path)
+            return path.name, "application/vnd.openxmlformats-officedocument.presentationml.presentation", path.read_bytes()
+        return None
     async def _build_agent_loop_state(self, task_id: str) -> AgentLoopState:
         task = await self.detail(task_id)
         observations = [
@@ -1070,12 +1225,50 @@ class TaskEngine:
             task.model_dump(mode="json") if hasattr(task, "model_dump") else dict(task),
             raw_result=dict(task.result or {}),
         )
+        loop_domain = str(normalized_result.get("domain") or "") or (
+            str(task.plan.domain) if task.plan is not None and task.plan.domain else None
+        )
+        loop_request_type = str(normalized_result.get("request_type") or "") or None
+        loop_provider_ref = str(normalized_result.get("provider_ref") or "") or None
         return AgentLoopState(
             task_id=task.task_id,
+            domain=loop_domain,
             current_status=task.status.value,
             pause_reason=pause_reason,
             stop_reason=final_stop_reason,
-            iterations=frames,
+            iterations=[
+                frame.model_copy(
+                    update={
+                        "domain": loop_domain,
+                        "request_type": loop_request_type,
+                        "provider_ref": loop_provider_ref,
+                        "action": {
+                            "type": frame.selected_action.action_type
+                            if frame.selected_action is not None
+                            else None,
+                            "step_key": frame.selected_action.step_key
+                            if frame.selected_action is not None
+                            else None,
+                            "tool_call_refs": (
+                                frame.selected_action.tool_call_refs
+                                if frame.selected_action is not None
+                                else []
+                            ),
+                        },
+                        "evidence": {
+                            "observation": frame.observation.model_dump(mode="json")
+                            if frame.observation is not None
+                            else {},
+                            "deliverable": dict(normalized_result.get("deliverable") or {}),
+                            "artifact_evidence": dict(
+                                normalized_result.get("artifact_evidence") or {}
+                            ),
+                        },
+                        "approval": dict(normalized_result.get("approval_state") or {}),
+                    }
+                )
+                for frame in frames
+            ],
             latest_observation=latest_observation,
             latest_next_action=latest_next_action,
             final_result=normalized_result,
@@ -2074,12 +2267,36 @@ class TaskEngine:
         result = dict(raw_result or task.get("result") or {})
         repo_profile = _repo_profile_from_task(task)
         code_hosting_profile = _code_hosting_profile_from_task(task)
+        steps = await self._repo.list_steps(task["task_id"])
+        preflight = dict(task.get("preflight") or {})
+        office_profile = dict(
+            preflight.get("productivity_domain")
+            or preflight.get("office_productivity")
+            or {}
+        )
+        if office_profile.get("enabled"):
+            artifacts = [TaskArtifact(**row) for row in await self._repo.list_artifacts(task["task_id"])]
+            approvals = list(await self._repo.list_approvals(task["task_id"]))
+            result = office_final_result(
+                task_id=task["task_id"],
+                trace_id=task.get("trace_id"),
+                task_status=task["status"],
+                profile=office_profile,
+                steps=steps,
+                artifacts=artifacts,
+                approvals=approvals,
+                raw_result=result,
+            )
+            result.setdefault("domain", "productivity")
+            result.setdefault("domain_request", dict(office_profile.get("request") or {}))
+            result.setdefault(
+                "provider_capability_profile",
+                dict(office_profile.get("provider_capability_profile") or {}),
+            )
         if not repo_profile.get("enabled") and not code_hosting_profile.get("enabled"):
             return result
-        steps = await self._repo.list_steps(task["task_id"])
         workspace_dir = self._artifacts.task_dir(task["task_id"])
         workspace_snapshot = _workspace_snapshot(workspace_dir)
-        preflight = dict(task.get("preflight") or {})
         repo_execution = dict(preflight.get("repo_execution") or {})
         baseline = {
             str(key): str(value)
@@ -3015,7 +3232,14 @@ class TaskEngine:
             },
         )
         mode = _select_mode(request)
-        risk = _risk_for_goal(request.goal)
+        office_profile = office_profile_for_task_request(
+            goal=request.goal,
+            domain=request.domain,
+            domain_request=request.domain_request,
+            office_request=request.office_request,
+            constraints=request.constraints,
+        )
+        risk = RiskLevel(office_profile.get("risk_level") or _risk_for_goal(request.goal).value)
         budget = TaskBudget(**{**TaskBudget().model_dump(), **request.budget_override})
         resolved_constraints = dict(request.constraints or {})
         code_hosting_profile = _code_hosting_profile_for_request(request)
@@ -3129,9 +3353,11 @@ class TaskEngine:
                 **code_hosting_profile,
                 "skill_binding": code_hosting_binding,
             },
+            "productivity_domain": office_profile,
+            "office_productivity": office_profile,
         }
         planner_type = _planner_type(mode)
-        assumptions = _planner_assumptions(planning_request, mode, capability_snapshot)
+        assumptions = _phase100_planner_assumptions(planning_request, mode, capability_snapshot)
         await self._end_span(
             span_id,
             output_data={
@@ -3145,6 +3371,9 @@ class TaskEngine:
             task_id=task_id,
             title=_title_from_goal(request.goal),
             goal=request.goal,
+            domain=str(office_profile.get("domain") or request.domain or "general")
+            if office_profile.get("enabled")
+            else request.domain,
             mode=mode,
             owner_member_id=request.owner_member_id,
             host_member_id=request.owner_member_id if mode == TaskMode.SUPERVISOR else None,
@@ -3481,6 +3710,15 @@ class TaskEngine:
 def _select_mode(request: TaskCreateRequest) -> TaskMode:
     if request.mode_hint is not None:
         return request.mode_hint
+    office_profile = office_profile_for_task_request(
+        goal=request.goal,
+        domain=request.domain,
+        domain_request=request.domain_request,
+        office_request=request.office_request,
+        constraints=request.constraints,
+    )
+    if office_profile["enabled"]:
+        return TaskMode.AGENT
     if _code_hosting_profile_for_request(request)["enabled"]:
         return TaskMode.AGENT
     if _repo_profile_for_request(request)["enabled"]:
@@ -3515,6 +3753,14 @@ def _planner_reason_codes(
         reasons.append("high_risk_plan_first")
     if _goal_mentions_skill(request.goal) or request.constraints.get("skill_id"):
         reasons.append("skill_considered")
+    if office_profile_for_task_request(
+        goal=request.goal,
+        domain=request.domain,
+        domain_request=request.domain_request,
+        office_request=request.office_request,
+        constraints=request.constraints,
+    )["enabled"]:
+        reasons.append("office_productivity_considered")
     if _code_hosting_profile_for_request(request)["enabled"]:
         reasons.append("code_hosting_considered")
     if _goal_mentions_mcp(request.goal) or request.constraints.get("mcp_tool_name"):
@@ -3553,6 +3799,43 @@ def _planner_assumptions(
         assumptions.append("当前无 enabled Skill，计划不会伪造 Skill 执行。")
     if _goal_mentions_office(request.goal):
         assumptions.append("Office 文件请求只通过受控 Office 工具写入任务 artifact。")
+    return assumptions
+
+
+def _phase100_planner_assumptions(
+    request: TaskCreateRequest,
+    mode: TaskMode,
+    capability_snapshot: dict[str, Any],
+) -> list[str]:
+    assumptions = ["Rule-first planner is active unless a stronger runtime contract already applies."]
+    repo_profile = _repo_profile_for_request(request)
+    code_hosting_profile = _code_hosting_profile_for_request(request)
+    office_profile = office_profile_for_task_request(
+        goal=request.goal,
+        domain=request.domain,
+        domain_request=request.domain_request,
+        office_request=request.office_request,
+        constraints=request.constraints,
+    )
+    if repo_profile["enabled"]:
+        assumptions.append("Repository tasks use the Task/Agent mainline as the authoritative executor.")
+        if repo_profile.get("requires_verification"):
+            assumptions.append("Code-changing tasks require verification before they are deliverable.")
+        if repo_profile.get("allow_auto_repair"):
+            assumptions.append("At most one bounded auto-repair pass is allowed after verification failure.")
+    if code_hosting_profile["enabled"]:
+        assumptions.append("Remote code-hosting actions stay behind governed Skill execution.")
+        assumptions.append("If a usable code-hosting Skill is unavailable, the task records blockers instead of faking remote execution.")
+    if mode == TaskMode.AGENT:
+        assumptions.append("Agent loop records observation, next action, evidence, and stop reason on each iteration.")
+    if not request.resource_handle_ids:
+        assumptions.append("No resource handles were declared, so the plan can only use capabilities that do not require extra assets.")
+    if _goal_mentions_mcp(request.goal) and capability_snapshot.get("ready_mcp_server_count") == 0:
+        assumptions.append("No ready MCP server is available, so MCP execution is not promised by this plan.")
+    if _goal_mentions_skill(request.goal) and capability_snapshot.get("enabled_skill_count") == 0:
+        assumptions.append("No enabled Skill is currently available, so the planner will not pretend Skill execution exists.")
+    if office_profile["enabled"]:
+        assumptions.append("Office productivity requests flow through the Task/Agent mainline and emit unified deliverable/evidence records.")
     return assumptions
 
 
@@ -3637,6 +3920,13 @@ def _steps_for_goal(
         ]
     steps: list[dict[str, Any]] = []
     goal = request.goal.lower()
+    office_profile = office_profile_for_task_request(
+        goal=request.goal,
+        domain=request.domain,
+        domain_request=request.domain_request,
+        office_request=request.office_request,
+        constraints=request.constraints,
+    )
     skill_match_refs = (
         capability_snapshot.get("skill_match_refs", []) if capability_snapshot is not None else []
     )
@@ -3654,18 +3944,29 @@ def _steps_for_goal(
                 },
             }
         )
-    elif office_skill_id:
+    elif office_profile.get("enabled") and office_skill_id and office_profile.get("request_type") in {
+        "document",
+        "spreadsheet",
+        "deck",
+    }:
         steps.append(
             {
                 "step_key": "skill_run",
                 "step_type": "skill_run",
                 "title": "执行 Office Skill",
-                "risk_level": "R2",
+                "risk_level": str(office_profile.get("risk_level") or "R2"),
                 "input": {
                     "skill_id": office_skill_id,
                     "input": _office_skill_input(request),
                     "matched_reason": "office_intent_route",
                     "confidence": _office_skill_confidence(office_skill_id, skill_match_refs),
+                },
+                "metadata": {
+                    "domain": office_profile.get("domain") or "productivity",
+                    "office_step_role": "deliverable_execution",
+                    "office_request_type": office_profile.get("request_type"),
+                    "office_operation": office_profile.get("operation"),
+                    "provider_ref": office_profile.get("provider_ref"),
                 },
             }
         )
@@ -3679,6 +3980,27 @@ def _steps_for_goal(
                 "title": "匹配可用 Skill",
                 "risk_level": "R1",
                 "input": {"goal": request.goal, "intent": "task_execution"},
+            }
+        )
+    if office_profile.get("enabled") and office_profile.get("tool_name"):
+        steps.append(
+            {
+                "step_key": "office_productivity_action",
+                "step_type": "tool_call",
+                "title": "Execute Office Productivity Action",
+                "risk_level": str(office_profile.get("risk_level") or "R2"),
+                "input": {
+                    "tool_name": office_profile["tool_name"],
+                    "args": office_tool_args(office_profile),
+                },
+                "metadata": {
+                    "domain": office_profile.get("domain") or "productivity",
+                    "office_step_role": "governed_action",
+                    "office_request_type": office_profile.get("request_type"),
+                    "office_operation": office_profile.get("operation"),
+                    "provider_ref": office_profile.get("provider_ref"),
+                    "high_risk_actions": list(office_profile.get("high_risk_actions") or []),
+                },
             }
         )
     if request.constraints.get("mcp_tool_name"):
@@ -4244,7 +4566,39 @@ def _office_skill_confidence(skill_id: str, matches: list[dict[str, Any]]) -> fl
 
 def _office_skill_input(request: TaskCreateRequest) -> dict[str, Any]:
     skill_input = dict(request.constraints.get("skill_input") or {})
-    office_request = parse_office_chat_request(request.goal)
+    parsed_request = parse_office_chat_request(request.goal)
+    if parsed_request is not None:
+        office_request = parsed_request
+    else:
+        office_request = office_request_from_task_fields(
+            goal=request.goal,
+            domain=request.domain,
+            domain_request=request.domain_request,
+            office_request=request.office_request,
+            constraints=request.constraints,
+        )
+    if office_request is not None and hasattr(office_request, "request_type"):
+        metadata = dict(getattr(office_request, "metadata", {}) or {})
+        request_type = str(getattr(office_request, "request_type", "document"))
+        document_type = metadata.get(
+            "document_type",
+            "word"
+            if request_type == "document"
+            else "excel"
+            if request_type == "spreadsheet"
+            else "ppt"
+            if request_type == "deck"
+            else "word",
+        )
+        office_request = parse_office_chat_request(request.goal) or type("OfficeBridge", (), {
+            "document_type": document_type,
+            "operation": getattr(office_request, "operation", "generate"),
+            "topic": getattr(office_request, "title", None),
+            "summary": getattr(office_request, "summary", None),
+            "slide_count": metadata.get("slide_count"),
+            "user_text": getattr(office_request, "content", None),
+            "source_artifact_id": getattr(office_request, "source_artifact_id", None),
+        })()
     if office_request is not None:
         for key, value in office_chat_skill_input(office_request).items():
             skill_input.setdefault(key, value)

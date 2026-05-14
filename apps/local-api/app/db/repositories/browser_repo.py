@@ -22,6 +22,12 @@ PROFILE_UPDATE_COLUMNS = {
     "metadata_json",
     "reuse_policy",
     "reuse_policy_json",
+    "execution_backend",
+    "cdp_endpoint",
+    "browser_family",
+    "browser_profile_name",
+    "identity_binding_status",
+    "login_capture_mode",
     "updated_at",
     "revoked_at",
     "cleared_at",
@@ -42,6 +48,13 @@ SESSION_UPDATE_COLUMNS = {
     "reuse_policy",
     "reuse_policy_json",
     "restore_context_ref",
+    "execution_backend",
+    "identity_source",
+    "cdp_endpoint",
+    "browser_family",
+    "browser_profile_name",
+    "identity_binding_status",
+    "login_capture_mode",
     "secret_ref",
     "last_used_at",
     "updated_at",
@@ -62,8 +75,10 @@ class BrowserRepository:
               storage_backend, status, sensitivity, allowed_domains_json,
               blocked_domains_json, policy_json, metadata_json, created_by_member_id,
               trace_id, created_at, updated_at, revoked_at, cleared_at, expires_at,
-              health_status, last_probe_at, recovery_hint, reuse_policy_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              health_status, last_probe_at, recovery_hint, reuse_policy_json,
+              execution_backend, cdp_endpoint, browser_family, browser_profile_name,
+              identity_binding_status, login_capture_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["browser_profile_id"],
@@ -88,6 +103,12 @@ class BrowserRepository:
                 data.get("last_probe_at"),
                 data.get("recovery_hint"),
                 _json(data.get("reuse_policy", {})),
+                data.get("execution_backend", "playwright_ephemeral"),
+                data.get("cdp_endpoint"),
+                data.get("browser_family"),
+                data.get("browser_profile_name"),
+                data.get("identity_binding_status", "unbound"),
+                data.get("login_capture_mode", "manual_handoff"),
             ),
         )
 
@@ -99,6 +120,7 @@ class BrowserRepository:
                 "blocked_domains": "blocked_domains_json",
                 "policy": "policy_json",
                 "metadata": "metadata_json",
+                "reuse_policy": "reuse_policy_json",
             },
         )
         if not values:
@@ -148,8 +170,9 @@ class BrowserRepository:
               secret_ref, created_by_member_id, trace_id, created_at, updated_at,
               last_used_at, expires_at, revoked_at, health_status, login_state,
               last_probe_at, invalidation_reason, recovery_hint, reuse_policy_json,
-              restore_context_ref
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              restore_context_ref, execution_backend, identity_source, cdp_endpoint,
+              browser_family, browser_profile_name, identity_binding_status, login_capture_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["browser_session_id"],
@@ -176,13 +199,23 @@ class BrowserRepository:
                 data.get("recovery_hint"),
                 _json(data.get("reuse_policy", {})),
                 data.get("restore_context_ref"),
+                data.get("execution_backend", "playwright_ephemeral"),
+                data.get("identity_source"),
+                data.get("cdp_endpoint"),
+                data.get("browser_family"),
+                data.get("browser_profile_name"),
+                data.get("identity_binding_status", "unbound"),
+                data.get("login_capture_mode", "manual_handoff"),
             ),
         )
 
     async def update_session(self, browser_session_id: str, fields: dict[str, Any]) -> None:
         values = _json_update_fields(
             {key: value for key, value in fields.items() if key in SESSION_UPDATE_COLUMNS},
-            {"session_metadata": "session_metadata_json"},
+            {
+                "session_metadata": "session_metadata_json",
+                "reuse_policy": "reuse_policy_json",
+            },
         )
         if not values:
             return

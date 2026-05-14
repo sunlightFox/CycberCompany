@@ -311,6 +311,35 @@ def direct_route_reply(route_type: str, user_text: str) -> str | None:
     return None
 
 
+def direct_route_reply(route_type: str, user_text: str) -> tuple[str, str, dict[str, Any]] | None:
+    del user_text
+    if route_type == "office_document":
+        return (
+            "这类请求更适合走文档生成流程，我会按文档任务来组织结果。",
+            "office_document_request",
+            {},
+        )
+    if route_type == "browser_read":
+        return (
+            "这类请求适合走网页只读链路，我会优先给出页面内容和证据。",
+            "browser_read_page",
+            {},
+        )
+    if route_type == "download_topic":
+        return (
+            "下载端点本身只是取回已存在的 artifact 文件，不会替你创建新内容；这次按说明处理，不会触发真实下载。",
+            "download_topic_explanation",
+            {"download_topic": {"executed": False}},
+        )
+    if route_type == "skill_mcp_concept":
+        return (
+            "Skill 更像平台内已经接好的能力封装；MCP 更像把外部工具或服务按协议接进来。前者偏产品化能力，后者偏连接标准。",
+            "skill_mcp_concept",
+            {"concept_reply": {"kind": "skill_mcp_difference"}},
+        )
+    return None
+
+
 def host_filesystem_list_reply(result: dict[str, Any]) -> str:
     location = host_filesystem_label(str(result.get("location") or "home"))
     entries = list(result.get("entries") or [])
@@ -504,7 +533,7 @@ def office_doc_visible_name(document_type: str) -> str:
 
 
 def office_reply_detail(office_request: OfficeChatRequest) -> str:
-    return str(office_request.summary or office_request.user_text or "").strip()
+    return str(office_request.content or office_request.topic or "").strip()
 
 
 def office_next_edit_hint(document_type: str) -> str:
@@ -531,6 +560,8 @@ def office_artifact_refs(artifacts: list[Any], document_type: str) -> list[dict[
                 "artifact_id": artifact_id,
                 "document_type": document_type,
                 "display_name": getattr(artifact, "display_name", None),
+                "content_type": getattr(artifact, "content_type", None),
+                "download_url": f"/api/artifacts/{artifact_id}/download",
                 "uri": getattr(artifact, "uri", None),
             }
         )
@@ -538,7 +569,16 @@ def office_artifact_refs(artifacts: list[Any], document_type: str) -> list[dict[
 
 
 def first_office_artifact(artifacts: list[Any], document_type: str) -> Any | None:
+    content_markers = {
+        "word": "wordprocessingml.document",
+        "excel": "spreadsheetml.sheet",
+        "ppt": "presentationml.presentation",
+    }
+    marker = content_markers.get(document_type)
     for artifact in artifacts:
+        content_type = str(getattr(artifact, "content_type", None) or "")
+        if marker and marker in content_type:
+            return artifact
         if getattr(artifact, "artifact_type", None) == document_type:
             return artifact
     return artifacts[0] if artifacts else None

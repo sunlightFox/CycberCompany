@@ -4,6 +4,7 @@ import asyncio
 import os
 import re
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -334,6 +335,10 @@ def _minimal_env(request: TerminalSandboxRequest) -> dict[str, str]:
         value = os.environ.get(key)
         if value and not SECRET_ENV_RE.search(key):
             env[key] = value
+    python_dir = str(Path(sys.executable).resolve().parent)
+    path_entries = [item for item in str(env.get("PATH") or "").split(os.pathsep) if item]
+    if python_dir not in path_entries:
+        env["PATH"] = os.pathsep.join([python_dir, *path_entries]) if path_entries else python_dir
     env["CYCBER_TASK_ID"] = request.task_id
     env["CYCBER_SANDBOX_ROOT"] = str(request.cwd)
     env["PYTHONIOENCODING"] = "utf-8"

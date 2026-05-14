@@ -7,6 +7,8 @@ from app.schemas.browser import (
     BrowserEvidenceResponse,
     BrowserPageStateListResponse,
     BrowserProfileActionRequest,
+    BrowserProfileBindLocalCdpRequest,
+    BrowserProfileBootstrapLoginRequest,
     BrowserProfileCreateRequest,
     BrowserProfileEventListResponse,
     BrowserProfileListResponse,
@@ -14,6 +16,7 @@ from app.schemas.browser import (
     BrowserProfileUpdateRequest,
     BrowserSessionHealthCheckRequest,
     BrowserSessionHealthCheckResponse,
+    BrowserSessionLoginProbeRequest,
     BrowserSessionRestoreContextRequest,
     BrowserSessionRestoreContextResponse,
     BrowserSessionCreateRequest,
@@ -83,6 +86,36 @@ async def activate_browser_profile(
         trace_id=getattr(request.state, "trace_id", None),
     )
     return BrowserProfileResponse(**profile.model_dump(mode="json"))
+
+
+@router.post("/profiles/{browser_profile_id}/bind-local-cdp", response_model=BrowserProfileResponse)
+async def bind_browser_profile_local_cdp(
+    browser_profile_id: str,
+    payload: BrowserProfileBindLocalCdpRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> BrowserProfileResponse:
+    profile = await registry.browser_session_service.bind_local_cdp(
+        browser_profile_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return BrowserProfileResponse(**profile.model_dump(mode="json"))
+
+
+@router.post("/profiles/{browser_profile_id}/bootstrap-login", response_model=BrowserSessionResponse)
+async def bootstrap_browser_profile_login(
+    browser_profile_id: str,
+    payload: BrowserProfileBootstrapLoginRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> BrowserSessionResponse:
+    session = await registry.browser_session_service.bootstrap_login(
+        browser_profile_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return BrowserSessionResponse(**session.model_dump(mode="json"))
 
 
 @router.post("/profiles/{browser_profile_id}/pause", response_model=BrowserProfileResponse)
@@ -166,6 +199,23 @@ async def health_check_browser_session(
     registry: ServiceRegistry = Depends(get_registry),
 ) -> BrowserSessionHealthCheckResponse:
     return await registry.browser_session_service.health_check_session(
+        browser_session_id,
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.post(
+    "/sessions/{browser_session_id}/probe-login-state",
+    response_model=BrowserSessionHealthCheckResponse,
+)
+async def probe_browser_session_login_state(
+    browser_session_id: str,
+    payload: BrowserSessionLoginProbeRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> BrowserSessionHealthCheckResponse:
+    return await registry.browser_session_service.probe_login_state(
         browser_session_id,
         payload,
         trace_id=getattr(request.state, "trace_id", None),

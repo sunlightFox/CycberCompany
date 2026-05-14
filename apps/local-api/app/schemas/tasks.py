@@ -23,6 +23,7 @@ from core_types import (
     PlanVerificationResult,
     RiskLevel,
     SkillPolicy,
+    OfficeTaskRequest,
     TaskArtifact,
     TaskDetail,
     TaskEvent,
@@ -49,6 +50,8 @@ class TaskCreateRequest(ApiModel):
     conversation_id: EntityId | None = None
     owner_member_id: EntityId = "mem_xiaoyao"
     goal: str = Field(min_length=1)
+    domain: str | None = None
+    domain_request: dict[str, Any] = Field(default_factory=dict)
     mode_hint: TaskMode | None = None
     success_criteria: list[str] = Field(default_factory=list)
     constraints: dict[str, Any] = Field(default_factory=dict)
@@ -56,6 +59,7 @@ class TaskCreateRequest(ApiModel):
     budget_override: dict[str, int] = Field(default_factory=dict)
     brain_decision_id: EntityId | None = None
     planner_context: dict[str, Any] = Field(default_factory=dict)
+    office_request: OfficeTaskRequest | None = None
     client_request_id: str | None = None
     auto_start: bool = True
 

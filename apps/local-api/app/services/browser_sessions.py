@@ -21,16 +21,20 @@ from app.core.time import new_id, utc_now_iso
 from app.db.repositories.asset_repo import AssetRepository
 from app.db.repositories.browser_repo import BrowserRepository
 from app.schemas.browser import (
+    BrowserProfileBindLocalCdpRequest,
+    BrowserProfileBootstrapLoginRequest,
     BrowserProfileCreateRequest,
     BrowserProfileUpdateRequest,
     BrowserSessionHealthCheckRequest,
     BrowserSessionHealthCheckResponse,
+    BrowserSessionLoginProbeRequest,
     BrowserSessionHealthProbeResponse,
     BrowserSessionRestoreContextRequest,
     BrowserSessionRestoreContextResponse,
     BrowserSessionCreateRequest,
 )
 from app.services.audit import AuditEventService
+from app.services.browser_policy import browser_session_preflight
 
 SENSITIVE_QUERY_KEYS = {
     "api_key",
@@ -212,6 +216,12 @@ class BrowserSessionService:
             "expires_at": request.expires_at,
             "health_status": "unknown",
             "reuse_policy": request.metadata.get("reuse_policy", {}),
+            "execution_backend": request.execution_backend,
+            "cdp_endpoint": request.cdp_endpoint,
+            "browser_family": request.browser_family,
+            "browser_profile_name": request.browser_profile_name,
+            "identity_binding_status": request.identity_binding_status,
+            "login_capture_mode": request.login_capture_mode,
         }
         await self._repo.insert_profile(data)
         await self._event(
@@ -406,6 +416,13 @@ class BrowserSessionService:
             "health_status": "unknown",
             "login_state": "unknown",
             "reuse_policy": request.reuse_policy,
+            "execution_backend": request.execution_backend,
+            "identity_source": request.identity_source,
+            "cdp_endpoint": request.cdp_endpoint or profile.cdp_endpoint,
+            "browser_family": request.browser_family or profile.browser_family,
+            "browser_profile_name": request.browser_profile_name or profile.browser_profile_name,
+            "identity_binding_status": request.identity_binding_status,
+            "login_capture_mode": request.login_capture_mode,
         }
         await self._repo.insert_session(data)
         await self._event(
@@ -446,6 +463,113 @@ class BrowserSessionService:
             BrowserSession(**row)
             for row in await self._repo.list_sessions(browser_profile_id=browser_profile_id)
         ]
+
+    async def bind_local_cdp(
+        self,
+        browser_profile_id: str,
+        request: BrowserProfileBindLocalCdpRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> BrowserProfile:
+        await self.get_profile(browser_profile_id)
+        await self._repo.update_profile(
+            browser_profile_id,
+            {
+                "execution_backend": "local_cdp",
+                "cdp_endpoint": request.cdp_endpoint,
+                "browser_family": request.browser_family,
+                "browser_profile_name": request.browser_profile_name,
+                "identity_binding_status": "bound",
+                "updated_at": utc_now_iso(),
+            },
+        )
+        await self._event(
+            browser_profile_id,
+            "browser_profile.local_cdp_bound",
+            {
+                "execution_backend": "local_cdp",
+                "browser_family": request.browser_family,
+                "browser_profile_name": request.browser_profile_name,
+                "identity_source": request.identity_source,
+            },
+            trace_id=trace_id,
+        )
+        return await self.get_profile(browser_profile_id)
+
+    async def bootstrap_login(
+        self,
+        browser_profile_id: str,
+        request: BrowserProfileBootstrapLoginRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> BrowserSession:
+        profile = await self.get_profile(browser_profile_id)
+        if profile.execution_backend != "local_cdp" and not request.cdp_endpoint:
+            raise AppError(
+                ErrorCode.VALIDATION_ERROR,
+                "browser profile must bind local CDP before login bootstrap",
+                status_code=422,
+                details={"reason_code": "local_cdp_binding_required"},
+            )
+        if profile.execution_backend != "local_cdp":
+            await self._repo.update_profile(
+                browser_profile_id,
+                {
+                    "execution_backend": "local_cdp",
+                    "cdp_endpoint": request.cdp_endpoint,
+                    "browser_family": request.browser_family,
+                    "browser_profile_name": request.browser_profile_name,
+                    "identity_binding_status": "bound",
+                    "login_capture_mode": request.login_capture_mode,
+                    "updated_at": utc_now_iso(),
+                },
+            )
+            profile = await self.get_profile(browser_profile_id)
+        session = await self.create_session(
+            browser_profile_id,
+            BrowserSessionCreateRequest(
+                asset_id=request.asset_id,
+                login_domain=request.login_domain,
+                auth_type=request.auth_type,
+                sensitivity=request.sensitivity,
+                session_metadata={
+                    **request.session_metadata,
+                    "login_url": request.login_url,
+                    "bootstrap_source": "browser_profile.bootstrap_login",
+                },
+                created_by_member_id=request.created_by_member_id,
+                expires_at=request.expires_at,
+                reuse_policy=request.reuse_policy,
+                execution_backend="local_cdp",
+                identity_source="local_edge_cdp",
+                cdp_endpoint=request.cdp_endpoint or profile.cdp_endpoint,
+                browser_family=request.browser_family or profile.browser_family,
+                browser_profile_name=request.browser_profile_name or profile.browser_profile_name,
+                identity_binding_status="bound",
+                login_capture_mode=request.login_capture_mode,
+            ),
+            trace_id=trace_id,
+        )
+        await self._repo.update_session(
+            session.browser_session_id,
+            {
+                "health_status": "login_required",
+                "login_state": "login_required",
+                "status": "recovery_required",
+                "recovery_hint": "complete_login_in_bound_edge_then_probe",
+                "updated_at": utc_now_iso(),
+            },
+        )
+        return await self.get_session(session.browser_session_id)
+
+    async def probe_login_state(
+        self,
+        browser_session_id: str,
+        request: BrowserSessionLoginProbeRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> BrowserSessionHealthCheckResponse:
+        return await self.health_check_session(browser_session_id, request, trace_id=trace_id)
 
     async def get_session(self, browser_session_id: str) -> BrowserSession:
         row = await self._repo.get_session(browser_session_id)
@@ -563,8 +687,15 @@ class BrowserSessionService:
             "login_domain": session.login_domain,
             "health_status": decision["health_status"],
             "login_state": decision["login_state"],
+            "execution_backend": session.execution_backend,
+            "identity_source": session.identity_source,
+            "cdp_endpoint": session.cdp_endpoint or profile.cdp_endpoint,
+            "browser_family": session.browser_family or profile.browser_family,
+            "browser_profile_name": session.browser_profile_name or profile.browser_profile_name,
+            "identity_binding_status": session.identity_binding_status,
+            "login_capture_mode": session.login_capture_mode,
             "restore_context_ref": session.restore_context_ref,
-            "recoverable": decision["health_status"] != "healthy",
+            "recoverable": decision["health_status"] != "ready",
             "page_key": request.page_key,
             "current_url": str(redact(request.current_url)) if request.current_url else None,
             "requested_action": request.requested_action,
@@ -597,6 +728,7 @@ class BrowserSessionService:
         member_id: str | None = None,
         task_id: str | None = None,
         url: str | None = None,
+        allow_login_recovery: bool = False,
     ) -> dict[str, Any]:
         if not browser_profile_id and not browser_session_id:
             return {}
@@ -611,6 +743,17 @@ class BrowserSessionService:
             member_id=member_id,
             task_id=task_id,
             url=url,
+            allow_login_recovery=allow_login_recovery,
+        )
+        preflight = browser_session_preflight(
+            session_status=session.status if session else profile.status,
+            health_status=session.health_status if session else profile.health_status,
+            login_state=session.login_state if session else "authenticated",
+            execution_backend=session.execution_backend if session else profile.execution_backend,
+            identity_binding_status=(
+                session.identity_binding_status if session else profile.identity_binding_status
+            ),
+            login_capture_mode=session.login_capture_mode if session else profile.login_capture_mode,
         )
         return {
             "browser_profile_id": profile.browser_profile_id,
@@ -621,6 +764,19 @@ class BrowserSessionService:
             "sensitivity": session.sensitivity if session else profile.sensitivity,
             "reuse_policy": session.reuse_policy if session else profile.reuse_policy,
             "login_domain": session.login_domain if session else None,
+            "execution_backend": session.execution_backend if session else profile.execution_backend,
+            "identity_source": session.identity_source if session else None,
+            "cdp_endpoint": session.cdp_endpoint if session else profile.cdp_endpoint,
+            "browser_family": session.browser_family if session else profile.browser_family,
+            "browser_profile_name": (
+                session.browser_profile_name if session else profile.browser_profile_name
+            ),
+            "identity_binding_status": preflight["identity_binding_status"],
+            "login_capture_mode": preflight["login_capture_mode"],
+            "session_state": preflight["session_state"],
+            "backend_capabilities": preflight["backend_capabilities"],
+            "recovery_allowed": preflight["recovery_allowed"],
+            "login_reuse_allowed": preflight["login_reuse_allowed"],
         }
 
     def classify_url(
@@ -856,7 +1012,7 @@ class BrowserSessionService:
             }
         if provider_status in {"unreachable", "down", "offline"}:
             return {
-                "health_status": "provider_unreachable",
+                "health_status": "identity_unavailable",
                 "login_state": "unknown",
                 "session_status": "degraded",
                 "failure_reason": failure_reason or "provider_unreachable",
@@ -864,24 +1020,27 @@ class BrowserSessionService:
             }
         if observed_status in {
             "healthy",
+            "ready",
             "login_required",
             "session_expired",
-            "provider_unreachable",
             "recovery_required",
+            "identity_unavailable",
             "degraded",
         }:
-            health_status = observed_status
+            health_status = "ready" if observed_status == "healthy" else observed_status
         elif evidence.get("login_required") or evidence.get("challenge_detected"):
             health_status = "login_required"
         elif evidence.get("session_expired"):
             health_status = "session_expired"
         elif evidence.get("recovery_required"):
             health_status = "recovery_required"
+        elif evidence.get("identity_unavailable"):
+            health_status = "identity_unavailable"
         elif evidence.get("degraded"):
-            health_status = "degraded"
+            health_status = "identity_unavailable"
         else:
-            health_status = "healthy"
-        if health_status == "healthy":
+            health_status = "ready"
+        if health_status == "ready":
             login_state = "authenticated"
             session_status = "active"
         elif health_status == "login_required":
@@ -890,7 +1049,7 @@ class BrowserSessionService:
         elif health_status == "session_expired":
             login_state = "expired"
             session_status = "expired"
-        elif health_status == "provider_unreachable":
+        elif health_status == "identity_unavailable":
             login_state = "unknown"
             session_status = "degraded"
         elif health_status == "recovery_required":
@@ -917,6 +1076,7 @@ class BrowserSessionService:
         member_id: str | None,
         task_id: str | None,
         url: str | None,
+        allow_login_recovery: bool = False,
     ) -> None:
         if profile.status != "active":
             raise AppError(
@@ -927,6 +1087,16 @@ class BrowserSessionService:
             )
         if session is None:
             return
+        if (
+            session.execution_backend == "local_cdp"
+            or profile.execution_backend == "local_cdp"
+        ) and not (session.cdp_endpoint or profile.cdp_endpoint):
+            raise AppError(
+                "IDENTITY_UNAVAILABLE",
+                "bound local CDP browser identity is unavailable",
+                status_code=409,
+                details={"reason": "cdp_endpoint_missing"},
+            )
         if session.status in {"revoked", "cleared"}:
             raise AppError(
                 "SESSION_EXPIRED",
@@ -939,7 +1109,10 @@ class BrowserSessionService:
                     "recovery_hint": session.recovery_hint,
                 },
             )
-        if session.health_status == "login_required" or session.login_state == "login_required":
+        if (
+            not allow_login_recovery
+            and (session.health_status == "login_required" or session.login_state == "login_required")
+        ):
             raise AppError(
                 "LOGIN_REQUIRED",
                 "浏览器 session 登录态已失效，需要用户重新登录",
@@ -965,7 +1138,7 @@ class BrowserSessionService:
             )
         if session.health_status in {
             "recovery_required",
-            "provider_unreachable",
+            "identity_unavailable",
             "degraded",
         } or session.status in {"recovery_required", "degraded"}:
             raise AppError(
@@ -994,6 +1167,16 @@ class BrowserSessionService:
                     "浏览器 session 不允许跨任务复用",
                     status_code=403,
                     details={"reason": "task_mismatch"},
+                )
+        if url:
+            parsed = urlsplit(url)
+            host = parsed.hostname.lower() if parsed.hostname else None
+            if session.login_domain and host and not _domain_allowed(host, [session.login_domain]):
+                raise AppError(
+                    "SESSION_REUSE_DENIED",
+                    "browser session login domain does not match target host",
+                    status_code=403,
+                    details={"reason": "login_domain_mismatch"},
                 )
         if url and profile.allowed_domains:
             parsed = urlsplit(url)

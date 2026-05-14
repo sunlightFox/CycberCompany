@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +59,7 @@ class ArtifactStore:
                     "artifact 路径不合法",
                     status_code=422,
                 )
-            target_dir.mkdir(parents=True, exist_ok=True)
+            _mkdir_p(target_dir)
             path = (target_dir / safe_name).resolve()
             if target_dir not in [path, *path.parents]:
                 raise AppError(
@@ -67,8 +68,8 @@ class ArtifactStore:
                     status_code=422,
                 )
             redacted_content = str(redact(content))
-            path.write_text(redacted_content, encoding="utf-8")
-            raw = path.read_bytes()
+            _write_text(path, redacted_content)
+            raw = _read_bytes(path)
             checksum = "sha256:" + hashlib.sha256(raw).hexdigest()
             artifact_id = new_id("art")
             created_at = utc_now_iso()
@@ -143,7 +144,7 @@ class ArtifactStore:
                     "artifact 路径不合法",
                     status_code=422,
                 )
-            target_dir.mkdir(parents=True, exist_ok=True)
+            _mkdir_p(target_dir)
             path = (target_dir / safe_name).resolve()
             if target_dir not in [path, *path.parents]:
                 raise AppError(
@@ -151,7 +152,7 @@ class ArtifactStore:
                     "artifact 文件名不合法",
                     status_code=422,
                 )
-            path.write_bytes(content)
+            _write_bytes(path, content)
             checksum = "sha256:" + hashlib.sha256(content).hexdigest()
             artifact_id = new_id("art")
             created_at = utc_now_iso()
@@ -208,14 +209,14 @@ class ArtifactStore:
             raise AppError(ErrorCode.ARTIFACT_NOT_FOUND, "工件不存在", status_code=404)
         artifact = TaskArtifact(**row)
         path = self._path_from_uri(artifact.uri)
-        if not path.exists():
+        if not _path_exists(path):
             raise AppError(
                 ErrorCode.ARTIFACT_NOT_FOUND,
                 "工件文件不存在",
                 status_code=404,
                 details={"artifact_id": artifact_id},
             )
-        raw = path.read_bytes()
+        raw = _read_bytes(path)
         try:
             preview = raw[:limit].decode("utf-8")
         except UnicodeDecodeError:
@@ -228,7 +229,7 @@ class ArtifactStore:
             raise AppError(ErrorCode.ARTIFACT_NOT_FOUND, "工件不存在", status_code=404)
         artifact = TaskArtifact(**row)
         path = self.path_for_artifact(artifact)
-        if not path.exists() or not path.is_file():
+        if not _path_exists(path) or not _is_file(path):
             raise AppError(
                 ErrorCode.ARTIFACT_NOT_FOUND,
                 "工件文件不存在",
@@ -306,3 +307,40 @@ def _is_sensitive_path(path: Path) -> bool:
     parts = {part.lower() for part in path.parts}
     forbidden_names = {".env", ".env.local", "master.key", "local_secrets.json"}
     return "secrets" in parts or path.name.lower() in forbidden_names
+
+
+def _mkdir_p(path: Path) -> None:
+    os.makedirs(_fs_path(path), exist_ok=True)
+
+
+def _write_text(path: Path, content: str) -> None:
+    with open(_fs_path(path), "w", encoding="utf-8") as handle:
+        handle.write(content)
+
+
+def _write_bytes(path: Path, content: bytes) -> None:
+    with open(_fs_path(path), "wb") as handle:
+        handle.write(content)
+
+
+def _read_bytes(path: Path) -> bytes:
+    with open(_fs_path(path), "rb") as handle:
+        return handle.read()
+
+
+def _path_exists(path: Path) -> bool:
+    return os.path.exists(_fs_path(path))
+
+
+def _is_file(path: Path) -> bool:
+    return os.path.isfile(_fs_path(path))
+
+
+def _fs_path(path: Path) -> str:
+    raw = str(path)
+    if os.name != "nt" or raw.startswith("\\\\?\\") or len(raw) < 240:
+        return raw
+    normalized = raw.replace("/", "\\")
+    if normalized.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + normalized.lstrip("\\")
+    return "\\\\?\\" + normalized

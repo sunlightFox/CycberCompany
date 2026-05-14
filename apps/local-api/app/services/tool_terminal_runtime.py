@@ -259,9 +259,9 @@ class ToolTerminalRuntime:
 
         if not request.task_id:
             raise AppError(
-                ErrorCode.TOOL_PERMISSION_DENIED,
+                ErrorCode.TOOL_APPROVAL_REQUIRED,
                 "终端工具必须绑定任务",
-                status_code=422,
+                status_code=409,
             )
         command = str(request.args.get("command") or "")
         if request.args.get("cwd"):

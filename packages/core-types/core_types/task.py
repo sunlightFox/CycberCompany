@@ -29,6 +29,7 @@ class TaskPlan(ApiModel):
     task_id: EntityId
     title: str
     goal: str
+    domain: str | None = None
     mode: TaskMode
     owner_member_id: EntityId
     host_member_id: EntityId | None = None
@@ -327,6 +328,12 @@ class AgentLoopFrame(ApiModel):
     next_action: AgentNextActionDecision | None = None
     selected_action: AgentLoopSelectedAction | None = None
     evaluation: AgentLoopEvaluation = Field(default_factory=AgentLoopEvaluation)
+    domain: str | None = None
+    request_type: str | None = None
+    provider_ref: str | None = None
+    action: dict[str, Any] = Field(default_factory=dict)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    approval: dict[str, Any] = Field(default_factory=dict)
     plan_delta: dict[str, Any] = Field(default_factory=dict)
     pause_reason: str | None = None
     stop_reason: str | None = None
@@ -336,6 +343,7 @@ class AgentLoopState(ApiModel):
     runtime: str = "task_agent_runtime"
     authoritative: bool = True
     task_id: EntityId
+    domain: str | None = None
     mode: str = "agent"
     current_status: str
     pause_reason: str | None = None
@@ -848,6 +856,8 @@ class ApprovalDetail(ApiModel):
 class TaskReplay(ApiModel):
     task: TaskDetail
     agent_loop: AgentLoopState | None = None
+    domain: str | None = None
+    domain_request: dict[str, Any] = Field(default_factory=dict)
     steps: list[TaskStep] = Field(default_factory=list)
     events: list[TaskEvent] = Field(default_factory=list)
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
@@ -886,6 +896,7 @@ class TaskReplay(ApiModel):
     host_decisions: list[HostDecision] = Field(default_factory=list)
     workflow_evidence: dict[str, Any] = Field(default_factory=dict)
     agent_loop_evidence: dict[str, Any] = Field(default_factory=dict)
+    domain_evidence: dict[str, Any] = Field(default_factory=dict)
     recovery_evidence: dict[str, Any] = Field(default_factory=dict)
     handoff_evidence: dict[str, Any] = Field(default_factory=dict)
     final_result: dict[str, Any] = Field(default_factory=dict)

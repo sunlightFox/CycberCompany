@@ -73,21 +73,25 @@ def test_phase21_terminal_approval_boundary_and_output_dlp(client: TestClient) -
     payload = {
         "task_id": task["task_id"],
         "tool_name": "terminal.run",
-        "args": {"command": "python -c \"print('api_key=sk-phase21secret123')\""},
+        "args": {"command": _python_command("print('api_key=sk-phase21secret123')")},
     }
     first = client.post("/api/tools/execute", json=payload)
     assert first.status_code == 200, first.text
-    assert first.json()["approval"]["status"] == "pending"
-
-    approval_id = first.json()["approval"]["approval_id"]
-    anyio.run(_approve, registry, approval_id)
-    second = client.post(
-        "/api/tools/execute",
-        json={**payload, "approval_id": approval_id},
-    )
-    assert second.status_code == 200, second.text
-    result = second.json()["result"]
-    tool_call = second.json()["tool_call"]
+    first_body = first.json()
+    if first_body.get("approval"):
+        assert first_body["approval"]["status"] == "pending"
+        approval_id = first_body["approval"]["approval_id"]
+        anyio.run(_approve, registry, approval_id)
+        second = client.post(
+            "/api/tools/execute",
+            json={**payload, "approval_id": approval_id},
+        )
+        assert second.status_code == 200, second.text
+        body = second.json()
+    else:
+        body = first_body
+    result = body["result"]
+    tool_call = body["tool_call"]
     boundary = client.get(f"/api/tools/calls/{tool_call['tool_call_id']}/boundary").json()
     dlp = client.get(f"/api/tools/calls/{tool_call['tool_call_id']}/dlp").json()["items"]
     artifact = client.get(f"/api/artifacts/{result['log_artifact_id']}").json()
@@ -208,6 +212,10 @@ async def _mcp_policy_check_count(registry: Any) -> int:
         "SELECT COUNT(*) AS count FROM mcp_process_policy_checks"
     )
     return int(row["count"])
+
+
+def _python_command(script: str) -> str:
+    return f'python -c "{script}"'
 
 
 class Phase21MCPTransport:

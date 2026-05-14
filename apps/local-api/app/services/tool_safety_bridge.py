@@ -135,7 +135,10 @@ class ToolSafetyBridge:
                 else {}
             ),
             "risk_level": risk_level.value,
-            "required_controls": safety_decision.required_controls,
+            "required_controls": sorted(
+                set(safety_decision.required_controls)
+                | set(boundary_decision.required_controls if boundary_decision is not None else [])
+            ),
             "policy_sources": safety_decision.policy_sources,
             "decision": safety_decision.decision,
             "rollback_availability": rollback_availability_for_tool(
@@ -186,6 +189,7 @@ class ToolSafetyBridge:
         organization_id: str,
         risk_level: RiskLevel,
         terminal_command_policy: dict[str, Any] | None,
+        boundary_required_controls: list[str] | tuple[str, ...] | None,
         trace_id: str | None,
     ) -> Any | None:
         if request.approval_id:
@@ -201,13 +205,23 @@ class ToolSafetyBridge:
             raise AppError(ErrorCode.TOOL_APPROVAL_REQUIRED, "工具动作需要审批", status_code=409)
         from app.services.tools import _risk_order
 
-        if _risk_order(risk_level) < _risk_order(RiskLevel.R3):
+        boundary_requires_approval = any(
+            control in {"approval", "strong_approval"}
+            for control in (boundary_required_controls or ())
+        )
+        if boundary_requires_approval and not request.task_id:
+            raise AppError(
+                ErrorCode.TOOL_APPROVAL_REQUIRED,
+                "楂橀闄╁伐鍏峰繀椤荤粦瀹氫换鍔″苟鍒涘缓瀹℃壒",
+                status_code=409,
+            )
+        if not boundary_requires_approval and _risk_order(risk_level) < _risk_order(RiskLevel.R3):
             return None
         if self._runtime._safety_policy is not None:
             policy = await self._runtime._safety_policy.get_policy(
                 organization_id=organization_id
             )
-            if policy.should_skip_approval(
+            if not boundary_requires_approval and policy.should_skip_approval(
                 action=tool.tool_name,
                 risk_level=risk_level,
                 action_category=classify_action_category(

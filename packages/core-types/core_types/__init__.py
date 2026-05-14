@@ -192,6 +192,20 @@ from core_types.notification import (
     NotificationMessage,
     NotificationSubscription,
 )
+from core_types.office_productivity import (
+    ApprovalState,
+    ArtifactEvidence,
+    CalendarAction,
+    DeckOutline,
+    Deliverable,
+    DocumentChangeSet,
+    DocumentSuiteProvider,
+    FinalResult,
+    MailDraft,
+    OfficeTaskRequest,
+    ProviderCapabilityProfile,
+    SheetUpdateSummary,
+)
 from core_types.placeholder import CapabilityPlaceholder
 from core_types.project_deployment import (
     HostInstallExecution,

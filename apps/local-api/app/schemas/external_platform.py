@@ -88,12 +88,17 @@ class ExternalPlatformActionPlanCreateRequest(ApiModel):
     member_id: EntityId | None = None
     conversation_id: EntityId | None = None
     publish_text: str | None = None
+    title: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    publish_surface: str | None = None
+    media_artifact_ids: list[EntityId] = Field(default_factory=list)
     comment_text: str | None = None
     target_post_hint: str | None = None
     target_post_selector: str | None = None
     target_post_url: str | None = None
     published_post_ref: str | None = None
     provider_mode: str | None = None
+    require_full_comment_flow: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

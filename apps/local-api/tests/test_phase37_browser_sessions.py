@@ -124,6 +124,10 @@ def test_phase37_browser_snapshot_writes_evidence_and_replay(
         ensure_ascii=False,
     )
     assert result["browser_evidence_id"]
+    assert result["session_state"] == "active"
+    assert result["backend_capabilities"]["dom_snapshot"] is True
+    assert result["verification_evidence"]["present"] is True
+    assert result["browser_execution_summary"]["preflight_outcome"] == "ready"
     assert evidence["browser_session_id"]
     assert evidence["untrusted_external_content"] is True
     assert evidence["redaction_summary"]["cookie_redacted"] is True
@@ -177,6 +181,9 @@ def test_phase37_download_artifact_and_url_safety_blocks(client: TestClient) -> 
     evidence = result["browser_evidence"]
 
     assert downloaded.status_code == 200, downloaded.text
+    assert result["session_state"] == "active"
+    assert result["backend_capabilities"]["file_download"] is True
+    assert result["browser_execution_summary"]["step_outcome_counts"]["completed"] == 1
     assert artifact["artifact_type"] == "download"
     assert "quarantine" in artifact["uri"]
     assert evidence["download_artifact_id"] == artifact["artifact_id"]
@@ -375,4 +382,3 @@ class _TestHandler(BaseHTTPRequestHandler):
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
-

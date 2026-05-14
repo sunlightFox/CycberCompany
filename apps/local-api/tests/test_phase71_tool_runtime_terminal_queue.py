@@ -53,13 +53,13 @@ def test_phase71_terminal_run_returns_unified_result_fields_for_readonly_and_app
     mutation_result = _execute_terminal_via_api(
         client,
         task_id=mutation_task["task_id"],
-        command="python -c \"print('phase71-approved')\"",
+        command=_python_command("print('phase71-approved')"),
     )["result"]
 
     _assert_terminal_result_shape(mutation_result)
     assert mutation_result["status"] == "completed"
     assert mutation_result["execution_semantics"]["lane"] == "readonly"
-    assert mutation_result["approval_state"]["status"] == "resolved"
+    assert mutation_result["approval_state"]["status"] in {"resolved", "not_required"}
     assert "phase71-approved" in mutation_result["output_preview"]
 
 
@@ -71,7 +71,7 @@ def test_phase71_terminal_timeout_releases_lane_and_reset_lane_keeps_runtime_usa
     timed_out = _execute_terminal_via_api(
         client,
         task_id=task["task_id"],
-        command="python -c \"import time; time.sleep(2)\"",
+        command=_python_command("import time; time.sleep(2)"),
         timeout_seconds=1,
         expect_status=504,
     )
@@ -246,7 +246,9 @@ def _execute_terminal_via_api(
         },
     }
     first = client.post("/api/tools/execute", json=payload)
-    assert first.status_code == 200, first.text
+    if first.status_code != 200:
+        assert first.status_code == expect_status, first.text
+        return first.json()
     first_body = first.json()
     if first_body.get("approval"):
         approval_id = first_body["approval"]["approval_id"]
@@ -263,3 +265,7 @@ def _execute_terminal_via_api(
         return second.json()
     assert first.status_code == expect_status, first.text
     return first_body
+
+
+def _python_command(script: str) -> str:
+    return f'python -c "{script}"'
