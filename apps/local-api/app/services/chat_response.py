@@ -163,8 +163,17 @@ class ChatResponseCoordinator:
         )
         memory_recall_summary = dict(structured_payload.get("memory_recall_summary") or {})
         prompt_contract_metadata = self._prompt_contract_metadata(plan)
+        phase111_completion_semantics = dict(
+            structured_payload.get("phase111_completion_semantics") or {}
+        )
+        if (
+            phase111_completion_semantics.get("delivery_status") == "delivered"
+            and not phase111_completion_semantics.get("status")
+        ):
+            phase111_completion_semantics["status"] = "completed_with_evidence"
         visible_status_hint = (
             plan.visible_status_hint
+            or str(phase111_completion_semantics.get("status") or "")
             or str(action_status_semantics.get("status") or "")
             or None
         )
@@ -187,6 +196,7 @@ class ChatResponseCoordinator:
         structured_payload["tool_status_semantics"] = tool_status_semantics
         structured_payload["memory_write_hints"] = memory_write_hints
         structured_payload["memory_recall_summary"] = memory_recall_summary
+        structured_payload["phase111_completion_semantics"] = phase111_completion_semantics
         structured_payload["prompt_contract_metadata"] = prompt_contract_metadata
         structured_payload["response_contract"] = {
             "visible_authority": "response_plan_plain_text",

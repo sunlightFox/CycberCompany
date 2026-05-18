@@ -9,10 +9,12 @@ from core_types import (
     Attachment,
     ChatIngressMetadata,
     ChatInput,
+    ChannelPairingRequest,
     ChatTurnRequest,
     ChatTurnResponse,
     ClientContext,
     ErrorCode,
+    RiskLevel,
     TraceSpanStatus,
     TraceSpanType,
 )
@@ -24,6 +26,9 @@ from app.core.time import new_id, utc_now_iso
 from app.db.repositories.channel_repo import ChannelRepository
 from app.db.repositories.chat_repo import ChatRepository
 from app.schemas.channels import (
+    ChannelPairingDecisionResponse,
+    ChannelPeerRevokeResponse,
+    ChannelPeerSessionResponse,
     FeishuGatewayHealthResponse,
     FeishuGatewayPollResponse,
 )
@@ -97,6 +102,11 @@ class FeishuGatewayStats:
                 "phase88": {
                     "contract_version": PHASE88_CHANNEL_RELIABILITY_VERSION,
                     "taxonomy_counts": summary.get("taxonomy_counts") or {},
+                    "failure_reason_counts": summary.get("failure_reason_counts") or {},
+                    "no_turn_reason_group_counts": summary.get(
+                        "no_turn_reason_group_counts"
+                    )
+                    or {},
                     "delivery_binding_completeness": summary.get(
                         "delivery_binding_completeness"
                     ),
@@ -132,6 +142,10 @@ class FeishuChannelGatewayService:
         self._config = config
         self._last_poll_result: dict[str, Any] = {}
         self._channel_ingress_runtime: Any | None = None
+        self._worker_health_provider: Any | None = None
+        self._async_failure_reason_counts: dict[str, int] = {
+            "delivery_failed_after_turn_completed": 0,
+        }
         self._session_context_runtime = ChannelSessionContext()
         self._session_semantics_runtime = ChannelSessionSemanticsRuntime()
         self._stream_bridge = ChannelStreamBridge()
@@ -139,6 +153,9 @@ class FeishuChannelGatewayService:
 
     def set_channel_ingress_runtime(self, runtime: Any) -> None:
         self._channel_ingress_runtime = runtime
+
+    def set_worker_health_provider(self, provider: Any) -> None:
+        self._worker_health_provider = provider
 
     def set_channel_bridges(
         self,
@@ -176,11 +193,18 @@ class FeishuChannelGatewayService:
 
     def reliability_snapshot(self) -> dict[str, Any]:
         phase88 = dict(self._last_poll_result.get("details", {}).get("phase88") or {})
+        failure_reason_counts = dict(phase88.get("failure_reason_counts") or {})
+        for reason_code, count in self._async_failure_reason_counts.items():
+            failure_reason_counts[reason_code] = int(failure_reason_counts.get(reason_code) or 0) + int(
+                count or 0
+            )
         return {
             "contract_version": PHASE88_CHANNEL_RELIABILITY_VERSION,
             "last_poll_result": redact(self._last_poll_result),
             "taxonomy_counts": phase88.get("taxonomy_counts") or {},
+            "failure_reason_counts": failure_reason_counts,
             "delivery_binding_completeness": phase88.get("delivery_binding_completeness"),
+            "no_turn_reason_group_counts": phase88.get("no_turn_reason_group_counts") or {},
         }
 
     async def poll_once(
@@ -248,6 +272,157 @@ class FeishuChannelGatewayService:
         )
         self._last_poll_result = stats.response().model_dump(mode="json")
         return stats.response()
+
+    async def approve_pairing(
+        self,
+        pairing_request_id: str,
+        *,
+        member_id: str,
+        reason: str | None = None,
+        trace_id: str | None = None,
+    ) -> ChannelPairingDecisionResponse:
+        request = await self._require_pairing_request(pairing_request_id)
+        if request["status"] != "pending":
+            raise AppError(
+                ErrorCode.TASK_STATE_INVALID,
+                "配对请求状态不可审批",
+                status_code=409,
+                details={"status": request["status"]},
+            )
+        account = await self._repo.get_account(request["channel_account_id"])
+        if account is None:
+            raise AppError(ErrorCode.NOT_FOUND, "飞书渠道账号不存在", status_code=404)
+        now = utc_now_iso()
+        session = await self._repo.upsert_peer_session(
+            {
+                "channel_peer_session_id": new_id("chps"),
+                "organization_id": request["organization_id"],
+                "channel_account_id": request["channel_account_id"],
+                "channel_peer_id": request.get("channel_peer_id"),
+                "channel_id": account.get("channel_id"),
+                "provider": request["provider"],
+                "peer_ref_redacted": request["peer_ref_redacted"],
+                "peer_type": request["peer_type"],
+                "conversation_id": None,
+                "session_id": new_id("chsess"),
+                "member_id": member_id,
+                "peer_state_ref": request.get("peer_state_ref"),
+                "pairing_status": "paired",
+                "allow_inbound": True,
+                "allow_outbound": True,
+                "policy_snapshot": _gateway_policy(self._config),
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        await self._repo.update_pairing_request(
+            pairing_request_id,
+            {
+                "status": "approved",
+                "decision_by_member_id": member_id,
+                "decision_reason": str(redact(reason or "approved")),
+                "updated_at": now,
+                "decided_at": now,
+            },
+        )
+        await self._audit.write_event(
+            actor_type="member",
+            actor_id=member_id,
+            action="channel.peer_pairing.approved",
+            object_type="channel_pairing_request",
+            object_id=pairing_request_id,
+            summary="飞书 peer 配对已批准",
+            risk_level=RiskLevel.R2,
+            payload={"peer_ref_redacted": request["peer_ref_redacted"]},
+            trace_id=trace_id,
+        )
+        updated_request = await self._require_pairing_request(pairing_request_id)
+        return ChannelPairingDecisionResponse(
+            pairing_request=ChannelPairingRequest(**updated_request),
+            peer_session=ChannelPeerSessionResponse(**session),
+        )
+
+    async def deny_pairing(
+        self,
+        pairing_request_id: str,
+        *,
+        member_id: str,
+        reason: str | None = None,
+        trace_id: str | None = None,
+    ) -> ChannelPairingDecisionResponse:
+        request = await self._require_pairing_request(pairing_request_id)
+        if request["status"] != "pending":
+            raise AppError(
+                ErrorCode.TASK_STATE_INVALID,
+                "配对请求状态不可拒绝",
+                status_code=409,
+                details={"status": request["status"]},
+            )
+        now = utc_now_iso()
+        await self._repo.update_pairing_request(
+            pairing_request_id,
+            {
+                "status": "denied",
+                "decision_by_member_id": member_id,
+                "decision_reason": str(redact(reason or "denied")),
+                "updated_at": now,
+                "decided_at": now,
+            },
+        )
+        await self._audit.write_event(
+            actor_type="member",
+            actor_id=member_id,
+            action="channel.peer_pairing.denied",
+            object_type="channel_pairing_request",
+            object_id=pairing_request_id,
+            summary="飞书 peer 配对已拒绝",
+            risk_level=RiskLevel.R2,
+            payload={"peer_ref_redacted": request["peer_ref_redacted"]},
+            trace_id=trace_id,
+        )
+        updated_request = await self._require_pairing_request(pairing_request_id)
+        return ChannelPairingDecisionResponse(
+            pairing_request=ChannelPairingRequest(**updated_request),
+            peer_session=None,
+        )
+
+    async def revoke_peer(
+        self,
+        channel_peer_session_id: str,
+        *,
+        member_id: str,
+        reason: str | None = None,
+        trace_id: str | None = None,
+    ) -> ChannelPeerRevokeResponse:
+        session = await self._repo.get_peer_session(channel_peer_session_id)
+        if session is None:
+            raise AppError(ErrorCode.NOT_FOUND, "飞书 peer 会话不存在", status_code=404)
+        now = utc_now_iso()
+        await self._repo.update_peer_session(
+            channel_peer_session_id,
+            {
+                "pairing_status": "revoked",
+                "allow_inbound": False,
+                "allow_outbound": False,
+                "updated_at": now,
+            },
+        )
+        await self._audit.write_event(
+            actor_type="member",
+            actor_id=member_id,
+            action="channel.peer.revoked",
+            object_type="channel_peer_session",
+            object_id=channel_peer_session_id,
+            summary="飞书 peer 授权已撤销",
+            risk_level=RiskLevel.R2,
+            payload={"reason": str(redact(reason or "revoked"))},
+            trace_id=trace_id,
+        )
+        updated = await self._repo.get_peer_session(channel_peer_session_id) or session
+        return ChannelPeerRevokeResponse(
+            peer_session=ChannelPeerSessionResponse(**updated),
+            status="revoked",
+        )
 
     async def deliver_due(
         self,
@@ -530,6 +705,20 @@ class FeishuChannelGatewayService:
                 "untrusted_external_content": status != "received",
                 "provider_received_at": normalized["received_at"],
                 "message_id_redacted": _hash_value(normalized["message_id"]) if normalized["message_id"] else None,
+                "routing": {
+                    "delivery_mode": semantics.get("delivery_mode"),
+                    "channel_thread_id": semantics.get("channel_thread_id"),
+                    "dedupe_key": semantics.get("dedupe_key"),
+                    "session_peer_ref_redacted": semantics.get(
+                        "session_peer_ref_redacted"
+                    ),
+                    "conversation_binding_mode": semantics.get(
+                        "conversation_binding_mode"
+                    ),
+                    "cross_channel_reuse_allowed": bool(
+                        semantics.get("cross_channel_reuse_allowed", False)
+                    ),
+                },
             },
             "status": status,
             "trace_id": trace_id,
@@ -564,7 +753,39 @@ class FeishuChannelGatewayService:
             }
         )
         stats.processed_events += 1
+        reliability_records = stats.details.setdefault("reliability_records", [])
         if status != "received" or session is None:
+            reason_code = None
+            notes: list[str] = []
+            if status == "pairing_required":
+                reason_code = "pairing_rejected_or_missing"
+                notes.append("peer_session_not_paired_or_inbound_not_allowed")
+            elif status == "rejected_or_ignored":
+                reason_code = "ingress_policy_blocked"
+                notes.append("gateway_policy_or_peer_state_rejected_inbound")
+            if reason_code is not None:
+                reliability_records.append(
+                    no_turn_payload(
+                        correlation=build_correlation(
+                            inbound_event_id=channel_event_id,
+                            provider="feishu",
+                            channel_account_id=account.get("channel_account_id"),
+                            channel_message_id=normalized["provider_event_id"],
+                            channel_peer_id_redacted=peer_hash,
+                            channel_peer_session_id=(
+                                session.get("channel_peer_session_id") if session else None
+                            ),
+                            conversation_id=session.get("conversation_id") if session else None,
+                        ),
+                        reason_code=reason_code,
+                        turn_formation={
+                            "status": status,
+                            "turn_created": False,
+                            "event_status": status,
+                        },
+                        notes=notes,
+                    )
+                )
             return
         conflicting_session = None
         if session.get("conversation_id"):
@@ -579,7 +800,7 @@ class FeishuChannelGatewayService:
             and conflicting_session.get("peer_ref_redacted") != session.get("peer_ref_redacted")
         ):
             stats.failures += 1
-            stats.details.setdefault("reliability_records", []).append(
+            reliability_records.append(
                 wrong_reuse_payload(
                     correlation=build_correlation(
                         inbound_event_id=channel_event_id,
@@ -603,9 +824,9 @@ class FeishuChannelGatewayService:
                 stats=stats,
                 trace_id=trace_id,
             )
-        except Exception:
+        except Exception as exc:
             stats.failures += 1
-            stats.details.setdefault("reliability_records", []).append(
+            reliability_records.append(
                 no_turn_payload(
                     correlation=build_correlation(
                         inbound_event_id=channel_event_id,
@@ -616,7 +837,7 @@ class FeishuChannelGatewayService:
                         channel_peer_session_id=session.get("channel_peer_session_id"),
                         conversation_id=session.get("conversation_id"),
                     ),
-                    reason_code="channel_ingress_submit_failed",
+                    reason_code=self._classify_ingress_submit_failure(exc, session=session),
                 )
             )
             return
@@ -624,7 +845,7 @@ class FeishuChannelGatewayService:
             turn_id=response.turn_id,
             channel_peer_session_id=session["channel_peer_session_id"],
         )
-        stats.details.setdefault("reliability_records", []).append(
+        reliability_records.append(
             success_payload(
                 correlation=build_correlation(
                     inbound_event_id=channel_event_id,
@@ -859,6 +1080,8 @@ class FeishuChannelGatewayService:
                 "sent_at": utc_now_iso() if status == "sent" else None,
             },
         )
+        if status != "sent":
+            self._async_failure_reason_counts["delivery_failed_after_turn_completed"] += 1
         return status == "sent"
 
     async def _create_pairing_request(
@@ -900,6 +1123,12 @@ class FeishuChannelGatewayService:
             }
         )
         stats.created_pairing_requests += 1
+
+    async def _require_pairing_request(self, pairing_request_id: str) -> dict[str, Any]:
+        row = await self._repo.get_pairing_request(pairing_request_id)
+        if row is None:
+            raise AppError(ErrorCode.NOT_FOUND, "配对请求不存在", status_code=404)
+        return row
 
     async def _auto_pair_session(
         self,
@@ -988,6 +1217,35 @@ class FeishuChannelGatewayService:
                 status_code=500,
             )
         return self._channel_ingress_runtime
+
+    def _current_worker_health(self) -> dict[str, Any]:
+        if callable(self._worker_health_provider):
+            try:
+                payload = self._worker_health_provider()
+            except Exception:
+                return {}
+            return payload if isinstance(payload, dict) else {}
+        return {}
+
+    def _classify_ingress_submit_failure(
+        self,
+        exc: Exception,
+        *,
+        session: dict[str, Any],
+    ) -> str:
+        worker = _feishu_worker_health_payload(self._current_worker_health())
+        automation_state = str(worker.get("automation_state") or "unknown")
+        if automation_state in {"disabled", "not_started", "failed", "stopped"}:
+            return "worker_not_running_or_disabled"
+        if (
+            isinstance(exc, AppError)
+            and exc.code == ErrorCode.CHAT_RUNTIME_FAILED.value
+            and "ingress runtime" in str(exc)
+        ):
+            return "turn_created_but_runtime_missing"
+        if not session.get("conversation_id"):
+            return "conversation_bootstrap_failed"
+        return "channel_ingress_submit_failed"
 
     def _load_provider_state(self, provider_state_ref: str | None) -> dict[str, Any] | None:
         raw = self._secrets.get_secret(provider_state_ref)
@@ -1156,6 +1414,48 @@ def _feishu_operation(raw: dict[str, Any]) -> str | None:
     if "reaction" in value or "emoji" in value:
         return "reaction"
     return None
+
+
+def _feishu_worker_health_payload(worker_health: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(worker_health, dict):
+        return {
+            "automation_state": "unknown",
+            "reason": "worker_health_unavailable",
+        }
+    workers = worker_health.get("workers")
+    worker = workers.get("feishu_inbound_worker") if isinstance(workers, dict) else {}
+    enabled = bool(worker_health.get("enabled"))
+    running = bool(worker_health.get("running"))
+    last_status = str(worker.get("last_status") or "unknown")
+    reason: str | None = None
+    if running:
+        automation_state = "running"
+    elif not enabled:
+        automation_state = "disabled"
+        reason = "background_workers_disabled"
+    elif last_status == "healthy":
+        automation_state = "manual_tick_healthy"
+    elif last_status == "never_run":
+        automation_state = "not_started"
+        reason = "feishu_inbound_worker_never_run"
+    elif last_status == "failed":
+        automation_state = "failed"
+        reason = worker.get("last_error_code") or "feishu_inbound_worker_failed"
+    else:
+        automation_state = "stopped"
+        reason = str(worker_health.get("loop_status") or last_status)
+    return {
+        "enabled": enabled,
+        "running": running,
+        "loop_status": worker_health.get("loop_status"),
+        "automation_state": automation_state,
+        "reason": reason,
+        "feishu_inbound_worker": {
+            "last_status": last_status,
+            "last_error_code": worker.get("last_error_code"),
+            "consecutive_failure_count": worker.get("consecutive_failure_count"),
+        },
+    }
 
 
 def _gateway_policy(config: ChannelProviderSection) -> dict[str, Any]:

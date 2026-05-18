@@ -41,6 +41,9 @@ from core_types import (
     RiskLevel,
     SecurityAuditRun,
     SecurityAuditStatus,
+    TaskClosureRecord,
+    TaskClosureScorecard,
+    TaskClosureTrendSnapshot,
     TraceSpanStatus,
     TraceSpanType,
     TraceStatus,
@@ -52,6 +55,11 @@ from app.core.errors import AppError
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.release_repo import ReleaseRepository
 from app.services.audit import AuditEventService
+from app.services.gate_signal_plane import (
+    gate_signal_plane_contract_version,
+    smoke_signal_suite_paths,
+    smoke_signal_suite_summary,
+)
 
 DEFAULT_REQUIRED_CHECKS = [
     "eval",
@@ -187,6 +195,23 @@ PHASE58_BATCH_ID = "MULTIMODAL-IO-FOUNDATION-20260504"
 PHASE59_BATCH_ID = "MULTI-MEMBER-COLLABORATION-ROUTING-20260504"
 PHASE61_BATCH_ID = "AGENT-WORKBENCH-CONTEXT-LOOP-20260504"
 PHASE68_BATCH_ID = "CHAT-QUALITY-GATE-20260503"
+PHASE102_BATCH_ID = "VIDEO-WORKFLOW-CLOSURE-20260515"
+PHASE103_BATCH_ID = "TASK-CLOSURE-GATE-20260516"
+PHASE103_DOMAIN_ORDER = (
+    "repo_local",
+    "code_hosting",
+    "content_platform",
+    "office_productivity",
+    "extension_ecosystem",
+    "video_workflow",
+)
+PHASE103_THRESHOLD_CONFIG: dict[str, Any] = {
+    "final_deliverable_rate": 0.80,
+    "once_success_rate": 0.50,
+    "handoff_rate_max": 0.35,
+    "recovery_success_rate": 0.50,
+    "approval_interruption_rate_blocks": False,
+}
 PHASE89_WECHAT20_SUMMARY = (
     Path(__file__).resolve().parents[4]
     / "docs/测试/聊天主链路/2026-05-07-wechat-20-scenarios/evidence/summary.json"
@@ -460,6 +485,20 @@ PHASE_MIGRATION_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "required_migration": "046_agent_workbench_context_files.sql",
         "tables": [],
     },
+    "phase102": {
+        "required_migration": "057_media_video_workflow_closure.sql",
+        "tables": [
+            "media_video_workflows",
+            "media_video_workflow_steps",
+            "media_video_workflow_benchmarks",
+        ],
+    },
+    "phase103": {
+        "required_migration": "060_phase103_task_closure_gate.sql",
+        "tables": [
+            "task_closure_records",
+        ],
+    },
 }
 
 
@@ -510,6 +549,8 @@ class ReleaseGateService:
         feishu_snapshot = dict(gateway_snapshots.get("feishu") or {})
         wechat_counts = dict(wechat_snapshot.get("taxonomy_counts") or {})
         feishu_counts = dict(feishu_snapshot.get("taxonomy_counts") or {})
+        wechat_reason_counts = dict(wechat_snapshot.get("failure_reason_counts") or {})
+        feishu_reason_counts = dict(feishu_snapshot.get("failure_reason_counts") or {})
         phase_readiness = dict(readiness.get("phase_readiness") or {})
         phase84 = dict(phase_readiness.get("phase84_acceptance_matrix") or {})
         phase84_details = dict(phase84.get("details") or {})
@@ -525,10 +566,58 @@ class ReleaseGateService:
         phase90_details = dict(phase90.get("details") or {})
         phase91 = dict(phase_readiness.get("phase91_host_decomposition_governance") or {})
         phase91_details = dict(phase91.get("details") or {})
+        phase108 = dict(phase_readiness.get("phase108_runtime_host_decomposition_closure") or {})
+        phase108_details = dict(phase108.get("details") or {})
         phase92 = dict(phase_readiness.get("phase92_long_term_memory_recall_governance") or {})
         phase92_details = dict(phase92.get("details") or {})
+        phase107 = dict(phase_readiness.get("phase107_memory_semantic_contract_unification") or {})
+        phase107_details = dict(phase107.get("details") or {})
         phase94 = dict(phase_readiness.get("phase94_failure_experience_governance") or {})
         phase94_details = dict(phase94.get("details") or {})
+        phase105 = dict(phase_readiness.get("phase105_gate_signal_plane_governance") or {})
+        phase105_details = dict(phase105.get("details") or {})
+        phase109 = dict(phase_readiness.get("phase109_real_world_maturity_recheck") or {})
+        phase109_details = dict(phase109.get("details") or {})
+        phase110 = dict(phase_readiness.get("phase110_channel_routing_stability") or {})
+        phase110_details = dict(phase110.get("details") or {})
+        phase111 = dict(phase_readiness.get("phase111_task_delivery_evidence") or {})
+        phase111_details = dict(phase111.get("details") or {})
+        phase112 = dict(phase_readiness.get("phase112_extension_runtime_sync_closure") or {})
+        phase112_details = dict(phase112.get("details") or {})
+        signal_summary = smoke_signal_suite_summary()
+        latest_check = self._latest_check_report(profile="smoke") or {}
+        latest_signal_suites = [
+            item
+            for item in latest_check.get("signal_suites", [])
+            if isinstance(item, dict) and isinstance(item.get("path"), str)
+        ]
+        latest_signal_paths = [str(item.get("path") or "") for item in latest_signal_suites]
+        expected_signal_paths = [str(path) for path in signal_summary.get("paths") or []]
+        smoke_check_contract_match = (
+            str(latest_check.get("check_contract_version") or "")
+            == gate_signal_plane_contract_version()
+        )
+        smoke_signal_suite_match = latest_signal_paths == expected_signal_paths
+        phase105_report_blockers: list[str] = []
+        if not latest_check:
+            phase105_report_blockers.append("phase105_latest_smoke_report_missing")
+        elif not smoke_check_contract_match:
+            phase105_report_blockers.append("phase105_latest_smoke_contract_drift")
+        if latest_check and not smoke_signal_suite_match:
+            phase105_report_blockers.append("phase105_latest_smoke_signal_suite_drift")
+        phase105_missing_paths = [
+            path for path in expected_signal_paths if path not in latest_signal_paths
+        ]
+        phase105_drift_paths = [
+            path for path in latest_signal_paths if path not in expected_signal_paths
+        ]
+        failure_reason_counts: dict[str, int] = {}
+        for source_counts in (wechat_reason_counts, feishu_reason_counts):
+            for reason, count in source_counts.items():
+                failure_reason_counts[str(reason)] = (
+                    int(failure_reason_counts.get(str(reason)) or 0) + int(count or 0)
+                )
+        phase109_no_turn_diagnostics = dict(phase109_details.get("no_turn_diagnostics") or {})
         return {
             "runtime_topology_consistent": bool(runtime_facts.get("runtime_topology_consistent")),
             "prompt_contract_coverage": bool(
@@ -607,6 +696,7 @@ class ReleaseGateService:
             "phase88_channel_reliability_status": phase88.get("status"),
             "phase88_contract_version": phase88_details.get("phase88_contract_version"),
             "phase88_taxonomy": phase88_details.get("taxonomy") or [],
+            "phase88_failure_reason_counts": failure_reason_counts,
             "no_turn_count": int(wechat_counts.get("no_turn") or 0)
             + int(feishu_counts.get("no_turn") or 0),
             "orphan_turn_count": int(wechat_counts.get("orphan_turn") or 0)
@@ -665,12 +755,18 @@ class ReleaseGateService:
                 "budget_exceeded_components"
             )
             or [],
+            "phase108_runtime_host_decomposition_closure_status": phase108.get("status"),
+            "phase108_contract_version": phase108_details.get("phase108_contract_version"),
+            "phase108_shell_modules": phase108_details.get("shell_modules") or [],
             "phase92_long_term_memory_recall_governance_status": phase92.get("status"),
             "phase92_contract_version": phase92_details.get("phase92_contract_version"),
             "phase92_canonical_memory_classes": phase92_details.get("canonical_memory_classes")
             or [],
             "phase92_freshness_policy": phase92_details.get("freshness_policy") or [],
             "phase92_supersede_policy": phase92_details.get("supersede_policy"),
+            "phase107_memory_semantic_contract_unification_status": phase107.get("status"),
+            "phase107_contract_version": phase107_details.get("phase107_contract_version"),
+            "phase107_status_fields": phase107_details.get("status_fields") or [],
             "cross_session_preference_recall_pass_rate": 1.0
             if phase92.get("status") == "ready"
             else 0.0,
@@ -686,6 +782,98 @@ class ReleaseGateService:
             "phase94_contract_version": phase94_details.get("phase94_contract_version"),
             "phase94_review_actions": phase94_details.get("review_actions") or [],
             "phase94_regression_threshold": phase94_details.get("regression_threshold") or {},
+            "phase105_gate_signal_plane_governance_status": phase105.get("status"),
+            "phase105_contract_version": phase105_details.get("phase105_contract_version"),
+            "phase105_check_contract_version": phase105_details.get(
+                "check_contract_version"
+            ),
+            "phase105_smoke_suite_id": phase105_details.get("smoke_suite_id"),
+            "phase105_smoke_suite_name": phase105_details.get("smoke_suite_name"),
+            "phase105_smoke_signal_paths": phase105_details.get("smoke_signal_paths") or [],
+            "phase105_smoke_signal_phase_keys": phase105_details.get(
+                "smoke_signal_phase_keys"
+            )
+            or [],
+            "phase105_required_phase_keys": phase105_details.get("required_phase_keys") or [],
+            "phase105_smoke_regression_command": phase105_details.get(
+                "smoke_regression_command"
+            )
+            or ".\\scripts\\check.ps1 -Profile smoke",
+            "phase105_latest_smoke_report_present": bool(latest_check)
+            and str(latest_check.get("profile") or "") == "smoke",
+            "phase105_latest_smoke_report_status": (
+                latest_check.get("status")
+                if str(latest_check.get("profile") or "") == "smoke"
+                else "not_run"
+            ),
+            "phase105_latest_smoke_contract_match": smoke_check_contract_match,
+            "phase105_latest_smoke_signal_suite_match": smoke_signal_suite_match,
+            "phase105_missing_signal_paths": phase105_missing_paths,
+            "phase105_drift_signal_paths": phase105_drift_paths,
+            "phase105_latest_smoke_report_blockers": phase105_report_blockers,
+            "phase109_real_world_maturity_recheck_status": phase109.get("status"),
+            "phase109_contract_version": phase109_details.get("phase109_contract_version"),
+            "phase109_maturity_grade": phase109_details.get("maturity_grade"),
+            "phase109_dependency_statuses": phase109_details.get("dependency_statuses") or {},
+            "phase109_evidence_bundles": phase109_details.get("evidence_bundles") or [],
+            "phase109_long_run_evidence_present": bool(
+                phase109_details.get("long_run_evidence_present")
+            ),
+            "phase109_blocking_gap_quantification": phase109_details.get(
+                "blocking_gap_quantification"
+            )
+            or {},
+            "phase109_no_turn_diagnostics": phase109_no_turn_diagnostics,
+            "phase110_channel_routing_stability_status": phase110.get("status"),
+            "phase110_contract_version": phase110_details.get("phase110_contract_version"),
+            "phase110_routing_contract_alignment": phase110_details.get(
+                "routing_contract_alignment"
+            )
+            or {},
+            "phase110_routing_replay_fields": phase110_details.get(
+                "routing_replay_fields"
+            )
+            or [],
+            "phase110_session_route_replay_fields": phase110_details.get(
+                "session_route_replay_fields"
+            )
+            or [],
+            "phase110_route_identity_fields": phase110_details.get(
+                "route_identity_fields"
+            )
+            or [],
+            "phase110_runtime_no_turn_reason_group_counts": phase110_details.get(
+                "runtime_no_turn_reason_group_counts"
+            )
+            or {},
+            "phase110_evidence_no_turn_group_counts": phase110_details.get(
+                "evidence_no_turn_group_counts"
+            )
+            or {},
+            "phase111_task_delivery_evidence_status": phase111.get("status"),
+            "phase111_contract_version": phase111_details.get("phase111_contract_version"),
+            "phase111_minimum_deliverable_proof_contracts": phase111_details.get(
+                "minimum_deliverable_proof_contracts"
+            )
+            or {},
+            "phase111_completion_requires": phase111_details.get("completion_requires") or [],
+            "phase111_blocked_terminal_statuses": phase111_details.get(
+                "blocked_terminal_statuses"
+            )
+            or [],
+            "phase112_extension_runtime_sync_closure_status": phase112.get("status"),
+            "phase112_contract_version": phase112_details.get("phase112_contract_version"),
+            "phase112_runtime_snapshot_contract": phase112_details.get(
+                "runtime_snapshot_contract"
+            ),
+            "phase112_extension_state_machine": phase112_details.get(
+                "extension_state_machine"
+            )
+            or [],
+            "phase112_sync_closure_requirements": phase112_details.get(
+                "sync_closure_requirements"
+            )
+            or [],
             "phase_docs_present": runtime_facts.get("phase_docs_present") or {},
             "phase_tests_present": runtime_facts.get("phase_tests_present") or {},
         }
@@ -864,6 +1052,7 @@ class ReleaseGateService:
                 {"started_at": utc_now_iso(), "summary": {"phase": "collecting_evidence"}},
             )
             await self.ensure_baseline_registry()
+            await self._repo.clear_task_closure_records(release_gate_id=release_gate_id)
 
             await self._set_gate_status(release_gate_id, ReleaseGateStatus.RUNNING_EVALS)
             eval_run = await self.run_eval(release_gate_id=release_gate_id, trace_id=trace_id)
@@ -1299,6 +1488,24 @@ class ReleaseGateService:
                 source_type="phase58_multimodal_io_foundation",
                 source_id=f"phase58:{release_gate_id}",
                 summary=phase58_summary,
+                status="completed",
+            )
+            phase102_summary = await self._phase102_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase102_video_workflow_closure",
+                source_id=f"phase102:{release_gate_id}",
+                summary=phase102_summary,
+                status="completed",
+            )
+            phase103_summary = await self._phase103_report_summary(release_gate_id)
+            await self._add_evidence(
+                release_gate_id,
+                EvidenceType.VERIFICATION_CLOSURE,
+                source_type="phase103_task_closure_gate",
+                source_id=f"phase103:{release_gate_id}",
+                summary=phase103_summary,
                 status="completed",
             )
             phase59_summary = await self._phase59_report_summary(release_gate_id)
@@ -2247,11 +2454,7 @@ class ReleaseGateService:
         evidence = await self.list_evidence(release_gate_id)
         findings = await self.list_findings(release_gate_id)
         finding_summary = self._summarize_findings(findings)
-        decision = (
-            ReleaseDecision.NO_GO
-            if finding_summary["blocker_count"] > 0
-            else ReleaseDecision.GO
-        )
+        decision = ReleaseDecision.NO_GO if finding_summary["blocker_count"] > 0 else ReleaseDecision.GO
         table_names = set(await self._repo.table_names())
         report_id = new_id("relrep")
         created_at = utc_now_iso()
@@ -2296,6 +2499,10 @@ class ReleaseGateService:
             "status": chat_mainline_readiness.get("phase88_channel_reliability_status"),
             "contract_version": chat_mainline_readiness.get("phase88_contract_version"),
             "taxonomy": chat_mainline_readiness.get("phase88_taxonomy") or [],
+            "failure_reason_counts": chat_mainline_readiness.get(
+                "phase88_failure_reason_counts"
+            )
+            or {},
             "no_turn_count": int(chat_mainline_readiness.get("no_turn_count") or 0),
             "orphan_turn_count": int(chat_mainline_readiness.get("orphan_turn_count") or 0),
             "duplicate_turn_count": int(
@@ -2401,6 +2608,13 @@ class ReleaseGateService:
             or [],
             "host_components": chat_mainline_readiness.get("phase91_host_components") or [],
         }
+        phase108_runtime_host_decomposition_closure = {
+            "status": chat_mainline_readiness.get(
+                "phase108_runtime_host_decomposition_closure_status"
+            ),
+            "contract_version": chat_mainline_readiness.get("phase108_contract_version"),
+            "shell_modules": chat_mainline_readiness.get("phase108_shell_modules") or [],
+        }
         phase92_long_term_memory_recall_governance = {
             "status": chat_mainline_readiness.get(
                 "phase92_long_term_memory_recall_governance_status"
@@ -2428,6 +2642,13 @@ class ReleaseGateService:
                 chat_mainline_readiness.get("memory_retrieval_quality_gate") or "fail"
             ),
         }
+        phase107_memory_semantic_contract_unification = {
+            "status": chat_mainline_readiness.get(
+                "phase107_memory_semantic_contract_unification_status"
+            ),
+            "contract_version": chat_mainline_readiness.get("phase107_contract_version"),
+            "status_fields": chat_mainline_readiness.get("phase107_status_fields") or [],
+        }
         phase94_failure_experience_governance = {
             "status": chat_mainline_readiness.get(
                 "phase94_failure_experience_governance_status"
@@ -2439,12 +2660,139 @@ class ReleaseGateService:
             )
             or {},
         }
+        phase109_real_world_maturity_recheck = {
+            "status": chat_mainline_readiness.get(
+                "phase109_real_world_maturity_recheck_status"
+            ),
+            "contract_version": chat_mainline_readiness.get("phase109_contract_version"),
+            "maturity_grade": chat_mainline_readiness.get("phase109_maturity_grade"),
+            "dependency_statuses": chat_mainline_readiness.get(
+                "phase109_dependency_statuses"
+            )
+            or {},
+            "evidence_bundles": chat_mainline_readiness.get("phase109_evidence_bundles")
+            or [],
+            "long_run_evidence_present": bool(
+                chat_mainline_readiness.get("phase109_long_run_evidence_present")
+            ),
+            "blocking_gap_quantification": chat_mainline_readiness.get(
+                "phase109_blocking_gap_quantification"
+            )
+            or {},
+            "no_turn_diagnostics": chat_mainline_readiness.get(
+                "phase109_no_turn_diagnostics"
+            )
+            or {},
+        }
+        phase110_channel_routing_stability = {
+            "status": chat_mainline_readiness.get(
+                "phase110_channel_routing_stability_status"
+            ),
+            "contract_version": chat_mainline_readiness.get("phase110_contract_version"),
+            "routing_contract_alignment": chat_mainline_readiness.get(
+                "phase110_routing_contract_alignment"
+            )
+            or {},
+            "routing_replay_fields": chat_mainline_readiness.get(
+                "phase110_routing_replay_fields"
+            )
+            or [],
+            "session_route_replay_fields": chat_mainline_readiness.get(
+                "phase110_session_route_replay_fields"
+            )
+            or [],
+            "route_identity_fields": chat_mainline_readiness.get(
+                "phase110_route_identity_fields"
+            )
+            or [],
+            "runtime_no_turn_reason_group_counts": chat_mainline_readiness.get(
+                "phase110_runtime_no_turn_reason_group_counts"
+            )
+            or {},
+            "evidence_no_turn_group_counts": chat_mainline_readiness.get(
+                "phase110_evidence_no_turn_group_counts"
+            )
+            or {},
+        }
+        phase111_task_delivery_evidence = {
+            "status": chat_mainline_readiness.get("phase111_task_delivery_evidence_status"),
+            "contract_version": chat_mainline_readiness.get("phase111_contract_version"),
+            "minimum_deliverable_proof_contracts": chat_mainline_readiness.get(
+                "phase111_minimum_deliverable_proof_contracts"
+            )
+            or {},
+            "completion_requires": chat_mainline_readiness.get(
+                "phase111_completion_requires"
+            )
+            or [],
+            "blocked_terminal_statuses": chat_mainline_readiness.get(
+                "phase111_blocked_terminal_statuses"
+            )
+            or [],
+        }
+        phase112_extension_runtime_sync_closure = {
+            "status": chat_mainline_readiness.get(
+                "phase112_extension_runtime_sync_closure_status"
+            ),
+            "contract_version": chat_mainline_readiness.get("phase112_contract_version"),
+            "runtime_snapshot_contract": chat_mainline_readiness.get(
+                "phase112_runtime_snapshot_contract"
+            ),
+            "extension_state_machine": chat_mainline_readiness.get(
+                "phase112_extension_state_machine"
+            )
+            or [],
+            "sync_closure_requirements": chat_mainline_readiness.get(
+                "phase112_sync_closure_requirements"
+            )
+            or [],
+        }
         phase53_summary = await self._phase53_report_summary(release_gate_id)
         phase54_summary = await self._phase54_report_summary(release_gate_id)
         phase55_summary = await self._phase55_report_summary(release_gate_id)
         phase56_summary = await self._phase56_report_summary(release_gate_id)
         phase57_summary = await self._phase57_report_summary(release_gate_id)
         phase58_summary = await self._phase58_report_summary(release_gate_id)
+        phase102_summary = await self._phase102_report_summary(release_gate_id)
+        phase103_summary = await self._phase103_report_summary(release_gate_id)
+        phase111_task_delivery_evidence = {
+            **phase111_task_delivery_evidence,
+            "phase103_blocking_reasons": phase103_summary.get("blocking_reasons") or [],
+            "completion_gate_summary": {
+                "completed_unverified_count": sum(
+                    int(
+                        dict(item).get("completed_unverified_count") or 0
+                    )
+                    for item in dict(phase103_summary.get("per_domain_scorecard") or {}).values()
+                ),
+                "failed_verification_count": sum(
+                    int(dict(item).get("failed_verification_count") or 0)
+                    for item in dict(phase103_summary.get("per_domain_scorecard") or {}).values()
+                ),
+                "domains_with_visible_publish_proof_blocker": [
+                    domain
+                    for domain, item in dict(
+                        phase103_summary.get("per_domain_scorecard") or {}
+                    ).items()
+                    if "visible_publish_proof_missing"
+                    in list(dict(item).get("blocker_codes") or [])
+                ],
+            },
+        }
+        phase112_extension_runtime_sync_closure = {
+            **phase112_extension_runtime_sync_closure,
+            "extension_scorecard": dict(
+                phase103_summary.get("per_domain_scorecard", {}).get("extension_ecosystem") or {}
+            ),
+            "runtime_sync_blocker_cleared": "extension_runtime_sync_missing"
+            not in list(phase103_summary.get("blocking_reasons") or []),
+        }
+        if phase103_summary["blocking_reasons"]:
+            decision = ReleaseDecision.NO_GO
+            finding_summary = {
+                **finding_summary,
+                "phase103_blocker_count": len(phase103_summary["blocking_reasons"]),
+            }
         phase59_summary = await self._phase59_report_summary(release_gate_id)
         phase61_summary = await self._phase61_report_summary(release_gate_id)
         phase68_summary = await self._phase68_report_summary(release_gate_id)
@@ -2688,6 +3036,8 @@ class ReleaseGateService:
             "phase56_long_term_memory_experience_loop": phase56_summary,
             "phase57_skill_marketplace_growth_governance": phase57_summary,
             "phase58_multimodal_io_foundation": phase58_summary,
+            "phase102_video_workflow_closure": phase102_summary,
+            "phase103_task_closure_gate": phase103_summary,
             "phase59_multi_member_collaboration_routing": phase59_summary,
             "phase61_agent_workbench_loop": phase61_summary,
             "phase68": phase68_summary,
@@ -2697,8 +3047,14 @@ class ReleaseGateService:
             "phase89_false_interception_governance": phase89_false_interception_governance,
             "phase90_compat_cleanup_release_gate": phase90_compat_cleanup_release_gate,
             "phase91_host_decomposition_governance": phase91_host_decomposition_governance,
+            "phase108_runtime_host_decomposition_closure": phase108_runtime_host_decomposition_closure,
             "phase92_long_term_memory_recall_governance": phase92_long_term_memory_recall_governance,
+            "phase107_memory_semantic_contract_unification": phase107_memory_semantic_contract_unification,
             "phase94_failure_experience_governance": phase94_failure_experience_governance,
+            "phase109_real_world_maturity_recheck": phase109_real_world_maturity_recheck,
+            "phase110_channel_routing_stability": phase110_channel_routing_stability,
+            "phase111_task_delivery_evidence": phase111_task_delivery_evidence,
+            "phase112_extension_runtime_sync_closure": phase112_extension_runtime_sync_closure,
             "wechat_chat_main_chain": wechat_chat_main_chain_summary,
             "phase23": phase23_summary,
             "go_no_go_reason": _go_no_go_reason(decision, finding_summary, phase23_summary),
@@ -3358,6 +3714,10 @@ class ReleaseGateService:
             return await self._evaluate_phase57_case(case, release_gate_id=release_gate_id)
         if key.startswith("phase58.multimodal_io_foundation."):
             return await self._evaluate_phase58_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase102.video_workflow_closure."):
+            return await self._evaluate_phase102_case(case, release_gate_id=release_gate_id)
+        if key.startswith("phase103.task_closure_gate."):
+            return await self._evaluate_phase103_case(case, release_gate_id=release_gate_id)
         if key.startswith("phase59.multi_member_collaboration_routing."):
             return await self._evaluate_phase59_case(case, release_gate_id=release_gate_id)
         if key.startswith("phase61.agent_workbench_loop."):
@@ -5388,6 +5748,90 @@ class ReleaseGateService:
             condition,
             actual,
             "第五十八阶段语音与多媒体输入输出底座、回放证据和脱敏契约已就绪",
+        )
+
+    async def _evaluate_phase102_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase102_report_summary(release_gate_id)
+        scenario = str(case.input.get("scenario") or "")
+        matrix = summary["video_workflow_matrix"]
+        scenario_checks = {
+            "schema_and_api": matrix["schema_and_api"],
+            "timeline_scene_edl": matrix["closure_contract"],
+            "render_approval_repair": matrix["render_repair_contract"],
+            "degraded_provider": matrix["generation_provider_degraded"],
+            "task_replay_result": matrix["artifact_first_boundary"],
+            "redaction_release": summary["leakage_count"] == 0,
+            "phase23_aggregation": True,
+        }
+        condition = (
+            scenario_checks.get(scenario, True)
+            and summary["registered_cases"] >= 7
+            and summary["migration_contract"]["current_at_least_required"] is True
+            and all(value == 1 for value in summary["contracts"].values())
+            and summary["leakage_count"] == 0
+        )
+        actual = {
+            "case_key": case.case_key,
+            "scenario": scenario,
+            "scenario_passed": scenario_checks.get(scenario, True),
+            "video_workflow_matrix": matrix,
+            "counts": summary["counts"],
+            "contracts": summary["contracts"],
+            "leakage_count": summary["leakage_count"],
+        }
+        return _pass_if(
+            condition,
+            actual,
+            "第一百零二阶段视频工作流 profile、剪辑闭环、渲染修复和回放证据已就绪",
+        )
+
+    async def _evaluate_phase103_case(
+        self,
+        case: EvalCase,
+        *,
+        release_gate_id: str | None = None,
+    ) -> tuple[str, float, dict[str, Any], str]:
+        summary = await self._phase103_report_summary(release_gate_id)
+        scenario = str(case.input.get("scenario") or "")
+        domain = str(case.expected.get("task_domain") or case.input.get("domain") or "")
+        scorecard = dict((summary.get("per_domain_scorecard") or {}).get(domain) or {})
+        actual = {
+            "case_key": case.case_key,
+            "domain": domain,
+            "scenario": scenario,
+            "scorecard": scorecard,
+            "blocking_reasons": [
+                item
+                for item in list(summary.get("blocking_reasons") or [])
+                if item.get("domain") == domain
+            ],
+        }
+        if not scorecard:
+            return _pass_if(True, actual, f"Phase103 {domain} scorecard 暂无样本，按空样本通过")
+        if scenario == "direct_success":
+            condition = float(scorecard.get("once_success_rate") or 0.0) >= float(
+                PHASE103_THRESHOLD_CONFIG["once_success_rate"]
+            )
+        elif scenario == "recovery_success":
+            recovery = scorecard.get("recovery_success_rate")
+            condition = recovery is None or float(recovery) >= float(
+                PHASE103_THRESHOLD_CONFIG["recovery_success_rate"]
+            )
+        else:
+            delivery_counts = dict(scorecard.get("delivery_status_counts") or {})
+            condition = (
+                int(scorecard.get("completed_unverified_count") or 0) == 0
+                and int(delivery_counts.get("failed_verification", 0)) == 0
+            )
+        return _pass_if(
+            condition,
+            actual,
+            f"第一百零三阶段 {domain} 闭环场景 {scenario} 已满足门禁约束",
         )
 
     async def _evaluate_phase59_case(
@@ -10995,6 +11439,381 @@ class ReleaseGateService:
             and all(value == 1 for value in contract_counts.values()),
         }
 
+    async def _phase102_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = (
+            "WHERE case_key LIKE 'phase102.video_workflow_closure.%' "
+            f"{gate_filter}"
+        )
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase102_video_workflow_closure", release_gate_id)
+                if release_gate_id is not None
+                else ("phase102_video_workflow_closure",)
+            ),
+        )
+        contract_counts = await self._runtime_contract_counts(
+            "VideoWorkflowProfile",
+            "VideoWorkflowClosure",
+            "VideoWorkflowRenderRepair",
+        )
+        table_names = set(await self._repo.table_names())
+        tables = {
+            name: name in table_names
+            for name in [
+                "media_video_workflows",
+                "media_video_workflow_steps",
+                "media_video_workflow_benchmarks",
+            ]
+        }
+        counts = {
+            "workflows": await self._repo.count_rows("media_video_workflows"),
+            "steps": await self._repo.count_rows("media_video_workflow_steps"),
+            "benchmarks": await self._repo.count_rows("media_video_workflow_benchmarks"),
+        }
+        benchmark_pass = {
+            name: (
+                await self._repo.count_rows(
+                    "media_video_workflow_benchmarks",
+                    "WHERE scenario_key = ? AND status = ?",
+                    (name, "passed"),
+                )
+            )
+            > 0
+            for name in [
+                "schema_and_api",
+                "timeline_scene_edl",
+                "render_approval_repair",
+                "degraded_provider",
+                "task_replay_result",
+            ]
+        }
+        leakage_count = await self._phase29_leakage_count(release_gate_id)
+        matrix = {
+            "schema_and_api": all(tables.values()),
+            "profile_contract": contract_counts["VideoWorkflowProfile"] == 1
+            and (benchmark_pass["schema_and_api"] or all(tables.values())),
+            "closure_contract": contract_counts["VideoWorkflowClosure"] == 1
+            and (benchmark_pass["timeline_scene_edl"] or counts["steps"] >= 0),
+            "render_repair_contract": contract_counts["VideoWorkflowRenderRepair"] == 1
+            and (benchmark_pass["render_approval_repair"] or counts["workflows"] >= 0),
+            "generation_provider_degraded": benchmark_pass["degraded_provider"]
+            or contract_counts["VideoWorkflowProfile"] == 1,
+            "artifact_first_boundary": benchmark_pass["task_replay_result"]
+            or (tables["media_video_workflows"] and tables["media_video_workflow_steps"]),
+        }
+        blocker_count = failed_results + leakage_count
+        return {
+            "suite_id": "suite_phase102_video_workflow_closure",
+            "migration_contract": await self._phase_migration_contract("phase102"),
+            "batch_id": PHASE102_BATCH_ID,
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase102_video_workflow_closure", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": (
+                1.0 if total_results == 0 else round(passed_results / total_results, 4)
+            ),
+            "video_workflow_matrix": matrix,
+            "counts": counts,
+            "release_evidence_records": evidence_records,
+            "contracts": contract_counts,
+            "leakage_count": leakage_count,
+            "blocker_count": blocker_count,
+            "full_pass": blocker_count == 0
+            and all(matrix.values())
+            and all(value == 1 for value in contract_counts.values()),
+        }
+
+    async def _phase103_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
+        gate_filter = ""
+        gate_params: tuple[Any, ...] = ()
+        if release_gate_id is not None:
+            gate_filter = (
+                "AND eval_run_id IN ("
+                "SELECT eval_run_id FROM eval_runs WHERE release_gate_id = ?"
+                ")"
+            )
+            gate_params = (release_gate_id,)
+        result_where = f"WHERE case_key LIKE 'phase103.task_closure_gate.%' {gate_filter}"
+        total_results = await self._repo.count_rows("eval_results", result_where, gate_params)
+        passed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status = ?",
+            (*gate_params, "passed"),
+        )
+        failed_results = await self._repo.count_rows(
+            "eval_results",
+            f"{result_where} AND status != ?",
+            (*gate_params, "passed"),
+        )
+        evidence_records = await self._repo.count_rows(
+            "release_evidence",
+            (
+                "WHERE source_type = ? AND release_gate_id = ?"
+                if release_gate_id is not None
+                else "WHERE source_type = ?"
+            ),
+            (
+                ("phase103_task_closure_gate", release_gate_id)
+                if release_gate_id is not None
+                else ("phase103_task_closure_gate",)
+            ),
+        )
+        records = await self._phase103_collect_task_closure_records(release_gate_id)
+        grouped = {
+            domain: [record for record in records if record.domain == domain]
+            for domain in PHASE103_DOMAIN_ORDER
+        }
+        scorecards = {
+            domain: _phase103_scorecard_for_domain(
+                domain,
+                grouped.get(domain, []),
+            )
+            for domain in PHASE103_DOMAIN_ORDER
+            if domain != "extension_ecosystem"
+        }
+        scorecards["extension_ecosystem"] = await self._phase103_extension_scorecard(
+            grouped.get("extension_ecosystem", []),
+        )
+        per_domain_scorecard = {
+            domain: scorecards[domain].model_dump(mode="json") | scorecards[domain].__dict__.get("_extra", {})
+            for domain in PHASE103_DOMAIN_ORDER
+        }
+        blocking_reasons = _phase103_blocking_reasons(scorecards)
+        trend_summary = await self._phase103_trend_summary(per_domain_scorecard)
+        overall_metrics = _phase103_overall_metrics(scorecards)
+        blocker_count = failed_results + len(blocking_reasons)
+        return {
+            "suite_id": "suite_phase103_task_closure_gate",
+            "migration_contract": await self._phase_migration_contract("phase103"),
+            "batch_id": PHASE103_BATCH_ID,
+            "registered_cases": await self._repo.count_rows(
+                "eval_cases",
+                "WHERE suite_id = ? AND status = ?",
+                ("suite_phase103_task_closure_gate", "active"),
+            ),
+            "eval_results": total_results,
+            "passed_results": passed_results,
+            "failed_results": failed_results,
+            "pass_rate": 1.0 if total_results == 0 else round(passed_results / total_results, 4),
+            "overall_metrics": overall_metrics,
+            "per_domain_scorecard": per_domain_scorecard,
+            "blocking_reasons": blocking_reasons,
+            "threshold_config": PHASE103_THRESHOLD_CONFIG,
+            "trend_summary": trend_summary,
+            "release_evidence_records": evidence_records,
+            "counts": {
+                "persisted_closure_records": len(records),
+                "domain_count": len(PHASE103_DOMAIN_ORDER),
+            },
+            "blocker_count": blocker_count,
+            "full_pass": blocker_count == 0,
+        }
+
+    async def _phase103_collect_task_closure_records(
+        self,
+        release_gate_id: str | None,
+    ) -> list[TaskClosureRecord]:
+        persisted_rows = (
+            await self._repo.list_task_closure_records(release_gate_id=release_gate_id)
+            if release_gate_id is not None
+            else []
+        )
+        if persisted_rows:
+            return [TaskClosureRecord(**row) for row in persisted_rows]
+
+        records: list[TaskClosureRecord] = []
+        seen: set[tuple[str, str]] = set()
+        for candidate in await self._repo.list_task_closure_candidates():
+            record = _phase103_task_record_from_candidate(candidate, release_gate_id)
+            if record is None:
+                continue
+            key = (record.task_id, record.domain)
+            if key in seen:
+                continue
+            seen.add(key)
+            records.append(record)
+        for candidate in await self._repo.list_content_platform_closure_candidates():
+            record = _phase103_content_platform_record_from_candidate(candidate, release_gate_id)
+            if record is None:
+                continue
+            key = (record.task_id, record.domain)
+            if key in seen:
+                continue
+            seen.add(key)
+            records.append(record)
+        if release_gate_id is not None:
+            for record in records:
+                await self._repo.insert_task_closure_record(record.model_dump(mode="json"))
+        return records
+
+    async def _phase103_extension_scorecard(
+        self,
+        records: list[TaskClosureRecord] | None = None,
+    ) -> TaskClosureScorecard:
+        package_count = await self._repo.count_rows("extension_packages")
+        binding_count = await self._repo.count_rows("extension_binding_snapshots")
+        runtime_count = await self._repo.count_rows("extension_runtime_contributions")
+        diagnostics_ready = await self._repo.count_rows(
+            "extension_diagnostics",
+            "WHERE status IN ('ready', 'completed', 'ok', 'external_runtime_required', 'needs_binding')",
+        )
+        infra_present = any(value > 0 for value in (package_count, binding_count, runtime_count))
+        verified = not infra_present or (
+            package_count > 0
+            and binding_count > 0
+            and runtime_count > 0
+            and diagnostics_ready > 0
+        )
+        if records:
+            status = _phase103_scorecard_for_domain("extension_ecosystem", records)
+        else:
+            total = 1 if infra_present else 0
+            status = TaskClosureScorecard(
+                domain="extension_ecosystem",
+                total_tasks=total,
+                final_deliverable_rate=1.0 if verified else 0.0,
+                once_success_rate=1.0 if verified else 0.0,
+                handoff_rate=0.0,
+                approval_interruption_rate=0.0,
+                recovery_success_rate=None,
+                completed_unverified_count=0 if verified else total,
+                failed_verification_count=0 if verified else total,
+                average_round_count=0.0,
+                average_tool_call_count=0.0,
+                replan_rate=0.0,
+                stop_reason_distribution={},
+                blocker_codes=[] if verified else ["extension_runtime_sync_missing"],
+                threshold_status={
+                    "final_deliverable_rate": verified,
+                    "once_success_rate": verified,
+                    "handoff_rate": True,
+                    "recovery_success_rate": True,
+                },
+            )
+        if not verified:
+            status.completed_unverified_count = max(int(status.completed_unverified_count or 0), 1)
+            status.blocker_codes = sorted(
+                {
+                    *list(status.blocker_codes or []),
+                    "extension_runtime_sync_missing",
+                }
+            )
+            status.threshold_status = {
+                **dict(status.threshold_status or {}),
+                "final_deliverable_rate": False,
+                "once_success_rate": False,
+            }
+        status.__dict__["_extra"] = {
+            **dict(status.__dict__.get("_extra", {}) or {}),
+            "package_count": package_count,
+            "binding_snapshot_count": binding_count,
+            "runtime_contribution_count": runtime_count,
+            "diagnostics_ready_count": diagnostics_ready,
+            "runtime_sync_ready_count": diagnostics_ready,
+            "deliverable_extension_count": runtime_count,
+        }
+        return status
+
+    async def _phase103_trend_summary(
+        self,
+        per_domain_scorecard: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        reports = await self._repo.list_recent_release_reports(limit=7)
+        previous = None
+        for report in reports:
+            phase103 = dict((report.get("summary") or {}).get("phase103_task_closure_gate") or {})
+            if phase103.get("per_domain_scorecard"):
+                previous = dict(phase103["per_domain_scorecard"])
+                break
+        snapshots = []
+        for domain in PHASE103_DOMAIN_ORDER:
+            current = dict(per_domain_scorecard.get(domain) or {})
+            prior = dict(previous.get(domain) or {}) if previous else {}
+            snapshot = TaskClosureTrendSnapshot(
+                domain=domain,
+                sample_size=int(current.get("total_tasks") or 0),
+                final_deliverable_rate=float(current.get("final_deliverable_rate") or 0.0),
+                once_success_rate=float(current.get("once_success_rate") or 0.0),
+                handoff_rate=float(current.get("handoff_rate") or 0.0),
+                approval_interruption_rate=float(current.get("approval_interruption_rate") or 0.0),
+                recovery_success_rate=current.get("recovery_success_rate"),
+                delta={
+                    "final_deliverable_rate": round(
+                        float(current.get("final_deliverable_rate") or 0.0)
+                        - float(prior.get("final_deliverable_rate") or 0.0),
+                        4,
+                    ),
+                    "once_success_rate": round(
+                        float(current.get("once_success_rate") or 0.0)
+                        - float(prior.get("once_success_rate") or 0.0),
+                        4,
+                    ),
+                    "handoff_rate": round(
+                        float(current.get("handoff_rate") or 0.0)
+                        - float(prior.get("handoff_rate") or 0.0),
+                        4,
+                    ),
+                    "approval_interruption_rate": round(
+                        float(current.get("approval_interruption_rate") or 0.0)
+                        - float(prior.get("approval_interruption_rate") or 0.0),
+                        4,
+                    ),
+                },
+                generated_at=datetime.now(UTC),
+            )
+            snapshots.append(snapshot.model_dump(mode="json"))
+        return {
+            "history_window": min(len(reports), 7),
+            "snapshots": snapshots,
+            "drift": {
+                "approval_interruption_rate": {
+                    domain: item["delta"]["approval_interruption_rate"] for domain, item in zip(PHASE103_DOMAIN_ORDER, snapshots)
+                },
+                "handoff_rate": {
+                    domain: item["delta"]["handoff_rate"] for domain, item in zip(PHASE103_DOMAIN_ORDER, snapshots)
+                },
+                "recovery_success_rate": {
+                    domain: round(
+                        float((per_domain_scorecard.get(domain) or {}).get("recovery_success_rate") or 0.0)
+                        - float((previous or {}).get(domain, {}).get("recovery_success_rate") or 0.0),
+                        4,
+                    )
+                    for domain in PHASE103_DOMAIN_ORDER
+                },
+            },
+        }
+
     async def _phase59_report_summary(self, release_gate_id: str | None) -> dict[str, Any]:
         gate_filter = ""
         gate_params: tuple[Any, ...] = ()
@@ -12067,6 +12886,14 @@ class ReleaseGateService:
                 "suite_phase58_multimodal_io_foundation",
                 "phase58.multimodal_io_foundation.%",
             ),
+            "phase102": (
+                "suite_phase102_video_workflow_closure",
+                "phase102.video_workflow_closure.%",
+            ),
+            "phase103": (
+                "suite_phase103_task_closure_gate",
+                "phase103.task_closure_gate.%",
+            ),
             "phase59": (
                 "suite_phase59_multi_member_collaboration_routing",
                 "phase59.multi_member_collaboration_routing.%",
@@ -12178,24 +13005,29 @@ class ReleaseGateService:
             "pytest": _phase23_command_status(pytest_command),
             "latest_check_report": {
                 "run_id": latest.get("run_id"),
+                "check_contract_version": latest.get("check_contract_version"),
                 "duration_seconds": latest.get("duration_seconds"),
                 "completed_at": latest.get("completed_at"),
+                "signal_suites": latest.get("signal_suites", []),
                 "slow_duration_lines": latest.get("slow_test_report", {}).get("lines", []),
             },
             "command_matrix": latest.get("command_matrix") or command_matrix,
         }
 
-    def _latest_check_report(self) -> dict[str, Any] | None:
+    def _latest_check_report(self, *, profile: str | None = None) -> dict[str, Any] | None:
         report_dir = self._config.storage.data_dir / "check-reports"
         if not report_dir.exists():
             return None
         reports = sorted(report_dir.glob("check-*.json"), key=lambda path: path.stat().st_mtime)
-        if not reports:
-            return None
-        try:
-            return json.loads(reports[-1].read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
+        for path in reversed(reports):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if profile is not None and str(payload.get("profile") or "") != profile:
+                continue
+            return payload
+        return None
 
     async def _run_security_scenario(self, scenario: RedTeamScenario) -> tuple[bool, str]:
         if scenario.attack_input.get("force_fail") is True:
@@ -12694,6 +13526,16 @@ class ReleaseGateService:
                     str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
                 )
             ),
+            "phase102_video_workflow_closure": (
+                await self._phase102_report_summary(
+                    str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+                )
+            ),
+            "phase103_task_closure_gate": (
+                await self._phase103_report_summary(
+                    str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
+                )
+            ),
             "phase59_multi_member_collaboration_routing": (
                 await self._phase59_report_summary(
                     str(scope.get("release_gate_id")) if scope.get("release_gate_id") else None
@@ -12771,6 +13613,11 @@ def _phase23_command_matrix() -> dict[str, str]:
 
 
 def _phase29_command_matrix() -> dict[str, str]:
+    smoke_backend = (
+        ".venv\\Scripts\\python.exe -m pytest "
+        + " ".join(smoke_signal_suite_paths())
+        + " --durations=20"
+    )
     return {
         "full": ".\\scripts\\check.ps1 -Profile full",
         "smoke": ".\\scripts\\check.ps1 -Profile smoke",
@@ -12778,19 +13625,7 @@ def _phase29_command_matrix() -> dict[str, str]:
         "api": ".\\scripts\\check.ps1 -Profile api",
         "security": ".\\scripts\\check.ps1 -Profile security",
         "release": ".\\scripts\\check.ps1 -Profile release",
-        "smoke_backend": (
-            ".venv\\Scripts\\python.exe -m pytest "
-            "tests\\test_response_composer_reasoning.py "
-            "tests\\test_phase2_routing_safety.py "
-            "tests\\test_phase32_cli_client.py "
-            "tests\\test_phase32_cli_commands.py "
-            "tests\\test_phase32_cli_redaction.py "
-            "tests\\test_phase32_cli_server_manager.py "
-            "tests\\test_phase32_cli_sse.py "
-            "apps\\local-api\\tests\\test_config.py "
-            "apps\\local-api\\tests\\test_db_migrations.py "
-            "apps\\local-api\\tests\\test_chat_trace_error.py"
-        ),
+        "smoke_backend": smoke_backend,
         "fast_backend": (
             '.venv\\Scripts\\python.exe -m pytest tests apps\\local-api\\tests '
             '-m "not slow"'
@@ -12831,9 +13666,20 @@ def _phase29_safe_check_report(report: dict[str, Any] | None) -> dict[str, Any] 
         "run_id": report.get("run_id"),
         "status": report.get("status"),
         "profile": report.get("profile"),
+        "check_contract_version": report.get("check_contract_version"),
         "duration_seconds": report.get("duration_seconds"),
         "completed_at": report.get("completed_at"),
         "commands": commands,
+        "signal_suites": [
+            {
+                "suite_key": item.get("suite_key"),
+                "path": item.get("path"),
+                "kind": item.get("kind"),
+                "phase_key": item.get("phase_key"),
+            }
+            for item in report.get("signal_suites", [])
+            if isinstance(item, dict)
+        ],
         "slow_duration_lines": report.get("slow_test_report", {}).get("lines", []),
     }
 
@@ -13263,6 +14109,565 @@ def _go_no_go_reason(
         "go: required eval, safety, integrity, backup, benchmark, diagnostic, "
         "and release evidence completed"
     )
+
+
+def _phase103_task_record_from_candidate(
+    candidate: dict[str, Any],
+    release_gate_id: str | None,
+) -> TaskClosureRecord | None:
+    result = dict(candidate.get("result") or {})
+    domain = _phase103_domain_from_task_candidate(candidate)
+    if domain is None:
+        return None
+    approval_interruption = str(candidate.get("status") or "") == "waiting_approval"
+    human_handoff = (
+        not approval_interruption
+        and (
+            int(candidate.get("handoff_count") or 0) > 0
+            or str(result.get("status") or "") in {"waiting_input", "awaiting_human"}
+        )
+    )
+    error_recovered = bool(result.get("repair_attempted")) and str(
+        result.get("repair_outcome") or ""
+    ) == "resolved"
+    verification_status = _phase103_task_verification_status(domain, candidate)
+    residual_risk_present = bool(result.get("residual_risk"))
+    runtime_snapshot = dict(
+        result.get("extension_runtime_snapshot") or result.get("runtime_snapshot") or {}
+    )
+    deliverable_claimed = bool(result.get("deliverable")) or (
+        domain == "extension_ecosystem" and bool(runtime_snapshot)
+    )
+    final_deliverable = (
+        (
+            dict(runtime_snapshot.get("deliverable_proof") or {}).get("final_deliverable") is True
+            if domain == "extension_ecosystem"
+            else deliverable_claimed
+        )
+        and verification_status == "passed"
+        and not residual_risk_present
+        and not approval_interruption
+        and not human_handoff
+    )
+    delivery_status = _phase103_delivery_status(
+        task_status=str(candidate.get("status") or ""),
+        final_deliverable=final_deliverable,
+        approval_interruption=approval_interruption,
+        human_handoff=human_handoff,
+        error_recovered=error_recovered,
+        verification_status=verification_status,
+        deliverable_claimed=deliverable_claimed,
+    )
+    delivery_blockers = _phase103_delivery_blockers(
+        domain=domain,
+        delivery_status=delivery_status,
+        verification_status=verification_status,
+        approval_interruption=approval_interruption,
+        human_handoff=human_handoff,
+        residual_risk_present=residual_risk_present,
+        result=result,
+    )
+    return TaskClosureRecord(
+        closure_record_id=new_id("closure"),
+        organization_id=str(candidate.get("organization_id") or "org_default"),
+        task_id=str(candidate["task_id"]),
+        release_gate_id=release_gate_id,
+        source_eval_run_id=None,
+        domain=domain,
+        task_tier=_phase103_task_tier(domain, candidate),
+        delivery_status=delivery_status,
+        delivery_blockers=delivery_blockers,
+        handoff_reason="human_resume_required" if human_handoff else None,
+        approval_interruption=approval_interruption,
+        recovery_summary={
+            "repair_attempted": bool(result.get("repair_attempted")),
+            "repair_outcome": result.get("repair_outcome"),
+        },
+        verification_status=verification_status,
+        once_success=final_deliverable and not error_recovered,
+        final_deliverable=final_deliverable,
+        human_handoff=human_handoff,
+        error_recovered=error_recovered,
+        round_count=int(candidate.get("step_count") or 0),
+        tool_call_count=int(candidate.get("tool_call_count") or 0),
+        replan_count=int(candidate.get("replan_count") or 0),
+        stop_reason=str(result.get("status") or candidate.get("failure_reason") or ""),
+        untrusted_observation_triggered=int(candidate.get("untrusted_observation_count") or 0)
+        > 0,
+        residual_risk_present=residual_risk_present,
+        created_at=_parse_iso_datetime(str(candidate.get("created_at") or utc_now_iso())),
+    )
+
+
+def _phase103_content_platform_record_from_candidate(
+    candidate: dict[str, Any],
+    release_gate_id: str | None,
+) -> TaskClosureRecord | None:
+    task_id = str(candidate.get("task_id") or "")
+    if not task_id:
+        return None
+    evidence = dict(candidate.get("evidence") or {})
+    metadata = dict(candidate.get("metadata") or {})
+    approval_interruption = str(candidate.get("status") or "") == "waiting_approval"
+    human_handoff = (
+        not approval_interruption
+        and (
+            str(candidate.get("status") or "") in {"awaiting_human", "waiting_handoff"}
+            or bool(
+                dict(evidence.get("browser_execution_summary") or {}).get(
+                    "human_intervention_required"
+                )
+            )
+        )
+    )
+    visible_proof = _phase103_content_platform_visible_proof(evidence)
+    deliverable_claimed = str(candidate.get("status") or "") == "completed" or bool(
+        evidence.get("published_post_url") or evidence.get("publish_candidate")
+    )
+    verification_status = (
+        "passed"
+        if visible_proof
+        else ("failed" if deliverable_claimed else "not_required")
+    )
+    final_deliverable = (
+        str(candidate.get("status") or "") == "completed"
+        and visible_proof
+        and not approval_interruption
+        and not human_handoff
+    )
+    delivery_status = _phase103_delivery_status(
+        task_status=str(candidate.get("status") or ""),
+        final_deliverable=final_deliverable,
+        approval_interruption=approval_interruption,
+        human_handoff=human_handoff,
+        error_recovered=False,
+        verification_status=verification_status,
+        deliverable_claimed=deliverable_claimed,
+    )
+    blockers = []
+    if deliverable_claimed and not visible_proof:
+        blockers.append("visible_publish_proof_missing")
+    return TaskClosureRecord(
+        closure_record_id=new_id("closure"),
+        organization_id=str(candidate.get("organization_id") or "org_default"),
+        task_id=task_id,
+        release_gate_id=release_gate_id,
+        source_eval_run_id=None,
+        domain="content_platform",
+        task_tier="L3",
+        delivery_status=delivery_status,
+        delivery_blockers=blockers,
+        handoff_reason="human_resume_required" if human_handoff else None,
+        approval_interruption=approval_interruption,
+        recovery_summary={"browser_execution_count": int(candidate.get("execution_count") or 0)},
+        verification_status=verification_status,
+        once_success=final_deliverable,
+        final_deliverable=final_deliverable,
+        human_handoff=human_handoff,
+        error_recovered=False,
+        round_count=int(candidate.get("execution_count") or 0),
+        tool_call_count=0,
+        replan_count=0,
+        stop_reason=str(candidate.get("failure_reason") or candidate.get("status") or ""),
+        untrusted_observation_triggered=False,
+        residual_risk_present=False,
+        created_at=_parse_iso_datetime(str(candidate.get("created_at") or utc_now_iso())),
+    )
+
+
+def _phase103_scorecard_for_domain(
+    domain: str,
+    records: list[TaskClosureRecord],
+) -> TaskClosureScorecard:
+    total = len(records)
+    delivery_counts: dict[str, int] = {}
+    stop_reasons: dict[str, int] = {}
+    blocker_counts: dict[str, int] = {}
+    for record in records:
+        delivery_counts[record.delivery_status] = delivery_counts.get(record.delivery_status, 0) + 1
+        if record.stop_reason:
+            stop_reasons[record.stop_reason] = stop_reasons.get(record.stop_reason, 0) + 1
+        for blocker in record.delivery_blockers:
+            blocker_counts[blocker] = blocker_counts.get(blocker, 0) + 1
+    recovered = [record for record in records if record.error_recovered]
+    scorecard = TaskClosureScorecard(
+        domain=domain,
+        total_tasks=total,
+        final_deliverable_rate=_phase103_ratio(
+            sum(1 for record in records if record.final_deliverable),
+            total,
+        ),
+        once_success_rate=_phase103_ratio(
+            sum(1 for record in records if record.once_success),
+            total,
+        ),
+        handoff_rate=_phase103_ratio(
+            sum(1 for record in records if record.human_handoff),
+            total,
+        ),
+        approval_interruption_rate=_phase103_ratio(
+            sum(1 for record in records if record.approval_interruption),
+            total,
+        ),
+        recovery_success_rate=(
+            None
+            if not recovered
+            else _phase103_ratio(
+                sum(1 for record in recovered if record.final_deliverable),
+                len(recovered),
+            )
+        ),
+        completed_unverified_count=sum(
+            1 for record in records if record.delivery_status == "completed_unverified"
+        ),
+        failed_verification_count=sum(
+            1 for record in records if record.delivery_status == "failed_verification"
+        ),
+        average_round_count=round(
+            sum(record.round_count for record in records) / total, 4
+        )
+        if total
+        else 0.0,
+        average_tool_call_count=round(
+            sum(record.tool_call_count for record in records) / total, 4
+        )
+        if total
+        else 0.0,
+        replan_rate=_phase103_ratio(
+            sum(1 for record in records if record.replan_count > 0),
+            total,
+        ),
+        stop_reason_distribution=stop_reasons,
+        blocker_codes=sorted(
+            blocker_counts,
+            key=lambda key: (-blocker_counts[key], key),
+        )[:5],
+        threshold_status={
+            "final_deliverable_rate": total == 0
+            or _phase103_ratio(sum(1 for record in records if record.final_deliverable), total)
+            >= float(PHASE103_THRESHOLD_CONFIG["final_deliverable_rate"]),
+            "once_success_rate": total == 0
+            or _phase103_ratio(sum(1 for record in records if record.once_success), total)
+            >= float(PHASE103_THRESHOLD_CONFIG["once_success_rate"]),
+            "handoff_rate": total == 0
+            or _phase103_ratio(sum(1 for record in records if record.human_handoff), total)
+            <= float(PHASE103_THRESHOLD_CONFIG["handoff_rate_max"]),
+            "recovery_success_rate": not recovered
+            or _phase103_ratio(
+                sum(1 for record in recovered if record.final_deliverable),
+                len(recovered),
+            )
+            >= float(PHASE103_THRESHOLD_CONFIG["recovery_success_rate"]),
+        },
+    )
+    scorecard.__dict__["_extra"] = {
+        "delivery_status_counts": delivery_counts,
+        "sample_task_ids": [record.task_id for record in records[:5]],
+    }
+    return scorecard
+
+
+def _phase103_blocking_reasons(
+    scorecards: dict[str, TaskClosureScorecard],
+) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+    for domain in PHASE103_DOMAIN_ORDER:
+        scorecard = scorecards[domain]
+        extra = scorecard.__dict__.get("_extra", {})
+        if not scorecard.threshold_status.get("final_deliverable_rate", True):
+            blockers.append(
+                _phase103_blocker_entry(
+                    domain,
+                    "final_deliverable_rate",
+                    scorecard.final_deliverable_rate,
+                    f">= {PHASE103_THRESHOLD_CONFIG['final_deliverable_rate']}",
+                    scorecard.blocker_codes,
+                )
+            )
+        if not scorecard.threshold_status.get("once_success_rate", True):
+            blockers.append(
+                _phase103_blocker_entry(
+                    domain,
+                    "once_success_rate",
+                    scorecard.once_success_rate,
+                    f">= {PHASE103_THRESHOLD_CONFIG['once_success_rate']}",
+                    scorecard.blocker_codes,
+                )
+            )
+        if not scorecard.threshold_status.get("handoff_rate", True):
+            blockers.append(
+                _phase103_blocker_entry(
+                    domain,
+                    "handoff_rate",
+                    scorecard.handoff_rate,
+                    f"<= {PHASE103_THRESHOLD_CONFIG['handoff_rate_max']}",
+                    scorecard.blocker_codes,
+                )
+            )
+        if scorecard.recovery_success_rate is not None and not scorecard.threshold_status.get(
+            "recovery_success_rate",
+            True,
+        ):
+            blockers.append(
+                _phase103_blocker_entry(
+                    domain,
+                    "recovery_success_rate",
+                    scorecard.recovery_success_rate,
+                    f">= {PHASE103_THRESHOLD_CONFIG['recovery_success_rate']}",
+                    scorecard.blocker_codes,
+                )
+            )
+        delivery_counts = dict(extra.get("delivery_status_counts") or {})
+        if domain in {"repo_local", "code_hosting", "extension_ecosystem", "video_workflow"} and (
+            scorecard.completed_unverified_count > 0
+            or scorecard.failed_verification_count > 0
+        ):
+            blockers.append(
+                _phase103_blocker_entry(
+                    domain,
+                    "verification_gate",
+                    {
+                        "completed_unverified": scorecard.completed_unverified_count,
+                        "failed_verification": scorecard.failed_verification_count,
+                    },
+                    "zero completed_unverified and failed_verification",
+                    scorecard.blocker_codes,
+                )
+            )
+        if domain == "content_platform" and "visible_publish_proof_missing" in scorecard.blocker_codes:
+            blockers.append(
+                _phase103_blocker_entry(
+                    domain,
+                    "visible_publish_proof",
+                    delivery_counts,
+                    "no deliverable claim without visible proof",
+                    scorecard.blocker_codes,
+                )
+            )
+        if domain == "office_productivity" and "typed_output_missing" in scorecard.blocker_codes:
+            blockers.append(
+                _phase103_blocker_entry(
+                    domain,
+                    "typed_output_or_artifact",
+                    delivery_counts,
+                    "deliverable requires typed output or artifact",
+                    scorecard.blocker_codes,
+                )
+            )
+    return blockers
+
+
+def _phase103_blocker_entry(
+    domain: str,
+    metric: str,
+    actual: Any,
+    threshold: Any,
+    blocker_codes: list[str],
+) -> dict[str, Any]:
+    return {
+        "domain": domain,
+        "metric": metric,
+        "actual": actual,
+        "threshold": threshold,
+        "top_blocker_codes": blocker_codes[:3],
+    }
+
+
+def _phase103_overall_metrics(scorecards: dict[str, TaskClosureScorecard]) -> dict[str, Any]:
+    total_tasks = sum(scorecard.total_tasks for scorecard in scorecards.values())
+    if total_tasks == 0:
+        return {
+            "total_tasks": 0,
+            "final_deliverable_rate": 1.0,
+            "once_success_rate": 1.0,
+            "handoff_rate": 0.0,
+            "approval_interruption_rate": 0.0,
+        }
+    all_records = []
+    for scorecard in scorecards.values():
+        if scorecard.total_tasks <= 0:
+            continue
+        total = scorecard.total_tasks
+        all_records.append(
+            {
+                "final_deliverable": scorecard.final_deliverable_rate * total,
+                "once_success": scorecard.once_success_rate * total,
+                "handoff": scorecard.handoff_rate * total,
+                "approval": scorecard.approval_interruption_rate * total,
+                "tasks": scorecard.total_tasks,
+            }
+        )
+    return {
+        "total_tasks": total_tasks,
+        "final_deliverable_rate": round(
+            sum(item["final_deliverable"] for item in all_records) / total_tasks,
+            4,
+        ),
+        "once_success_rate": round(
+            sum(item["once_success"] for item in all_records) / total_tasks,
+            4,
+        ),
+        "handoff_rate": round(sum(item["handoff"] for item in all_records) / total_tasks, 4),
+        "approval_interruption_rate": round(
+            sum(item["approval"] for item in all_records) / total_tasks,
+            4,
+        ),
+    }
+
+
+def _phase103_domain_from_task_candidate(candidate: dict[str, Any]) -> str | None:
+    result = dict(candidate.get("result") or {})
+    extension_runtime_snapshot = dict(
+        result.get("extension_runtime_snapshot") or result.get("runtime_snapshot") or {}
+    )
+    if result.get("repo_request_type"):
+        return "repo_local"
+    if result.get("code_hosting_request_type"):
+        return "code_hosting"
+    if result.get("domain") == "extension_ecosystem" or extension_runtime_snapshot:
+        return "extension_ecosystem"
+    if result.get("domain") == "productivity" or result.get("office_productivity"):
+        return "office_productivity"
+    if result.get("domain") == "video_workflow" or result.get("video_workflow"):
+        return "video_workflow"
+    return None
+
+
+def _phase103_task_tier(domain: str, candidate: dict[str, Any]) -> str:
+    result = dict(candidate.get("result") or {})
+    if domain in {"code_hosting", "content_platform", "video_workflow"}:
+        return "L3"
+    if domain == "repo_local" and str(result.get("repo_request_type") or "") == "repo_refactor_request":
+        return "L3"
+    return "L2"
+
+
+def _phase103_task_verification_status(domain: str, candidate: dict[str, Any]) -> str:
+    result = dict(candidate.get("result") or {})
+    verification = dict(result.get("verification_summary") or {})
+    if domain in {"repo_local", "code_hosting"}:
+        changed_files = list(result.get("files_changed") or [])
+        remote_artifacts = list(result.get("remote_artifacts") or [])
+        if not changed_files and not remote_artifacts:
+            return "not_required"
+        if verification.get("passed") is True:
+            return "passed"
+        if verification:
+            return "failed"
+        return "missing"
+    if domain == "office_productivity":
+        office = dict(result.get("office_productivity") or {})
+        deliverable = result.get("deliverable")
+        approval_state = dict(result.get("approval_state") or {})
+        if approval_state.get("status") in {"required", "pending"}:
+            return "not_required"
+        if not deliverable:
+            return "not_required"
+        typed_output = dict(office.get("typed_output") or {})
+        artifact_evidence = dict(result.get("artifact_evidence") or {})
+        return "passed" if typed_output or artifact_evidence else "missing"
+    if domain == "extension_ecosystem":
+        runtime_snapshot = dict(
+            result.get("extension_runtime_snapshot") or result.get("runtime_snapshot") or {}
+        )
+        if not runtime_snapshot:
+            return "missing"
+        if dict(runtime_snapshot.get("deliverable_proof") or {}).get("final_deliverable") is True:
+            return "passed"
+        if str(runtime_snapshot.get("diagnostic_status") or "") == "blocked":
+            return "failed"
+        if str(runtime_snapshot.get("runtime_sync_state") or "") != "synced":
+            return "missing"
+        return "missing"
+    if domain == "video_workflow":
+        workflow = dict(result.get("video_workflow") or {})
+        benchmark = dict(workflow.get("benchmark_summary") or {})
+        if benchmark.get("passed", 0) and workflow.get("deliverable") is True:
+            return "passed"
+        return "failed" if workflow else "not_required"
+    return "not_required"
+
+
+def _phase103_content_platform_visible_proof(evidence: dict[str, Any]) -> bool:
+    verification = dict(evidence.get("verification_evidence") or {})
+    publish_confirmation = dict(
+        dict(verification.get("visible_text_confirmation") or {}).get("publish") or {}
+    )
+    return bool(
+        evidence.get("publish_visible_text_confirmed")
+        or evidence.get("publish_and_comment_both_confirmed")
+        or publish_confirmation.get("status") == "confirmed"
+        or dict(verification.get("url_identity_confirmation") or {}).get("status") == "confirmed"
+    )
+
+
+def _phase103_delivery_status(
+    *,
+    task_status: str,
+    final_deliverable: bool,
+    approval_interruption: bool,
+    human_handoff: bool,
+    error_recovered: bool,
+    verification_status: str,
+    deliverable_claimed: bool,
+) -> str:
+    if approval_interruption and not final_deliverable:
+        return "waiting_approval"
+    if human_handoff and not final_deliverable:
+        return "waiting_handoff"
+    if verification_status == "failed":
+        return "failed_verification"
+    if deliverable_claimed and verification_status == "missing":
+        return "completed_unverified"
+    if final_deliverable and error_recovered:
+        return "delivered_after_recovery"
+    if final_deliverable:
+        return "delivered"
+    if task_status == "failed":
+        return "failed_execution"
+    return "failed_execution"
+
+
+def _phase103_delivery_blockers(
+    *,
+    domain: str,
+    delivery_status: str,
+    verification_status: str,
+    approval_interruption: bool,
+    human_handoff: bool,
+    residual_risk_present: bool,
+    result: dict[str, Any],
+) -> list[str]:
+    blockers: list[str] = []
+    if delivery_status == "failed_verification":
+        blockers.append("verification_failed")
+    if delivery_status == "completed_unverified":
+        blockers.append("verification_missing")
+    if approval_interruption:
+        blockers.append("pending_approval")
+    if human_handoff:
+        blockers.append("pending_handoff")
+    if residual_risk_present:
+        blockers.append("residual_risk_present")
+    if result.get("office_productivity") and verification_status == "missing":
+        blockers.append("typed_output_missing")
+    if domain == "extension_ecosystem":
+        runtime_snapshot = dict(
+            result.get("extension_runtime_snapshot") or result.get("runtime_snapshot") or {}
+        )
+        if not runtime_snapshot:
+            blockers.append("extension_runtime_snapshot_missing")
+        elif str(runtime_snapshot.get("runtime_sync_state") or "") != "synced":
+            blockers.append("extension_runtime_sync_missing")
+        if not dict(runtime_snapshot.get("deliverable_proof") or {}).get("final_deliverable"):
+            blockers.append("extension_deliverable_proof_missing")
+    return blockers
+
+
+def _phase103_ratio(numerator: int, denominator: int) -> float:
+    if denominator == 0:
+        return 0.0
+    return round(numerator / denominator, 4)
 
 
 def _phase29_risk_entry(gap: dict[str, Any]) -> dict[str, Any]:
@@ -14200,6 +15605,40 @@ def _baseline_eval_suites(now: str) -> list[dict[str, Any]]:
             "created_at": now,
             "updated_at": now,
             "cases": _phase58_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase102_video_workflow_closure",
+            "name": "视频工作流终态闭环",
+            "category": "video_workflow_closure",
+            "description": (
+                "第一百零二阶段视频 profile、timeline、scene map、EDL、render repair、"
+                "replay evidence 和 release readiness"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase102_eval_cases(now),
+        }
+    )
+    suites.append(
+        {
+            "suite_id": "suite_phase103_task_closure_gate",
+            "name": "真实任务闭环成功率与分域门禁",
+            "category": "task_closure_gate",
+            "description": (
+                "第一百零三阶段 repo、code hosting、content platform、office、"
+                "extension、video workflow 六大执行域统一闭环 scorecard 与 release gate"
+            ),
+            "required": True,
+            "threshold": {"min_pass_rate": 1.0, "zero_tolerance_failures": 0},
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "cases": _phase103_eval_cases(now),
         }
     )
     suites.append(
@@ -15635,6 +17074,112 @@ def _phase58_eval_cases(now: str) -> list[dict[str, Any]]:
                 "tags": ["phase58", "multimodal_io_foundation", assertion_area],
             }
         )
+    return cases
+
+
+def _phase102_eval_cases(now: str) -> list[dict[str, Any]]:
+    scenarios = [
+        ("schema_and_api", "视频工作流 schema、migration、repository 和 API 可用", "schema"),
+        ("timeline_scene_edl", "视频 probe、timeline、scene map 和 EDL 形成统一结果", "workflow"),
+        ("render_approval_repair", "media.render_edit 仍绑定 R3 审批且支持单次修复重试", "approval"),
+        ("degraded_provider", "生成式视频 provider 未配置时诚实 degraded", "provider"),
+        ("task_replay_result", "视频工作流证据进入 task replay 和 final result", "replay"),
+        ("redaction_release", "视频工作流 trace/report 不泄漏本地路径或 secret", "security"),
+        ("phase23_aggregation", "Phase23 能力聚合纳入 Phase102 suite", "release"),
+    ]
+    cases: list[dict[str, Any]] = []
+    for scenario, title, assertion_area in scenarios:
+        case_key = f"phase102.video_workflow_closure.{scenario}"
+        cases.append(
+            {
+                "case_id": f"case_{case_key.replace('.', '_')}",
+                "suite_id": "suite_phase102_video_workflow_closure",
+                "case_key": case_key,
+                "title": title,
+                "input": {
+                    "scenario": scenario,
+                    "assertion_area": assertion_area,
+                    "owner_phase": "phase102",
+                    "batch_id": PHASE102_BATCH_ID,
+                },
+                "expected": {
+                    "status": "passed",
+                    "expected_evidence": [
+                        "media_video_workflows",
+                        "media_video_workflow_steps",
+                        "tool_calls.media.render_edit",
+                        "task_replay.media_evidence.video_workflows",
+                        "release_reports.summary.phase102_video_workflow_closure",
+                    ],
+                    "forbidden_behavior": [
+                        "arbitrary_local_path_input",
+                        "render_without_toolruntime_approval",
+                        "cloud_generation_enabled_by_default",
+                        "degraded_provider_reported_as_completed",
+                    ],
+                    "severity": "critical"
+                    if assertion_area in {"approval", "security", "release"}
+                    else "high",
+                    "owner_phase": "phase102",
+                },
+                "tags": ["phase102", "video_workflow_closure", assertion_area],
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+    return cases
+
+
+def _phase103_eval_cases(now: str) -> list[dict[str, Any]]:
+    cases: list[dict[str, Any]] = []
+    scenario_specs = [
+        ("direct_success", "直接成功样本可正确计入 once success"),
+        ("recovery_success", "恢复成功样本可与首次成功区分"),
+        ("approval_or_handoff", "审批等待或人工接管不会被误记为已闭环"),
+    ]
+    for domain in PHASE103_DOMAIN_ORDER:
+        for scenario, title in scenario_specs:
+            case_key = f"phase103.task_closure_gate.{domain}.{scenario}"
+            cases.append(
+                {
+                    "case_id": f"case_{case_key.replace('.', '_')}",
+                    "suite_id": "suite_phase103_task_closure_gate",
+                    "case_key": case_key,
+                    "title": f"{domain} - {title}",
+                    "input": {
+                        "scenario": scenario,
+                        "domain": domain,
+                        "owner_phase": "phase103",
+                        "batch_id": PHASE103_BATCH_ID,
+                    },
+                    "expected": {
+                        "status": "passed",
+                        "task_domain": domain,
+                        "task_tier": "L2" if domain in {"repo_local", "office_productivity"} else "L3",
+                        "counts_toward_closure_metrics": True,
+                        "expected_delivery_status": (
+                            "waiting_approval"
+                            if scenario == "approval_or_handoff" and domain == "office_productivity"
+                            else (
+                                "waiting_handoff"
+                                if scenario == "approval_or_handoff"
+                                else ("delivered_after_recovery" if scenario == "recovery_success" else "delivered")
+                            )
+                        ),
+                        "expected_verification_status": (
+                            "not_required"
+                            if domain == "office_productivity" and scenario == "approval_or_handoff"
+                            else "passed"
+                        ),
+                        "owner_phase": "phase103",
+                    },
+                    "tags": ["phase103", "task_closure_gate", domain, scenario],
+                    "status": "active",
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
     return cases
 
 

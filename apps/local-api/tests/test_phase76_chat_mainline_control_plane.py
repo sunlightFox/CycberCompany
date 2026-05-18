@@ -29,6 +29,8 @@ def test_phase76_chat_mainline_readiness_endpoint_exposes_control_plane_truth(
     assert "phase89_false_interception_governance" in payload["phase_readiness"]
     assert "phase90_compat_cleanup_release_gate" in payload["phase_readiness"]
     assert "phase91_host_decomposition_governance" in payload["phase_readiness"]
+    assert "phase108_runtime_host_decomposition_closure" in payload["phase_readiness"]
+    assert "phase109_real_world_maturity_recheck" in payload["phase_readiness"]
     assert "phase85_execution_batches" in payload["phase_readiness"]
     assert payload["runtime_facts"]["session_runtime_role"] == "entry_runtime"
     assert payload["runtime_facts"]["chat_service_host"].endswith("/chat.py")
@@ -38,12 +40,16 @@ def test_phase76_chat_mainline_readiness_endpoint_exposes_control_plane_truth(
     assert payload["runtime_facts"]["phase_docs_present"]["phase89_false_interception_governance"] is True
     assert payload["runtime_facts"]["phase_docs_present"]["phase90_compat_cleanup_release_gate"] is True
     assert payload["runtime_facts"]["phase_docs_present"]["phase91_host_decomposition_governance"] is True
+    assert payload["runtime_facts"]["phase_docs_present"]["phase108_runtime_host_decomposition_closure"] is True
+    assert payload["runtime_facts"]["phase_docs_present"]["phase109_real_world_maturity_recheck"] is True
     assert payload["runtime_facts"]["phase_docs_present"]["phase85_execution_batches"] is True
     assert payload["runtime_facts"]["phase_tests_present"]["phase75_quality_takeover_rollout"] is True
     assert payload["runtime_facts"]["phase_tests_present"]["phase86_runtime_host_uniqueness"] is True
     assert payload["runtime_facts"]["phase_tests_present"]["phase89_false_interception_governance"] is True
     assert payload["runtime_facts"]["phase_tests_present"]["phase90_compat_cleanup_release_gate"] is True
     assert payload["runtime_facts"]["phase_tests_present"]["phase91_host_decomposition_governance"] is True
+    assert payload["runtime_facts"]["phase_tests_present"]["phase108_runtime_host_decomposition_closure"] is True
+    assert payload["runtime_facts"]["phase_tests_present"]["phase109_real_world_maturity_recheck"] is True
     assert payload["runtime_facts"]["presence_runtime_rollout_visible"] is True
     assert payload["phase_readiness"]["phase82_ledger_memory"]["status"] in {"ready", "partial"}
     assert payload["phase_readiness"]["phase83_hooks"]["status"] in {"ready", "partial"}
@@ -96,13 +102,19 @@ def test_phase76_release_summary_includes_chat_mainline_readiness(
     assert "execution_batches_version" in readiness
     assert "next_batch" in readiness
     assert "phase88_channel_reliability_status" in readiness
+    assert "phase88_failure_reason_counts" in readiness
     assert "phase89_false_interception_governance_status" in readiness
     assert "phase90_compat_cleanup_release_gate_status" in readiness
     assert "phase91_host_decomposition_governance_status" in readiness
+    assert "phase108_runtime_host_decomposition_closure_status" in readiness
+    assert "phase109_real_world_maturity_recheck_status" in readiness
+    assert "phase109_no_turn_diagnostics" in readiness
     assert "strict_format_continuity_gate" in readiness
     assert "false_boundary_rate" in readiness
     assert "natural_continuation_pass_rate" in readiness
     assert "no_turn_count" in readiness
+    assert "evidence_no_turn_group_counts" in readiness["phase109_no_turn_diagnostics"]
+    assert "remediation_queue" in readiness["phase109_no_turn_diagnostics"]
     assert "phase_docs_present" in readiness
     assert "phase_tests_present" in readiness
     assert "phase86_runtime_host_uniqueness" in client.get(
@@ -118,6 +130,12 @@ def test_phase76_release_summary_includes_chat_mainline_readiness(
         "/api/system/chat-mainline-readiness"
     ).json()["phase_readiness"]
     assert "phase91_host_decomposition_governance" in client.get(
+        "/api/system/chat-mainline-readiness"
+    ).json()["phase_readiness"]
+    assert "phase108_runtime_host_decomposition_closure" in client.get(
+        "/api/system/chat-mainline-readiness"
+    ).json()["phase_readiness"]
+    assert "phase109_real_world_maturity_recheck" in client.get(
         "/api/system/chat-mainline-readiness"
     ).json()["phase_readiness"]
 

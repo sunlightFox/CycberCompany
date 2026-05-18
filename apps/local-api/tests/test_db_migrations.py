@@ -634,6 +634,18 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
         media_edit_plan_columns = {
             row["name"] for row in await db.fetch_all("PRAGMA table_info(media_edit_plans)")
         }
+        media_video_workflow_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(media_video_workflows)")
+        }
+        media_video_workflow_step_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(media_video_workflow_steps)")
+        }
+        media_video_workflow_benchmark_columns = {
+            row["name"]
+            for row in await db.fetch_all("PRAGMA table_info(media_video_workflow_benchmarks)")
+        }
         media_provider_health_columns = {
             row["name"]
             for row in await db.fetch_all("PRAGMA table_info(media_provider_health_records)")
@@ -1349,6 +1361,35 @@ async def test_db_001_empty_database_migrates_and_is_idempotent(tmp_path: Path) 
     assert {"edit_plan_id", "media_id", "operations_json", "requires_approval"}.issubset(
         media_edit_plan_columns
     )
+    assert {
+        "workflow_id",
+        "task_id",
+        "media_id",
+        "profile_json",
+        "approval_id",
+        "result_json",
+        "evidence_json",
+    }.issubset(media_video_workflow_columns)
+    assert {
+        "step_id",
+        "workflow_id",
+        "task_id",
+        "media_id",
+        "step_key",
+        "status",
+        "input_json",
+        "output_json",
+    }.issubset(media_video_workflow_step_columns)
+    assert {
+        "benchmark_id",
+        "workflow_id",
+        "task_id",
+        "scenario_key",
+        "layer",
+        "expected_result_json",
+        "observed_result_json",
+        "status",
+    }.issubset(media_video_workflow_benchmark_columns)
     assert {"health_record_id", "provider_name", "capability", "status"}.issubset(
         media_provider_health_columns
     )
@@ -1560,5 +1601,9 @@ async def test_db_004_phase_six_skill_mcp_tables_are_created(tmp_path: Path) -> 
         "mcp_calls",
         "plugin_install_jobs",
         "plugin_events",
+        "extension_packages",
+        "extension_sources",
+        "extension_compatibility_reports",
+        "extension_binding_snapshots",
     }
     assert phase_six_tables.issubset({row["name"] for row in rows})

@@ -298,6 +298,9 @@ def phase52_deploy_or_install_explain_only(text: str) -> bool:
             "先讲讲部署思路",
             "先讲讲安装步骤",
             "只做说明，不要执行",
+            "只解释如何部署",
+            "只解释如何安装",
+            "不要执行，不要创建任务",
         )
     )
 
@@ -342,7 +345,7 @@ def direct_route_reply(route_type: str, user_text: str) -> tuple[str, str, dict[
 
 def host_filesystem_list_reply(result: dict[str, Any]) -> str:
     location = host_filesystem_label(str(result.get("location") or "home"))
-    entries = list(result.get("entries") or [])
+    entries = list(result.get("entries") or result.get("items") or [])
     if not entries:
         return f"{location} 里目前没有可展示的条目。"
     names = [str(item.get("name") or "").strip() for item in entries[:8] if str(item.get("name") or "").strip()]

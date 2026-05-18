@@ -251,6 +251,48 @@ class ExternalPlatformRepository:
         )
         return _plan_from_row(dict(row)) if row else None
 
+    async def get_plan_by_approval_id(self, approval_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM external_platform_action_plans
+            WHERE approval_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (approval_id,),
+        )
+        return _plan_from_row(dict(row)) if row else None
+
+    async def list_recent_plans(
+        self,
+        *,
+        conversation_id: str | None = None,
+        statuses: list[str] | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if conversation_id is not None:
+            where.append("conversation_id = ?")
+            params.append(conversation_id)
+        if statuses:
+            placeholders = ", ".join("?" for _ in statuses)
+            where.append(f"status IN ({placeholders})")
+            params.extend(statuses)
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM external_platform_action_plans
+            {where_sql}
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [_plan_from_row(dict(row)) for row in rows]
+
     async def update_plan(self, plan_id: str, fields: dict[str, Any]) -> None:
         await self._update(
             "external_platform_action_plans",

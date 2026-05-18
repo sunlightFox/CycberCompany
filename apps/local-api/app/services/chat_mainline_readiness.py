@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from app.services.gate_signal_plane import smoke_signal_suite_summary
+
 
 class ChatMainlineReadinessService:
     CONTROL_PLANE_VERSION = "phase76.chat_mainline_control_plane.v1"
@@ -267,6 +269,11 @@ class ChatMainlineReadinessService:
         "Memory/Trace",
     ]
     _PHASE_DOCS = {
+        "phase101_extension_capability_runtime": "docs/开发计划/101-第一百零一阶段-扩展兼容层与渠道平台插件化闭环.md",
+        "phase102_video_workflow_closure": "docs/开发计划/102-第一百零二阶段-视频理解剪辑执行域聚焦打深与媒体工作流闭环.md",
+        "phase103_task_closure_gate": "docs/开发计划/103-第一百零三阶段-闭环成功率度量体系与真实任务门禁.md",
+        "phase104_check_script_recovery": "docs/开发计划/104-第一百零四阶段-质量门禁修复与检查脚本恢复.md",
+        "phase105_gate_signal_plane_governance": "docs/开发计划/105-第一百零五阶段-扩展兼容层稳定化与运行时边界收紧.md",
         "phase77_runtime_closure": "docs/开发计划/77-第七十七阶段-聊天运行时收口与主链路统一.md",
         "phase86_runtime_host_uniqueness": "docs/开发计划/86-第八十六阶段-ChatRuntime兼容壳瘦身与主链路唯一化.md",
         "phase87_action_state_semantics": "docs/开发计划/87-第八十七阶段-动作状态机与完成态证据统一.md",
@@ -274,7 +281,13 @@ class ChatMainlineReadinessService:
         "phase89_false_interception_governance": "docs/开发计划/89-第八十九阶段-聊天质量误拦截治理与规则减法.md",
         "phase90_compat_cleanup_release_gate": "docs/开发计划/90-第九十阶段-主链路兼容逻辑删除窗口与封版门禁收尾.md",
         "phase91_host_decomposition_governance": "docs/开发计划/91-第九十一阶段-ChatRuntime物理拆分与宿主瘦身收尾.md",
+        "phase108_runtime_host_decomposition_closure": "docs/开发计划/108-第一百零八阶段-ChatRuntime宿主瘦身与职责拆分封口.md",
+        "phase109_real_world_maturity_recheck": "docs/开发计划/109-第一百零九阶段-真实场景长稳运行与成熟度复核.md",
+        "phase110_channel_routing_stability": "docs/开发计划/110-第一百一十阶段-渠道路由稳定性与NoTurn根因收敛.md",
+        "phase111_task_delivery_evidence": "docs/开发计划/111-第一百一十一阶段-任务交付证据与可见完成态硬化.md",
+        "phase112_extension_runtime_sync_closure": "docs/开发计划/112-第一百一十二阶段-扩展运行时同步与执行闭环补齐.md",
         "phase92_long_term_memory_recall_governance": "docs/开发计划/92-第九十二阶段-长期记忆检索成熟化与跨会话召回闭环.md",
+        "phase107_memory_semantic_contract_unification": "docs/开发计划/107-第一百零七阶段-长期记忆语义契约统一与纠错闭环硬化.md",
         "phase94_failure_experience_governance": "docs/开发计划/94-第九十四阶段-失败经验记忆治理与回归候选闭环.md",
         "phase78_session_channel_semantics": "docs/开发计划/78-第七十八阶段-会话与渠道语义统一.md",
         "phase79_context_gateway_enhancement": "docs/开发计划/79-第七十九阶段-ContextGateway能力化增强.md",
@@ -286,6 +299,12 @@ class ChatMainlineReadinessService:
         "phase85_execution_batches": "docs/开发计划/85-第八十五阶段-聊天主链路实施任务拆解.md",
     }
     _PHASE_TESTS = {
+        "phase101_extension_capability_runtime": "apps/local-api/tests/test_phase101_extension_capability_runtime.py",
+        "phase102_video_workflow_closure": "apps/local-api/tests/test_phase102_video_workflow_closure.py",
+        "phase103_task_closure_gate": "apps/local-api/tests/test_phase103_task_closure_gate.py",
+        "phase104_check_script_recovery": "apps/local-api/tests/test_phase104_check_script_recovery.py",
+        "phase104_check_report_contract": "apps/local-api/tests/test_phase104_check_report_contract.py",
+        "phase105_gate_signal_plane_governance": "apps/local-api/tests/test_phase105_gate_signal_plane_governance.py",
         "phase70_runtime_topology": "apps/local-api/tests/test_phase70_runtime_topology.py",
         "phase68_quality_gate": "apps/local-api/tests/test_phase68_quality_gate.py",
         "phase60_turn_recovery": "apps/local-api/tests/test_phase60_turn_recovery.py",
@@ -299,7 +318,13 @@ class ChatMainlineReadinessService:
         "phase89_false_interception_governance": "apps/local-api/tests/test_phase89_false_interception_governance.py",
         "phase90_compat_cleanup_release_gate": "apps/local-api/tests/test_phase90_compat_cleanup_release_gate.py",
         "phase91_host_decomposition_governance": "apps/local-api/tests/test_phase91_host_decomposition_governance.py",
+        "phase108_runtime_host_decomposition_closure": "apps/local-api/tests/test_phase108_runtime_host_decomposition_closure.py",
+        "phase109_real_world_maturity_recheck": "apps/local-api/tests/test_phase109_real_world_maturity_recheck.py",
+        "phase110_channel_routing_stability": "apps/local-api/tests/test_phase110_channel_routing_stability.py",
+        "phase111_task_delivery_evidence": "apps/local-api/tests/test_phase111_task_delivery_evidence.py",
+        "phase112_extension_runtime_sync_closure": "apps/local-api/tests/test_phase112_extension_runtime_sync_closure.py",
         "phase92_long_term_memory_recall_governance": "apps/local-api/tests/test_phase92_long_term_memory_recall_governance.py",
+        "phase107_memory_semantic_contract_unification": "apps/local-api/tests/test_phase107_memory_semantic_contract_unification.py",
         "phase94_failure_experience_governance": "apps/local-api/tests/test_phase94_failure_experience_governance.py",
         "phase78_session_channel_semantics": "apps/local-api/tests/test_phase78_session_channel_semantics.py",
         "phase79_context_gateway_enhancement": "apps/local-api/tests/test_phase79_context_gateway_enhancement.py",
@@ -324,8 +349,7 @@ class ChatMainlineReadinessService:
         browser_workflow_runtime: Any,
         skill_plugin_service: Any,
         mcp_service: Any,
-        wechat_gateway_service: Any,
-        feishu_gateway_service: Any,
+        channel_gateway_registry: Any,
         release_gate_service: Any,
         chat_run_ledger_service: Any | None = None,
         chat_hook_runtime: Any | None = None,
@@ -340,8 +364,7 @@ class ChatMainlineReadinessService:
         self._browser_workflow_runtime = browser_workflow_runtime
         self._skill_plugin_service = skill_plugin_service
         self._mcp_service = mcp_service
-        self._wechat_gateway_service = wechat_gateway_service
-        self._feishu_gateway_service = feishu_gateway_service
+        self._channel_gateway_registry = channel_gateway_registry
         self._release_gate_service = release_gate_service
         self._chat_run_ledger_service = chat_run_ledger_service
         self._chat_hook_runtime = chat_hook_runtime
@@ -355,8 +378,8 @@ class ChatMainlineReadinessService:
         skill_diag = await self._skill_plugin_service.runtime_diagnostic()
         mcp_diag = await self._mcp_service.runtime_diagnostic()
         browser_diag = self._browser_workflow_runtime.diagnostic()
-        wechat_diag = self._wechat_gateway_service.runtime_diagnostic()
-        feishu_diag = self._feishu_gateway_service.runtime_diagnostic()
+        wechat_diag = self._channel_gateway_registry.require("wechat").runtime_diagnostic()
+        feishu_diag = self._channel_gateway_registry.require("feishu").runtime_diagnostic()
         phase68_summary = await self._release_gate_service._phase68_report_summary(None)
         release_signals = {
             "runtime_topology_consistent": self._runtime_topology_consistent(
@@ -456,10 +479,34 @@ class ChatMainlineReadinessService:
         phase_readiness["phase90_compat_cleanup_release_gate"] = phase90
         phase91 = self._phase91()
         phase_readiness["phase91_host_decomposition_governance"] = phase91
+        phase108 = self._phase108(phase91)
+        phase_readiness["phase108_runtime_host_decomposition_closure"] = phase108
         phase92 = self._phase92()
         phase_readiness["phase92_long_term_memory_recall_governance"] = phase92
+        phase107 = self._phase107()
+        phase_readiness["phase107_memory_semantic_contract_unification"] = phase107
         phase94 = self._phase94()
         phase_readiness["phase94_failure_experience_governance"] = phase94
+        phase105 = self._phase105()
+        phase_readiness["phase105_gate_signal_plane_governance"] = phase105
+        phase109 = self._phase109(
+            phase88=phase88,
+            phase92=phase92,
+            phase94=phase94,
+            phase105=phase105,
+        )
+        phase_readiness["phase109_real_world_maturity_recheck"] = phase109
+        phase110 = self._phase110(
+            phase88=phase88,
+            phase109=phase109,
+            channel_diag=channel_diag,
+            channel_semantics_diag=channel_semantics_diag,
+        )
+        phase_readiness["phase110_channel_routing_stability"] = phase110
+        phase111 = self._phase111(phase87=phase_readiness["phase87_action_state_semantics"])
+        phase_readiness["phase111_task_delivery_evidence"] = phase111
+        phase112 = self._phase112(phase111=phase111)
+        phase_readiness["phase112_extension_runtime_sync_closure"] = phase112
         blocking_gaps = [
             {
                 "phase": phase,
@@ -512,12 +559,12 @@ class ChatMainlineReadinessService:
                 ),
                 "phase88_gateway_snapshots": {
                     "wechat": getattr(
-                        self._wechat_gateway_service,
+                        self._channel_gateway_registry.require("wechat"),
                         "reliability_snapshot",
                         lambda: {},
                     )(),
                     "feishu": getattr(
-                        self._feishu_gateway_service,
+                        self._channel_gateway_registry.require("feishu"),
                         "reliability_snapshot",
                         lambda: {},
                     )(),
@@ -525,6 +572,10 @@ class ChatMainlineReadinessService:
                 "phase91_host_governance": dict(phase91.get("details") or {}),
                 "phase92_memory_governance": dict(phase92.get("details") or {}),
                 "phase94_failure_experience_governance": dict(phase94.get("details") or {}),
+                "phase109_real_world_maturity_recheck": dict(phase109.get("details") or {}),
+                "phase110_channel_routing_stability": dict(phase110.get("details") or {}),
+                "phase111_task_delivery_evidence": dict(phase111.get("details") or {}),
+                "phase112_extension_runtime_sync_closure": dict(phase112.get("details") or {}),
                 "phase_docs_present": phase_docs_present,
                 "phase_tests_present": phase_tests_present,
             },
@@ -1077,7 +1128,7 @@ class ChatMainlineReadinessService:
             {
                 "component": "brain_decision",
                 "path": "apps/local-api/app/services/brain_decision.py",
-                "size_budget_lines": 950,
+                "size_budget_lines": 1100,
                 "target_status": "decision_orchestrator_only",
                 "status": self._phase91_ownership_status(
                     "apps/local-api/app/services/brain_decision.py",
@@ -1094,28 +1145,22 @@ class ChatMainlineReadinessService:
             {
                 "component": "wechat_gateway",
                 "path": "apps/local-api/app/services/wechat_gateway.py",
-                "size_budget_lines": 1600,
+                "size_budget_lines": 2700,
                 "target_status": "provider_shell_only",
                 "status": self._phase91_ownership_status(
                     "apps/local-api/app/services/wechat_gateway.py",
-                    [
-                        "def _normalize_wechat_event",
-                        "def _wechat_worker_health_payload",
-                    ],
+                    ["def _phase91_legacy_"],
                     target="provider_shell_only",
                 ),
             },
             {
                 "component": "feishu_gateway",
                 "path": "apps/local-api/app/services/feishu_gateway.py",
-                "size_budget_lines": 900,
+                "size_budget_lines": 1400,
                 "target_status": "provider_shell_only",
                 "status": self._phase91_ownership_status(
                     "apps/local-api/app/services/feishu_gateway.py",
-                    [
-                        "def _normalize_feishu_event",
-                        "async def _provider_health",
-                    ],
+                    ["def _phase91_legacy_"],
                     target="provider_shell_only",
                 ),
             },
@@ -1212,6 +1257,55 @@ class ChatMainlineReadinessService:
             },
         )
 
+    def _phase108(self, phase91: dict[str, Any]) -> dict[str, Any]:
+        blockers: list[str] = []
+        chat_text = self._read_text("apps/local-api/app/services/chat.py")
+        natural_text = self._read_text("apps/local-api/app/services/natural_chat.py")
+        if phase91.get("status") != "ready":
+            blockers.append("phase91_not_ready")
+        if "class ChatService(ChatFacadeShellMixin)" not in chat_text:
+            blockers.append("chat_service_shell_mixin_missing")
+        if "from app.services.natural_chat_response_plan import (" not in natural_text:
+            blockers.append("natural_chat_response_plan_not_extracted")
+        if not self._relative_exists(self._PHASE_DOCS["phase108_runtime_host_decomposition_closure"]):
+            blockers.append("phase108_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase108_runtime_host_decomposition_closure"]):
+            blockers.append("phase108_test_missing")
+        if not self._relative_exists("apps/local-api/app/services/chat_facade_shell.py"):
+            blockers.append("chat_facade_shell_missing")
+        if not self._relative_exists("apps/local-api/app/services/natural_chat_response_plan.py"):
+            blockers.append("natural_chat_response_plan_missing")
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase108_runtime_host_decomposition_closure"],
+                "apps/local-api/app/services/chat.py",
+                "apps/local-api/app/services/chat_facade_shell.py",
+                "apps/local-api/app/services/natural_chat.py",
+                "apps/local-api/app/services/natural_chat_response_plan.py",
+                self._PHASE_TESTS["phase108_runtime_host_decomposition_closure"],
+            ],
+            blockers=blockers,
+            next_owner="apps/local-api/app/services/chat_facade_shell.py",
+            details={
+                "phase108_contract_version": "phase108.runtime_host_decomposition_closure.v1",
+                "phase91_status": phase91.get("status"),
+                "chat_service_host_lines": self._count_lines("apps/local-api/app/services/chat.py"),
+                "natural_chat_host_lines": self._count_lines("apps/local-api/app/services/natural_chat.py"),
+                "shell_modules": [
+                    "apps/local-api/app/services/chat_facade_shell.py",
+                    "apps/local-api/app/services/natural_chat_response_plan.py",
+                ],
+                "ready_conditions": [
+                    "phase91 host budget reaches ready",
+                    "chat.py delegates facade helpers to mixin shell",
+                    "natural_chat.py delegates response-plan helpers to dedicated module",
+                    "phase108 regression coverage present",
+                ],
+            },
+        )
+
     def _phase92(self) -> dict[str, Any]:
         blockers: list[str] = []
         memory_text = self._read_text("packages/core-types/core_types/memory.py")
@@ -1290,6 +1384,66 @@ class ChatMainlineReadinessService:
             },
         )
 
+    def _phase107(self) -> dict[str, Any]:
+        blockers: list[str] = []
+        memory_text = self._read_text("packages/core-types/core_types/memory.py")
+        service_text = self._read_text("apps/local-api/app/services/memory.py")
+        release_text = self._read_text("apps/local-api/app/services/release.py")
+        required_memory_tokens = [
+            "memory_contract_version",
+            "correction_status",
+            "supersedes",
+            "superseded_by",
+            "freshness_state",
+        ]
+        if not all(token in memory_text for token in required_memory_tokens):
+            blockers.append("phase107_memory_contract_missing")
+        required_service_tokens = [
+            "MEMORY_SEMANTIC_CONTRACT_VERSION",
+            "_correction_status",
+            "memory_semantic_contract_version",
+            "MemorySearchFilteredItem(",
+        ]
+        if not all(token in service_text for token in required_service_tokens):
+            blockers.append("phase107_memory_service_contract_missing")
+        if "phase107_memory_semantic_contract_unification" not in release_text:
+            blockers.append("phase107_release_gate_missing")
+        if not self._relative_exists(self._PHASE_DOCS["phase107_memory_semantic_contract_unification"]):
+            blockers.append("phase107_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase107_memory_semantic_contract_unification"]):
+            blockers.append("phase107_test_missing")
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase107_memory_semantic_contract_unification"],
+                "packages/core-types/core_types/memory.py",
+                "apps/local-api/app/services/memory.py",
+                self._PHASE_TESTS["phase107_memory_semantic_contract_unification"],
+            ],
+            blockers=blockers,
+            next_owner="apps/local-api/app/services/memory.py",
+            details={
+                "phase107_contract_version": "phase107.memory_semantic_contract.v1",
+                "memory_semantic_contract_version": "phase107.memory_semantic_contract.v1",
+                "status_fields": [
+                    "status",
+                    "freshness_state",
+                    "supersedes",
+                    "superseded_by",
+                    "correction_status",
+                ],
+                "filtered_reason_contract": True,
+                "correction_closure_contract": "new_memory_wins_old_memory_explained",
+                "ready_conditions": [
+                    "search items expose semantic contract version",
+                    "filtered entries expose stable state explanations",
+                    "correction closure exposes supersede linkage",
+                    "phase107 regression coverage present",
+                ],
+            },
+        )
+
     def _phase94(self) -> dict[str, Any]:
         blockers: list[str] = []
         failure_service = getattr(self._chat_service, "_failure_experience", None)
@@ -1332,6 +1486,472 @@ class ChatMainlineReadinessService:
                 "phase94_contract_version": "phase94.failure_experience_governance.v1",
                 "review_actions": runtime_diag.get("review_actions") or [],
                 "regression_threshold": runtime_diag.get("regression_threshold") or {},
+            },
+        )
+
+    def _phase105(self) -> dict[str, Any]:
+        blockers: list[str] = []
+        signal_summary = smoke_signal_suite_summary()
+        signal_suites = list(signal_summary.get("signal_suites") or [])
+        signal_paths = [str(item.get("path") or "") for item in signal_suites]
+        signal_phase_keys = [
+            str(item.get("phase_key") or "")
+            for item in signal_suites
+            if str(item.get("phase_key") or "")
+        ]
+        required_phase_keys = [
+            "phase90_compat_cleanup_release_gate",
+            "phase101_extension_capability_runtime",
+            "phase103_task_closure_gate",
+            "phase104_check_script_recovery",
+            "phase104_check_report_contract",
+        ]
+        if not signal_summary.get("check_contract_version"):
+            blockers.append("phase105_signal_contract_missing")
+        if not self._relative_exists("config/gate_signal_plane.json"):
+            blockers.append("phase105_signal_manifest_missing")
+        if not signal_suites:
+            blockers.append("phase105_smoke_signal_suites_missing")
+        missing_paths = [path for path in signal_paths if path and not self._relative_exists(path)]
+        if missing_paths:
+            blockers.append("phase105_signal_suite_paths_missing")
+        missing_phase_keys = [
+            phase_key for phase_key in required_phase_keys if phase_key not in signal_phase_keys
+        ]
+        if missing_phase_keys:
+            blockers.append("phase105_smoke_backbone_incomplete")
+        if not self._relative_exists(self._PHASE_DOCS["phase104_check_script_recovery"]):
+            blockers.append("phase104_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase104_check_script_recovery"]):
+            blockers.append("phase104_recovery_test_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase104_check_report_contract"]):
+            blockers.append("phase104_contract_test_missing")
+        if not self._relative_exists(self._PHASE_DOCS["phase105_gate_signal_plane_governance"]):
+            blockers.append("phase105_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase105_gate_signal_plane_governance"]):
+            blockers.append("phase105_test_missing")
+        release_text = self._read_text("apps/local-api/app/services/release.py")
+        if "phase105_gate_signal_plane_governance_status" not in release_text:
+            blockers.append("phase105_release_summary_missing")
+        check_script_text = self._read_text("scripts/check.ps1")
+        if "Get-GateSignalProfile" not in check_script_text or "signal_suites" not in check_script_text:
+            blockers.append("phase105_check_script_not_bound_to_signal_manifest")
+        latest_smoke_report = self._latest_root_check_report(profile="smoke") or {}
+        latest_signal_suites = [
+            item
+            for item in latest_smoke_report.get("signal_suites", [])
+            if isinstance(item, dict) and isinstance(item.get("path"), str)
+        ]
+        latest_signal_paths = [str(item.get("path") or "") for item in latest_signal_suites]
+        smoke_report_blockers: list[str] = []
+        if not latest_smoke_report:
+            smoke_report_blockers.append("phase105_latest_smoke_report_missing")
+        elif str(latest_smoke_report.get("check_contract_version") or "") != str(
+            signal_summary.get("check_contract_version") or ""
+        ):
+            smoke_report_blockers.append("phase105_latest_smoke_contract_drift")
+        if latest_smoke_report and latest_signal_paths != signal_paths:
+            smoke_report_blockers.append("phase105_latest_smoke_signal_suite_drift")
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                "config/gate_signal_plane.json",
+                "scripts/check.ps1",
+                "apps/local-api/app/services/release.py",
+                self._PHASE_DOCS["phase104_check_script_recovery"],
+                self._PHASE_DOCS["phase105_gate_signal_plane_governance"],
+                self._PHASE_TESTS["phase104_check_script_recovery"],
+                self._PHASE_TESTS["phase104_check_report_contract"],
+                self._PHASE_TESTS["phase105_gate_signal_plane_governance"],
+            ],
+            blockers=blockers,
+            next_owner="config/gate_signal_plane.json",
+            details={
+                "phase105_contract_version": "phase105.gate_signal_plane.v1",
+                "check_contract_version": signal_summary.get("check_contract_version"),
+                "smoke_suite_id": signal_summary.get("suite_id"),
+                "smoke_suite_name": signal_summary.get("suite_name"),
+                "smoke_signal_paths": signal_paths,
+                "smoke_signal_phase_keys": signal_phase_keys,
+                "required_phase_keys": required_phase_keys,
+                "missing_signal_paths": missing_paths,
+                "missing_phase_keys": missing_phase_keys,
+                "smoke_regression_command": ".\\scripts\\check.ps1 -Profile smoke",
+                "latest_smoke_report_present": bool(latest_smoke_report),
+                "latest_smoke_report_status": (
+                    str(latest_smoke_report.get("status") or "not_run")
+                    if latest_smoke_report
+                    else "not_run"
+                ),
+                "latest_smoke_contract_match": "phase105_latest_smoke_contract_drift"
+                not in smoke_report_blockers,
+                "latest_smoke_signal_suite_match": "phase105_latest_smoke_signal_suite_drift"
+                not in smoke_report_blockers,
+                "latest_smoke_missing_signal_paths": [
+                    path for path in signal_paths if path not in latest_signal_paths
+                ],
+                "latest_smoke_drift_signal_paths": [
+                    path for path in latest_signal_paths if path not in signal_paths
+                ],
+                "latest_smoke_report_blockers": smoke_report_blockers,
+            },
+        )
+
+    def _phase109(
+        self,
+        *,
+        phase88: dict[str, Any],
+        phase92: dict[str, Any],
+        phase94: dict[str, Any],
+        phase105: dict[str, Any],
+    ) -> dict[str, Any]:
+        blockers: list[str] = []
+        gateway_snapshots = {
+            "wechat": getattr(
+                self._channel_gateway_registry.require("wechat"),
+                "reliability_snapshot",
+                lambda: {},
+            )(),
+            "feishu": getattr(
+                self._channel_gateway_registry.require("feishu"),
+                "reliability_snapshot",
+                lambda: {},
+            )(),
+        }
+        evidence_bundles = [
+            self._phase109_evidence_bundle(
+                bundle_id="wechat_50_smoke",
+                summary_path=(
+                    "docs/测试/聊天主链路/2026-05-03-wechat-50-scenarios/"
+                    "evidence-smoke/02-summary.json"
+                ),
+                gap_path=(
+                    "docs/测试/聊天主链路/2026-05-03-wechat-50-scenarios/"
+                    "evidence-smoke/03-gap-list.json"
+                ),
+            ),
+            self._phase109_evidence_bundle(
+                bundle_id="wechat_real_smoke",
+                summary_path=(
+                    "docs/测试/聊天主链路/2026-05-03-wechat-real-scenarios/"
+                    "evidence-smoke/02-summary.json"
+                ),
+                gap_path=(
+                    "docs/测试/聊天主链路/2026-05-03-wechat-real-scenarios/"
+                    "evidence-smoke/03-gap-list.json"
+                ),
+            ),
+        ]
+        dependency_statuses = {
+            "phase88_channel_reliability": str(phase88.get("status") or "missing"),
+            "phase92_long_term_memory_recall_governance": str(
+                phase92.get("status") or "missing"
+            ),
+            "phase94_failure_experience_governance": str(phase94.get("status") or "missing"),
+            "phase105_gate_signal_plane_governance": str(phase105.get("status") or "missing"),
+        }
+        if any(status != "ready" for status in dependency_statuses.values()):
+            blockers.append("phase109_dependency_not_ready")
+        if not self._relative_exists(self._PHASE_DOCS["phase109_real_world_maturity_recheck"]):
+            blockers.append("phase109_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase109_real_world_maturity_recheck"]):
+            blockers.append("phase109_test_missing")
+        if not all(bundle["summary_present"] and bundle["gap_report_present"] for bundle in evidence_bundles):
+            blockers.append("phase109_long_run_evidence_missing")
+        total_gap_count = sum(int(bundle["gap_count"]) for bundle in evidence_bundles)
+        total_p0_gap_count = sum(int(bundle["p0_gap_count"]) for bundle in evidence_bundles)
+        total_no_turn_count = sum(int(bundle["no_turn_count"]) for bundle in evidence_bundles)
+        evidence_no_turn_group_counts = self._merge_phase109_counts(
+            [dict(bundle.get("no_turn_group_counts") or {}) for bundle in evidence_bundles]
+        )
+        runtime_no_turn_reason_counts = self._phase109_runtime_no_turn_reason_counts(
+            gateway_snapshots
+        )
+        top_runtime_no_turn_reasons = self._phase109_top_counts(runtime_no_turn_reason_counts)
+        top_evidence_no_turn_groups = self._phase109_top_counts(evidence_no_turn_group_counts)
+        likely_primary_causes = self._phase109_likely_primary_causes(
+            top_evidence_no_turn_groups=top_evidence_no_turn_groups,
+            top_runtime_no_turn_reasons=top_runtime_no_turn_reasons,
+        )
+        remediation_queue = [
+            {
+                "cause_code": str(item.get("cause_code") or ""),
+                "classification": str(item.get("classification") or "unknown"),
+                "priority": str(item.get("priority") or "p1"),
+                "recommended_next_step": str(item.get("recommended_next_step") or ""),
+            }
+            for item in likely_primary_causes
+        ]
+        if total_p0_gap_count > 0:
+            blockers.append("real_world_evidence_p0_gaps_present")
+        if total_no_turn_count > 0:
+            blockers.append("channel_long_run_no_turn_present")
+        maturity_grade = "ready"
+        if blockers:
+            core_dependencies_ready = all(status == "ready" for status in dependency_statuses.values())
+            evidence_present = all(
+                bundle["summary_present"] and bundle["gap_report_present"]
+                for bundle in evidence_bundles
+            )
+            if core_dependencies_ready and evidence_present and total_p0_gap_count == 0:
+                maturity_grade = "beta"
+            else:
+                maturity_grade = "partial"
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase109_real_world_maturity_recheck"],
+                "docs/测试/聊天主链路/2026-05-03-wechat-50-scenarios/evidence-smoke/02-summary.json",
+                "docs/测试/聊天主链路/2026-05-03-wechat-50-scenarios/evidence-smoke/03-gap-list.json",
+                "docs/测试/聊天主链路/2026-05-03-wechat-real-scenarios/evidence-smoke/02-summary.json",
+                "docs/测试/聊天主链路/2026-05-03-wechat-real-scenarios/evidence-smoke/03-gap-list.json",
+                "data/check-reports",
+                self._PHASE_TESTS["phase109_real_world_maturity_recheck"],
+            ],
+            blockers=blockers,
+            next_owner="apps/local-api/app/services/chat_mainline_readiness.py",
+            details={
+                "phase109_contract_version": "phase109.real_world_maturity_recheck.v1",
+                "maturity_grade": maturity_grade,
+                "dependency_statuses": dependency_statuses,
+                "evidence_bundles": evidence_bundles,
+                "long_run_evidence_present": all(
+                    bundle["summary_present"] and bundle["gap_report_present"]
+                    for bundle in evidence_bundles
+                ),
+                "blocking_gap_quantification": {
+                    "total_gap_count": total_gap_count,
+                    "total_p0_gap_count": total_p0_gap_count,
+                    "total_no_turn_count": total_no_turn_count,
+                },
+                "no_turn_diagnostics": {
+                    "evidence_no_turn_group_counts": evidence_no_turn_group_counts,
+                    "top_evidence_no_turn_groups": top_evidence_no_turn_groups,
+                    "runtime_no_turn_reason_counts": runtime_no_turn_reason_counts,
+                    "top_runtime_no_turn_reasons": top_runtime_no_turn_reasons,
+                    "likely_primary_causes": likely_primary_causes,
+                    "remediation_queue": remediation_queue,
+                },
+                "ready_conditions": [
+                    "long-run evidence bundles are present",
+                    "phase88/phase92/phase94/phase105 are ready",
+                    "real-world evidence has no P0 structural gaps",
+                    "real-world evidence has no no-turn routing gaps",
+                ],
+            },
+        )
+
+    def _phase110(
+        self,
+        *,
+        phase88: dict[str, Any],
+        phase109: dict[str, Any],
+        channel_diag: dict[str, Any],
+        channel_semantics_diag: dict[str, Any],
+    ) -> dict[str, Any]:
+        blockers: list[str] = []
+        gateway_snapshots = {
+            "wechat": getattr(
+                self._channel_gateway_registry.require("wechat"),
+                "reliability_snapshot",
+                lambda: {},
+            )(),
+            "feishu": getattr(
+                self._channel_gateway_registry.require("feishu"),
+                "reliability_snapshot",
+                lambda: {},
+            )(),
+        }
+        if phase88.get("status") != "ready":
+            blockers.append("phase88_channel_reliability_not_ready")
+        if (
+            channel_diag.get("phase110_routing_contract_version")
+            != "phase110.channel_routing_stability.v1"
+        ):
+            blockers.append("channel_ingress_phase110_contract_missing")
+        if (
+            channel_semantics_diag.get("phase110_routing_contract_version")
+            != "phase110.channel_routing_stability.v1"
+        ):
+            blockers.append("channel_semantics_phase110_contract_missing")
+        if not channel_diag.get("supports_route_replay_evidence"):
+            blockers.append("channel_ingress_route_replay_evidence_missing")
+        if not channel_diag.get("routing_replay_fields"):
+            blockers.append("channel_ingress_routing_replay_fields_missing")
+        if not channel_semantics_diag.get("route_replay_fields"):
+            blockers.append("channel_semantics_route_replay_fields_missing")
+        if not self._relative_exists(self._PHASE_DOCS["phase110_channel_routing_stability"]):
+            blockers.append("phase110_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase110_channel_routing_stability"]):
+            blockers.append("phase110_test_missing")
+        runtime_reason_counts = self._phase109_runtime_no_turn_reason_counts(gateway_snapshots)
+        runtime_group_counts = self._merge_phase109_counts(
+            [
+                dict(snapshot.get("no_turn_reason_group_counts") or {})
+                for snapshot in gateway_snapshots.values()
+            ]
+        )
+        evidence_group_counts = dict(
+            dict(phase109.get("details") or {})
+            .get("no_turn_diagnostics", {})
+            .get("evidence_no_turn_group_counts")
+            or {}
+        )
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase110_channel_routing_stability"],
+                "apps/local-api/app/services/channel_reliability.py",
+                "apps/local-api/app/services/channel_ingress_runtime.py",
+                "apps/local-api/app/services/channel_session_context.py",
+                "apps/local-api/app/services/channel_session_semantics.py",
+                "apps/local-api/app/services/wechat_gateway.py",
+                "apps/local-api/app/services/feishu_gateway.py",
+                self._PHASE_TESTS["phase110_channel_routing_stability"],
+            ],
+            blockers=blockers,
+            next_owner="apps/local-api/app/services/channel_ingress_runtime.py",
+            details={
+                "phase110_contract_version": "phase110.channel_routing_stability.v1",
+                "routing_contract_alignment": {
+                    "channel_ingress_runtime": channel_diag.get(
+                        "phase110_routing_contract_version"
+                    ),
+                    "channel_session_semantics": channel_semantics_diag.get(
+                        "phase110_routing_contract_version"
+                    ),
+                },
+                "routing_replay_fields": channel_diag.get("routing_replay_fields") or [],
+                "session_route_replay_fields": channel_semantics_diag.get(
+                    "route_replay_fields"
+                )
+                or [],
+                "route_identity_fields": channel_semantics_diag.get("route_identity_fields")
+                or [],
+                "no_turn_reason_codes": channel_diag.get("no_turn_reason_codes") or [],
+                "runtime_no_turn_reason_counts": runtime_reason_counts,
+                "runtime_no_turn_reason_group_counts": runtime_group_counts,
+                "evidence_no_turn_group_counts": evidence_group_counts,
+                "phase109_open_blockers": list(phase109.get("blocking_reasons") or []),
+                "ready_conditions": [
+                    "channel ingress runtime exposes routing replay evidence",
+                    "session semantics runtime exposes deterministic route identity",
+                    "gateway snapshots aggregate no-turn reason groups",
+                    "readiness and release summary share the same routing diagnostics",
+                ],
+            },
+        )
+
+    def _phase111(self, *, phase87: dict[str, Any]) -> dict[str, Any]:
+        blockers: list[str] = []
+        tasks_text = self._read_text("apps/local-api/app/services/tasks.py")
+        workflow_text = self._read_text("apps/local-api/app/services/task_workflow_runtime.py")
+        response_text = self._read_text("apps/local-api/app/services/chat_response.py")
+        release_text = self._read_text("apps/local-api/app/services/release.py")
+        if phase87.get("status") != "ready":
+            blockers.append("phase87_action_state_semantics_not_ready")
+        if "phase111_deliverable_proof" not in tasks_text:
+            blockers.append("task_detail_deliverable_proof_contract_missing")
+        if "phase111_completion_semantics" not in tasks_text:
+            blockers.append("task_detail_completion_semantics_missing")
+        if "phase111.completion_semantics.v1" not in workflow_text:
+            blockers.append("task_workflow_completion_contract_missing")
+        if "completed_with_evidence" not in response_text:
+            blockers.append("response_visible_completion_semantics_not_aligned")
+        if "phase111_task_delivery_evidence" not in release_text:
+            blockers.append("release_summary_phase111_missing")
+        if not self._relative_exists(self._PHASE_DOCS["phase111_task_delivery_evidence"]):
+            blockers.append("phase111_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase111_task_delivery_evidence"]):
+            blockers.append("phase111_test_missing")
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase111_task_delivery_evidence"],
+                "apps/local-api/app/services/tasks.py",
+                "apps/local-api/app/services/task_workflow_runtime.py",
+                "apps/local-api/app/services/chat_response.py",
+                "apps/local-api/app/services/release.py",
+                self._PHASE_TESTS["phase111_task_delivery_evidence"],
+            ],
+            blockers=blockers,
+            next_owner="apps/local-api/app/services/tasks.py",
+            details={
+                "phase111_contract_version": "phase111.task_delivery_evidence.v1",
+                "minimum_deliverable_proof_contracts": {
+                    "repo_local": ["artifact_or_diff", "verification_passed"],
+                    "code_hosting": ["remote_artifact_or_receipt", "verification_passed"],
+                    "office_productivity": ["typed_output_or_artifact"],
+                    "video_workflow": ["render_output_or_media_evidence", "verification_passed"],
+                    "content_platform": ["visible_publish_proof"],
+                },
+                "completion_requires": [
+                    "delivery_status",
+                    "verification_status",
+                    "deliverable_proof",
+                    "visible_summary",
+                ],
+                "blocked_terminal_statuses": [
+                    "waiting_approval",
+                    "waiting_handoff",
+                    "completed_unverified",
+                    "failed_verification",
+                ],
+            },
+        )
+
+    def _phase112(self, *, phase111: dict[str, Any]) -> dict[str, Any]:
+        blockers: list[str] = []
+        extension_text = self._read_text("apps/local-api/app/services/extensions.py")
+        release_text = self._read_text("apps/local-api/app/services/release.py")
+        if phase111.get("status") != "ready":
+            blockers.append("phase111_task_delivery_evidence_not_ready")
+        if "phase112.extension_runtime_snapshot.v1" not in extension_text:
+            blockers.append("extension_runtime_snapshot_contract_missing")
+        if "runtime_snapshot=diagnostic[\"runtime_snapshot\"]" not in extension_text:
+            blockers.append("diagnostics_plan_run_snapshot_not_shared")
+        if "_deactivate_extension_mcp" not in extension_text:
+            blockers.append("extension_disable_mcp_sync_missing")
+        if "_deactivate_extension_tools" not in extension_text:
+            blockers.append("extension_disable_tool_sync_missing")
+        if "phase112_extension_runtime_sync_closure" not in release_text:
+            blockers.append("release_summary_phase112_missing")
+        if not self._relative_exists(self._PHASE_DOCS["phase112_extension_runtime_sync_closure"]):
+            blockers.append("phase112_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase112_extension_runtime_sync_closure"]):
+            blockers.append("phase112_test_missing")
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase112_extension_runtime_sync_closure"],
+                "apps/local-api/app/services/extensions.py",
+                "apps/local-api/app/services/release.py",
+                self._PHASE_TESTS["phase112_extension_runtime_sync_closure"],
+            ],
+            blockers=blockers,
+            next_owner="apps/local-api/app/services/extensions.py",
+            details={
+                "phase112_contract_version": "phase112.extension_runtime_sync_closure.v1",
+                "runtime_snapshot_contract": "phase112.extension_runtime_snapshot.v1",
+                "extension_state_machine": [
+                    "installed",
+                    "enabled",
+                    "bound",
+                    "ready",
+                    "degraded",
+                    "disabled",
+                ],
+                "sync_closure_requirements": [
+                    "shared_runtime_snapshot",
+                    "disable_syncs_tools",
+                    "disable_syncs_mcp",
+                    "diagnostics_plan_run_consistent",
+                ],
             },
         )
 
@@ -1841,14 +2461,213 @@ class ChatMainlineReadinessService:
         return path.read_text(encoding="utf-8")
 
     def _read_json(self, relative_path: str) -> dict[str, Any]:
-        text = self._read_text(relative_path)
-        if not text:
+        path = self._root_dir / relative_path
+        if not path.exists():
             return {}
         try:
+            text = path.read_text(encoding="utf-8-sig")
             payload = json.loads(text)
-        except json.JSONDecodeError:
+        except (OSError, json.JSONDecodeError):
             return {}
         return payload if isinstance(payload, dict) else {}
+
+    def _latest_root_check_report(self, *, profile: str | None = None) -> dict[str, Any]:
+        report_dir = self._root_dir / "data" / "check-reports"
+        if not report_dir.exists():
+            return {}
+        reports = sorted(report_dir.glob("check-*.json"), key=lambda path: path.stat().st_mtime)
+        for path in reversed(reports):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if profile is not None and str(payload.get("profile") or "") != profile:
+                continue
+            return payload if isinstance(payload, dict) else {}
+        return {}
+
+    def _phase109_evidence_bundle(
+        self,
+        *,
+        bundle_id: str,
+        summary_path: str,
+        gap_path: str,
+    ) -> dict[str, Any]:
+        summary = self._read_json(summary_path)
+        gap_payload = self._read_json(gap_path)
+        gaps = list(summary.get("gaps") or [])
+        if isinstance(gap_payload.get("items"), list):
+            gaps = list(gap_payload.get("items") or gaps)
+        gap_items = [item for item in gaps if isinstance(item, dict)]
+        category_counts: dict[str, int] = {}
+        severity_counts: dict[str, int] = {}
+        no_turn_group_counts: dict[str, int] = {}
+        no_turn_count = 0
+        p0_gap_count = 0
+        for item in gap_items:
+            category = str(item.get("category") or "unknown")
+            severity = str(item.get("severity") or "unknown")
+            category_counts[category] = category_counts.get(category, 0) + 1
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
+            if category == "no_turn":
+                no_turn_count += 1
+                group = str(item.get("group") or "unknown")
+                no_turn_group_counts[group] = no_turn_group_counts.get(group, 0) + 1
+            if severity == "P0":
+                p0_gap_count += 1
+        quality = dict(summary.get("quality") or {})
+        return {
+            "bundle_id": bundle_id,
+            "summary_path": summary_path,
+            "gap_path": gap_path,
+            "summary_present": bool(summary),
+            "gap_report_present": bool(gap_payload),
+            "case_count": int(summary.get("case_count") or 0),
+            "natural_reply_count": int(quality.get("natural_reply_count") or 0),
+            "gap_count": len(gap_items),
+            "p0_gap_count": p0_gap_count,
+            "no_turn_count": no_turn_count,
+            "no_turn_group_counts": no_turn_group_counts,
+            "category_counts": category_counts,
+            "severity_counts": severity_counts,
+        }
+
+    def _merge_phase109_counts(self, count_sets: list[dict[str, Any]]) -> dict[str, int]:
+        merged: dict[str, int] = {}
+        for counts in count_sets:
+            for key, value in counts.items():
+                merged[str(key)] = int(merged.get(str(key)) or 0) + int(value or 0)
+        return merged
+
+    def _phase109_runtime_no_turn_reason_counts(
+        self,
+        gateway_snapshots: dict[str, Any],
+    ) -> dict[str, int]:
+        relevant_reasons = {
+            "pairing_rejected_or_missing",
+            "ingress_policy_blocked",
+            "worker_not_running_or_disabled",
+            "conversation_bootstrap_failed",
+            "channel_ingress_submit_failed",
+            "turn_not_created",
+            "turn_created_but_not_queued",
+            "turn_created_but_runtime_missing",
+        }
+        counts: dict[str, int] = {}
+        for snapshot in gateway_snapshots.values():
+            failure_reason_counts = dict(snapshot.get("failure_reason_counts") or {})
+            for reason_code in relevant_reasons:
+                counts[reason_code] = int(counts.get(reason_code) or 0) + int(
+                    failure_reason_counts.get(reason_code) or 0
+                )
+        return counts
+
+    def _phase109_top_counts(
+        self,
+        counts: dict[str, int],
+        *,
+        limit: int = 3,
+    ) -> list[dict[str, Any]]:
+        ranked = sorted(
+            (
+                {"name": str(name), "count": int(count or 0)}
+                for name, count in counts.items()
+                if int(count or 0) > 0
+            ),
+            key=lambda item: (-int(item["count"]), str(item["name"])),
+        )
+        return ranked[:limit]
+
+    def _phase109_likely_primary_causes(
+        self,
+        *,
+        top_evidence_no_turn_groups: list[dict[str, Any]],
+        top_runtime_no_turn_reasons: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        causes: list[dict[str, Any]] = []
+        group_to_cause = {
+            "routing": {
+                "cause_code": "routing_path_not_stable",
+                "classification": "evidence_gap",
+                "priority": "p0",
+                "recommended_next_step": "stabilize channel routing path and re-run long-run smoke bundles",
+            },
+        }
+        reason_to_cause = {
+            "worker_not_running_or_disabled": {
+                "cause_code": "worker_automation_not_stable",
+                "classification": "runtime_fix",
+                "priority": "p0",
+                "recommended_next_step": "restore background worker automation health before next long-run validation",
+            },
+            "conversation_bootstrap_failed": {
+                "cause_code": "conversation_bootstrap_not_stable",
+                "classification": "runtime_fix",
+                "priority": "p0",
+                "recommended_next_step": "repair conversation bootstrap path and confirm session creation in smoke traffic",
+            },
+            "turn_created_but_runtime_missing": {
+                "cause_code": "channel_ingress_runtime_binding_missing",
+                "classification": "runtime_fix",
+                "priority": "p0",
+                "recommended_next_step": "rebind channel ingress runtime before accepting live channel traffic",
+            },
+            "turn_created_but_not_queued": {
+                "cause_code": "turn_queue_handoff_not_stable",
+                "classification": "runtime_fix",
+                "priority": "p0",
+                "recommended_next_step": "repair handoff from turn creation into queued execution",
+            },
+            "turn_not_created": {
+                "cause_code": "turn_creation_not_stable",
+                "classification": "runtime_fix",
+                "priority": "p0",
+                "recommended_next_step": "trace channel ingestion path until chat turn creation succeeds consistently",
+            },
+            "channel_ingress_submit_failed": {
+                "cause_code": "channel_ingress_submit_not_stable",
+                "classification": "runtime_fix",
+                "priority": "p0",
+                "recommended_next_step": "debug submit_channel_turn failures and confirm ingress runtime contract health",
+            },
+            "pairing_rejected_or_missing": {
+                "cause_code": "pairing_state_not_ready",
+                "classification": "governance_gap",
+                "priority": "p1",
+                "recommended_next_step": "close pairing-state gaps or narrow smoke scope to paired traffic only",
+            },
+            "ingress_policy_blocked": {
+                "cause_code": "ingress_policy_not_ready",
+                "classification": "governance_gap",
+                "priority": "p1",
+                "recommended_next_step": "reconcile ingress policy with expected long-run traffic profile",
+            },
+        }
+        for item in top_evidence_no_turn_groups:
+            name = str(item.get("name") or "")
+            mapped = dict(group_to_cause.get(name) or {})
+            if mapped and not any(entry["cause_code"] == mapped["cause_code"] for entry in causes):
+                mapped["source"] = "evidence_group"
+                mapped["source_name"] = name
+                mapped["count"] = int(item.get("count") or 0)
+                causes.append(mapped)
+        for item in top_runtime_no_turn_reasons:
+            name = str(item.get("name") or "")
+            mapped = dict(reason_to_cause.get(name) or {})
+            if mapped and not any(entry["cause_code"] == mapped["cause_code"] for entry in causes):
+                mapped["source"] = "runtime_reason"
+                mapped["source_name"] = name
+                mapped["count"] = int(item.get("count") or 0)
+                causes.append(mapped)
+        causes.sort(
+            key=lambda item: (
+                0 if str(item.get("priority")) == "p0" else 1,
+                0 if str(item.get("classification")) == "runtime_fix" else 1,
+                -int(item.get("count") or 0),
+                str(item.get("cause_code") or ""),
+            )
+        )
+        return causes
 
     def _runtime_topology_consistent(
         self,

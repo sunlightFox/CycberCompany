@@ -38,9 +38,17 @@ class ActionDialogueMapperShadowService:
         ):
             dimensions.append("skill_mcp_transition_naturalness")
 
-        if isinstance(natural, dict) and canonical_action_status(natural.get("status"), default="") == "waiting_for_approval":
+        natural_status = ""
+        if isinstance(natural, dict):
+            raw_natural_status = str(natural.get("status") or "")
+            natural_status = (
+                "pending_action"
+                if raw_natural_status == "pending_action"
+                else canonical_action_status(raw_natural_status, default="")
+            )
+        if natural_status in {"waiting_for_approval", "pending_action"}:
             return ActionDialogueMappingShadow(
-                action_status="waiting_for_approval",
+                action_status=natural_status,
                 narration_style="approval_waiting",
                 should_explain_pending=True,
                 should_claim_completion=False,

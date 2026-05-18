@@ -12,12 +12,10 @@ from trace_service import TraceService, redact
 from app.core.time import utc_now_iso
 from app.services.audit import AuditEventService
 from app.services.checkpoints import CheckpointService
-from app.services.feishu_gateway import FeishuChannelGatewayService
 from app.services.memory import MemoryService
 from app.services.notifications import NotificationGatewayService
 from app.services.scheduled_tasks import ScheduledTaskService
 from app.services.tasks import TaskEngine
-from app.services.wechat_gateway import WechatChannelGatewayService
 
 WorkerHandler = Callable[[str], Awaitable[dict[str, Any]]]
 
@@ -72,8 +70,8 @@ class BackgroundWorkerService:
         task_engine: TaskEngine,
         memory_service: MemoryService,
         agent_workbench_service: Any | None = None,
-        wechat_gateway: WechatChannelGatewayService | None = None,
-        feishu_gateway: FeishuChannelGatewayService | None = None,
+        wechat_gateway: Any | None = None,
+        feishu_gateway: Any | None = None,
         trace_service: TraceService,
         audit_service: AuditEventService,
         enabled: bool = False,
@@ -86,8 +84,11 @@ class BackgroundWorkerService:
         self._task_engine = task_engine
         self._memory = memory_service
         self._agent_workbench = agent_workbench_service
-        self._wechat_gateway = wechat_gateway
-        self._feishu_gateway = feishu_gateway
+        self._channel_gateways: dict[str, Any] = {}
+        if wechat_gateway is not None:
+            self._channel_gateways["wechat"] = wechat_gateway
+        if feishu_gateway is not None:
+            self._channel_gateways["feishu"] = feishu_gateway
         self._trace = trace_service
         self._audit = audit_service
         self._enabled = enabled
@@ -113,11 +114,14 @@ class BackgroundWorkerService:
             name: WorkerState(name=name, enabled=True) for name in self._handlers
         }
 
-    def set_wechat_gateway(self, wechat_gateway: WechatChannelGatewayService) -> None:
-        self._wechat_gateway = wechat_gateway
+    def set_channel_gateway(self, provider: str, gateway: Any) -> None:
+        self._channel_gateways[provider] = gateway
 
-    def set_feishu_gateway(self, feishu_gateway: FeishuChannelGatewayService) -> None:
-        self._feishu_gateway = feishu_gateway
+    def set_wechat_gateway(self, wechat_gateway: Any) -> None:
+        self.set_channel_gateway("wechat", wechat_gateway)
+
+    def set_feishu_gateway(self, feishu_gateway: Any) -> None:
+        self.set_channel_gateway("feishu", feishu_gateway)
 
     async def start(self) -> None:
         if not self._enabled or self._loop_task is not None:
@@ -343,20 +347,22 @@ class BackgroundWorkerService:
         }
 
     async def _wechat_inbound_worker(self, trace_id: str) -> dict[str, Any]:
-        if self._wechat_gateway is None:
+        gateway = self._channel_gateways.get("wechat")
+        if gateway is None:
             return {"status": "skipped", "reason": "wechat_gateway_unavailable"}
-        inbound = await self._wechat_gateway.poll_once(trace_id=trace_id)
-        outbound = await self._wechat_gateway.deliver_due(trace_id=trace_id)
+        inbound = await gateway.poll_once(trace_id=trace_id)
+        outbound = await gateway.deliver_due(trace_id=trace_id)
         return {
             "inbound": inbound.model_dump(mode="json"),
             "outbound": outbound.model_dump(mode="json"),
         }
 
     async def _feishu_inbound_worker(self, trace_id: str) -> dict[str, Any]:
-        if self._feishu_gateway is None:
+        gateway = self._channel_gateways.get("feishu")
+        if gateway is None:
             return {"status": "skipped", "reason": "feishu_gateway_unavailable"}
-        inbound = await self._feishu_gateway.poll_once(trace_id=trace_id)
-        outbound = await self._feishu_gateway.deliver_due(trace_id=trace_id)
+        inbound = await gateway.poll_once(trace_id=trace_id)
+        outbound = await gateway.deliver_due(trace_id=trace_id)
         return {
             "inbound": inbound.model_dump(mode="json"),
             "outbound": outbound.model_dump(mode="json"),

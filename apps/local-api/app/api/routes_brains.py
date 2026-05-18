@@ -10,10 +10,12 @@ from app.schemas.brain import (
     BrainDecisionPreviewRequest,
     BrainDecisionPreviewResponse,
     BrainListResponse,
+    BrainProviderPresetListResponse,
     BrainResponse,
     BrainUpdateRequest,
     BrainVerifyResponse,
 )
+from app.services.brain_provider_catalog import list_provider_presets
 from app.services.registry import ServiceRegistry
 
 router = APIRouter(prefix="/api/brains", tags=["brains"])
@@ -23,6 +25,11 @@ decision_router = APIRouter(prefix="/api/brain", tags=["brain"])
 @router.get("", response_model=BrainListResponse)
 async def list_brains(registry: ServiceRegistry = Depends(get_registry)) -> BrainListResponse:
     return BrainListResponse(items=await registry.brain_service.list_brains())
+
+
+@router.get("/providers", response_model=BrainProviderPresetListResponse)
+async def list_brain_providers() -> BrainProviderPresetListResponse:
+    return BrainProviderPresetListResponse(items=list_provider_presets())
 
 
 @router.post("", response_model=BrainResponse)

@@ -14,7 +14,8 @@ risk:
     - ~/.config/*/secrets/**
     - browser_profile://default/**
   approval_profile: balanced_personal
-  chat_visible_redaction: strict
+  governance_mode: smooth
+  chat_visible_redaction: relaxed
   approval_policy:
     balanced_personal:
       auto_approve_max_risk: R3

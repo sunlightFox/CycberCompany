@@ -18,6 +18,7 @@ from app.schemas.brain import (
     BrainVerifyResponse,
 )
 from app.services.audit import AuditEventService
+from app.services.brain_provider_catalog import apply_provider_defaults
 from app.services.model_gateway import ModelProtocolGateway
 from app.services.secrets import SecretStore
 
@@ -50,10 +51,14 @@ class BrainService:
         *,
         trace_id: str | None = None,
     ) -> BrainResponse:
+        data = apply_provider_defaults(
+            request.model_dump(exclude={"api_key", "api_key_ref"}),
+            explicit_fields=set(request.model_fields_set),
+        )
         self._validate_brain_payload(
-            is_local=request.is_local,
-            endpoint=request.endpoint,
-            model_name=request.model_name,
+            is_local=bool(data.get("is_local", request.is_local)),
+            endpoint=data.get("endpoint"),
+            model_name=str(data.get("model_name") or request.model_name),
             api_key=request.api_key,
             api_key_ref=request.api_key_ref,
         )
@@ -81,7 +86,7 @@ class BrainService:
         brain_id = new_id("brn")
         await self._repo.insert_brain(
             {
-                **request.model_dump(exclude={"api_key", "api_key_ref"}),
+                **data,
                 "brain_id": brain_id,
                 "api_key_ref": api_key_ref,
                 "status": "configured" if request.enabled else "disabled",
@@ -98,7 +103,7 @@ class BrainService:
             risk_level=RiskLevel.R1,
             payload={
                 "brain_id": brain_id,
-                "provider": request.provider,
+                "provider": data.get("provider"),
                 "has_api_key": bool(api_key_ref),
             },
             trace_id=trace_id,
@@ -283,7 +288,8 @@ class BrainService:
                             candidate.get("request_format") or verify_capabilities["request_format"]
                         ),
                         "response_format": str(
-                            candidate.get("response_format") or verify_capabilities["response_format"]
+                            candidate.get("response_format")
+                            or verify_capabilities["response_format"]
                         ),
                         "selected_protocol_family": candidate_family,
                         "endpoint_reachable": False,

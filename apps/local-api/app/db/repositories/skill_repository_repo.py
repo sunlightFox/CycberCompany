@@ -265,6 +265,10 @@ class SkillRepositoryRepository:
     async def upsert_package_version(self, data: dict[str, Any]) -> None:
         version = data.get("version") or "unversioned"
         checksum = data.get("checksum") or ""
+        version_id = (
+            f"skver_"
+            f"{_hash_text(data['repository_id'] + ':' + data['package_ref'] + ':' + version + ':' + checksum)[:24]}"
+        )
         await self._db.execute(
             """
             INSERT INTO skill_marketplace_package_versions (
@@ -272,8 +276,13 @@ class SkillRepositoryRepository:
               version, checksum, source_uri_hash, dependency_summary_json,
               compatibility_json, quality_score, status, indexed_at, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(repository_id, package_ref, version, checksum) DO UPDATE SET
+            ON CONFLICT(version_id) DO UPDATE SET
+              organization_id = excluded.organization_id,
+              repository_id = excluded.repository_id,
+              package_ref = excluded.package_ref,
               bundle_id = excluded.bundle_id,
+              version = excluded.version,
+              checksum = excluded.checksum,
               source_uri_hash = excluded.source_uri_hash,
               dependency_summary_json = excluded.dependency_summary_json,
               compatibility_json = excluded.compatibility_json,
@@ -283,13 +292,13 @@ class SkillRepositoryRepository:
               updated_at = excluded.updated_at
             """,
             (
-                f"skver_{_hash_text(data['repository_id'] + ':' + data['package_ref'] + ':' + version + ':' + checksum)[:24]}",
+                version_id,
                 data["organization_id"],
                 data["repository_id"],
                 data["package_ref"],
                 data["bundle_id"],
-                data.get("version"),
-                data.get("checksum"),
+                version,
+                checksum,
                 _source_uri_hash(data.get("source", {})),
                 _json(data.get("dependency_summary", {})),
                 _json(data.get("compatibility", {})),

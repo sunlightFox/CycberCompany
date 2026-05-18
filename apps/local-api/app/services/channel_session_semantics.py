@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from app.services.channel_reliability import PHASE110_CHANNEL_ROUTING_STABILITY_VERSION
+
 
 def _hash(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -103,11 +105,26 @@ class ChannelSessionSemanticsRuntime:
         return {
             "runtime": "channel_session_semantics",
             "maturity": "runtime_native",
+            "phase110_routing_contract_version": PHASE110_CHANNEL_ROUTING_STABILITY_VERSION,
             "supports_delivery_modes": list(self._DELIVERY_MODES),
             "supports_thread_isolation": True,
             "supports_peer_session_rollover": True,
             "dedupe_source": "channel_account_peer_thread_message",
             "cross_channel_reuse_default": False,
+            "route_identity_fields": [
+                "provider",
+                "channel_account_id",
+                "delivery_mode",
+                "channel_peer_id_redacted",
+                "channel_thread_id",
+            ],
+            "route_replay_fields": [
+                "channel_message_id",
+                "dedupe_key",
+                "session_peer_ref_redacted",
+                "conversation_binding_mode",
+                "cross_channel_reuse_allowed",
+            ],
         }
 
     def _delivery_mode(

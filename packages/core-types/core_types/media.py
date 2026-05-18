@@ -193,3 +193,69 @@ class MediaChatBinding(ApiModel):
     evidence: dict[str, Any] = Field(default_factory=dict)
     trace_id: EntityId | None = None
     created_at: datetime | str
+
+
+class VideoWorkflowProfile(ApiModel):
+    workflow_type: str = "video_edit"
+    task_class: str = "standard"
+    require_render: bool = True
+    require_export: bool = False
+    include_transcript: bool = True
+    include_frames: bool = True
+    frame_interval_ms: int = 10000
+    max_frames: int = 3
+    scene_threshold: float = 0.35
+    max_segments: int = 6
+    render_strategy: str = "copy"
+    provider_capabilities: dict[str, Any] = Field(default_factory=dict)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+
+
+class VideoWorkflowStep(ApiModel):
+    step_id: EntityId
+    workflow_id: EntityId
+    organization_id: EntityId = "org_default"
+    task_id: EntityId
+    media_id: EntityId
+    step_key: str
+    status: str = "pending"
+    attempt: int = 1
+    input: dict[str, Any] = Field(default_factory=dict)
+    output: dict[str, Any] = Field(default_factory=dict)
+    error_code: str | None = None
+    error_summary: str | None = None
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
+    started_at: datetime | str | None = None
+    completed_at: datetime | str | None = None
+    created_at: datetime | str
+    updated_at: datetime | str
+
+
+class VideoWorkflowResult(ApiModel):
+    timeline_summary: dict[str, Any] = Field(default_factory=dict)
+    scene_map: list[dict[str, Any]] = Field(default_factory=list)
+    edit_decision_list: list[dict[str, Any]] = Field(default_factory=list)
+    render_output: dict[str, Any] = Field(default_factory=dict)
+    not_run_effects: list[str] = Field(default_factory=list)
+    residual_risk: list[str] = Field(default_factory=list)
+    deliverable: bool = False
+    provider_status: dict[str, Any] = Field(default_factory=dict)
+    export_summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class VideoWorkflowPlan(ApiModel):
+    workflow_id: EntityId
+    organization_id: EntityId = "org_default"
+    task_id: EntityId
+    media_id: EntityId
+    goal: str
+    status: str = "planned"
+    profile: VideoWorkflowProfile = Field(default_factory=VideoWorkflowProfile)
+    edit_plan_id: EntityId | None = None
+    approval_id: EntityId | None = None
+    result: VideoWorkflowResult = Field(default_factory=VideoWorkflowResult)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
+    created_at: datetime | str
+    updated_at: datetime | str

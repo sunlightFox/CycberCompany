@@ -25,20 +25,29 @@ class PermissionPreview(ApiModel):
 class PluginBundle(ApiModel):
     bundle_id: EntityId
     organization_id: EntityId
+    extension_id: EntityId | None = None
     display_name: str
     description: str | None = None
     author: str | None = None
     bundle_revision: str
+    package_kind: str = "plugin_bundle"
     source_type: str
+    source_format: str = "cycber_bundle_v1"
     source_uri: str | None = None
     package_uri: str | None = None
     manifest_hash: str
+    canonical_version: str = "canonical.skill.v1"
+    compatibility_status: str = "compatible"
+    compatibility_notes: list[str] = Field(default_factory=list)
     signature_status: str
     trust_level: str
     status: str
+    binding_status: str = "not_required"
+    binding_summary: dict[str, Any] = Field(default_factory=dict)
     permission_summary: dict[str, Any] = Field(default_factory=dict)
     risk_summary: dict[str, Any] = Field(default_factory=dict)
     manifest: dict[str, Any] = Field(default_factory=dict)
+    canonical_snapshot: dict[str, Any] = Field(default_factory=dict)
     installed_by_member_id: EntityId | None = None
     installed_at: datetime | None = None
     enabled_at: datetime | None = None
@@ -64,11 +73,21 @@ class SkillRecord(ApiModel):
     skill_id: EntityId
     organization_id: EntityId
     bundle_id: EntityId
+    extension_id: EntityId | None = None
     name: str
     display_name: str
     description: str | None = None
     entrypoint_path: str
     instructions: str
+    runtime_kind: str = "workflow_bound"
+    source_format: str = "cycber_bundle_v1"
+    canonical_version: str = "canonical.skill.v1"
+    compatibility_status: str = "compatible"
+    compatibility_notes: list[str] = Field(default_factory=list)
+    binding_status: str = "not_required"
+    binding_summary: dict[str, Any] = Field(default_factory=dict)
+    instruction_spec: dict[str, Any] = Field(default_factory=dict)
+    execution_binding: dict[str, Any] = Field(default_factory=dict)
     trigger: dict[str, Any] = Field(default_factory=dict)
     input_schema: dict[str, Any] = Field(default_factory=dict)
     output_schema: dict[str, Any] = Field(default_factory=dict)
@@ -138,6 +157,48 @@ class SkillCandidateRecord(ApiModel):
     trace_id: EntityId | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class SkillLifecycleRecord(ApiModel):
+    skill_id: EntityId
+    organization_id: EntityId
+    bundle_id: EntityId
+    created_by: str = "system"
+    provenance: str = "unknown"
+    use_count: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    last_used_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_failure_at: datetime | None = None
+    pinned: bool = False
+    state: str = "active"
+    archived_at: datetime | None = None
+    archive_reason: str | None = None
+    trace_id: EntityId | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class SkillCuratorPreviewItem(ApiModel):
+    skill_id: EntityId
+    bundle_id: EntityId
+    state: str = "active"
+    proposed_action: str
+    last_used_at: datetime | None = None
+    pinned: bool = False
+    stale_cutoff_at: datetime | None = None
+    archive_cutoff_at: datetime | None = None
+    reason_summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class SkillCuratorRunResult(ApiModel):
+    checked_count: int = 0
+    marked_stale_count: int = 0
+    archived_count: int = 0
+    skipped_pinned_count: int = 0
+    items: list[SkillLifecycleRecord] = Field(default_factory=list)
+    preview_items: list[SkillCuratorPreviewItem] = Field(default_factory=list)
 
 
 class SkillEvalRun(ApiModel):
@@ -297,6 +358,127 @@ class SkillMarketplacePackageDetail(ApiModel):
     latest_health: SkillMarketplaceHealthRecord | None = None
     install_records: list[SkillMarketplaceInstallRecord] = Field(default_factory=list)
     dependency_edges: list[SkillDependencyEdge] = Field(default_factory=list)
+
+
+class CanonicalToolRequirement(ApiModel):
+    tool_name: str
+    required: bool = True
+    source: str | None = None
+
+
+class CanonicalMcpRequirement(ApiModel):
+    server_id: str | None = None
+    tool_name: str | None = None
+    capability: str | None = None
+    required: bool = True
+    permission: dict[str, Any] = Field(default_factory=dict)
+
+
+class CanonicalAssetRequirement(ApiModel):
+    asset_type: str
+    optional: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CanonicalPermissionEnvelope(ApiModel):
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+    mcp: list[dict[str, Any]] = Field(default_factory=list)
+    assets: list[dict[str, Any]] = Field(default_factory=list)
+    network: dict[str, Any] = Field(default_factory=dict)
+    filesystem: dict[str, Any] = Field(default_factory=dict)
+    environment: dict[str, Any] = Field(default_factory=dict)
+
+
+class CanonicalSkillInstruction(ApiModel):
+    markdown: str
+    frontmatter: dict[str, Any] = Field(default_factory=dict)
+    trigger: dict[str, Any] = Field(default_factory=dict)
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    output_schema: dict[str, Any] = Field(default_factory=dict)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class CanonicalExecutionBinding(ApiModel):
+    runtime_kind: str = "instruction_only"
+    status: str = "unbound"
+    builtin_tools: list[str] = Field(default_factory=list)
+    mcp_tools: list[str] = Field(default_factory=list)
+    missing_requirements: list[str] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class CanonicalRuntimeContribution(ApiModel):
+    contribution_id: EntityId
+    contribution_type: str
+    status: str = "registered_disabled"
+    runtime_kind: str = "manifest"
+    name: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class CanonicalSkill(ApiModel):
+    skill_id: EntityId
+    name: str
+    display_name: str
+    description: str | None = None
+    entrypoint_path: str = "SKILL.md"
+    runtime_kind: str = "instruction_only"
+    instruction_spec: CanonicalSkillInstruction
+    execution_binding: CanonicalExecutionBinding = Field(
+        default_factory=CanonicalExecutionBinding
+    )
+    required_tools: list[CanonicalToolRequirement] = Field(default_factory=list)
+    required_assets: list[CanonicalAssetRequirement] = Field(default_factory=list)
+    permission_envelope: CanonicalPermissionEnvelope = Field(
+        default_factory=CanonicalPermissionEnvelope
+    )
+    compatibility_status: str = "native"
+    compatibility_notes: list[str] = Field(default_factory=list)
+
+
+class CanonicalCompatibilityReport(ApiModel):
+    extension_id: EntityId
+    source_format: str
+    canonical_version: str = "canonical.skill.v1"
+    compatibility_status: str
+    compatibility_notes: list[str] = Field(default_factory=list)
+    missing_items: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    compatibility_tier: str = "manifest_compatible"
+    smoke_check: dict[str, Any] = Field(default_factory=dict)
+    package_compatibility: dict[str, Any] = Field(default_factory=dict)
+    blocked_reasons: list[str] = Field(default_factory=list)
+
+
+class CanonicalExtensionPackage(ApiModel):
+    extension_id: EntityId
+    bundle_id: EntityId
+    display_name: str
+    description: str | None = None
+    package_kind: str
+    source_type: str
+    source_format: str
+    source_uri: str | None = None
+    manifest_format: str | None = None
+    canonical_version: str = "canonical.skill.v1"
+    compatibility_status: str = "compatible"
+    compatibility_notes: list[str] = Field(default_factory=list)
+    trust_level: str = "restricted"
+    version: str | None = None
+    permission_envelope: CanonicalPermissionEnvelope = Field(
+        default_factory=CanonicalPermissionEnvelope
+    )
+    skills: list[CanonicalSkill] = Field(default_factory=list)
+    mcp_requirements: list[CanonicalMcpRequirement] = Field(default_factory=list)
+    runtime_compatibility: str = "manifest_compatible"
+    config_requirements: list[dict[str, Any]] = Field(default_factory=list)
+    secret_requirements: list[dict[str, Any]] = Field(default_factory=list)
+    env_requirements: list[dict[str, Any]] = Field(default_factory=list)
+    dependency_requirements: list[dict[str, Any]] = Field(default_factory=list)
+    runtime_contributions: list[CanonicalRuntimeContribution] = Field(default_factory=list)
+    setup_hints: list[dict[str, Any]] = Field(default_factory=list)
+    manifest: dict[str, Any] = Field(default_factory=dict)
+    canonical_snapshot: dict[str, Any] = Field(default_factory=dict)
 
 
 class MCPServerRecord(ApiModel):

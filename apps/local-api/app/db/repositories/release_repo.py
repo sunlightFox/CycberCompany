@@ -115,6 +115,181 @@ class ReleaseRepository:
             ),
         )
 
+    async def clear_task_closure_records(self, *, release_gate_id: str | None = None) -> None:
+        if release_gate_id is None:
+            return
+        await self._db.execute(
+            "DELETE FROM task_closure_records WHERE release_gate_id = ?",
+            (release_gate_id,),
+        )
+
+    async def insert_task_closure_record(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO task_closure_records (
+              closure_record_id, organization_id, task_id, release_gate_id, source_eval_run_id,
+              domain, task_tier, delivery_status, delivery_blockers_json, handoff_reason,
+              approval_interruption, recovery_summary_json, verification_status, once_success,
+              final_deliverable, human_handoff, error_recovered, round_count, tool_call_count,
+              replan_count, stop_reason, untrusted_observation_triggered, residual_risk_present,
+              created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["closure_record_id"],
+                data["organization_id"],
+                data["task_id"],
+                data.get("release_gate_id"),
+                data.get("source_eval_run_id"),
+                data["domain"],
+                data["task_tier"],
+                data["delivery_status"],
+                _json(data.get("delivery_blockers", [])),
+                data.get("handoff_reason"),
+                1 if data.get("approval_interruption") else 0,
+                _json(data.get("recovery_summary", {})),
+                data["verification_status"],
+                1 if data.get("once_success") else 0,
+                1 if data.get("final_deliverable") else 0,
+                1 if data.get("human_handoff") else 0,
+                1 if data.get("error_recovered") else 0,
+                data.get("round_count", 0),
+                data.get("tool_call_count", 0),
+                data.get("replan_count", 0),
+                data.get("stop_reason"),
+                1 if data.get("untrusted_observation_triggered") else 0,
+                1 if data.get("residual_risk_present") else 0,
+                data["created_at"],
+            ),
+        )
+
+    async def list_task_closure_records(
+        self,
+        *,
+        release_gate_id: str | None = None,
+        domain: str | None = None,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if release_gate_id is not None:
+            where.append("release_gate_id = ?")
+            params.append(release_gate_id)
+        if domain is not None:
+            where.append("domain = ?")
+            params.append(domain)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM task_closure_records
+            {clause}
+            ORDER BY created_at ASC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [_task_closure_record_from_row(dict(row)) for row in rows]
+
+    async def list_recent_release_reports(self, limit: int = 7) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM release_reports
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return [_release_report_from_row(dict(row)) for row in rows]
+
+    async def list_task_closure_candidates(self, limit: int = 200) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT
+              task.task_id,
+              task.organization_id,
+              task.status,
+              task.goal,
+              task.failure_reason,
+              task.plan_json,
+              task.preflight_json,
+              task.result_json,
+              task.created_at,
+              (
+                SELECT COUNT(*) FROM task_steps step WHERE step.task_id = task.task_id
+              ) AS step_count,
+              (
+                SELECT COUNT(*) FROM tool_calls call WHERE call.task_id = task.task_id
+              ) AS tool_call_count,
+              (
+                SELECT COUNT(*) FROM approvals approval WHERE approval.task_id = task.task_id
+              ) AS approval_count,
+              (
+                SELECT COUNT(*) FROM collaboration_handoff_records handoff WHERE handoff.task_id = task.task_id
+              ) AS handoff_count,
+              (
+                SELECT COUNT(*) FROM task_retry_plans retry WHERE retry.task_id = task.task_id
+              ) AS retry_plan_count,
+              (
+                SELECT COUNT(*) FROM tool_failure_recovery_plans recovery WHERE recovery.task_id = task.task_id
+              ) AS recovery_plan_count,
+              (
+                SELECT COUNT(*) FROM task_observations observation
+                WHERE observation.task_id = task.task_id
+                  AND observation.untrusted_instructions_detected = 1
+              ) AS untrusted_observation_count,
+              (
+                SELECT COUNT(*)
+                FROM agent_next_action_decisions decision
+                WHERE decision.task_id = task.task_id
+                  AND COALESCE(decision.plan_delta_json, '{}') != '{}'
+              ) AS replan_count
+            FROM tasks task
+            ORDER BY task.created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return [_task_closure_candidate_from_row(dict(row)) for row in rows]
+
+    async def list_content_platform_closure_candidates(
+        self,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT
+              plan.plan_id,
+              plan.task_id,
+              plan.organization_id,
+              plan.platform_key,
+              plan.action_type,
+              plan.status,
+              plan.failure_reason,
+              plan.evidence_json,
+              plan.metadata_json,
+              plan.created_at,
+              (
+                SELECT COUNT(*)
+                FROM external_platform_executions execution
+                WHERE execution.plan_id = plan.plan_id
+              ) AS execution_count,
+              (
+                SELECT COUNT(*)
+                FROM external_platform_executions execution
+                WHERE execution.plan_id = plan.plan_id
+                  AND execution.status IN ('awaiting_human', 'waiting_approval', 'failed')
+              ) AS incomplete_execution_count
+            FROM external_platform_action_plans plan
+            WHERE plan.task_id IS NOT NULL
+            ORDER BY plan.created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return [_content_platform_closure_candidate_from_row(dict(row)) for row in rows]
+
     async def list_evidence(self, release_gate_id: str) -> list[dict[str, Any]]:
         rows = await self._db.fetch_all(
             """
@@ -957,6 +1132,43 @@ def _release_report_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "summary": summary,
         "evidence_summary": evidence_summary,
         "findings_summary": findings_summary,
+    }
+
+
+def _task_closure_record_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    delivery_blockers = _load(row.pop("delivery_blockers_json")) or []
+    recovery_summary = _load(row.pop("recovery_summary_json")) or {}
+    for key in (
+        "approval_interruption",
+        "once_success",
+        "final_deliverable",
+        "human_handoff",
+        "error_recovered",
+        "untrusted_observation_triggered",
+        "residual_risk_present",
+    ):
+        row[key] = bool(row.get(key))
+    return {
+        **row,
+        "delivery_blockers": delivery_blockers,
+        "recovery_summary": recovery_summary,
+    }
+
+
+def _task_closure_candidate_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **row,
+        "plan": _load(row.pop("plan_json")) or {},
+        "preflight": _load(row.pop("preflight_json")) or {},
+        "result": _load(row.pop("result_json")) or {},
+    }
+
+
+def _content_platform_closure_candidate_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **row,
+        "evidence": _load(row.pop("evidence_json")) or {},
+        "metadata": _load(row.pop("metadata_json")) or {},
     }
 
 

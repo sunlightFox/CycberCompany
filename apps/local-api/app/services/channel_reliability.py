@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 PHASE88_CHANNEL_RELIABILITY_VERSION = "phase88.channel_reliability.v1"
+PHASE110_CHANNEL_ROUTING_STABILITY_VERSION = "phase110.channel_routing_stability.v1"
 PHASE88_TAXONOMY = (
     "no_turn",
     "orphan_turn",
@@ -11,8 +12,11 @@ PHASE88_TAXONOMY = (
 )
 PHASE88_FAILURE_REASON_CODES = (
     "pairing_rejected_or_missing",
+    "ingress_policy_blocked",
     "duplicate_inbound_suppressed",
     "session_binding_mismatch",
+    "worker_not_running_or_disabled",
+    "conversation_bootstrap_failed",
     "channel_ingress_submit_failed",
     "turn_not_created",
     "turn_created_but_not_queued",
@@ -25,14 +29,32 @@ PHASE88_FAILURE_REASON_CODES = (
     "duplicate_control_event",
     "control_session_mismatch",
 )
+PHASE110_NO_TURN_REASON_GROUPS = {
+    "pairing_rejected_or_missing": "pairing",
+    "ingress_policy_blocked": "policy",
+    "worker_not_running_or_disabled": "worker",
+    "conversation_bootstrap_failed": "bootstrap",
+    "channel_ingress_submit_failed": "routing",
+    "turn_not_created": "routing",
+    "turn_created_but_not_queued": "routing",
+    "turn_created_but_runtime_missing": "routing",
+    "session_binding_mismatch": "routing",
+}
 
 
 def runtime_contract_details() -> dict[str, Any]:
     return {
         "phase88_reliability_contract": PHASE88_CHANNEL_RELIABILITY_VERSION,
+        "phase110_routing_contract": PHASE110_CHANNEL_ROUTING_STABILITY_VERSION,
         "taxonomy": list(PHASE88_TAXONOMY),
         "failure_reason_codes": list(PHASE88_FAILURE_REASON_CODES),
+        "no_turn_reason_groups": dict(PHASE110_NO_TURN_REASON_GROUPS),
     }
+
+
+def phase110_no_turn_reason_group(reason_code: str | None) -> str:
+    key = str(reason_code or "").strip()
+    return PHASE110_NO_TURN_REASON_GROUPS.get(key, "unknown")
 
 
 def build_correlation(
@@ -112,14 +134,30 @@ def wrong_reuse_payload(*, correlation: dict[str, Any], conflicting_session_id: 
     )
 
 
-def no_turn_payload(*, correlation: dict[str, Any], reason_code: str) -> dict[str, Any]:
+def no_turn_payload(
+    *,
+    correlation: dict[str, Any],
+    reason_code: str,
+    turn_formation: dict[str, Any] | None = None,
+    delivery_binding: dict[str, Any] | None = None,
+    notes: list[str] | None = None,
+) -> dict[str, Any]:
     return reliability_payload(
         reliability_status="failed",
         correlation=correlation,
         taxonomy=["no_turn"],
         failure_reason_codes=[reason_code],
-        turn_formation={"status": "not_created", "turn_created": False},
-        delivery_binding={"status": "not_created", "binding_visible": False},
+        turn_formation={
+            "status": "not_created",
+            "turn_created": False,
+            **dict(turn_formation or {}),
+        },
+        delivery_binding={
+            "status": "not_created",
+            "binding_visible": False,
+            **dict(delivery_binding or {}),
+        },
+        notes=notes,
     )
 
 
@@ -172,6 +210,8 @@ def success_payload(
 def summarize_records(provider: str, records: list[dict[str, Any]] | None) -> dict[str, Any]:
     items = [dict(item) for item in (records or [])]
     counts = {name: 0 for name in PHASE88_TAXONOMY}
+    failure_reason_counts = {name: 0 for name in PHASE88_FAILURE_REASON_CODES}
+    no_turn_reason_group_counts: dict[str, int] = {}
     failure_reason_codes: list[str] = []
     last_payload = reliability_payload(
         reliability_status="ok",
@@ -184,8 +224,15 @@ def summarize_records(provider: str, records: list[dict[str, Any]] | None) -> di
             if taxonomy in counts:
                 counts[taxonomy] += 1
         for reason_code in item.get("failure_reason_codes") or []:
+            if reason_code in failure_reason_counts:
+                failure_reason_counts[reason_code] += 1
             if reason_code not in failure_reason_codes:
                 failure_reason_codes.append(reason_code)
+            if "no_turn" in list(item.get("taxonomy") or []):
+                group = phase110_no_turn_reason_group(str(reason_code or ""))
+                no_turn_reason_group_counts[group] = (
+                    int(no_turn_reason_group_counts.get(group) or 0) + 1
+                )
         last_payload = item
     total = max(1, len(items)) if items else 0
     delivery_complete = sum(
@@ -196,6 +243,8 @@ def summarize_records(provider: str, records: list[dict[str, Any]] | None) -> di
     return {
         **last_payload,
         "failure_reason_codes": failure_reason_codes,
+        "failure_reason_counts": failure_reason_counts,
+        "no_turn_reason_group_counts": no_turn_reason_group_counts,
         "taxonomy_counts": counts,
         "delivery_binding_completeness": 1.0 if total == 0 else delivery_complete / total,
         "reliability_records": items,

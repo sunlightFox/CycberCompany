@@ -35,6 +35,7 @@ from app.schemas.channels import (
     WechatGatewayHealthResponse,
     WechatGatewayPollResponse,
 )
+from app.services.channel_gateway_router import ChannelGatewayRouter
 from app.services.registry import ServiceRegistry
 
 router = APIRouter(prefix="/api/channels", tags=["channels"])
@@ -160,7 +161,8 @@ async def approve_pairing_request(
     request: Request,
     registry: ServiceRegistry = Depends(get_registry),
 ) -> ChannelPairingDecisionResponse:
-    return await registry.wechat_gateway_service.approve_pairing(
+    gateway = await ChannelGatewayRouter(registry).for_pairing_request(pairing_request_id)
+    return await gateway.approve_pairing(
         pairing_request_id,
         member_id=payload.member_id,
         reason=payload.reason,
@@ -178,7 +180,8 @@ async def deny_pairing_request(
     request: Request,
     registry: ServiceRegistry = Depends(get_registry),
 ) -> ChannelPairingDecisionResponse:
-    return await registry.wechat_gateway_service.deny_pairing(
+    gateway = await ChannelGatewayRouter(registry).for_pairing_request(pairing_request_id)
+    return await gateway.deny_pairing(
         pairing_request_id,
         member_id=payload.member_id,
         reason=payload.reason,
@@ -193,7 +196,8 @@ async def revoke_peer(
     request: Request,
     registry: ServiceRegistry = Depends(get_registry),
 ) -> ChannelPeerRevokeResponse:
-    return await registry.wechat_gateway_service.revoke_peer(
+    gateway = await ChannelGatewayRouter(registry).for_peer(peer_id)
+    return await gateway.revoke_peer(
         peer_id,
         member_id=payload.member_id,
         reason=payload.reason,
@@ -275,6 +279,7 @@ async def receive_wechat_inbound(
     request: Request,
     registry: ServiceRegistry = Depends(get_registry),
 ) -> ChannelInboundWechatResponse:
+    gateway = ChannelGatewayRouter(registry).for_provider("wechat")
     response = await registry.channel_binding_service.receive_wechat_inbound(
         payload,
         trace_id=getattr(request.state, "trace_id", None),
@@ -286,7 +291,7 @@ async def receive_wechat_inbound(
             else ""
         )
         if not binding_status or binding_status == "no_pending_action":
-            routed = await registry.wechat_gateway_service.route_received_wechat_inbound(
+            routed = await gateway.route_received_wechat_inbound(
                 request=payload,
                 event=response.event.model_dump(mode="json"),
                 trace_id=getattr(request.state, "trace_id", None),
@@ -316,7 +321,8 @@ async def wechat_poll_once(
     limit: int | None = Query(default=None, ge=1, le=500),
     registry: ServiceRegistry = Depends(get_registry),
 ) -> WechatGatewayPollResponse:
-    return await registry.wechat_gateway_service.poll_once(
+    gateway = ChannelGatewayRouter(registry).for_provider("wechat")
+    return await gateway.poll_once(
         trace_id=getattr(request.state, "trace_id", None),
         limit=limit,
     )
@@ -328,7 +334,8 @@ async def wechat_deliver_due(
     limit: int = Query(default=20, ge=1, le=500),
     registry: ServiceRegistry = Depends(get_registry),
 ) -> WechatGatewayPollResponse:
-    return await registry.wechat_gateway_service.deliver_due(
+    gateway = ChannelGatewayRouter(registry).for_provider("wechat")
+    return await gateway.deliver_due(
         trace_id=getattr(request.state, "trace_id", None),
         limit=limit,
     )
@@ -338,7 +345,8 @@ async def wechat_deliver_due(
 async def wechat_gateway_health(
     registry: ServiceRegistry = Depends(get_registry),
 ) -> WechatGatewayHealthResponse:
-    return await registry.wechat_gateway_service.gateway_health(
+    gateway = ChannelGatewayRouter(registry).for_provider("wechat")
+    return await gateway.gateway_health(
         worker_health=registry.background_worker_service.health(),
     )
 
@@ -349,7 +357,8 @@ async def receive_feishu_inbound(
     request: Request,
     registry: ServiceRegistry = Depends(get_registry),
 ) -> FeishuInboundResponse:
-    result = await registry.feishu_gateway_service.receive_event(
+    gateway = ChannelGatewayRouter(registry).for_provider("feishu")
+    result = await gateway.receive_event(
         event={**payload.raw_event, "received_at": payload.received_at}
         if payload.received_at
         else payload.raw_event,
@@ -370,7 +379,8 @@ async def feishu_health(
 async def feishu_gateway_health(
     registry: ServiceRegistry = Depends(get_registry),
 ) -> FeishuGatewayHealthResponse:
-    return await registry.feishu_gateway_service.gateway_health(
+    gateway = ChannelGatewayRouter(registry).for_provider("feishu")
+    return await gateway.gateway_health(
         worker_health=registry.background_worker_service.health(),
     )
 
@@ -381,7 +391,8 @@ async def feishu_poll_once(
     limit: int | None = Query(default=None, ge=1, le=500),
     registry: ServiceRegistry = Depends(get_registry),
 ) -> FeishuGatewayPollResponse:
-    return await registry.feishu_gateway_service.poll_once(
+    gateway = ChannelGatewayRouter(registry).for_provider("feishu")
+    return await gateway.poll_once(
         trace_id=getattr(request.state, "trace_id", None),
         limit=limit,
     )
@@ -393,7 +404,8 @@ async def feishu_deliver_due(
     limit: int = Query(default=20, ge=1, le=500),
     registry: ServiceRegistry = Depends(get_registry),
 ) -> FeishuGatewayPollResponse:
-    return await registry.feishu_gateway_service.deliver_due(
+    gateway = ChannelGatewayRouter(registry).for_provider("feishu")
+    return await gateway.deliver_due(
         trace_id=getattr(request.state, "trace_id", None),
         limit=limit,
     )
@@ -405,8 +417,9 @@ async def feishu_message_operation(
     request: Request,
     operation: str = Query(..., pattern="^(recall|read|reaction|history)$"),
     registry: ServiceRegistry = Depends(get_registry),
-    ) -> FeishuMessageOperationResponse:
-    result = await registry.feishu_gateway_service.message_operation(
+) -> FeishuMessageOperationResponse:
+    gateway = ChannelGatewayRouter(registry).for_provider("feishu")
+    result = await gateway.message_operation(
         channel_account_id=str(payload.channel_account_id),
         operation=operation,
         message_id=payload.message_id,

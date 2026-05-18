@@ -43,6 +43,13 @@ class ChannelSessionContext:
             or raw_payload.get("source_timestamp")
             or raw_payload.get("received_at"),
             "dedupe_key": semantics_payload.get("dedupe_key") or raw_payload.get("dedupe_key"),
+            "session_peer_ref_redacted": semantics_payload.get("session_peer_ref_redacted"),
+            "conversation_binding_mode": semantics_payload.get(
+                "conversation_binding_mode"
+            ),
+            "cross_channel_reuse_allowed": bool(
+                semantics_payload.get("cross_channel_reuse_allowed", False)
+            ),
             "sender_label": raw_payload.get("sender_label") or raw_payload.get("display_name"),
             "recipient": raw_payload.get("recipient"),
             "thread_ref": raw_payload.get("thread_ref") or raw_payload.get("thread_id"),

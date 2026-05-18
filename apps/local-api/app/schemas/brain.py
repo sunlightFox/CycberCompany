@@ -136,6 +136,44 @@ class BrainListResponse(ApiModel):
     items: list[BrainResponse]
 
 
+class BrainProviderModelPreset(ApiModel):
+    model_name: str
+    display_name: str
+    context_window: int | None = None
+    supports_tools: bool = False
+    supports_vision: bool = False
+    supports_audio: bool = False
+    reasoning: bool = False
+
+
+class BrainProviderPreset(ApiModel):
+    provider: str
+    display_name: str
+    category: str
+    adapter_family: str
+    implementation_status: str
+    endpoint: str | None = None
+    api_key_env_vars: list[str] = Field(default_factory=list)
+    default_model: str | None = None
+    model_presets: list[BrainProviderModelPreset] = Field(default_factory=list)
+    is_local_default: bool = False
+    allow_cloud_default: bool = False
+    protocol_family: str = "auto"
+    request_format: str = "chat_completions"
+    response_format: str = "auto"
+    supports_stream: bool = True
+    supports_tools: bool = False
+    supports_vision: bool = False
+    supports_audio: bool = False
+    icon_uri: str | None = None
+    docs_ref: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class BrainProviderPresetListResponse(ApiModel):
+    items: list[BrainProviderPreset]
+
+
 class BrainVerifyResponse(ApiModel):
     brain_id: str
     status: str

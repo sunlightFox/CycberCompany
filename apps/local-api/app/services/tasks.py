@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -50,7 +51,7 @@ from core_types import (
 from trace_service import TraceService, redact
 
 from app.core.errors import AppError
-from app.core.time import new_id, utc_now_iso
+from app.core.time import new_id, utc_now, utc_now_iso
 from app.db.repositories.member_repo import MemberRepository
 from app.db.repositories.task_repo import TaskRepository
 from app.schemas.skill_governance import SkillGrantCreateRequest
@@ -133,6 +134,9 @@ class TaskEngine:
         self._media_replay_provider: Callable[[str], Awaitable[list[dict[str, Any]]]] | None = (
             None
         )
+        self._video_workflow_executor: (
+            Callable[[dict[str, Any], dict[str, Any], str | None], Awaitable[dict[str, Any]]] | None
+        ) = None
         planner_adapter = (
             BrainModelPlannerAdapter(
                 brain_repo=brain_repo,
@@ -191,6 +195,12 @@ class TaskEngine:
     ) -> None:
         self._media_replay_provider = provider
 
+    def set_video_workflow_executor(
+        self,
+        executor: Callable[[dict[str, Any], dict[str, Any], str | None], Awaitable[dict[str, Any]]],
+    ) -> None:
+        self._video_workflow_executor = executor
+
     def set_model_planner_adapter(self, adapter: Any | None) -> None:
         self._model_planner.set_adapter(adapter)
 
@@ -239,6 +249,7 @@ class TaskEngine:
             raise AppError(ErrorCode.NOT_FOUND, "成员不存在", status_code=404)
         task_id = new_id("tsk")
         now = utc_now_iso()
+        should_auto_start = request.auto_start
         span_id = await self._start_span(
             trace_id,
             TraceSpanType.TASK_CREATE,
@@ -472,6 +483,54 @@ class TaskEngine:
                 trace_id=trace_id,
                 created_at=utc_now_iso(),
             )
+            if should_auto_start:
+                approval_step = next(
+                    (
+                        step
+                        for step in plan.steps
+                        if _risk_order(str(step.get("risk_level") or "R1")) >= 5
+                    ),
+                    None,
+                )
+                if approval_step is not None:
+                    step_row = next(
+                        (
+                            step
+                            for step in await self._repo.list_steps(task_id)
+                            if step["step_key"] == approval_step["step_key"]
+                        ),
+                        None,
+                    )
+                    approval_id = await self._create_task_start_approval(
+                        task_id=task_id,
+                        step_id=step_row["step_id"] if step_row else None,
+                        requested_action=str(approval_step.get("title") or plan.title),
+                        summary=f"高风险任务步骤需要确认：{approval_step.get('title') or plan.title}",
+                        payload={
+                            "task_id": task_id,
+                            "step_key": approval_step.get("step_key"),
+                            "step_input": approval_step.get("input", {}),
+                        },
+                        trace_id=trace_id,
+                    )
+                    if step_row is not None:
+                        await self._repo.update_step(
+                            step_row["step_id"],
+                            {
+                                "status": "waiting_approval",
+                                "approval_id": approval_id,
+                                "updated_at": utc_now_iso(),
+                            },
+                        )
+                    await self._repo.update_task(
+                        task_id,
+                        {
+                            "status": TaskStatus.WAITING_APPROVAL.value,
+                            "current_approval_id": approval_id,
+                            "updated_at": utc_now_iso(),
+                        },
+                    )
+                    should_auto_start = False
             await self._repo.upsert_job(
                 {
                     "job_id": new_id("tjob"),
@@ -480,7 +539,7 @@ class TaskEngine:
                     "job_type": "run_task",
                     "idempotency_key": f"task.run:{task_id}",
                     "status": "pending",
-                    "payload": {"auto_start": request.auto_start},
+                    "payload": {"auto_start": should_auto_start},
                     "created_at": now,
                     "updated_at": now,
                 }
@@ -496,9 +555,64 @@ class TaskEngine:
             trace_id=trace_id,
         )
         await self._end_span(span_id, output_data={"task_id": task_id})
-        if request.auto_start:
+        if should_auto_start:
             await self.start_task(task_id, trace_id=trace_id)
         return await self.detail(task_id)
+
+    async def _create_task_start_approval(
+        self,
+        *,
+        task_id: str,
+        step_id: str | None,
+        requested_action: str,
+        summary: str,
+        payload: dict[str, Any],
+        trace_id: str | None,
+    ) -> str:
+        approval_id = new_id("apr")
+        now = utc_now_iso()
+        expires_at = (utc_now() + timedelta(hours=2)).isoformat()
+        data = {
+            "approval_id": approval_id,
+            "organization_id": "org_default",
+            "task_id": task_id,
+            "step_id": step_id,
+            "tool_call_id": None,
+            "approval_type": "action",
+            "requested_action": requested_action,
+            "risk_level": RiskLevel.R5.value,
+            "summary": summary,
+            "payload_redacted": redact(payload),
+            "options": ["approve", "deny", "edit"],
+            "status": "pending",
+            "expires_at": expires_at,
+            "trace_id": trace_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await self._repo.insert_approval(data)
+        await self._repo.insert_event(
+            {
+                "event_id": new_id("tevt"),
+                "organization_id": "org_default",
+                "task_id": task_id,
+                "step_id": step_id,
+                "event_type": "approval.required",
+                "payload": {
+                    "approval_id": approval_id,
+                    "summary": summary,
+                    "risk_level": RiskLevel.R5.value,
+                },
+                "payload_redacted": {
+                    "approval_id": approval_id,
+                    "summary": summary,
+                    "risk_level": RiskLevel.R5.value,
+                },
+                "trace_id": trace_id,
+                "created_at": now,
+            }
+        )
+        return approval_id
 
     async def list_tasks(
         self,
@@ -520,6 +634,23 @@ class TaskEngine:
         task = await self._get_task(task_id)
         summary = await self._summary(task)
         normalized_result = await self._normalized_task_result(task)
+        phase111_deliverable_proof = _phase111_deliverable_proof(
+            task=task,
+            result=normalized_result,
+        )
+        phase111_completion_semantics = _phase111_completion_semantics(
+            task=task,
+            result=normalized_result,
+            deliverable_proof=phase111_deliverable_proof,
+        )
+        normalized_result = {
+            **normalized_result,
+            "phase111_deliverable_proof": phase111_deliverable_proof,
+            "phase111_completion_semantics": phase111_completion_semantics,
+            "delivery_status": phase111_completion_semantics.get("delivery_status"),
+            "verification_status": phase111_completion_semantics.get("verification_status"),
+            "final_deliverable": bool(phase111_completion_semantics.get("final_deliverable")),
+        }
         return TaskDetail(
             **summary.model_dump(mode="json"),
             plan=TaskPlan(**task["plan"]) if task.get("plan") else None,
@@ -621,11 +752,17 @@ class TaskEngine:
             )
             return await self.detail(task_id)
         if approval["status"] in {"approved", "edited"}:
-            step = (
-                await self._repo.get_step(approval["step_id"])
-                if approval.get("step_id")
-                else None
-            )
+            step = None
+            if approval.get("step_id"):
+                step = await self._repo.get_step(approval["step_id"])
+            elif task["status"] == TaskStatus.WAITING_APPROVAL.value:
+                for candidate in await self._repo.list_steps(task_id):
+                    if (
+                        candidate.get("approval_id") == approval_id
+                        and candidate["status"] == "waiting_approval"
+                    ):
+                        step = candidate
+                        break
             if (
                 task.get("current_approval_id") != approval_id
                 and task["status"] != TaskStatus.WAITING_APPROVAL.value
@@ -638,11 +775,11 @@ class TaskEngine:
             await self._event(
                 task_id,
                 "approval.resume.started",
-                {"approval_id": approval_id, "step_id": approval.get("step_id")},
-                step_id=approval.get("step_id"),
+                {"approval_id": approval_id, "step_id": approval.get("step_id") or step.get("step_id") if step else None},
+                step_id=approval.get("step_id") or (step.get("step_id") if step else None),
                 trace_id=trace_id,
             )
-            if approval.get("step_id"):
+            if step is not None:
                 if step is not None and step["status"] not in {"completed", "running"}:
                     next_fields = {
                         "status": "pending",
@@ -653,7 +790,7 @@ class TaskEngine:
                             step["input"],
                             approval["edited_payload"],
                         )
-                    await self._repo.update_step(approval["step_id"], next_fields)
+                    await self._repo.update_step(step["step_id"], next_fields)
             await self._mark_run_job(task_id, "running")
             await self._transition_task(
                 task_id,
@@ -821,6 +958,7 @@ class TaskEngine:
                 agent_loop=agent_loop_state,
                 domain=replay_domain,
                 domain_request=dict(final_result.get("domain_request") or {}),
+                domain_result=final_result,
                 steps=steps,
                 events=[TaskEvent(**row) for row in await self._repo.list_events(task_id)],
                 tool_calls=[
@@ -968,7 +1106,11 @@ class TaskEngine:
                     "provider_capability_profile": dict(
                         final_result.get("provider_capability_profile") or {}
                     ),
-                    "deliverable": dict(final_result.get("deliverable") or {}),
+                    "deliverable": (
+                        dict(final_result.get("deliverable"))
+                        if isinstance(final_result.get("deliverable"), dict)
+                        else {"status": bool(final_result.get("deliverable"))}
+                    ),
                     "artifact_evidence": dict(final_result.get("artifact_evidence") or {}),
                     "approval_state": dict(final_result.get("approval_state") or {}),
                     "next_actions": list(
@@ -1259,7 +1401,11 @@ class TaskEngine:
                             "observation": frame.observation.model_dump(mode="json")
                             if frame.observation is not None
                             else {},
-                            "deliverable": dict(normalized_result.get("deliverable") or {}),
+                            "deliverable": (
+                                dict(normalized_result.get("deliverable") or {})
+                                if isinstance(normalized_result.get("deliverable"), dict)
+                                else {}
+                            ),
                             "artifact_evidence": dict(
                                 normalized_result.get("artifact_evidence") or {}
                             ),
@@ -2098,6 +2244,46 @@ class TaskEngine:
                 )
                 output = {"artifact_id": artifact.artifact_id, "uri": artifact.uri}
                 tool_call_id = None
+            elif step["step_type"] == "video_workflow":
+                if self._video_workflow_executor is None:
+                    raise AppError(
+                        ErrorCode.TASK_STEP_FAILED,
+                        "Video Workflow executor not configured",
+                        status_code=500,
+                    )
+                output = await self._video_workflow_executor(
+                    task,
+                    step,
+                    trace_id,
+                )
+                if output.get("status") == "waiting_approval" and output.get("approval_id"):
+                    await self._repo.update_step(
+                        step["step_id"],
+                        {
+                            "status": "waiting_approval",
+                            "approval_id": output.get("approval_id"),
+                            "output": redact(output),
+                            "updated_at": utc_now_iso(),
+                        },
+                    )
+                    await self._repo.update_task(
+                        task["task_id"],
+                        {
+                            "status": TaskStatus.WAITING_APPROVAL.value,
+                            "current_approval_id": output.get("approval_id"),
+                            "updated_at": utc_now_iso(),
+                        },
+                    )
+                    await self._end_span(
+                        span_id,
+                        output_data={
+                            "status": "waiting_approval",
+                            "approval_id": output.get("approval_id"),
+                            "workflow_id": output.get("workflow_id"),
+                        },
+                    )
+                    return
+                tool_call_id = None
             else:
                 output = {"status": "skipped", "reason": f"unsupported_step:{step['step_type']}"}
                 tool_call_id = None
@@ -2264,7 +2450,10 @@ class TaskEngine:
         *,
         raw_result: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        result = dict(raw_result or task.get("result") or {})
+        result = _merge_extension_runtime_result_context(
+            task,
+            dict(raw_result or task.get("result") or {}),
+        )
         repo_profile = _repo_profile_from_task(task)
         code_hosting_profile = _code_hosting_profile_from_task(task)
         steps = await self._repo.list_steps(task["task_id"])
@@ -2293,6 +2482,31 @@ class TaskEngine:
                 "provider_capability_profile",
                 dict(office_profile.get("provider_capability_profile") or {}),
             )
+        planner_context = dict(preflight.get("planner_context") or {})
+        if not planner_context:
+            planner_context = dict(
+                task.get("plan", {}).get("constraints", {}).get("planner_context") or {}
+            )
+        if not planner_context:
+            planner_context = dict(task.get("planner_context") or {})
+        if (
+            planner_context.get("phase") == "phase102"
+            or planner_context.get("intent") == "video_workflow_request"
+            or result.get("domain") == "video_workflow"
+        ):
+            media_evidence = (
+                await self._media_replay_provider(task["task_id"])
+                if self._media_replay_provider is not None
+                else []
+            )
+            result = _merge_video_workflow_result(
+                result=result,
+                planner_context=planner_context,
+                media_evidence=media_evidence,
+                task_status=str(task.get("status") or ""),
+            )
+        if result.get("extension_runtime_snapshot") or result.get("runtime_snapshot"):
+            result["domain"] = "extension_ecosystem"
         if not repo_profile.get("enabled") and not code_hosting_profile.get("enabled"):
             return result
         workspace_dir = self._artifacts.task_dir(task["task_id"])
@@ -2748,6 +2962,8 @@ class TaskEngine:
         *,
         trace_id: str | None,
     ) -> None:
+        current_task = await self._get_task(task_id)
+        result = _merge_extension_runtime_result_context(current_task, result)
         await self._transition_task(
             task_id,
             TaskStatus.COMPLETED.value,
@@ -3920,6 +4136,36 @@ def _steps_for_goal(
         ]
     steps: list[dict[str, Any]] = []
     goal = request.goal.lower()
+    video_workflow_profile = _video_workflow_profile_for_request(request)
+    if video_workflow_profile is not None:
+        steps.append(
+            {
+                "step_key": "video_workflow_execute",
+                "step_type": "video_workflow",
+                "title": "Execute Video Workflow",
+                "risk_level": "R3" if video_workflow_profile.get("require_render") else "R2",
+                "input": {
+                    "goal": request.goal,
+                    "workflow_profile": video_workflow_profile,
+                    "planner_context": dict(request.planner_context or {}),
+                },
+                "metadata": {
+                    "domain": "video_workflow",
+                    "video_workflow_request": True,
+                    "video_workflow_step_role": "plan_and_execute",
+                },
+            }
+        )
+        steps.append(
+            {
+                "step_key": "compose_report",
+                "step_type": "compose",
+                "title": "鐢熸垚浠诲姟鎶ュ憡",
+                "risk_level": "R1",
+                "input": {},
+            }
+        )
+        return steps
     office_profile = office_profile_for_task_request(
         goal=request.goal,
         domain=request.domain,
@@ -4095,6 +4341,33 @@ def _steps_for_goal(
         }
     )
     return steps
+
+
+def _video_workflow_profile_for_request(request: TaskCreateRequest) -> dict[str, Any] | None:
+    planner_context = dict(request.planner_context or {})
+    route_intent = str(planner_context.get("route_intent") or planner_context.get("intent") or "")
+    if route_intent != "video_workflow_request" and planner_context.get("phase") != "phase102":
+        return None
+    profile = planner_context.get("video_workflow_profile")
+    if isinstance(profile, dict) and profile:
+        return redact(profile)
+    media_request = planner_context.get("media_request")
+    require_render = True
+    if isinstance(media_request, dict):
+        require_render = not bool(media_request.get("plan_only"))
+    return {
+        "workflow_type": "video_edit",
+        "task_class": "standard",
+        "require_render": require_render,
+        "require_export": False,
+        "include_transcript": True,
+        "include_frames": True,
+        "render_strategy": "copy",
+        "provider_capabilities": {
+            "video_generation": False,
+            "generation_provider_status": "not_configured",
+        },
+    }
 
 
 def _code_hosting_profile_for_request(request: TaskCreateRequest) -> dict[str, Any]:
@@ -4853,3 +5126,334 @@ def _artifact_refs(payload: Any) -> list[dict[str, Any]]:
                     }
                 )
     return refs
+
+
+def _video_workflow_replays(media_evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        workflow
+        for item in media_evidence
+        for workflow in list(item.get("video_workflows") or [])
+        if isinstance(workflow, dict)
+    ]
+
+
+def _extension_runtime_context(
+    task: dict[str, Any],
+    result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    preflight = dict(task.get("preflight") or {})
+    planner_context = dict(preflight.get("planner_context") or {})
+    extension_task = dict(planner_context.get("extension_task") or {})
+    runtime_snapshot = dict(
+        (result or {}).get("extension_runtime_snapshot")
+        or (result or {}).get("runtime_snapshot")
+        or extension_task.get("runtime_snapshot")
+        or {}
+    )
+    selected_match = dict(extension_task.get("selected_match") or {})
+    selected_skill_id = str(
+        (result or {}).get("selected_skill_id")
+        or extension_task.get("selected_skill_id")
+        or selected_match.get("skill_id")
+        or ""
+    ).strip()
+    extension_id = str(
+        (result or {}).get("extension_id") or extension_task.get("extension_id") or ""
+    ).strip()
+    bundle_id = str(
+        (result or {}).get("extension_bundle_id")
+        or (result or {}).get("bundle_id")
+        or extension_task.get("bundle_id")
+        or ""
+    ).strip()
+    if not any((runtime_snapshot, extension_id, bundle_id, selected_skill_id, extension_task)):
+        return {}
+    return {
+        "extension_id": extension_id or None,
+        "bundle_id": bundle_id or None,
+        "selected_skill_id": selected_skill_id or None,
+        "selected_match": selected_match,
+        "runtime_snapshot": runtime_snapshot,
+        "runnable_state": str(extension_task.get("runnable_state") or "").strip() or None,
+        "selected_capabilities": list(extension_task.get("selected_capabilities") or []),
+    }
+
+
+def _merge_extension_runtime_result_context(
+    task: dict[str, Any],
+    result: dict[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(result or {})
+    context = _extension_runtime_context(task, merged)
+    if not context:
+        return merged
+    runtime_snapshot = dict(context.get("runtime_snapshot") or {})
+    merged["domain"] = "extension_ecosystem"
+    if context.get("extension_id"):
+        merged.setdefault("extension_id", context["extension_id"])
+    if context.get("bundle_id"):
+        merged.setdefault("extension_bundle_id", context["bundle_id"])
+        merged.setdefault("bundle_id", context["bundle_id"])
+    if context.get("selected_skill_id"):
+        merged.setdefault("selected_skill_id", context["selected_skill_id"])
+    if context.get("selected_match"):
+        merged.setdefault("selected_match", context["selected_match"])
+    if context.get("selected_capabilities"):
+        merged.setdefault("selected_capabilities", context["selected_capabilities"])
+    if context.get("runnable_state"):
+        merged.setdefault("runnable_state", context["runnable_state"])
+    if runtime_snapshot:
+        merged.setdefault("extension_runtime_snapshot", runtime_snapshot)
+        merged.setdefault("runtime_snapshot", runtime_snapshot)
+        final_deliverable = bool(
+            dict(runtime_snapshot.get("deliverable_proof") or {}).get("final_deliverable")
+        )
+        if final_deliverable:
+            merged["deliverable"] = True
+        elif "deliverable" not in merged:
+            merged["deliverable"] = False
+    return merged
+
+
+def _merge_video_workflow_result(
+    *,
+    result: dict[str, Any],
+    planner_context: dict[str, Any],
+    media_evidence: list[dict[str, Any]],
+    task_status: str,
+) -> dict[str, Any]:
+    workflows = _video_workflow_replays(media_evidence)
+    latest_replay = workflows[-1] if workflows else {}
+    latest_workflow = dict(latest_replay.get("workflow") or {})
+    latest_result = dict(latest_workflow.get("result") or {})
+    benchmarks = list(latest_replay.get("benchmarks") or [])
+    workflow_profile = (
+        latest_workflow.get("profile")
+        or planner_context.get("video_workflow_profile")
+        or {}
+    )
+    approval_id = latest_workflow.get("approval_id") or result.get("current_approval_id")
+    approval_state = {
+        "status": "waiting_approval" if task_status == TaskStatus.WAITING_APPROVAL.value else "resolved",
+        "approval_id": approval_id,
+        "required": bool(approval_id),
+    }
+    summary = {
+        "workflow_id": latest_workflow.get("workflow_id"),
+        "status": latest_workflow.get("status") or task_status,
+        "profile": workflow_profile,
+        "timeline_summary": latest_result.get("timeline_summary", {}),
+        "scene_map": latest_result.get("scene_map", []),
+        "edit_decision_list": latest_result.get("edit_decision_list", []),
+        "render_output": latest_result.get("render_output", {}),
+        "not_run_effects": latest_result.get("not_run_effects", []),
+        "residual_risk": latest_result.get("residual_risk", []),
+        "provider_status": latest_result.get("provider_status", {}),
+        "deliverable": bool(latest_result.get("deliverable", False)),
+        "approval_state": approval_state,
+        "benchmark_summary": {
+            "total": len(benchmarks),
+            "passed": sum(1 for item in benchmarks if item.get("status") == "passed"),
+            "failed": sum(1 for item in benchmarks if item.get("status") == "failed"),
+        },
+        "benchmarks": benchmarks,
+        "source_boundary": latest_replay.get("source_boundary") or "task_artifact_only",
+        "raw_media_content_included": bool(latest_replay.get("raw_media_content_included")),
+        "media_evidence": media_evidence,
+    }
+    return {
+        **result,
+        "domain": "video_workflow",
+        "video_workflow_profile": workflow_profile,
+        "timeline_summary": summary["timeline_summary"],
+        "scene_map": summary["scene_map"],
+        "edit_decision_list": summary["edit_decision_list"],
+        "render_output": summary["render_output"],
+        "not_run_effects": summary["not_run_effects"],
+        "residual_risk": summary["residual_risk"],
+        "deliverable": summary["deliverable"],
+        "approval_state": approval_state,
+        "media_evidence": media_evidence,
+        "video_workflow": summary,
+    }
+
+
+def _phase111_deliverable_proof(
+    *,
+    task: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    extension_runtime_snapshot = dict(
+        result.get("extension_runtime_snapshot") or result.get("runtime_snapshot") or {}
+    )
+    domain = str(
+        result.get("domain")
+        or ("code_hosting" if result.get("code_hosting_request_type") else "")
+        or ("repo_local" if result.get("repo_request_type") else "")
+        or ("extension_ecosystem" if extension_runtime_snapshot else "")
+        or ("video_workflow" if result.get("video_workflow") else "")
+        or ("office_productivity" if result.get("office_request_type") else "")
+        or "generic"
+    )
+    verification_summary = dict(result.get("verification_summary") or {})
+    required_proof_types: list[str]
+    present_proof_types: list[str] = []
+    notes: list[str] = []
+    if domain == "repo_local":
+        required_proof_types = ["artifact_or_diff", "verification_passed"]
+        if int(dict(result.get("patch_summary") or {}).get("changed_files_count") or 0) > 0:
+            present_proof_types.append("artifact_or_diff")
+        if verification_summary.get("passed") is True:
+            present_proof_types.append("verification_passed")
+    elif domain == "code_hosting":
+        required_proof_types = ["remote_artifact_or_receipt", "verification_passed"]
+        if (
+            list(result.get("remote_artifacts") or [])
+            or dict(result.get("commit_summary") or {})
+            or dict(result.get("pr_summary") or {})
+            or dict(result.get("release_summary") or {})
+        ):
+            present_proof_types.append("remote_artifact_or_receipt")
+        if verification_summary.get("passed") is True:
+            present_proof_types.append("verification_passed")
+    elif domain == "video_workflow":
+        required_proof_types = ["render_output_or_media_evidence", "verification_passed"]
+        render_output = dict(result.get("render_output") or {})
+        if render_output.get("uri") or list(result.get("media_evidence") or []):
+            present_proof_types.append("render_output_or_media_evidence")
+        benchmark_summary = dict(dict(result.get("video_workflow") or {}).get("benchmark_summary") or {})
+        if int(benchmark_summary.get("total") or 0) > 0 and int(
+            benchmark_summary.get("failed") or 0
+        ) == 0:
+            present_proof_types.append("verification_passed")
+    elif domain == "office_productivity":
+        required_proof_types = ["typed_output_or_artifact"]
+        if any(
+            result.get(key)
+            for key in ("content", "html", "markdown", "artifact_refs", "attachments", "draft")
+        ):
+            present_proof_types.append("typed_output_or_artifact")
+    elif domain == "extension_ecosystem":
+        required_proof_types = [
+            "runtime_snapshot",
+            "runtime_sync",
+            "runtime_contribution",
+        ]
+        if extension_runtime_snapshot:
+            present_proof_types.append("runtime_snapshot")
+        if extension_runtime_snapshot.get("runtime_sync_state") == "synced":
+            present_proof_types.append("runtime_sync")
+        if (
+            dict(extension_runtime_snapshot.get("deliverable_proof") or {}).get("final_deliverable")
+            is True
+            or any(
+                int(value or 0) > 0
+                for value in dict(
+                    extension_runtime_snapshot.get("contribution_type_counts") or {}
+                ).values()
+            )
+        ):
+            present_proof_types.append("runtime_contribution")
+    else:
+        required_proof_types = ["visible_summary"]
+        if str(result.get("summary") or "").strip():
+            present_proof_types.append("visible_summary")
+    missing_proof_types = [
+        item for item in required_proof_types if item not in present_proof_types
+    ]
+    if missing_proof_types:
+        notes.append(f"missing proof: {', '.join(missing_proof_types)}")
+    return {
+        "contract_version": "phase111.deliverable_proof.v1",
+        "domain": domain,
+        "required_proof_types": required_proof_types,
+        "present_proof_types": present_proof_types,
+        "missing_proof_types": missing_proof_types,
+        "proof_status": "present" if not missing_proof_types else "missing",
+        "notes": notes,
+    }
+
+
+def _phase111_completion_semantics(
+    *,
+    task: dict[str, Any],
+    result: dict[str, Any],
+    deliverable_proof: dict[str, Any],
+) -> dict[str, Any]:
+    task_status = str(task.get("status") or "")
+    domain = str(result.get("domain") or deliverable_proof.get("domain") or "")
+    verification_summary = dict(result.get("verification_summary") or {})
+    verification_status = str(verification_summary.get("status") or "").strip()
+    if domain == "extension_ecosystem":
+        runtime_snapshot = dict(
+            result.get("extension_runtime_snapshot") or result.get("runtime_snapshot") or {}
+        )
+        if dict(runtime_snapshot.get("deliverable_proof") or {}).get("final_deliverable") is True:
+            normalized_verification = "passed"
+        elif str(runtime_snapshot.get("diagnostic_status") or "") == "blocked":
+            normalized_verification = "failed"
+        elif runtime_snapshot:
+            normalized_verification = "missing"
+        else:
+            normalized_verification = "missing"
+    elif verification_status == "passed":
+        normalized_verification = "passed"
+    elif verification_status == "failed":
+        normalized_verification = "failed"
+    elif verification_status in {"not_required", "skipped"}:
+        normalized_verification = "not_required"
+    elif verification_status == "not_run":
+        normalized_verification = "missing"
+    else:
+        normalized_verification = "missing"
+    deliverable_claimed = bool(result.get("deliverable")) or task_status == TaskStatus.COMPLETED.value
+    blocking_reasons: list[str] = list(deliverable_proof.get("missing_proof_types") or [])
+    if task_status == TaskStatus.WAITING_APPROVAL.value:
+        delivery_status = "waiting_approval"
+        status = "waiting_approval"
+        blocking_reasons.append("pending_approval")
+    elif task_status in {TaskStatus.PAUSED.value, "awaiting_human", "waiting_handoff"}:
+        delivery_status = "waiting_handoff"
+        status = "waiting_handoff"
+        blocking_reasons.append("handoff_or_pause_pending")
+    elif normalized_verification == "failed":
+        delivery_status = "failed_verification"
+        status = "failed_verification"
+    elif deliverable_claimed and normalized_verification == "missing":
+        delivery_status = "completed_unverified"
+        status = "completed_unverified"
+    elif task_status == TaskStatus.COMPLETED.value and not blocking_reasons and bool(result.get("deliverable")):
+        delivery_status = "delivered"
+        status = "completed_with_evidence"
+    elif task_status == TaskStatus.COMPLETED.value and blocking_reasons:
+        delivery_status = "completed_unverified"
+        status = "completed_unverified"
+    else:
+        delivery_status = "not_delivered"
+        status = "incomplete"
+    final_deliverable = delivery_status == "delivered"
+    visible_summary = str(result.get("summary") or "").strip()
+    if not visible_summary:
+        if final_deliverable:
+            visible_summary = "任务已完成，并具备可交付证据。"
+        elif delivery_status == "failed_verification":
+            visible_summary = "任务已执行，但验证没有通过。"
+        elif delivery_status == "completed_unverified":
+            visible_summary = "任务已执行，但还缺少完成所需证据。"
+        elif delivery_status == "waiting_approval":
+            visible_summary = "任务正在等待审批，当前不能视为完成。"
+        elif delivery_status == "waiting_handoff":
+            visible_summary = "任务正在等待接管或外部确认，当前不能视为完成。"
+        else:
+            visible_summary = "任务尚未形成最终可交付结果。"
+    return {
+        "contract_version": "phase111.completion_semantics.v1",
+        "task_status": task_status,
+        "status": status,
+        "delivery_status": delivery_status,
+        "verification_status": normalized_verification,
+        "deliverable_claimed": deliverable_claimed,
+        "final_deliverable": final_deliverable,
+        "blocking_reasons": sorted({str(item) for item in blocking_reasons if str(item).strip()}),
+        "visible_summary": visible_summary,
+    }

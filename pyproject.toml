@@ -76,7 +76,13 @@ asyncio_mode = "auto"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["data"]
+extend-exclude = [
+  "data",
+  ".tmp*",
+  "tmp-*",
+  ".wheels",
+  ".venv",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -89,6 +95,10 @@ ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
 exclude = [
   '^data([\\/]|$)',
+  '^\.tmp',
+  '^tmp-',
+  '^\.wheels([\\/]|$)',
+  '^\.venv([\\/]|$)',
   '^docs[\\/]测试([\\/]|$)',
 ]
 

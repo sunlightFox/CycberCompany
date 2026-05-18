@@ -184,7 +184,10 @@ class OpenAICompatibleClient:
         try:
             data = response.json()
         except json.JSONDecodeError as exc:
-            raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "模型响应不是合法 JSON") from exc
+            raise ModelAdapterError(
+                ErrorCode.MODEL_PROTOCOL_ERROR,
+                "模型响应不是合法 JSON",
+            ) from exc
         try:
             text, finish_reason, usage, metadata = self._extract_completion(data)
         except ModelAdapterError as exc:
@@ -361,13 +364,18 @@ def _extract_responses_completion(
         for block in content:
             if not isinstance(block, dict):
                 continue
-            text = str(block.get("text") or "").strip()
+            text = str(block.get("text") or "")
             if text:
                 parts.append(text)
     text = "".join(parts).strip()
     if not text:
         raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "模型没有返回可用文本")
-    return text, str(data.get("status") or "completed"), data.get("usage") or {}, {"id": data.get("id")}
+    return (
+        text,
+        str(data.get("status") or "completed"),
+        data.get("usage") or {},
+        {"id": data.get("id")},
+    )
 
 
 def _extract_chat_message_text(message: dict[str, Any]) -> str:
@@ -404,7 +412,13 @@ def _parse_chat_stream_line(line: str) -> ModelStreamEvent | None:
         data = json.loads(payload)
         if _looks_like_responses_stream_event(data):
             return _parse_responses_stream_event(data)
-        choice = data.get("choices", [{}])[0]
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise ModelAdapterError(
+                ErrorCode.MODEL_STREAM_SCHEMA_ERROR,
+                "模型流式响应缺少 choices",
+            )
+        choice = choices[0]
         delta = choice.get("delta") or {}
         usage = data.get("usage") or {}
         finish_reason = choice.get("finish_reason")
@@ -429,7 +443,10 @@ def _parse_responses_stream_line(line: str) -> ModelStreamEvent | None:
     try:
         data = json.loads(payload)
     except json.JSONDecodeError as exc:
-        raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "responses 流式响应格式不合法") from exc
+        raise ModelAdapterError(
+            ErrorCode.MODEL_PROTOCOL_ERROR,
+            "responses 流式响应格式不合法",
+        ) from exc
     return _parse_responses_stream_event(data)
 
 

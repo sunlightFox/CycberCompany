@@ -35,6 +35,7 @@ from app.schemas.notifications import (
     InboundMessageCreateRequest,
     NotificationChannelCreateRequest,
 )
+from app.services.artifacts import ArtifactStore
 from app.services.asset import AssetService
 from app.services.audit import AuditEventService
 from app.services.capability import CapabilityGraphService
@@ -64,6 +65,7 @@ class ChannelBindingService:
         capability: CapabilityGraphService,
         notifications: NotificationGatewayService,
         connectors: ChannelConnectorRegistry,
+        artifact_store: ArtifactStore,
         secret_store: SecretStore,
         trace_service: TraceService,
         audit_service: AuditEventService,
@@ -74,6 +76,7 @@ class ChannelBindingService:
         self._capability = capability
         self._notifications = notifications
         self._connectors = connectors
+        self._artifacts = artifact_store
         self._secrets = secret_store
         self._trace = trace_service
         self._audit = audit_service
@@ -723,6 +726,27 @@ class ChannelBindingService:
             audio_bytes=audio_bytes,
             content_type=content_type,
             filename=filename,
+        )
+
+    async def send_channel_file(
+        self,
+        *,
+        provider: str,
+        provider_state_ref: str | None,
+        recipient: str,
+        artifact_id: str,
+        content_type: str | None = None,
+        filename: str | None = None,
+    ) -> ChannelSendResult:
+        provider_state = self._load_provider_state(provider_state_ref)
+        artifact, path = await self._artifacts.open_download(artifact_id)
+        return await self._connectors.get(provider).send_file(
+            provider_state_ref=provider_state_ref,
+            provider_state=provider_state,
+            recipient=recipient,
+            local_path=path,
+            content_type=content_type or artifact.content_type,
+            filename=filename or artifact.display_name,
         )
 
     async def _grant_channel_actions(

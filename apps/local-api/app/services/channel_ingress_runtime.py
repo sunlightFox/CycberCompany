@@ -4,6 +4,10 @@ from typing import Any
 
 from core_types import Attachment, ChatContentPart, ChatContextRef, ChatTurnResponse
 
+from app.services.channel_reliability import (
+    PHASE110_CHANNEL_ROUTING_STABILITY_VERSION,
+    PHASE88_FAILURE_REASON_CODES,
+)
 from app.services.channel_session_router import ChannelSessionRouter
 from app.services.chat_steering import ChatSteeringCoordinator
 
@@ -133,7 +137,34 @@ class ChannelIngressRuntime:
             "providers": ["local", "wechat", "feishu"],
             "router": "channel_session_router",
             "runtime": "channel_ingress_runtime",
+            "phase110_routing_contract_version": PHASE110_CHANNEL_ROUTING_STABILITY_VERSION,
             "supports": ["text", "multi_part", "attachments", "context_refs"],
+            "routing_replay_fields": [
+                "inbound_event_id",
+                "channel_message_id",
+                "channel_account_id",
+                "channel_peer_id_redacted",
+                "channel_thread_id",
+                "delivery_mode",
+                "source_timestamp",
+                "dedupe_key",
+            ],
+            "no_turn_reason_codes": [
+                code
+                for code in PHASE88_FAILURE_REASON_CODES
+                if code
+                in {
+                    "pairing_rejected_or_missing",
+                    "ingress_policy_blocked",
+                    "worker_not_running_or_disabled",
+                    "conversation_bootstrap_failed",
+                    "channel_ingress_submit_failed",
+                    "turn_not_created",
+                    "turn_created_but_not_queued",
+                    "turn_created_but_runtime_missing",
+                }
+            ],
+            "supports_route_replay_evidence": True,
             "session_semantics_runtime": (
                 "channel_session_semantics"
                 if self._channel_session_semantics is not None

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from cycber_cli.diagnostics import turn_diagnostics
-from cycber_cli.http_client import CycberApiClient
+from cycber_cli.http_client import ApiError, CycberApiClient
 from cycber_cli.output import assistant_delta, persisted_assistant_text
 from cycber_cli.state import CliState
 
@@ -66,7 +66,12 @@ async def send_message(
         if callable(turn_detail):
             deadline = time.time() + 60
             while time.time() < deadline:
-                detail = await turn_detail(turn_id)
+                try:
+                    detail = await turn_detail(turn_id)
+                except ApiError as exc:
+                    if exc.status_code == 404:
+                        break
+                    raise
                 if detail.get("status") in {"completed", "failed", "cancelled"}:
                     break
                 await asyncio.sleep(0.1)

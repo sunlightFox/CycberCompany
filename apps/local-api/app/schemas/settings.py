@@ -19,8 +19,9 @@ class SafetySettings(ApiModel):
     require_confirmation: list[str] = Field(default_factory=list)
     deny_paths: list[str] = Field(default_factory=list)
     terminal_policy_profile: str = "task_artifact_sandbox"
+    governance_mode: Literal["smooth", "balanced", "strict"] = "smooth"
     approval_profile: str = "balanced_personal"
-    chat_visible_redaction: str = "strict"
+    chat_visible_redaction: str = "relaxed"
     approval_policy: dict[str, Any] = Field(default_factory=dict)
 
 

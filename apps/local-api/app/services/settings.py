@@ -209,8 +209,10 @@ class SettingsService:
                 "approval_profile": str(
                     safety_risk.get("approval_profile") or "balanced_personal"
                 ),
+                "governance_mode": str(safety_risk.get("governance_mode") or "smooth"),
                 "chat_visible_redaction": str(
-                    safety_risk.get("chat_visible_redaction") or "strict"
+                    safety_risk.get("chat_visible_redaction")
+                    or ("relaxed" if safety_risk.get("governance_mode") == "smooth" else "strict")
                 ),
                 "approval_policy": _mapping(safety_risk.get("approval_policy")),
             },

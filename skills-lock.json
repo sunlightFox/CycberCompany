@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-browser": {
+      "source": "vercel-labs/agent-browser",
+      "sourceType": "github",
+      "skillPath": "skills/agent-browser/SKILL.md",
+      "computedHash": "69ce2932d46901fc0cc0e6244055b51e7325d806604eedf89093d50c2041a575"
+    },
+    "bb-browser": {
+      "source": "epiral/bb-browser",
+      "sourceType": "github",
+      "skillPath": "skills/bb-browser/SKILL.md",
+      "computedHash": "01f9b981e7fee3f1b1cb26d9db1b415e08419689713753a81a2ababc9087afba"
+    },
+    "openclaw-backup": {
+      "source": "theagentservice/skills",
+      "sourceType": "github",
+      "skillPath": "openclaw-backup/SKILL.md",
+      "computedHash": "39f41457944d3ec4d678c79d2b786d816614250cd5f5403afe976537e221321f"
+    },
+    "openclaw-control-center": {
+      "source": "aradotso/trending-skills",
+      "sourceType": "github",
+      "skillPath": "skills/openclaw-control-center/SKILL.md",
+      "computedHash": "a797a565682ae44e806e0b18ae66cdeaa3c4d19fa3321a952371673d279c8457"
+    },
+    "qiaomu-opencli-autofix": {
+      "source": "joeseesun/opencli-skill",
+      "sourceType": "github",
+      "skillPath": "qiaomu-opencli-autofix/SKILL.md",
+      "computedHash": "74a45bcca40db6f27661be5cda1b17119c21a72fde15042da2475075c9c283ac"
+    },
+    "qiaomu-opencli-browser": {
+      "source": "joeseesun/opencli-skill",
+      "sourceType": "github",
+      "skillPath": "qiaomu-opencli-browser/SKILL.md",
+      "computedHash": "fdca36698a7edd6cafa461e8efaa72955a1d0e4b95e629f3bf2cd2a090d6953f"
+    },
+    "qiaomu-opencli-explorer": {
+      "source": "joeseesun/opencli-skill",
+      "sourceType": "github",
+      "skillPath": "qiaomu-opencli-explorer/SKILL.md",
+      "computedHash": "cbbb46f7866ac2fb4e6af4a9fa8a4c7be591503dba26b161dda5d54dee454bba"
+    },
+    "qiaomu-opencli-oneshot": {
+      "source": "joeseesun/opencli-skill",
+      "sourceType": "github",
+      "skillPath": "qiaomu-opencli-oneshot/SKILL.md",
+      "computedHash": "93f7635674edf89273f9efd97c2b30d22437dc71728651cf595c6ff3b9b3451b"
+    },
+    "qiaomu-opencli-usage": {
+      "source": "joeseesun/opencli-skill",
+      "sourceType": "github",
+      "skillPath": "qiaomu-opencli-usage/SKILL.md",
+      "computedHash": "b5158072cd89c08d0ac45664c2ea0b72ac8ab84f7aee51ea478d3819a2fb4bb2"
+    },
+    "qiaomu-smart-search": {
+      "source": "joeseesun/opencli-skill",
+      "sourceType": "github",
+      "skillPath": "qiaomu-smart-search/SKILL.md",
+      "computedHash": "012e70535b5574c7473d235eb85dea35daccad2d07c86e1543f9aba2ffccce94"
+    },
+    "self-improving-agent": {
+      "source": "charon-fan/agent-playbook",
+      "sourceType": "github",
+      "skillPath": "skills/self-improving-agent/SKILL.md",
+      "computedHash": "f52b5577f09152ab9c2577f6fd6bd4d23ba87acc884dfc3e90a551949f0d90f1"
+    },
+    "skill-vetter": {
+      "source": "useai-pro/openclaw-skills-security",
+      "sourceType": "github",
+      "skillPath": "skills/skill-vetter/SKILL.md",
+      "computedHash": "63cd7b3be36cc39c1cff7731259e1120ad839ef87c28f4dd40856cb8d0721168"
+    }
+  }
+}

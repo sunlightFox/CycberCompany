@@ -41,6 +41,7 @@ from app.schemas.channels import (
     WechatGatewayPollResponse,
 )
 from app.schemas.notifications import NotificationMessageCreateRequest
+from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
 from app.services.channel_connectors import (
     ChannelConnectorRegistry,
@@ -115,6 +116,11 @@ class WechatGatewayStats:
                 "phase88": {
                     "contract_version": PHASE88_CHANNEL_RELIABILITY_VERSION,
                     "taxonomy_counts": summary.get("taxonomy_counts") or {},
+                    "failure_reason_counts": summary.get("failure_reason_counts") or {},
+                    "no_turn_reason_group_counts": summary.get(
+                        "no_turn_reason_group_counts"
+                    )
+                    or {},
                     "delivery_binding_completeness": summary.get(
                         "delivery_binding_completeness"
                     ),
@@ -150,6 +156,7 @@ class WechatChannelGatewayService:
         chat_service: ChatService,
         notifications: NotificationGatewayService,
         connectors: ChannelConnectorRegistry,
+        artifact_store: ArtifactStore,
         secret_store: SecretStore,
         media_repo: MediaRepository,
         data_dir: Path,
@@ -163,6 +170,7 @@ class WechatChannelGatewayService:
         self._chat = chat_service
         self._notifications = notifications
         self._connectors = connectors
+        self._artifacts = artifact_store
         self._secrets = secret_store
         self._media_repo = media_repo
         self._blob_dir = data_dir / "channel-attachments" / "wechat"
@@ -176,6 +184,11 @@ class WechatChannelGatewayService:
         self._delivery_watch_timeout_seconds = 120.0
         self._delivery_watch_poll_seconds = 0.25
         self._channel_ingress_runtime: Any | None = None
+        self._worker_health_provider: Any | None = None
+        self._async_failure_reason_counts: dict[str, int] = {
+            "delivery_binding_pending_timeout": 0,
+            "delivery_failed_after_turn_completed": 0,
+        }
         self._session_context_runtime = ChannelSessionContext()
         self._session_semantics_runtime = ChannelSessionSemanticsRuntime()
         self._stream_bridge = ChannelStreamBridge()
@@ -183,6 +196,9 @@ class WechatChannelGatewayService:
 
     def set_channel_ingress_runtime(self, runtime: Any) -> None:
         self._channel_ingress_runtime = runtime
+
+    def set_worker_health_provider(self, provider: Any) -> None:
+        self._worker_health_provider = provider
 
     def set_channel_bridges(
         self,
@@ -220,11 +236,18 @@ class WechatChannelGatewayService:
 
     def reliability_snapshot(self) -> dict[str, Any]:
         phase88 = dict(self._last_poll_result.get("details", {}).get("phase88") or {})
+        failure_reason_counts = dict(phase88.get("failure_reason_counts") or {})
+        for reason_code, count in self._async_failure_reason_counts.items():
+            failure_reason_counts[reason_code] = int(failure_reason_counts.get(reason_code) or 0) + int(
+                count or 0
+            )
         return {
             "contract_version": PHASE88_CHANNEL_RELIABILITY_VERSION,
             "last_poll_result": redact(self._last_poll_result),
             "taxonomy_counts": phase88.get("taxonomy_counts") or {},
+            "failure_reason_counts": failure_reason_counts,
             "delivery_binding_completeness": phase88.get("delivery_binding_completeness"),
+            "no_turn_reason_group_counts": phase88.get("no_turn_reason_group_counts") or {},
         }
 
     async def poll_once(
@@ -573,13 +596,16 @@ class WechatChannelGatewayService:
                 stats=stats,
                 trace_id=trace_id,
             )
-        except Exception:
+        except Exception as exc:
             return {
                 "status": "failed",
                 "chat_turns_created": 0,
                 **no_turn_payload(
                     correlation=correlation,
-                    reason_code="channel_ingress_submit_failed",
+                    reason_code=self._classify_ingress_submit_failure(
+                        exc,
+                        session=session,
+                    ),
                 ),
             }
         binding = await self._repo.get_delivery_binding_by_turn(
@@ -748,6 +774,21 @@ class WechatChannelGatewayService:
             and session.get("pairing_status") == "paired"
             and bool(session.get("allow_inbound"))
         )
+        routing_semantics = self._session_semantics_runtime.resolve_inbound(
+            provider="wechat",
+            channel_account_id=account["channel_account_id"],
+            channel_message_id=normalized["provider_event_id"],
+            raw_payload={
+                "chat_type": normalized["chat_type"],
+                "peer_ref_redacted": peer_hash,
+                "thread_ref": normalized.get("raw_event", {}).get("source", {}).get("thread_ref")
+                or normalized.get("raw_event", {}).get("source", {}).get("thread_id"),
+                "source_timestamp": normalized["received_at"],
+            },
+            queue_policy="immediate",
+            fallback_peer_ref_redacted=peer_hash,
+            fallback_source_timestamp=str(normalized["received_at"] or ""),
+        )
         event_data = {
             "channel_event_id": channel_event_id,
             "organization_id": account["organization_id"],
@@ -781,6 +822,20 @@ class WechatChannelGatewayService:
                 "untrusted_external_content": not trusted_private_peer,
                 "provider_received_at": normalized["received_at"],
                 "gateway_created_at": normalized.get("gateway_created_at"),
+                "routing": {
+                    "delivery_mode": routing_semantics.get("delivery_mode"),
+                    "channel_thread_id": routing_semantics.get("channel_thread_id"),
+                    "dedupe_key": routing_semantics.get("dedupe_key"),
+                    "session_peer_ref_redacted": routing_semantics.get(
+                        "session_peer_ref_redacted"
+                    ),
+                    "conversation_binding_mode": routing_semantics.get(
+                        "conversation_binding_mode"
+                    ),
+                    "cross_channel_reuse_allowed": bool(
+                        routing_semantics.get("cross_channel_reuse_allowed", False)
+                    ),
+                },
                 "latency_markers": {
                     "t1_provider_received_at": normalized["received_at"],
                     "t2_channel_event_created_at": now,
@@ -798,7 +853,39 @@ class WechatChannelGatewayService:
             fields={"channel_event_id": channel_event_id, "status": status, "updated_at": now},
         )
         stats.processed_events += 1
+        reliability_records = stats.details.setdefault("reliability_records", [])
         if status != "received" or session is None:
+            reason_code = None
+            notes: list[str] = []
+            if status == "pairing_required":
+                reason_code = "pairing_rejected_or_missing"
+                notes.append("peer_session_not_paired_or_inbound_not_allowed")
+            elif status == "rejected_or_ignored":
+                reason_code = "ingress_policy_blocked"
+                notes.append("gateway_policy_or_peer_state_rejected_inbound")
+            if reason_code is not None:
+                reliability_records.append(
+                    no_turn_payload(
+                        correlation=build_correlation(
+                            inbound_event_id=channel_event_id,
+                            provider="wechat",
+                            channel_account_id=account.get("channel_account_id"),
+                            channel_message_id=normalized["provider_event_id"],
+                            channel_peer_id_redacted=peer_hash,
+                            channel_peer_session_id=(
+                                session.get("channel_peer_session_id") if session else None
+                            ),
+                            conversation_id=session.get("conversation_id") if session else None,
+                        ),
+                        reason_code=reason_code,
+                        turn_formation={
+                            "status": status,
+                            "turn_created": False,
+                            "event_status": status,
+                        },
+                        notes=notes,
+                    )
+                )
             return
         conflicting_session = None
         if session.get("conversation_id"):
@@ -813,7 +900,7 @@ class WechatChannelGatewayService:
             and conflicting_session.get("peer_ref_redacted") != session.get("peer_ref_redacted")
         ):
             stats.failures += 1
-            stats.details.setdefault("reliability_records", []).append(
+            reliability_records.append(
                 wrong_reuse_payload(
                     correlation=build_correlation(
                         inbound_event_id=channel_event_id,
@@ -863,9 +950,9 @@ class WechatChannelGatewayService:
                 stats=stats,
                 trace_id=trace_id,
             )
-        except Exception:
+        except Exception as exc:
             stats.failures += 1
-            stats.details.setdefault("reliability_records", []).append(
+            reliability_records.append(
                 no_turn_payload(
                     correlation=build_correlation(
                         inbound_event_id=channel_event_id,
@@ -877,7 +964,7 @@ class WechatChannelGatewayService:
                         channel_peer_session_id=session.get("channel_peer_session_id"),
                         conversation_id=session.get("conversation_id"),
                     ),
-                    reason_code="channel_ingress_submit_failed",
+                    reason_code=self._classify_ingress_submit_failure(exc, session=session),
                 )
             )
             return
@@ -928,7 +1015,7 @@ class WechatChannelGatewayService:
                 queue_status=response.queue_status,
             )
         )
-        stats.details.setdefault("reliability_records", []).append(record)
+        reliability_records.append(record)
 
     async def _create_pairing_request(
         self,
@@ -1443,6 +1530,16 @@ class WechatChannelGatewayService:
         latest = await self._repo.get_delivery_binding(binding["channel_delivery_binding_id"])
         if latest is None or latest.get("status") != "pending":
             return None
+        user_message = None
+        if turn.get("user_message_id"):
+            user_message = await self._chat_repo.get_message(str(turn["user_message_id"]))
+        selection = await _wechat_outbound_attachment_selection(
+            artifacts=self._artifacts,
+            turn=turn,
+            message=message,
+            user_text=str(user_message.get("content_text") or "") if user_message else "",
+            final_text=self._stream_bridge.final_plain_text(message),
+        )
         outbound_span_id = None
         if trace_id is not None:
             outbound_span_id = await self._trace.start_span(
@@ -1474,6 +1571,13 @@ class WechatChannelGatewayService:
                     "turn_id": turn_id,
                     "message_id": message_id,
                     "voice_reply": dict(message.get("voice_metadata") or {}),
+                    "attachments": selection["selected_attachments"],
+                    "attachment_selection": {
+                        "reason_codes": selection["selection_reason_codes"],
+                        "scene": selection["scene"],
+                        "explicit_request_detected": selection["explicit_request_detected"],
+                        "suppressed_attachments": selection["suppressed_attachments"],
+                    },
                     "channel_session_context": self._session_context_runtime.build_outbound(
                         provider="wechat",
                         session=session,
@@ -1529,6 +1633,7 @@ class WechatChannelGatewayService:
                 {"last_outbound_at": delivered_at, "updated_at": delivered_at},
             )
             return True
+        self._async_failure_reason_counts["delivery_failed_after_turn_completed"] += 1
         return False
 
     def _schedule_immediate_delivery(
@@ -1579,6 +1684,7 @@ class WechatChannelGatewayService:
                     return
                 await asyncio.sleep(self._delivery_watch_poll_seconds)
             self._immediate_delivery.watchers_failed += 1
+            self._async_failure_reason_counts["delivery_binding_pending_timeout"] += 1
             self._immediate_delivery.last_delivery_latency_ms = int(
                 (loop.time() - started) * 1000
             )
@@ -1769,6 +1875,35 @@ class WechatChannelGatewayService:
                 status_code=500,
             )
         return self._channel_ingress_runtime
+
+    def _current_worker_health(self) -> dict[str, Any]:
+        if callable(self._worker_health_provider):
+            try:
+                payload = self._worker_health_provider()
+            except Exception:
+                return {}
+            return payload if isinstance(payload, dict) else {}
+        return {}
+
+    def _classify_ingress_submit_failure(
+        self,
+        exc: Exception,
+        *,
+        session: dict[str, Any],
+    ) -> str:
+        worker_payload = _wechat_worker_health_payload(self._current_worker_health())
+        automation_state = str(worker_payload.get("automation_state") or "unknown")
+        if automation_state in {"disabled", "not_started", "failed", "stopped"}:
+            return "worker_not_running_or_disabled"
+        if (
+            isinstance(exc, AppError)
+            and exc.code == ErrorCode.CHAT_RUNTIME_FAILED.value
+            and "ingress runtime" in str(exc)
+        ):
+            return "turn_created_but_runtime_missing"
+        if not session.get("conversation_id"):
+            return "conversation_bootstrap_failed"
+        return "channel_ingress_submit_failed"
 
     def _load_provider_state(self, provider_state_ref: str | None) -> dict[str, Any] | None:
         raw = self._secrets.get_secret(provider_state_ref)
@@ -2194,6 +2329,306 @@ def _write_text_with_parent_retry(path: Path, content: str, *, encoding: str) ->
     except FileNotFoundError:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding=encoding)
+
+
+async def _wechat_outbound_attachment_selection(
+    *,
+    artifacts: ArtifactStore,
+    turn: dict[str, Any],
+    message: dict[str, Any],
+    user_text: str,
+    final_text: str,
+) -> dict[str, Any]:
+    response_plan = message.get("content", {}).get("response_plan")
+    response_plan = response_plan if isinstance(response_plan, dict) else {}
+    structured = response_plan.get("structured_payload")
+    structured = structured if isinstance(structured, dict) else {}
+    refs = response_plan.get("artifact_refs")
+    refs = refs if isinstance(refs, list) else []
+    candidates = await _resolve_wechat_attachment_candidates(
+        artifacts=artifacts,
+        refs=refs,
+        task_id=_attachment_task_id(structured),
+    )
+    scene = _attachment_scene(structured, candidates)
+    explicit_request = _looks_like_attachment_request(user_text)
+    reply_implies_document = _reply_mentions_generated_document(final_text)
+    reason_codes: list[str] = []
+    if explicit_request:
+        reason_codes.append("explicit_attachment_request")
+    if scene != "generic":
+        reason_codes.append(f"scene:{scene}")
+    if reply_implies_document:
+        reason_codes.append("reply_mentions_generated_document")
+    should_send = bool(candidates) and (
+        explicit_request
+        or scene in {"office_document", "office_text"}
+        or reply_implies_document
+    )
+    selected = _sort_wechat_attachment_candidates(candidates, user_text=user_text, scene=scene)
+    suppressed = []
+    for item in candidates:
+        if item not in selected:
+            suppressed.append(
+                {
+                    "artifact_id": item.get("artifact_id"),
+                    "display_name": item.get("display_name"),
+                    "reason": "filtered_after_sort",
+                }
+            )
+    if not should_send:
+        suppressed.extend(
+            {
+                "artifact_id": item.get("artifact_id"),
+                "display_name": item.get("display_name"),
+                "reason": "delivery_not_triggered",
+            }
+            for item in selected
+        )
+        selected = []
+    return {
+        "should_send_attachments": should_send,
+        "selected_attachments": selected,
+        "selection_reason_codes": reason_codes,
+        "suppressed_attachments": suppressed,
+        "scene": scene,
+        "explicit_request_detected": explicit_request,
+    }
+
+
+async def _resolve_wechat_attachment_candidates(
+    *,
+    artifacts: ArtifactStore,
+    refs: list[dict[str, Any]],
+    task_id: str | None,
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for ref in refs:
+        artifact_id = str(ref.get("artifact_id") or "")
+        if not artifact_id or artifact_id in seen:
+            continue
+        candidate = await _resolve_wechat_attachment_candidate(artifacts=artifacts, ref=ref)
+        if candidate is not None:
+            candidates.append(candidate)
+            seen.add(artifact_id)
+    if candidates or not task_id:
+        return candidates
+    for artifact in await artifacts.list_task_artifacts(task_id):
+        if artifact.artifact_id in seen:
+            continue
+        candidate = _candidate_from_artifact(
+            artifact_id=artifact.artifact_id,
+            display_name=artifact.display_name,
+            content_type=artifact.content_type,
+            artifact_type=artifact.artifact_type,
+            created_at=artifact.created_at,
+            download_url=f"/api/artifacts/{artifact.artifact_id}/download",
+            metadata=artifact.metadata,
+        )
+        if candidate is not None:
+            candidates.append(candidate)
+            seen.add(artifact.artifact_id)
+    return candidates
+
+
+async def _resolve_wechat_attachment_candidate(
+    *,
+    artifacts: ArtifactStore,
+    ref: dict[str, Any],
+) -> dict[str, Any] | None:
+    artifact_id = str(ref.get("artifact_id") or "")
+    if not artifact_id:
+        return None
+    try:
+        artifact = await artifacts.get_artifact(artifact_id)
+    except AppError:
+        return None
+    return _candidate_from_artifact(
+        artifact_id=artifact_id,
+        display_name=str(ref.get("display_name") or artifact.display_name),
+        content_type=str(ref.get("content_type") or artifact.content_type or ""),
+        artifact_type=str(getattr(artifact, "artifact_type", "") or ""),
+        created_at=str(getattr(artifact, "created_at", "") or ""),
+        download_url=str(ref.get("download_url") or f"/api/artifacts/{artifact_id}/download"),
+        metadata=artifact.metadata,
+    )
+
+
+def _candidate_from_artifact(
+    *,
+    artifact_id: str,
+    display_name: str,
+    content_type: str,
+    artifact_type: str,
+    created_at: str,
+    download_url: str,
+    metadata: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    suffix = Path(display_name).suffix.lower()
+    allowed_suffixes = {".docx", ".xlsx", ".pptx", ".md", ".txt"}
+    blocked_artifact_types = {
+        "terminal_log",
+        "checkpoint_snapshot",
+        "screenshot",
+        "download",
+        "image",
+        "audio",
+        "video",
+        "report",
+        "recovery_record",
+        "trace",
+    }
+    if suffix not in allowed_suffixes or artifact_type in blocked_artifact_types:
+        return None
+    name = display_name.lower()
+    blocked_name_markers = (
+        "terminal",
+        "checkpoint",
+        "screenshot",
+        "debug",
+        "trace",
+        "diagnostic",
+        "recovery",
+        "transcript",
+        "host-install-log",
+        "toolchain-log",
+        "deployment-log",
+        "code-hosting-report",
+    )
+    if any(marker in name for marker in blocked_name_markers):
+        return None
+    delivery_role = _attachment_delivery_role(display_name, suffix=suffix)
+    return {
+        "artifact_id": artifact_id,
+        "display_name": display_name,
+        "content_type": content_type,
+        "download_url": download_url,
+        "delivery_role": delivery_role,
+        "artifact_type": artifact_type,
+        "created_at": created_at,
+        "metadata": metadata or {},
+        "extension": suffix,
+    }
+
+
+def _attachment_task_id(structured: dict[str, Any]) -> str | None:
+    keys = (
+        ("task_status", "task_id"),
+        ("office_productivity", "task_id"),
+    )
+    for parent, child in keys:
+        value = structured.get(parent)
+        if isinstance(value, dict) and value.get(child):
+            return str(value[child])
+    return None
+
+
+def _attachment_scene(structured: dict[str, Any], candidates: list[dict[str, Any]]) -> str:
+    route = structured.get("route_semantics")
+    if isinstance(route, dict):
+        route_name = str(route.get("route") or "")
+        if "office" in route_name:
+            return "office_document" if any(_is_primary_attachment(item) for item in candidates) else "office_text"
+    office_payload = structured.get("office_productivity")
+    if isinstance(office_payload, dict):
+        return "office_document" if any(_is_primary_attachment(item) for item in candidates) else "office_text"
+    if any(
+        str(item.get("artifact_type") or "")
+        in {"mail_draft", "calendar_plan", "office_action_record"}
+        for item in candidates
+    ):
+        return "office_text"
+    return "generic"
+
+
+def _looks_like_attachment_request(text: str) -> bool:
+    lowered = text.lower()
+    markers = (
+        "发我文件",
+        "把文件发我",
+        "发我附件",
+        "附件发来",
+        "导出一下",
+        "导出文件",
+        "发我文档",
+        "把文档给我",
+        "send me the file",
+        "send the file",
+        "send me the attachment",
+        "export",
+        "attachment",
+    )
+    return any(marker in lowered for marker in markers)
+
+
+def _reply_mentions_generated_document(text: str) -> bool:
+    lowered = text.lower()
+    markers = (
+        "已整理成文档",
+        "已生成草稿",
+        "已输出结果文件",
+        "已生成文档",
+        "已为你生成",
+        "draft is ready",
+        "document is ready",
+        "file is ready",
+    )
+    return any(marker in lowered for marker in markers)
+
+
+def _sort_wechat_attachment_candidates(
+    candidates: list[dict[str, Any]],
+    *,
+    user_text: str,
+    scene: str,
+) -> list[dict[str, Any]]:
+    format_bonus = _requested_format_bonus(user_text)
+    return sorted(
+        candidates,
+        key=lambda item: (
+            format_bonus.get(str(item.get("extension") or ""), 0),
+            _primary_rank(item),
+            _role_rank(str(item.get("delivery_role") or "")),
+            1 if scene == "office_document" and _is_primary_attachment(item) else 0,
+            str(item.get("created_at") or ""),
+            str(item.get("display_name") or ""),
+        ),
+        reverse=True,
+    )
+
+
+def _requested_format_bonus(text: str) -> dict[str, int]:
+    lowered = text.lower()
+    return {
+        ".pptx": 1 if "ppt" in lowered else 0,
+        ".docx": 1 if "word" in lowered or "docx" in lowered else 0,
+        ".xlsx": 1 if "excel" in lowered or "xlsx" in lowered else 0,
+        ".md": 1 if "markdown" in lowered or " md" in lowered or lowered.endswith("md") else 0,
+        ".txt": 1 if "txt" in lowered or "文本" in lowered else 0,
+    }
+
+
+def _primary_rank(item: dict[str, Any]) -> int:
+    return 1 if _is_primary_attachment(item) else 0
+
+
+def _is_primary_attachment(item: dict[str, Any]) -> bool:
+    return str(item.get("extension") or "") in {".docx", ".xlsx", ".pptx"}
+
+
+def _role_rank(role: str) -> int:
+    order = {"primary": 3, "summary": 2, "record": 1}
+    return order.get(role, 0)
+
+
+def _attachment_delivery_role(display_name: str, *, suffix: str) -> str:
+    if suffix in {".docx", ".xlsx", ".pptx"}:
+        return "primary"
+    lowered = display_name.lower()
+    if "record" in lowered or "action" in lowered:
+        return "record"
+    return "summary"
 
 
 def _gateway_policy(config: ChannelProviderSection) -> dict[str, Any]:

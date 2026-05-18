@@ -23,6 +23,10 @@ from app.schemas.media import (
     MediaTimelineRequest,
     MediaTTSRequest,
     MediaTranscribeAudioRequest,
+    VideoWorkflowCreateRequest,
+    VideoWorkflowExecuteRequest,
+    VideoWorkflowResponse,
+    VideoWorkflowResumeRequest,
 )
 from app.schemas.tasks import ToolExecuteRequest, ToolExecuteResponse
 from app.services.registry import ServiceRegistry
@@ -38,6 +42,54 @@ async def import_artifact(
 ) -> MediaOperationResponse:
     return await registry.media_service.import_artifact(
         payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.post("/video-workflows", response_model=VideoWorkflowResponse)
+async def create_video_workflow(
+    payload: VideoWorkflowCreateRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> VideoWorkflowResponse:
+    return await registry.video_workflow_service.create(
+        payload,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.get("/video-workflows/{workflow_id}", response_model=VideoWorkflowResponse)
+async def get_video_workflow(
+    workflow_id: str,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> VideoWorkflowResponse:
+    return await registry.video_workflow_service.get(workflow_id)
+
+
+@router.post("/video-workflows/{workflow_id}/execute", response_model=VideoWorkflowResponse)
+async def execute_video_workflow(
+    workflow_id: str,
+    request: Request,
+    payload: VideoWorkflowExecuteRequest | None = None,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> VideoWorkflowResponse:
+    return await registry.video_workflow_service.execute(
+        workflow_id,
+        payload or VideoWorkflowExecuteRequest(),
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+
+
+@router.post("/video-workflows/{workflow_id}/resume", response_model=VideoWorkflowResponse)
+async def resume_video_workflow(
+    workflow_id: str,
+    payload: VideoWorkflowResumeRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> VideoWorkflowResponse:
+    return await registry.video_workflow_service.resume(
+        workflow_id,
+        payload.approval_id,
         trace_id=getattr(request.state, "trace_id", None),
     )
 

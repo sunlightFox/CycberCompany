@@ -42,6 +42,7 @@ from app.schemas.external_platform import (
     ExternalPlatformPlanExecuteRequest,
     ExternalPlatformTargetCreateRequest,
 )
+from app.schemas.external_platform_adapters import ExternalPlatformAdapterExecuteRequest
 from app.schemas.skill_governance import SkillGrantCreateRequest
 from app.schemas.skills import BundleInstallRequest
 from app.schemas.tasks import TaskCreateRequest
@@ -52,19 +53,48 @@ from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
 from app.services.browser_sessions import BrowserSessionService
 from app.services.capability import CapabilityGraphService
-from app.services.external_platform_providers import (
-    FAKE_PROVIDER_TARGET,
-    XIAOHONGSHU_BROWSER_TARGET,
-    ExternalPlatformProviderRegistry,
-    ProviderExecutionRequest,
-    ProviderInfo,
-    default_external_platform_provider_registry,
+from app.services.external_platform_chat_orchestration import (
+    ExternalPlatformChatOrchestrator,
 )
+from app.services.external_platform_chat_parser import ExternalPlatformChatParser
+from app.services.external_platform_extensions import (
+    ExternalPlatformExtensionRegistry,
+    ExternalPlatformRuntimeContext,
+)
+from app.services.external_platform_providers import ProviderExecutionRequest, ProviderInfo
 from app.services.safety_policy import RuntimeSafetyPolicyService
 from app.services.skill_governance import SkillGovernanceService
 from app.services.skill_plugin import SkillPluginService
 from app.services.skill_repositories import SkillRepositoryService
 from app.services.tasks import TaskEngine
+
+ACTION_MARKERS = {
+    "comment_content": ["评论", "留言", "回复", "comment", "reply"],
+    "publish_content": [
+        "发布",
+        "发一篇文章",
+        "发文章",
+        "发动态",
+        "发帖",
+        "发到",
+        "同步公告",
+        "publish",
+        "post",
+    ],
+    "send_message": ["发消息", "私信", "发送", "send message", "message"],
+    "read_status": ["查看", "读取", "查询状态", "read", "status"],
+}
+
+CONTENT_MARKERS = [
+    "内容：",
+    "内容:",
+    "正文：",
+    "正文:",
+    "这段内容：",
+    "这段内容:",
+    "文章：",
+    "文章:",
+]
 
 ACTION_MARKERS = {
     "comment_content": ["评论", "留言", "回复", "comment", "reply"],
@@ -119,7 +149,8 @@ class ExternalPlatformActionService:
         approval_service: ApprovalService,
         trace_service: TraceService,
         audit_service: AuditEventService,
-        provider_registry: ExternalPlatformProviderRegistry | None = None,
+        extension_registry: ExternalPlatformExtensionRegistry,
+        runtime_context: ExternalPlatformRuntimeContext,
         safety_policy_service: RuntimeSafetyPolicyService | None = None,
         skill_plugin_service: SkillPluginService | None = None,
         skill_governance_service: SkillGovernanceService | None = None,
@@ -137,7 +168,16 @@ class ExternalPlatformActionService:
         self._approvals = approval_service
         self._trace = trace_service
         self._audit = audit_service
-        self._providers = provider_registry or default_external_platform_provider_registry()
+        self._extension_registry = extension_registry
+        self._external_platform_runtime_context = runtime_context
+        self._providers = extension_registry.build_provider_registry(runtime_context)
+        self._chat_parser = ExternalPlatformChatParser(extension_registry)
+        self._chat_orchestrator = ExternalPlatformChatOrchestrator(
+            repo=repo,
+            get_plan_by_approval_id=self.get_plan_by_approval_id,
+            get_plan=self.get_plan,
+            plan_event=self._plan_event,
+        )
         self._safety_policy = safety_policy_service
         self._skills = skill_plugin_service
         self._skill_governance = skill_governance_service
@@ -145,16 +185,13 @@ class ExternalPlatformActionService:
 
     async def ensure_seeded_targets(self, *, trace_id: str | None = None) -> None:
         now = utc_now_iso()
-        for target_seed, target_id in (
-            (FAKE_PROVIDER_TARGET, "ept_fake_platform"),
-            (XIAOHONGSHU_BROWSER_TARGET, "ept_social_xiaohongshu"),
-        ):
+        for target_seed in self._extension_registry.seeded_targets():
             existing = await self._repo.get_target_by_key(str(target_seed["platform_key"]))
             if existing is not None:
                 continue
             target = {
                 **target_seed,
-                "target_id": target_id,
+                "target_id": str(target_seed["target_id"]),
                 "organization_id": "org_default",
                 "status": "active",
                 "trace_id": trace_id,
@@ -174,8 +211,37 @@ class ExternalPlatformActionService:
     ) -> ExternalPlatformTarget:
         _reject_inline_secret_config(request.metadata)
         now = utc_now_iso()
+        existing = await self._repo.get_target_by_key(request.platform_key)
+        display_name = request.display_name
+        aliases = list(request.aliases)
+        supported_actions = list(request.supported_actions)
+        required_asset_types = list(request.required_asset_types)
+        execution_modes = list(request.execution_modes)
+        risk_defaults = dict(request.risk_defaults)
+        metadata = dict(request.metadata)
+        if existing is not None and bool((existing.get("metadata") or {}).get("provider_registry_owned")):
+            display_name = str(existing.get("display_name") or display_name)
+            aliases = list(dict.fromkeys([*existing.get("aliases", []), *aliases]))
+            supported_actions = list(
+                dict.fromkeys([*existing.get("supported_actions", []), *supported_actions])
+            )
+            required_asset_types = list(
+                dict.fromkeys([*existing.get("required_asset_types", []), *required_asset_types])
+            )
+            execution_modes = list(
+                dict.fromkeys([*existing.get("execution_modes", []), *execution_modes])
+            )
+            risk_defaults = {**existing.get("risk_defaults", {}), **risk_defaults}
+            metadata = {**existing.get("metadata", {}), **metadata}
         data = {
             **request.model_dump(mode="json"),
+            "display_name": display_name,
+            "aliases": aliases,
+            "supported_actions": supported_actions,
+            "required_asset_types": required_asset_types,
+            "execution_modes": execution_modes,
+            "risk_defaults": risk_defaults,
+            "metadata": metadata,
             "target_id": new_id("ept"),
             "organization_id": "org_default",
             "trace_id": trace_id,
@@ -213,6 +279,193 @@ class ExternalPlatformActionService:
             ExternalPlatformTarget(**row)
             for row in await self._repo.list_targets(status=status, limit=limit)
         ]
+
+    async def looks_like_chat_request(
+        self,
+        text: str,
+        *,
+        organization_id: str = "org_default",
+    ) -> bool:
+        await self.ensure_seeded_targets()
+        clean = " ".join(str(text or "").strip().split())
+        if not clean:
+            return False
+        targets = await self._repo.list_targets(
+            organization_id=organization_id,
+            status="active",
+        )
+        action_type, _ = _detect_action_type(clean)
+        if _match_target(clean, targets) is not None and action_type != "unknown":
+            return True
+        lowered = clean.lower()
+        generic_platform_markers = [
+            "平台",
+            "账号",
+            "账户",
+            "外部平台",
+            "社交平台",
+            "channel",
+            "platform",
+            "account",
+        ]
+        generic_platform_markers = [
+            "平台",
+            "账号",
+            "账户",
+            "外部平台",
+            "社交平台",
+            *generic_platform_markers,
+        ]
+        return action_type != "unknown" and any(
+            marker in clean or marker in lowered for marker in generic_platform_markers
+        )
+
+    async def default_execution_mode_for_intent(
+        self,
+        *,
+        intent: ExternalPlatformActionIntent,
+        organization_id: str = "org_default",
+    ) -> str:
+        target = await self._target_for_intent(intent)
+        if target is None:
+            return "fake_provider"
+        adapter = None
+        if intent.platform_key:
+            adapter = await self._adapter_repo.find_active_adapter(
+                organization_id=organization_id,
+                platform_key=str(intent.platform_key),
+                action_type=intent.action_type,
+                adapter_type=None,
+            )
+        if adapter is not None:
+            return str(adapter.get("adapter_type") or "browser")
+        if "browser" in target.execution_modes:
+            return "browser"
+        provider = self._providers.get(str(intent.platform_key or target.platform_key or ""))
+        for mode in provider.info.execution_modes:
+            if mode in target.execution_modes:
+                return mode
+        if target.execution_modes:
+            return str(target.execution_modes[0])
+        return "fake_provider"
+
+    async def get_plan_by_approval_id(
+        self,
+        approval_id: str,
+    ) -> ExternalPlatformActionPlan | None:
+        row = await self._repo.get_plan_by_approval_id(approval_id)
+        return ExternalPlatformActionPlan(**row) if row else None
+
+    async def find_chat_resumable_plan(
+        self,
+        *,
+        conversation_id: str,
+    ) -> tuple[ExternalPlatformActionPlan | None, str]:
+        rows = await self._repo.list_recent_plans(
+            conversation_id=conversation_id,
+            statuses=["awaiting_human", "awaiting_approval"],
+            limit=5,
+        )
+        plans = [ExternalPlatformActionPlan(**row) for row in rows]
+        if not plans:
+            return None, "none"
+        pending = [
+            plan
+            for plan in plans
+            if plan.status == "awaiting_human"
+            or (plan.status == "awaiting_approval" and plan.approval_id)
+        ]
+        if len(pending) != 1:
+            return None, "multiple"
+        return pending[0], "single"
+
+    async def continue_after_approval(
+        self,
+        approval: ApprovalDetail,
+        *,
+        adapter_service: Any | None,
+        trace_id: str | None = None,
+    ) -> Any | None:
+        if not str(approval.requested_action or "").startswith("external_platform."):
+            return None
+        plan = await self.get_plan_by_approval_id(approval.approval_id)
+        if plan is None:
+            return None
+        if approval.status == "denied":
+            await self._repo.update_plan(
+                plan.plan_id,
+                {
+                    "status": "cancelled",
+                    "failure_reason": "approval_denied",
+                    "updated_at": utc_now_iso(),
+                },
+            )
+            await self._plan_event(
+                plan.plan_id,
+                "plan.cancelled",
+                {"reason": "approval_denied"},
+                trace_id=trace_id,
+            )
+            return await self.get_plan(plan.plan_id)
+        if approval.status not in {"approved", "edited"}:
+            return await self.get_plan(plan.plan_id)
+        adapter_type = _adapter_type_for_execution_mode(plan.execution_mode)
+        if adapter_service is not None and adapter_type is not None:
+            return await adapter_service.execute_adapter(
+                plan.plan_id,
+                ExternalPlatformAdapterExecuteRequest(
+                    adapter_type=adapter_type,
+                    approval_id=approval.approval_id,
+                ),
+                trace_id=trace_id,
+            )
+        return await self.get_plan(plan.plan_id)
+
+    async def resume_from_chat(
+        self,
+        *,
+        plan: ExternalPlatformActionPlan,
+        text: str,
+        adapter_service: Any | None,
+        trace_id: str | None = None,
+    ) -> Any | None:
+        if plan.status == "awaiting_approval" and plan.approval_id:
+            raise AppError(
+                ErrorCode.TASK_STATE_INVALID,
+                "当前还在等你确认，先明确同意或拒绝这一项外部平台操作。",
+                status_code=409,
+            )
+        if adapter_service is None:
+            raise AppError(
+                ErrorCode.INTERNAL_ERROR,
+                "外部平台恢复执行服务暂时不可用。",
+                status_code=500,
+            )
+        from app.schemas.external_platform_adapters import (
+            ExternalPlatformAdapterResumeRequest,
+        )
+
+        normalized = str(text or "").strip().lower()
+        login_markers = ["已登录", "登录好了", "login completed", "logged in"]
+        login_completed = any(marker in str(text or "") for marker in login_markers)
+        if "resume_after_login" in str(plan.metadata.get("chat_next_step") or ""):
+            login_completed = True
+        return await adapter_service.resume_after_human(
+            plan.plan_id,
+            ExternalPlatformAdapterResumeRequest(
+                adapter_type=(
+                    _adapter_type_for_execution_mode(plan.execution_mode)
+                ),
+                approval_id=plan.approval_id,
+                human_resolution={
+                    "login_completed": login_completed,
+                    "chat_resume": True,
+                    "reply_text": str(redact(text)),
+                    "normalized": normalized[:80],
+                },
+            ),
+            trace_id=trace_id,
+        )
 
     async def resolve_intent(
         self,
@@ -1822,10 +2075,12 @@ def _match_target(text: str, targets: list[dict[str, Any]]) -> dict[str, Any] | 
     lowered = text.lower()
     matches: list[dict[str, Any]] = []
     for target in targets:
+        platform_key = str(target.get("platform_key") or "")
         aliases = [
-            str(target.get("platform_key") or ""),
+            platform_key,
             str(target.get("display_name") or ""),
             *[str(alias) for alias in target.get("aliases", [])],
+            *_platform_key_aliases(platform_key),
         ]
         for alias in aliases:
             if alias and alias.lower() in lowered:
@@ -1841,6 +2096,23 @@ def _match_target(text: str, targets: list[dict[str, Any]]) -> dict[str, Any] | 
     if len(matches) == 1:
         return matches[0]
     return None
+
+
+def _adapter_type_for_execution_mode(execution_mode: str | None) -> str | None:
+    mode = str(execution_mode or "").strip().lower()
+    if mode == "mcp_adapter":
+        return "mcp"
+    if mode in {"browser", "mcp"}:
+        return mode
+    return None
+
+
+def _platform_key_aliases(platform_key: str) -> list[str]:
+    key = platform_key.strip().lower()
+    aliases: list[str] = []
+    if "xiaohongshu" in key:
+        aliases.extend(["小红书", "xhs", "rednote"])
+    return aliases
 
 
 def _detect_action_type(text: str) -> tuple[str, float]:
@@ -2525,3 +2797,186 @@ def _restore_boolean_guard_fields(value: Any) -> Any:
 
 def _stable_hash(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+async def _external_platform_looks_like_chat_request(
+    self: ExternalPlatformActionService,
+    text: str,
+    *,
+    organization_id: str = "org_default",
+) -> bool:
+    await self.ensure_seeded_targets()
+    targets = await self._repo.list_targets(
+        organization_id=organization_id,
+        status="active",
+    )
+    return self._chat_parser.looks_like_chat_request(text, targets)
+
+
+async def _external_platform_find_chat_resumable_plan(
+    self: ExternalPlatformActionService,
+    *,
+    conversation_id: str,
+) -> tuple[ExternalPlatformActionPlan | None, str]:
+    return await self._chat_orchestrator.find_chat_resumable_plan(
+        conversation_id=conversation_id
+    )
+
+
+async def _external_platform_continue_after_approval(
+    self: ExternalPlatformActionService,
+    approval: ApprovalDetail,
+    *,
+    adapter_service: Any | None,
+    trace_id: str | None = None,
+) -> Any | None:
+    return await self._chat_orchestrator.continue_after_approval(
+        approval,
+        adapter_service=adapter_service,
+        trace_id=trace_id,
+    )
+
+
+async def _external_platform_resume_from_chat(
+    self: ExternalPlatformActionService,
+    *,
+    plan: ExternalPlatformActionPlan,
+    text: str,
+    adapter_service: Any | None,
+    trace_id: str | None = None,
+) -> Any | None:
+    return await self._chat_orchestrator.resume_from_chat(
+        plan=plan,
+        text=text,
+        adapter_service=adapter_service,
+        trace_id=trace_id,
+    )
+
+
+async def _external_platform_resolve_intent(
+    self: ExternalPlatformActionService,
+    request: ExternalPlatformIntentResolveRequest,
+    *,
+    trace_id: str | None = None,
+) -> ExternalPlatformIntentResolveResponse:
+    await self.ensure_seeded_targets(trace_id=trace_id)
+    span_id = await self._start_span(
+        trace_id,
+        "external_platform.intent.resolve",
+        input_data={"text": str(redact(request.text)), "member_id": request.member_id},
+    )
+    try:
+        targets = await self._repo.list_targets(
+            organization_id=request.organization_id,
+            status="active",
+        )
+        match = self._chat_parser.match_target(request.text, targets)
+        platform_key = str(match["platform_key"]) if match else None
+        action_type, action_score = self._chat_parser.detect_action_type(
+            request.text,
+            platform_key=platform_key,
+        )
+        content = self._chat_parser.extract_content(
+            request.text,
+            action_type,
+            platform_key=platform_key,
+        )
+        redaction_summary = _redaction_summary(request.text)
+        missing_fields: list[str] = []
+        if match is None:
+            missing_fields.append("platform")
+        if action_type == "unknown":
+            missing_fields.append("action_type")
+        if action_type in {"publish_content", "comment_content", "send_message"} and not content:
+            missing_fields.append("content")
+        confidence = round(
+            0.25 + (0.35 if match else 0) + action_score + (0.15 if content else 0),
+            2,
+        )
+        status = "resolved" if not missing_fields and confidence >= 0.75 else "clarification_needed"
+        now = utc_now_iso()
+        intent_id = new_id("epai")
+        platform_hint = str(match["matched_alias"]) if match else None
+        constraints = {
+            **request.constraints,
+            "requires_external_state_change": action_type in HIGH_RISK_ACTIONS,
+            "redaction": redaction_summary,
+            "sensitive_content_detected": redaction_summary["redaction_count"] > 0,
+        }
+        data = {
+            "intent_id": intent_id,
+            "organization_id": request.organization_id,
+            "member_id": request.member_id,
+            "conversation_id": request.conversation_id,
+            "turn_id": request.turn_id,
+            "trace_id": trace_id,
+            "platform_hint": platform_hint,
+            "platform_key": platform_key,
+            "action_type": action_type,
+            "content_redacted": str(redact(content or request.text)),
+            "content_summary": _content_summary(content or request.text),
+            "target_hint": _target_hint(request.text),
+            "constraints": constraints,
+            "confidence": confidence,
+            "status": status,
+            "missing_fields": missing_fields,
+            "resolver_evidence": {
+                "target_match": redact(match or {}),
+                "action_score": action_score,
+                "platform_from_target_alias": bool(match),
+                "missing_fields": missing_fields,
+                "content_hash": _stable_hash(content or request.text),
+                "redaction_summary": redaction_summary,
+            },
+            "created_at": now,
+            "updated_at": now,
+        }
+        await self._repo.insert_intent(data)
+        await self._audit.write_event(
+            actor_type="member",
+            actor_id=request.member_id,
+            action="external_platform.intent.resolved",
+            object_type="external_platform_action_intent",
+            object_id=intent_id,
+            summary="外部平台动作意图已解析",
+            risk_level=RiskLevel.R2,
+            payload={
+                "intent_id": intent_id,
+                "platform_key": platform_key,
+                "action_type": action_type,
+                "status": status,
+                "missing_fields": missing_fields,
+            },
+            trace_id=trace_id,
+        )
+        await self._end_span(
+            span_id,
+            output_data={
+                "intent_id": intent_id,
+                "status": status,
+                "platform_key": platform_key,
+                "action_type": action_type,
+            },
+        )
+        intent = ExternalPlatformActionIntent(**data)
+        return ExternalPlatformIntentResolveResponse(
+            intent=intent,
+            message=_intent_message(intent),
+            next_step=(
+                "create_action_plan" if intent.status == "resolved" else "ask_user_for_missing_fields"
+            ),
+        )
+    except Exception as exc:
+        await self._end_span(
+            span_id,
+            status=TraceSpanStatus.FAILED,
+            output_data={"error_code": getattr(exc, "code", ErrorCode.INTERNAL_ERROR.value)},
+        )
+        raise
+
+
+ExternalPlatformActionService.looks_like_chat_request = _external_platform_looks_like_chat_request
+ExternalPlatformActionService.find_chat_resumable_plan = _external_platform_find_chat_resumable_plan
+ExternalPlatformActionService.continue_after_approval = _external_platform_continue_after_approval
+ExternalPlatformActionService.resume_from_chat = _external_platform_resume_from_chat
+ExternalPlatformActionService.resolve_intent = _external_platform_resolve_intent

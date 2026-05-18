@@ -204,6 +204,30 @@ _KNOWN_OFFICIAL_SOURCE_HINTS = {
         "vendor_domains": ("qq.com", "im.qq.com", "dldir1.qq.com", "tencent.com"),
         "package_ids": ("Tencent.QQ",),
     },
+    "vs code": {
+        "queries": ("VS Code", "Visual Studio Code", "Code"),
+        "publisher_hints": ("Microsoft",),
+        "official_sites": ("https://code.visualstudio.com/",),
+        "download_pages": ("https://code.visualstudio.com/Download",),
+        "vendor_domains": ("code.visualstudio.com", "visualstudio.com", "microsoft.com"),
+        "package_ids": ("Microsoft.VisualStudioCode", "Microsoft.VisualStudioCode.User"),
+    },
+    "visual studio code": {
+        "queries": ("Visual Studio Code", "VS Code", "Code"),
+        "publisher_hints": ("Microsoft",),
+        "official_sites": ("https://code.visualstudio.com/",),
+        "download_pages": ("https://code.visualstudio.com/Download",),
+        "vendor_domains": ("code.visualstudio.com", "visualstudio.com", "microsoft.com"),
+        "package_ids": ("Microsoft.VisualStudioCode", "Microsoft.VisualStudioCode.User"),
+    },
+    "vscode": {
+        "queries": ("VS Code", "Visual Studio Code", "Code"),
+        "publisher_hints": ("Microsoft",),
+        "official_sites": ("https://code.visualstudio.com/",),
+        "download_pages": ("https://code.visualstudio.com/Download",),
+        "vendor_domains": ("code.visualstudio.com", "visualstudio.com", "microsoft.com"),
+        "package_ids": ("Microsoft.VisualStudioCode", "Microsoft.VisualStudioCode.User"),
+    },
 }
 
 
@@ -3877,6 +3901,9 @@ async def _resolve_official_website_candidate(
     normalized = _normalize_software_query(software)
     if not normalized:
         return None
+    static_candidate = _static_official_website_candidate(normalized)
+    if static_candidate is not None:
+        return static_candidate
     cached = _OFFICIAL_SOURCE_CACHE.get(normalized)
     now = time.monotonic()
     if cached is not None and now - cached[0] < _OFFICIAL_SOURCE_CACHE_TTL_SECONDS:
@@ -3899,6 +3926,32 @@ async def _resolve_official_website_candidate(
             _OFFICIAL_SOURCE_CACHE[normalized] = (now, resolved)
             return resolved
     _OFFICIAL_SOURCE_CACHE[normalized] = (now, None)
+    return None
+
+
+def _static_official_website_candidate(normalized_query: str) -> HostPackageCandidate | None:
+    lowered = normalized_query.lower()
+    if any(key in lowered for key in ("vs code", "visual studio code", "vscode")):
+        return HostPackageCandidate(
+            source_type="official_website",
+            package_id="Microsoft.VisualStudioCode",
+            publisher="Microsoft",
+            confidence=0.95,
+            match_reason="static_official_website_verified",
+            version=None,
+            name="Visual Studio Code",
+            installer_url="https://update.code.visualstudio.com/latest/win32-x64-user/stable",
+            installer_sha256=None,
+            installer_type="inno",
+            official_page="https://code.visualstudio.com/Download",
+            official_source_verification={
+                "source": "official_website",
+                "official_page": "https://code.visualstudio.com/Download",
+                "download_url": "https://update.code.visualstudio.com/latest/win32-x64-user/stable",
+                "checksum_status": "unavailable",
+                "domain_status": "vendor_domain_match",
+            },
+        )
     return None
 
 

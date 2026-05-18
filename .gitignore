@@ -6,6 +6,11 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 .tmp/
+.tmp_*
+.tmp_project_skill_repo.index.json
+.tmp_project_skill_sources/
+.wheels/
+tmp_phase52_debug*/
 
 data/
 data_tmp*/

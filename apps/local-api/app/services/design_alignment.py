@@ -619,6 +619,27 @@ class RuntimeContractService:
                 details={"phase": "phase_43", "diagnostic": "phase43_media_runtime"},
             ),
             _contract(
+                "VideoWorkflowProfile",
+                "implemented",
+                "video workflow capability profile exposes local media, render and generation "
+                "provider availability without enabling unavailable providers by default",
+                details={"phase": "phase_102", "provider_generation": "degraded_when_unconfigured"},
+            ),
+            _contract(
+                "VideoWorkflowClosure",
+                "implemented",
+                "video workflow composes probe, frames, scene map, timeline, EDL and render "
+                "into one replayable deliverable contract",
+                details={"phase": "phase_102", "artifact_first": True},
+            ),
+            _contract(
+                "VideoWorkflowRenderRepair",
+                "implemented",
+                "media.render_edit remains an R3 ToolRuntime action and video workflow records "
+                "one safe_reencode repair attempt after runtime render failure",
+                details={"phase": "phase_102", "tool": "media.render_edit"},
+            ),
+            _contract(
                 "ChatTurnOrchestrator",
                 "implemented",
                 "chat turn stage order is explicit and delegates policy branches "
@@ -801,6 +822,17 @@ class RuntimeContractService:
                 "external platform execution is routed through provider registry entries",
                 blocker_level="none",
                 details={"phase": "phase_47", "provider_api": "/api/external-platform/providers"},
+            ),
+            _contract(
+                "ExternalPlatformExtensionRegistry",
+                "implemented",
+                "bundled external platform extensions register providers, seeded targets and execution handlers",
+                blocker_level="none",
+                details={
+                    "phase": "phase_99",
+                    "bundled_extensions": ["fake", "browser", "xiaohongshu"],
+                    "seeded_targets_registry_owned": True,
+                },
             ),
             _contract(
                 "FakeExternalPlatformProviderModule",

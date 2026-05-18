@@ -178,6 +178,8 @@ class MediaRuntime:
         source: Path,
         work_dir: Path,
         edit_plan: MediaEditPlan,
+        *,
+        render_strategy: str = "copy",
     ) -> RuntimeFileOutput:
         if not self._ffmpeg:
             raise _media_unavailable("ffmpeg_missing")
@@ -190,13 +192,21 @@ class MediaRuntime:
         command.extend(["-i", str(source)])
         if operation:
             command.extend(["-to", f"{operation['source_end_ms'] / 1000:.3f}"])
-        command.extend(["-c", "copy", str(target)])
+        if render_strategy == "safe_reencode":
+            command.extend(["-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac"])
+        else:
+            command.extend(["-c", "copy"])
+        command.append(str(target))
         await self._run(command)
         return RuntimeFileOutput(
             path=target,
             display_name="rendered.mp4",
             content_type="video/mp4",
-            metadata={"renderer": "ffmpeg", "operation_count": len(edit_plan.operations)},
+            metadata={
+                "renderer": "ffmpeg",
+                "operation_count": len(edit_plan.operations),
+                "render_strategy": render_strategy,
+            },
         )
 
     async def _run(self, command: list[str]) -> dict[str, str]:
@@ -223,17 +233,22 @@ class MediaRuntime:
 
 
 class FakeMediaRuntime(MediaRuntime):
-    def __init__(self) -> None:
-        pass
+    def __init__(self, *, fail_render_attempts: int = 0, unavailable: bool = False) -> None:
+        self._fail_render_attempts = fail_render_attempts
+        self._render_attempts = 0
+        self._unavailable = unavailable
 
     def status(self) -> dict[str, Any]:
         return {
             "backend": "fake_media_runtime",
-            "ffmpeg_available": True,
-            "ffprobe_available": True,
+            "ffmpeg_available": not self._unavailable,
+            "ffprobe_available": not self._unavailable,
+            "degraded_reason": "ffmpeg_or_ffprobe_missing" if self._unavailable else None,
         }
 
     async def probe(self, source: Path) -> dict[str, Any]:
+        if self._unavailable:
+            raise _media_unavailable("ffprobe_missing")
         size = source.stat().st_size if source.exists() else 0
         return {
             "duration_ms": 42000,
@@ -252,6 +267,8 @@ class FakeMediaRuntime(MediaRuntime):
         work_dir: Path,
         request: MediaExtractFramesRequest,
     ) -> list[RuntimeFileOutput]:
+        if self._unavailable:
+            raise _media_unavailable("ffmpeg_missing")
         del source
         work_dir.mkdir(parents=True, exist_ok=True)
         timestamps = request.timestamps_ms[: request.max_frames] or [
@@ -278,6 +295,8 @@ class FakeMediaRuntime(MediaRuntime):
         work_dir: Path,
         request: MediaExtractAudioRequest,
     ) -> RuntimeFileOutput:
+        if self._unavailable:
+            raise _media_unavailable("ffmpeg_missing")
         del source
         work_dir.mkdir(parents=True, exist_ok=True)
         path = work_dir / "audio.wav"
@@ -294,7 +313,19 @@ class FakeMediaRuntime(MediaRuntime):
         source: Path,
         work_dir: Path,
         edit_plan: MediaEditPlan,
+        *,
+        render_strategy: str = "copy",
     ) -> RuntimeFileOutput:
+        if self._unavailable:
+            raise _media_unavailable("ffmpeg_missing")
+        self._render_attempts += 1
+        if self._render_attempts <= self._fail_render_attempts:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "fake render failure",
+                status_code=502,
+                details={"attempt": self._render_attempts, "render_strategy": render_strategy},
+            )
         del source
         work_dir.mkdir(parents=True, exist_ok=True)
         path = work_dir / "rendered.mp4"
@@ -306,6 +337,7 @@ class FakeMediaRuntime(MediaRuntime):
             metadata={
                 "renderer": "fake_media_runtime",
                 "operation_count": len(edit_plan.operations),
+                "render_strategy": render_strategy,
             },
         )
 
@@ -1258,7 +1290,7 @@ class MediaService:
         *,
         trace_id: str | None = None,
     ) -> MediaEditPlanResponse:
-        del request
+        request = request or MediaRenderEditRequest()
         edit_plan = await self.get_edit_plan(edit_plan_id)
         media = await self.get_media(edit_plan.media_id)
         _validate_operations(media, edit_plan.operations)
@@ -1268,6 +1300,7 @@ class MediaService:
                 source,
                 self._work_dir(media.task_id, "render"),
                 edit_plan,
+                render_strategy=request.render_strategy,
             )
         except AppError as exc:
             if exc.code == ErrorCode.MEDIA_BACKEND_UNAVAILABLE.value:
@@ -1330,6 +1363,7 @@ class MediaService:
                     **edit_plan.evidence,
                     "output_artifact_id": artifact.artifact_id,
                     "renderer": output.metadata.get("renderer"),
+                    "render_strategy": output.metadata.get("render_strategy"),
                 },
                 "updated_at": utc_now_iso(),
             },

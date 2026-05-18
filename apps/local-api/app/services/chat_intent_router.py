@@ -60,11 +60,13 @@ class ChatIntentRouter:
         clean = _clean(text)
         if not clean:
             return ChatRouteDecision("empty", 0.0, "empty_text")
+        format_sensitive_request = _format_sensitive_direct_answer_request(clean)
         office_request = parse_office_chat_request(clean)
         if office_request is None:
             document_type = office_document_type(clean)
             if (
                 document_type is not None
+                and not format_sensitive_request
                 and not _direct_only(clean)
                 and not _negative_office_generation_constraint(clean)
                 and not is_skill_or_mcp_concept_request(clean)
@@ -88,7 +90,7 @@ class ChatIntentRouter:
                 safe_user_summary=_safe_summary(clean),
                 office_request=office_request,
             )
-        if is_skill_or_mcp_concept_request(clean):
+        if is_skill_or_mcp_concept_request(clean) and not format_sensitive_request:
             return ChatRouteDecision(
                 route_type="skill_mcp_concept",
                 confidence=0.82,
@@ -225,6 +227,10 @@ def direct_only_requested(text: str) -> bool:
     return _direct_only(_clean(text))
 
 
+def format_sensitive_direct_answer_requested(text: str) -> bool:
+    return _format_sensitive_direct_answer_request(_clean(text))
+
+
 def is_readonly_route_request(text: str) -> bool:
     clean = _clean(text)
     return any(
@@ -240,6 +246,8 @@ def is_readonly_route_request(text: str) -> bool:
 def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
     clean = _clean(text)
     if _direct_only(clean):
+        return None
+    if _format_sensitive_direct_answer_request(clean) and not _has_office_action(clean):
         return None
     if is_host_filesystem_list_request(clean):
         return None
@@ -785,15 +793,64 @@ def is_skill_or_mcp_concept_request(text: str) -> bool:
     lowered = clean.lower()
     action_text = _without_direct_only_markers(clean)
     if any(
-        marker in action_text
-        for marker in ["生成", "创建", "做一个", "做一份", "编辑", "修改"]
+        marker in action_text or marker in lowered
+        for marker in ["生成", "创建", "做一个", "做一份", "编辑", "修改", "generate", "create", "edit", "modify", "build"]
     ):
         return False
-    concept_markers = ["是什么", "怎么配置", "如何配置", "解释", "介绍", "原理", "区别"]
+    concept_markers = [
+        "是什么",
+        "怎么配置",
+        "如何配置",
+        "解释",
+        "介绍",
+        "原理",
+        "区别",
+        "what is",
+        "explain",
+        "difference",
+        "compare",
+        "how to configure",
+    ]
     target_markers = ["skill", "技能", "mcp"]
     return any(marker in clean or marker in lowered for marker in target_markers) and any(
         marker in clean or marker in lowered for marker in concept_markers
     )
+
+
+def _format_sensitive_direct_answer_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if not any(
+        marker in clean or marker in lowered
+        for marker in [
+            "只输出 json",
+            "只输出json",
+            "json-only",
+            "only output json",
+            "only json",
+            "output json only",
+            "不要markdown",
+            "不要 markdown",
+            "no markdown",
+            "只要纯文本",
+            "plain text only",
+            "只要表格",
+            "markdown 表格",
+            "markdown表格",
+            "用表格比较",
+            "用表格",
+            "表格比较",
+            "use a table",
+            "table to compare",
+            "compare in a table",
+            "markdown table",
+            "只返回代码",
+            "只要代码",
+            "code only",
+        ]
+    ):
+        return False
+    return True
 
 
 def preferred_office_bundle_id(request: OfficeChatRequest) -> str:

@@ -15,17 +15,17 @@ async def _phase90_stream_chat(
 ):
     del self, cancel_token
     prompt = str(request.messages[-1]["content"])
-    if "用表格比较 REST" in prompt:
-        assert "只输出 JSON" not in prompt
+    if "REST" in prompt and "GraphQL" in prompt and "gRPC" in prompt:
+        assert "JSON" not in prompt
         reply = (
-            "| 方案 | 适用场景 |\n"
+            "| Strategy | Best fit |\n"
             "| --- | --- |\n"
-            "| REST | 通用 CRUD、团队协作成本低 |\n"
-            "| GraphQL | 前端按需取数 |\n"
-            "| gRPC | 内部高性能服务调用 |"
+            "| REST | General CRUD and team-friendly APIs |\n"
+            "| GraphQL | Client-driven field selection |\n"
+            "| gRPC | High-throughput internal service calls |"
         )
-    elif "只输出 JSON" in prompt:
-        reply = '{"conclusion":"聊天质量要先稳住自然度和边界一致性","risks":["回复模板腔偏重"]}'
+    elif "JSON" in prompt and "conclusion" in prompt and "risks" in prompt:
+        reply = '{"conclusion":"Keep naturalness and boundary honesty stable first.","risks":["Template drift"]}'
     else:
         reply = "phase90"
     yield ModelStreamEvent(event="started")
@@ -106,7 +106,7 @@ def test_phase90_format_sensitive_request_does_not_inherit_prior_json_shape(
         client,
         conversation_id,
         "phase90-json",
-        "只输出 JSON，字段只有 conclusion 和 risks。",
+        "Only output JSON with exactly two fields: conclusion and risks.",
     )
     json_events = _parse_sse(client.get(created_json["stream_url"]).text)
     json_completed = next(item for item in json_events if item["event"] == "response.completed")
@@ -116,7 +116,7 @@ def test_phase90_format_sensitive_request_does_not_inherit_prior_json_shape(
         client,
         conversation_id,
         "phase90-table",
-        "用表格比较 REST、GraphQL、gRPC 的适用场景。",
+        "Use a table to compare when REST, GraphQL, and gRPC fit best.",
     )
     table_events = _parse_sse(client.get(created_table["stream_url"]).text)
     table_completed = next(
@@ -125,7 +125,7 @@ def test_phase90_format_sensitive_request_does_not_inherit_prior_json_shape(
     plain_text = table_completed["payload"]["response_plan"]["plain_text"]
 
     assert "| REST |" in plain_text
-    assert plain_text.startswith("| 方案 |")
+    assert plain_text.startswith("| Strategy |")
 
 
 def _create_local_brain(client: TestClient) -> str:

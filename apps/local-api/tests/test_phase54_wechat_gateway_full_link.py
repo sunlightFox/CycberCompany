@@ -23,6 +23,7 @@ from app.services.channel_connectors import (
     _encode_wechat_voice_silk,
     _send_audio_as_voice_message,
 )
+from app.services.wechat_gateway import _wechat_outbound_attachment_selection
 from core_types import ChatTurnResponse
 from fastapi.testclient import TestClient
 
@@ -846,12 +847,14 @@ class GatewayWechatClient:
     events: ClassVar[list[dict[str, Any]]] = []
     send_calls: ClassVar[list[dict[str, str]]] = []
     audio_calls: ClassVar[list[dict[str, Any]]] = []
+    file_calls: ClassVar[list[dict[str, Any]]] = []
 
     @classmethod
     def reset(cls) -> None:
         cls.events = []
         cls.send_calls = []
         cls.audio_calls = []
+        cls.file_calls = []
 
     @classmethod
     def create(cls, **kwargs: Any) -> GatewayWechatClient:
@@ -909,6 +912,10 @@ class GatewayWechatClient:
         )
         return {"message_id": f"audio-{len(self.__class__.audio_calls)}-secret"}
 
+    async def send_file(self, **kwargs: Any) -> dict[str, Any]:
+        self.__class__.file_calls.append(dict(kwargs))
+        return {"message_id": f"file-{len(self.__class__.file_calls)}-secret"}
+
     async def download_media(self, *, account_id: str, media_id: str) -> bytes:
         assert account_id == "wxid-phase54-account-secret"
         if media_id == "image-secret-ref":
@@ -934,6 +941,16 @@ class FailingGatewayWechatClient(GatewayWechatClient):
     ) -> dict[str, Any]:
         del account_id, user_id, audio_bytes, content_type, filename
         raise RuntimeError("provider failed token=audio-secret")
+
+    async def send_file(self, **kwargs: Any) -> dict[str, Any]:
+        del kwargs
+        raise RuntimeError("provider failed token=file-secret")
+
+
+class AttachmentFailingGatewayWechatClient(GatewayWechatClient):
+    async def send_file(self, **kwargs: Any) -> dict[str, Any]:
+        del kwargs
+        raise RuntimeError("provider failed token=attachment-secret")
 
 
 class _FakeVoiceApiClient:
@@ -1008,6 +1025,203 @@ class _WechatTestHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         del format, args
+
+
+def test_phase54_wechat_outbound_attachment_selection_prefers_primary_office_outputs(
+    client: TestClient,
+) -> None:
+    registry = cast(Any, client.app).state.registry
+    task = client.post("/api/tasks", json={"goal": "phase54 attachment selection"}).json()
+    task_id = task["task_id"]
+    artifact_store = registry.artifact_store
+    word_artifact = _run_async(
+        client,
+        lambda: artifact_store.write_bytes(
+            task_id=task_id,
+            organization_id="org_default",
+            display_name="weekly-brief.docx",
+            content=b"phase54-docx",
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            artifact_type="office_document",
+        ),
+    )
+    markdown_artifact = _run_async(
+        client,
+        lambda: artifact_store.write_text(
+            task_id=task_id,
+            organization_id="org_default",
+            display_name="weekly-brief.md",
+            content="# phase54",
+            artifact_type="text",
+        ),
+    )
+    _run_async(
+        client,
+        lambda: artifact_store.write_text(
+            task_id=task_id,
+            organization_id="org_default",
+            display_name="terminal.log",
+            content="internal",
+            artifact_type="terminal_log",
+        ),
+    )
+
+    selection = _run_async(
+        client,
+        lambda: _wechat_outbound_attachment_selection(
+            artifacts=artifact_store,
+            turn={},
+            message={
+                "content": {
+                    "response_plan": {
+                        "artifact_refs": [
+                            {
+                                "artifact_id": word_artifact.artifact_id,
+                                "display_name": word_artifact.display_name,
+                                "content_type": word_artifact.content_type,
+                            },
+                            {
+                                "artifact_id": markdown_artifact.artifact_id,
+                                "display_name": markdown_artifact.display_name,
+                                "content_type": markdown_artifact.content_type,
+                            },
+                        ],
+                        "structured_payload": {"office_productivity": {"task_id": task_id}},
+                    }
+                }
+            },
+            user_text="把文件发我，我要 Word 版本",
+            final_text="已为你生成文档。",
+        ),
+    )
+
+    assert selection["explicit_request_detected"] is True
+    assert selection["scene"] == "office_document"
+    assert [item["display_name"] for item in selection["selected_attachments"]] == [
+        "weekly-brief.docx",
+        "weekly-brief.md",
+    ]
+
+
+def test_phase54_wechat_notification_provider_sends_text_then_attachments(
+    client: TestClient,
+) -> None:
+    _install_fake_wechat(client, GatewayWechatClient)
+    bound = _bind_real_wechat(client)
+    registry = cast(Any, client.app).state.registry
+    task = client.post("/api/tasks", json={"goal": "phase54 notification attachments"}).json()
+    artifact_store = registry.artifact_store
+    task_id = task["task_id"]
+    word_artifact = _run_async(
+        client,
+        lambda: artifact_store.write_bytes(
+            task_id=task_id,
+            organization_id="org_default",
+            display_name="reply.docx",
+            content=b"phase54-docx",
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            artifact_type="office_document",
+        ),
+    )
+    note_artifact = _run_async(
+        client,
+        lambda: artifact_store.write_text(
+            task_id=task_id,
+            organization_id="org_default",
+            display_name="reply.md",
+            content="# reply",
+            artifact_type="text",
+        ),
+    )
+
+    response = client.post(
+        "/api/notification/messages",
+        json={
+            "channel_id": bound["channel_id"],
+            "message_type": "wechat_chat_reply",
+            "recipient": "wxid-attachment-secret",
+            "subject": "attachment",
+            "body": "文件在这。",
+            "metadata": {
+                "attachments": [
+                    {
+                        "artifact_id": word_artifact.artifact_id,
+                        "display_name": word_artifact.display_name,
+                        "content_type": word_artifact.content_type,
+                    },
+                    {
+                        "artifact_id": note_artifact.artifact_id,
+                        "display_name": note_artifact.display_name,
+                        "content_type": note_artifact.content_type,
+                    },
+                ]
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "sent"
+    assert GatewayWechatClient.send_calls[-1]["text"] == "文件在这。"
+    assert [item["filename"] for item in GatewayWechatClient.file_calls[-2:]] == [
+        "reply.docx",
+        "reply.md",
+    ]
+    attempts = client.get(
+        f"/api/notification/messages/{payload['notification_id']}/attempts"
+    ).json()["items"]
+    assert attempts[0]["response_summary"]["attachment_delivery_status"] == "sent"
+    assert len(attempts[0]["response_summary"]["attachment_results"]) == 2
+
+
+def test_phase54_wechat_notification_provider_keeps_text_sent_when_attachments_fail(
+    client: TestClient,
+) -> None:
+    _install_fake_wechat(client, AttachmentFailingGatewayWechatClient)
+    bound = _bind_real_wechat(client)
+    registry = cast(Any, client.app).state.registry
+    task = client.post("/api/tasks", json={"goal": "phase54 attachment degrade"}).json()
+    artifact_store = registry.artifact_store
+    task_id = task["task_id"]
+    artifact = _run_async(
+        client,
+        lambda: artifact_store.write_text(
+            task_id=task_id,
+            organization_id="org_default",
+            display_name="reply.md",
+            content="# reply",
+            artifact_type="text",
+        ),
+    )
+
+    response = client.post(
+        "/api/notification/messages",
+        json={
+            "channel_id": bound["channel_id"],
+            "message_type": "wechat_chat_reply",
+            "recipient": "wxid-attachment-fail-secret",
+            "subject": "attachment",
+            "body": "先把文字发出去。",
+            "metadata": {
+                "attachments": [
+                    {
+                        "artifact_id": artifact.artifact_id,
+                        "display_name": artifact.display_name,
+                        "content_type": artifact.content_type,
+                    }
+                ]
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "sent"
+    attempts = client.get(
+        f"/api/notification/messages/{payload['notification_id']}/attempts"
+    ).json()["items"]
+    assert attempts[0]["response_summary"]["attachment_delivery_status"] == "failed_all"
+    assert attempts[0]["response_summary"]["attachment_results"][0]["error_code"] == (
+        "provider_send_failed"
+    )
 
 
 def _install_fake_wechat(client: TestClient, factory: type[GatewayWechatClient]) -> None:
@@ -1118,6 +1332,7 @@ async def _insert_completed_turn(
     *,
     assistant_text: str = "收到，我会从微信接着聊。",
     conversation_id: str | None = None,
+    assistant_content: dict[str, Any] | None = None,
 ) -> ChatTurnResponse:
     turn_id = _new_test_id("turn")
     user_message_id = _new_test_id("msg_user")
@@ -1157,7 +1372,7 @@ async def _insert_completed_turn(
         author_id=request.member_id,
         content_type="text",
         content_text=assistant_text,
-        content={"text": assistant_text},
+        content=assistant_content or {"text": assistant_text},
         trace_id="trc_phase54_media",
         created_at=now,
     )

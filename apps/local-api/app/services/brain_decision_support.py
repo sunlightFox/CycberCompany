@@ -2,17 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from core_types import DialogueState, IntentDecision, PrivacyLevel, SemanticIntentCandidate, TaskMode
 from trace_service import redact
 
-from app.services.chat_intent_router import (
-    is_explicit_download_request,
-    is_file_mutation_request,
-    is_host_filesystem_list_request,
-    is_host_software_install_request,
-    is_office_document_request,
-    is_webpage_read_request,
-)
+from app.services.chat_intent_router import is_office_document_request
 
 
 def clarify(reason: str, questions: list[str], *, clarification_type: str) -> dict[str, Any]:
@@ -204,7 +196,14 @@ def filesystem_scope_action(text: str) -> bool:
 
 
 def ambiguous_scope(text: str) -> bool:
-    return any(marker in text for marker in ["那个文件", "这个目录", "那一堆", "这些东西"])
+    if any(marker in text for marker in ["那个文件", "这个目录", "那一堆", "这些东西"]):
+        return True
+    if any(marker in text for marker in ["整理文件夹", "整理目录", "整理文件"]):
+        return not any(
+            marker in text
+            for marker in ["桌面", "下载", "文档", "/", "\\", "：", ":", ".txt", ".md", ".doc"]
+        )
+    return False
 
 
 def domain(text: str) -> str:
@@ -216,6 +215,16 @@ def domain(text: str) -> str:
 
 
 def capability_available(snapshot: dict[str, Any], key: str) -> bool:
+    if key == "skill_engine" and isinstance(snapshot.get("skill"), dict):
+        skill = snapshot["skill"]
+        return bool(skill.get("available")) and int(skill.get("enabled_count") or 0) > 0
+    if key == "mcp" and isinstance(snapshot.get("mcp_runtime"), dict):
+        mcp = snapshot["mcp_runtime"]
+        return (
+            bool(mcp.get("available"))
+            and int(mcp.get("ready_server_count") or 0) > 0
+            and int(mcp.get("active_tool_count") or 0) > 0
+        )
     value = snapshot.get(key)
     if isinstance(value, dict):
         return bool(value.get("available"))
@@ -223,7 +232,13 @@ def capability_available(snapshot: dict[str, Any], key: str) -> bool:
 
 
 def execution_risks(risks: list[str]) -> list[str]:
-    return [item for item in risks if item in {"destructive_action", "external_side_effect", "high_risk_financial_or_signature", "host_software_change"}]
+    risky_actions = {
+        "destructive_action",
+        "external_side_effect",
+        "high_risk_financial_or_signature",
+        "host_software_change",
+    }
+    return [item for item in risks if item in risky_actions]
 
 
 def continuation_reference(text: str) -> bool:
@@ -231,7 +246,11 @@ def continuation_reference(text: str) -> bool:
 
 
 def skill_unavailable_reason(snapshot: dict[str, Any]) -> str:
-    return "skill_unavailable" if not capability_available(snapshot, "skill_engine") else "skill_available"
+    return (
+        "skill_unavailable"
+        if not capability_available(snapshot, "skill_engine")
+        else "skill_available"
+    )
 
 
 def mcp_unavailable_reason(snapshot: dict[str, Any]) -> str:

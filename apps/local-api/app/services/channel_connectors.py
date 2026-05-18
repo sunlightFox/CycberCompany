@@ -112,6 +112,18 @@ class ChannelConnector(Protocol):
     ) -> ChannelSendResult:
         ...
 
+    async def send_file(
+        self,
+        *,
+        provider_state_ref: str | None,
+        provider_state: dict[str, Any] | None,
+        recipient: str,
+        local_path: Path,
+        content_type: str | None = None,
+        filename: str | None = None,
+    ) -> ChannelSendResult:
+        ...
+
     async def health(self) -> ChannelHealth:
         ...
 
@@ -255,6 +267,29 @@ class WechatMockConnector:
                 "content_type": content_type,
                 "filename": filename,
                 "audio_size_bytes": len(audio_bytes),
+            },
+        )
+
+    async def send_file(
+        self,
+        *,
+        provider_state_ref: str | None,
+        provider_state: dict[str, Any] | None,
+        recipient: str,
+        local_path: Path,
+        content_type: str | None = None,
+        filename: str | None = None,
+    ) -> ChannelSendResult:
+        del provider_state_ref, provider_state, local_path
+        return ChannelSendResult(
+            status="sent",
+            provider_message_id=f"wechat_mock_file:{_hash_value(recipient)[:16]}",
+            response_summary={
+                "mock": True,
+                "recipient_hash": _hash_value(recipient),
+                "content_type": content_type,
+                "filename": filename,
+                "delivery_kind": "file",
             },
         )
 
@@ -405,6 +440,29 @@ class FeishuMockConnector:
                 "audio_size_bytes": len(audio_bytes),
                 "content_type": content_type,
                 "filename": filename,
+            },
+        )
+
+    async def send_file(
+        self,
+        *,
+        provider_state_ref: str | None,
+        provider_state: dict[str, Any] | None,
+        recipient: str,
+        local_path: Path,
+        content_type: str | None = None,
+        filename: str | None = None,
+    ) -> ChannelSendResult:
+        del provider_state_ref, provider_state, local_path
+        return ChannelSendResult(
+            status="sent",
+            provider_message_id=f"feishu_mock_file:{_hash_value(recipient)[:16]}",
+            response_summary={
+                "mock": True,
+                "recipient_hash": _hash_value(recipient),
+                "content_type": content_type,
+                "filename": filename,
+                "delivery_kind": "file",
             },
         )
 
@@ -728,6 +786,45 @@ class FeishuOpenPlatformConnector:
                 temp_path.unlink(missing_ok=True)
             except OSError:
                 pass
+
+    async def send_file(
+        self,
+        *,
+        provider_state_ref: str | None,
+        provider_state: dict[str, Any] | None,
+        recipient: str,
+        local_path: Path,
+        content_type: str | None = None,
+        filename: str | None = None,
+    ) -> ChannelSendResult:
+        del provider_state_ref
+        file_name = filename or local_path.name
+        uploaded = await self._upload_file(
+            provider_state=provider_state,
+            file_path=local_path,
+            file_name=file_name,
+            file_type=_feishu_file_type(content_type, file_name),
+        )
+        if not uploaded.get("file_key"):
+            return ChannelSendResult(
+                status="retryable_failure",
+                error_code="provider_media_upload_failed",
+                error_summary="feishu file upload did not return file_key",
+                response_summary={"retryable": True, "delivery_kind": "file"},
+            )
+        return await self._send_message(
+            provider_state=provider_state,
+            recipient=recipient,
+            msg_type="file",
+            content={"file_key": uploaded["file_key"]},
+            delivery_kind="file",
+            extra_summary={
+                "content_type": content_type,
+                "filename": file_name,
+                "delivery_format": "file",
+                "file_key_ref": _hash_value(str(uploaded["file_key"])),
+            },
+        )
 
     async def send_card(
         self,
@@ -1299,6 +1396,91 @@ class WechatClawbotConnector:
                 error_code="provider_send_failed",
                 error_summary=str(redact(str(exc))),
                 response_summary={"retryable": True},
+            )
+
+    async def send_file(
+        self,
+        *,
+        provider_state_ref: str | None,
+        provider_state: dict[str, Any] | None,
+        recipient: str,
+        local_path: Path,
+        content_type: str | None = None,
+        filename: str | None = None,
+    ) -> ChannelSendResult:
+        if not self._config.enabled:
+            return ChannelSendResult(
+                status="provider_unavailable",
+                error_code="provider_unavailable",
+                error_summary="wechat provider is disabled",
+                response_summary={"retryable": True},
+            )
+        try:
+            client = await self._create_client(provider_state_ref or "default")
+            account_id = _account_id_from_state(provider_state)
+            if not account_id:
+                return ChannelSendResult(
+                    status="rejected",
+                    error_code="provider_state_missing_account",
+                    error_summary="wechat provider state does not include account_id",
+                    response_summary={"retryable": False},
+                )
+            send_file = getattr(client, "send_file", None)
+            if send_file is None:
+                return ChannelSendResult(
+                    status="rejected",
+                    error_code="message_rejected",
+                    error_summary="wechat sdk does not support file outbound",
+                    response_summary={"retryable": False, "reason": "file_outbound_unsupported"},
+                )
+            mime_type = (
+                content_type
+                or mimetypes.guess_type(filename or local_path.name)[0]
+                or "application/octet-stream"
+            )
+            kwargs = {
+                "account_id": account_id,
+                "user_id": recipient,
+                "local_path": local_path,
+                "filename": filename or local_path.name,
+                "mime_type": mime_type,
+                "text": None,
+            }
+            context_token = _wechat_context_token_for_recipient(
+                state_dir=self._state_dir,
+                account_id=account_id,
+                recipient=recipient,
+            )
+            try:
+                result = await _maybe_await(send_file(**kwargs, context_token=context_token))
+            except TypeError:
+                result = await _maybe_await(send_file(**kwargs))
+            message_id = _pick_attr(result, "message_id", "msg_id", "id")
+            provider_message_ref = _hash_value(str(message_id or local_path.name or recipient))
+            return ChannelSendResult(
+                status="sent",
+                provider_message_id=f"wechat_file:{provider_message_ref[:24]}",
+                response_summary={
+                    "sdk": "wechat-clawbot-sdk",
+                    "provider_message_ref": provider_message_ref,
+                    "content_type": mime_type,
+                    "filename": kwargs["filename"],
+                    "delivery_kind": "file",
+                    "provider_raw_response": _wechat_send_response_summary(result),
+                    "delivery_confirmation": (
+                        "unconfirmed"
+                        if _wechat_send_response_unconfirmed(result)
+                        else "provider_acknowledged"
+                    ),
+                },
+            )
+        except Exception as exc:
+            self._last_error_code = exc.__class__.__name__
+            return ChannelSendResult(
+                status="retryable_failure",
+                error_code="provider_send_failed",
+                error_summary=str(redact(str(exc))),
+                response_summary={"retryable": True, "delivery_kind": "file"},
             )
 
     async def send_audio(

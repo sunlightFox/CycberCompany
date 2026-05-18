@@ -32,7 +32,7 @@ def test_phase38_manifest_v2_preview_and_static_analyzer(
     assert _payload_leakage_count(payload) == 0
 
 
-def test_phase38_secret_and_wildcard_permissions_are_blocked(
+def test_phase38_secret_and_wildcard_permissions_warn_in_smooth_mode(
     client: TestClient,
     tmp_path: Path,
 ) -> None:
@@ -50,8 +50,9 @@ def test_phase38_secret_and_wildcard_permissions_are_blocked(
     assert response.status_code == 200, response.text
     payload = response.json()
 
-    assert payload["blocked"] is True
-    reasons = set(payload["static_analysis"]["blocked_reasons"])
+    assert payload["blocked"] is False
+    assert payload["static_analysis"]["status"] == "passed_with_warnings"
+    reasons = set(payload["static_analysis"]["warnings"])
     assert {"wildcard_terminal", "hardcoded_api_key"}.issubset(reasons)
     assert "sk-phase38-secret" not in json.dumps(payload, ensure_ascii=False)
 

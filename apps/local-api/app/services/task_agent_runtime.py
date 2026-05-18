@@ -374,7 +374,7 @@ class TaskAgentRuntime:
                     plan_delta_suggestion=plan_delta_suggestion,
                 )
                 next_action_payload = next_action.model_dump(mode="json")
-                next_action_payload["next_action_type"] = "pause_for_budget"
+                next_action_payload["next_action_type"] = "stop_budget"
                 next_action_payload["stop_reason"] = stop_reason
                 await self._engine._repo.insert_agent_loop_iteration(
                     {
@@ -388,7 +388,7 @@ class TaskAgentRuntime:
                             **next_action.plan_delta,
                             "plan_delta_type": "budget_pause",
                         },
-                        "selected_action": {"next_action_type": "pause_for_budget"},
+                        "selected_action": {"next_action_type": "stop_budget"},
                         "tool_call_refs": [],
                         "safety_decision_refs": [],
                         "evaluation_result": {

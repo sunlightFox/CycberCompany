@@ -16,6 +16,9 @@ from core_types import (
     MediaSpeechRender,
     MediaSpeechTranscript,
     TaskArtifact,
+    VideoWorkflowPlan,
+    VideoWorkflowProfile,
+    VideoWorkflowStep,
 )
 from pydantic import Field
 
@@ -92,6 +95,7 @@ class MediaEditPlanCreateRequest(ApiModel):
 
 class MediaRenderEditRequest(ApiModel):
     force: bool = False
+    render_strategy: str = "copy"
 
 
 class MediaExportArtifactRequest(ApiModel):
@@ -139,3 +143,27 @@ class MediaProviderHealthResponse(ApiModel):
 
 class MediaIORecordResponse(ApiModel):
     items: list[MediaIORecord] = Field(default_factory=list)
+
+
+class VideoWorkflowCreateRequest(ApiModel):
+    task_id: EntityId
+    media_id: EntityId
+    goal: str = Field(min_length=1)
+    workflow_profile: VideoWorkflowProfile = Field(default_factory=VideoWorkflowProfile)
+
+
+class VideoWorkflowExecuteRequest(ApiModel):
+    force: bool = False
+    approval_id: EntityId | None = None
+
+
+class VideoWorkflowResumeRequest(ApiModel):
+    approval_id: EntityId | None = None
+
+
+class VideoWorkflowResponse(ApiModel):
+    workflow: VideoWorkflowPlan
+    steps: list[VideoWorkflowStep] = Field(default_factory=list)
+    media: MediaAsset | None = None
+    message: str
+    next_step: str | None = None

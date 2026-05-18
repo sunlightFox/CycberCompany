@@ -223,7 +223,9 @@ class TaskWorkflowRuntime:
     def diagnostic(self) -> dict[str, object]:
         return {
             "runtime": "task_workflow_runtime",
+            "phase111_completion_contract_version": "phase111.completion_semantics.v1",
             "approval_wait_supported": True,
+            "completion_requires_evidence": True,
             "step_state_machine": True,
             "agent_mode_delegates_to": "task_agent_runtime",
             "public_entrypoints": ["start_task", "resume_task", "run_task"],

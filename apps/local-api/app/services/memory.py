@@ -49,6 +49,7 @@ from app.services.audit import AuditEventService
 
 DEFAULT_USER_ID = "user_local_owner"
 MIN_WRITE_SCORE = 0.55
+MEMORY_SEMANTIC_CONTRACT_VERSION = "phase107.memory_semantic_contract.v1"
 
 REMEMBER_MARKERS = ("记住", "请记住", "以后", "我的偏好", "这个项目规则")
 EXPLICIT_REMEMBER_PREFIXES = ("记住", "请记住", "以后", "我的偏好", "这个项目规则")
@@ -229,6 +230,7 @@ class MemoryService:
         return {
             "runtime": "memory_service",
             "memory_contract_version": "phase92.long_term_memory_recall.v1",
+            "memory_semantic_contract_version": MEMORY_SEMANTIC_CONTRACT_VERSION,
             "cross_session_recall_enabled": True,
             "canonical_memory_classes": [
                 "preference",
@@ -619,6 +621,7 @@ class MemoryService:
             )
             return MemorySearchApiResponse(
                 retrieval_id=retrieval_id,
+                memory_contract_version=MEMORY_SEMANTIC_CONTRACT_VERSION,
                 degraded=degraded_reason is not None and "semantic_vector" not in retrieval_sources,
                 recall_scope_applied=_recall_scope_applied(request),
                 provider=provider,
@@ -664,7 +667,9 @@ class MemoryService:
                         conflict_notes=row.get("conflict_notes", []),
                         suppressed_reason=row.get("suppressed_reason"),
                         suppressed_reason_codes=_suppressed_reason_codes(row),
+                        supersedes=row.get("supersedes"),
                         superseded_by=_superseded_by(row),
+                        correction_status=_correction_status(row),
                         evidence_strength=_evidence_strength_for_row(row),
                         requires_user_confirmation=bool(
                             row.get("requires_user_confirmation", False)
@@ -849,7 +854,19 @@ class MemoryService:
                 asset_scope_ids=asset_scope_ids,
             )
             if reason:
-                filtered.append(MemorySearchFilteredItem(memory_id=memory_id, reason=reason))
+                filtered.append(
+                    MemorySearchFilteredItem(
+                        memory_id=memory_id,
+                        reason=reason,
+                        status=str(item.get("status") or "active"),
+                        freshness_state=_freshness_state_for_row(item),
+                        memory_class=_memory_class_for_row(item),
+                        durability=_durability_for_row(item),
+                        supersedes=item.get("supersedes"),
+                        superseded_by=_superseded_by(item),
+                        correction_status=_correction_status(item),
+                    )
+                )
         ranking = [
             MemorySearchRankingItem(
                 memory_id=row["memory_id"],
@@ -2377,6 +2394,24 @@ class MemoryService:
                 include_sensitive=False,
             )
             old_memory = matches[0] if matches else None
+            if old_memory is None:
+                fallback_rows = await self._repo.list_memory_items(
+                    member_id=str(candidate["member_id"]),
+                    status="active",
+                    limit=50,
+                )
+                normalized_query = _normalize(supersede_query)
+                for row in fallback_rows:
+                    normalized_summary = str(
+                        row.get("normalized_summary")
+                        or _normalize(str(row.get("summary_text") or ""))
+                    )
+                    if normalized_query and (
+                        normalized_query in normalized_summary
+                        or normalized_summary in normalized_query
+                    ):
+                        old_memory = row
+                        break
             await self._end_span(
                 conflict_span,
                 output_data={
@@ -2926,6 +2961,7 @@ def _memory_item(row: dict[str, Any]) -> MemoryItem:
         valid_from=row.get("valid_from"),
         valid_to=row.get("valid_to"),
         supersedes=row.get("supersedes"),
+        correction_status=_correction_status(row),
         status=row["status"],
         last_accessed_at=row.get("last_accessed_at"),
         access_count=int(row.get("access_count") or 0),
@@ -3026,7 +3062,7 @@ def _suppression_reason_for_memory(
     status = str(row.get("status") or "")
     if status in {"superseded", "deleted", "archived"} and not request.include_archived:
         if status == "superseded":
-            return "superseded"
+            return "status_superseded"
         return f"status_{status}"
     freshness_state = _freshness_state_for_row(row)
     if freshness_state == "expired" and request.freshness_policy != "allow_expired":
@@ -3034,7 +3070,7 @@ def _suppression_reason_for_memory(
     if freshness_state in {"stale", "aging"} and request.freshness_policy == "exclude_stale":
         return freshness_state
     if freshness_state == "superseded" and request.freshness_policy != "allow_superseded":
-        return "superseded"
+        return "status_superseded"
     if request.memory_classes and _memory_class_for_row(row) not in request.memory_classes:
         return "memory_class_filtered"
     if request.durability_filter and _durability_for_row(row) not in request.durability_filter:
@@ -3419,17 +3455,16 @@ def _parse_correction(text: str) -> dict[str, str] | None:
         if stripped.startswith(prefix):
             stripped = stripped.removeprefix(prefix).strip(" ：:，,。")
             break
-    match = re.search(r"^(?P<context>.*?)不是(?P<old>.+?)[，,、\s]*是(?P<new>.+)", stripped)
+    match = re.search(r"^(?P<context>.*?)不是(?P<old>.+?)(?:[，,、\s]*而)?[，,、\s]*是(?P<new>.+)", stripped)
     if match:
         context = match.group("context").strip(" ，,。:：")
-        old = match.group("old").strip(" ，,。:：")
+        old = match.group("old").strip(" ，,。:：").rstrip("而").strip(" ，,。:：")
         new = match.group("new").strip(" ，,。:：")
-        old_query = " ".join(part for part in [context, old] if part).strip() or old
         if context:
             summary = f"用户纠正：{context} 不是{old}，是{new}"
         else:
             summary = f"用户纠正：不是{old}，是{new}"
-        return {"old": old_query, "summary": str(redact(summary))}
+        return {"old": old, "summary": str(redact(summary))}
     if "改成" in stripped:
         before, after = stripped.split("改成", 1)
         old = before.strip("把将 的偏好记忆，,。:：")
@@ -3639,6 +3674,12 @@ def _superseded_by(row: dict[str, Any]) -> str | None:
         or dict(row.get("metadata") or {}).get("superseded_by")
         or ""
     ).strip() or None
+
+
+def _correction_status(row: dict[str, Any]) -> str | None:
+    if str(row.get("kind") or "") != "correction":
+        return None
+    return "applied" if row.get("supersedes") else "not_found"
 
 
 def _evidence_strength_value(*, quality_score: float, confidence: float) -> float:
@@ -3952,7 +3993,7 @@ def _filter_reason(
 ) -> str | None:
     if memory["status"] != "active":
         if memory["status"] == "superseded":
-            return "superseded"
+            return "status_superseded"
         return f"status_{memory['status']}"
     freshness_state = _freshness_state_for_row(memory)
     if freshness_state == "expired" and request.freshness_policy != "allow_expired":
@@ -3960,7 +4001,7 @@ def _filter_reason(
     if freshness_state in {"stale", "aging"} and request.freshness_policy == "exclude_stale":
         return freshness_state
     if freshness_state == "superseded" and request.freshness_policy != "allow_superseded":
-        return "superseded"
+        return "status_superseded"
     if request.memory_classes and _memory_class_for_row(memory) not in request.memory_classes:
         return "memory_class_filtered"
     if request.durability_filter and _durability_for_row(memory) not in request.durability_filter:
@@ -3980,7 +4021,8 @@ def _filter_reason(
 
 
 def _normalize(value: str) -> str:
-    return "".join(value.lower().split())
+    lowered = value.lower()
+    return "".join(ch for ch in lowered if ch.isalnum())
 
 
 def _hash_text(value: str) -> str:

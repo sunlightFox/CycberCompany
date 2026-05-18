@@ -49,6 +49,7 @@ class MemoryItem(ApiModel):
     valid_from: datetime | None = None
     valid_to: datetime | None = None
     supersedes: EntityId | None = None
+    correction_status: str | None = None
     status: str
     last_accessed_at: datetime | None = None
     access_count: int = 0
@@ -258,7 +259,9 @@ class MemorySearchHit(ApiModel):
     conflict_notes: list[str] = Field(default_factory=list)
     suppressed_reason: str | None = None
     suppressed_reason_codes: list[str] = Field(default_factory=list)
+    supersedes: EntityId | None = None
     superseded_by: EntityId | None = None
+    correction_status: str | None = None
     evidence_strength: float = 0.5
     requires_user_confirmation: bool = False
     source: MemorySource
@@ -267,6 +270,13 @@ class MemorySearchHit(ApiModel):
 class MemorySearchFilteredItem(ApiModel):
     memory_id: EntityId
     reason: str
+    status: str | None = None
+    freshness_state: str | None = None
+    memory_class: str | None = None
+    durability: str | None = None
+    supersedes: EntityId | None = None
+    superseded_by: EntityId | None = None
+    correction_status: str | None = None
 
 
 class MemorySearchRankingItem(ApiModel):
@@ -281,6 +291,7 @@ class MemorySearchResponse(ApiModel):
     selected_memory_ids: list[EntityId] = Field(default_factory=list)
     filtered: list[MemorySearchFilteredItem] = Field(default_factory=list)
     ranking: list[MemorySearchRankingItem] = Field(default_factory=list)
+    memory_contract_version: str = "phase107.memory_semantic_contract.v1"
     degraded: bool = False
     recall_scope_applied: str = "member_cross_session"
     provider: str | None = None

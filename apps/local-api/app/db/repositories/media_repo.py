@@ -47,6 +47,40 @@ IO_REQUEST_UPDATE_COLUMNS = {
     "updated_at",
 }
 
+VIDEO_WORKFLOW_UPDATE_COLUMNS = {
+    "status",
+    "profile_json",
+    "edit_plan_id",
+    "approval_id",
+    "result_json",
+    "evidence_json",
+    "trace_id",
+    "updated_at",
+}
+
+VIDEO_WORKFLOW_STEP_UPDATE_COLUMNS = {
+    "status",
+    "attempt",
+    "input_json",
+    "output_json",
+    "error_code",
+    "error_summary",
+    "evidence_json",
+    "trace_id",
+    "started_at",
+    "completed_at",
+    "updated_at",
+}
+
+VIDEO_WORKFLOW_BENCHMARK_UPDATE_COLUMNS = {
+    "workflow_id",
+    "task_id",
+    "expected_result_json",
+    "observed_result_json",
+    "status",
+    "updated_at",
+}
+
 
 class MediaRepository:
     def __init__(self, db: Database) -> None:
@@ -294,6 +328,174 @@ class MediaRepository:
             ),
             EDIT_PLAN_UPDATE_COLUMNS,
         )
+
+    async def insert_video_workflow(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO media_video_workflows (
+              workflow_id, organization_id, task_id, media_id, goal, status,
+              profile_json, edit_plan_id, approval_id, result_json, evidence_json,
+              trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["workflow_id"],
+                data.get("organization_id", "org_default"),
+                data["task_id"],
+                data["media_id"],
+                data["goal"],
+                data.get("status", "planned"),
+                _json(data.get("profile", {})),
+                data.get("edit_plan_id"),
+                data.get("approval_id"),
+                _json(data.get("result", {})),
+                _json(data.get("evidence", {})),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def get_video_workflow(self, workflow_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM media_video_workflows WHERE workflow_id = ?",
+            (workflow_id,),
+        )
+        return _video_workflow_from_row(dict(row)) if row else None
+
+    async def list_video_workflows_by_task(self, task_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_video_workflows
+            WHERE task_id = ?
+            ORDER BY created_at ASC
+            """,
+            (task_id,),
+        )
+        return [_video_workflow_from_row(dict(row)) for row in rows]
+
+    async def list_video_workflows_by_media(self, media_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_video_workflows
+            WHERE media_id = ?
+            ORDER BY created_at ASC
+            """,
+            (media_id,),
+        )
+        return [_video_workflow_from_row(dict(row)) for row in rows]
+
+    async def update_video_workflow(self, workflow_id: str, fields: dict[str, Any]) -> None:
+        await self._update(
+            "media_video_workflows",
+            "workflow_id",
+            workflow_id,
+            _json_update_fields(
+                fields,
+                {
+                    "profile": "profile_json",
+                    "result": "result_json",
+                    "evidence": "evidence_json",
+                },
+            ),
+            VIDEO_WORKFLOW_UPDATE_COLUMNS,
+        )
+
+    async def insert_video_workflow_step(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO media_video_workflow_steps (
+              step_id, workflow_id, organization_id, task_id, media_id, step_key,
+              status, attempt, input_json, output_json, error_code, error_summary,
+              evidence_json, trace_id, started_at, completed_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["step_id"],
+                data["workflow_id"],
+                data.get("organization_id", "org_default"),
+                data["task_id"],
+                data["media_id"],
+                data["step_key"],
+                data.get("status", "pending"),
+                data.get("attempt", 1),
+                _json(data.get("input", {})),
+                _json(data.get("output", {})),
+                data.get("error_code"),
+                data.get("error_summary"),
+                _json(data.get("evidence", {})),
+                data.get("trace_id"),
+                data.get("started_at"),
+                data.get("completed_at"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_video_workflow_steps(self, workflow_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_video_workflow_steps
+            WHERE workflow_id = ?
+            ORDER BY created_at ASC
+            """,
+            (workflow_id,),
+        )
+        return [_video_workflow_step_from_row(dict(row)) for row in rows]
+
+    async def update_video_workflow_step(self, step_id: str, fields: dict[str, Any]) -> None:
+        await self._update(
+            "media_video_workflow_steps",
+            "step_id",
+            step_id,
+            _json_update_fields(
+                fields,
+                {
+                    "input": "input_json",
+                    "output": "output_json",
+                    "evidence": "evidence_json",
+                },
+            ),
+            VIDEO_WORKFLOW_STEP_UPDATE_COLUMNS,
+        )
+
+    async def insert_video_workflow_benchmark(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO media_video_workflow_benchmarks (
+              benchmark_id, workflow_id, organization_id, task_id, scenario_key, layer,
+              expected_result_json, observed_result_json, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["benchmark_id"],
+                data.get("workflow_id"),
+                data.get("organization_id", "org_default"),
+                data.get("task_id"),
+                data["scenario_key"],
+                data["layer"],
+                _json(data.get("expected_result", {})),
+                _json(data.get("observed_result", {})),
+                data["status"],
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_video_workflow_benchmarks_by_task(self, task_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM media_video_workflow_benchmarks
+            WHERE task_id = ?
+            ORDER BY created_at ASC
+            """,
+            (task_id,),
+        )
+        return [_video_workflow_benchmark_from_row(dict(row)) for row in rows]
 
     async def insert_provider_health(self, data: dict[str, Any]) -> None:
         await self._db.execute(
@@ -696,6 +898,26 @@ def _multimodal_summary_from_row(row: dict[str, Any]) -> dict[str, Any]:
 
 def _chat_binding_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    return row
+
+
+def _video_workflow_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["profile"] = json.loads(row.pop("profile_json") or "{}")
+    row["result"] = json.loads(row.pop("result_json") or "{}")
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    return row
+
+
+def _video_workflow_step_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["input"] = json.loads(row.pop("input_json") or "{}")
+    row["output"] = json.loads(row.pop("output_json") or "{}")
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    return row
+
+
+def _video_workflow_benchmark_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["expected_result"] = json.loads(row.pop("expected_result_json") or "{}")
+    row["observed_result"] = json.loads(row.pop("observed_result_json") or "{}")
     return row
 
 

@@ -11,11 +11,59 @@ from app.db.repositories.settings_repo import SettingsRepository
 from app.services.browser_policy import classify_browser_action_category
 
 PROFILE_STRICT = "strict"
+GOVERNANCE_SMOOTH = "smooth"
+GOVERNANCE_BALANCED = "balanced"
+GOVERNANCE_STRICT = "strict"
 PROFILE_BALANCED_PERSONAL = "balanced_personal"
 VISIBLE_REDACTION_STRICT = "strict"
 VISIBLE_REDACTION_RELAXED = "relaxed"
 
 APPROVAL_CONTROLS = {"approval", "strong_approval"}
+_ALWAYS_EXPLICIT_APPROVAL_ACTIONS = {"media.render_edit"}
+_SMOOTH_EXPLICIT_APPROVAL_ACTIONS = {
+    "account.publish_post",
+    "browser.upload",
+    "file.delete",
+    "host.install_software",
+    "host.uninstall_software",
+    "media.render_edit",
+    "payment.send",
+    "wallet.sign",
+    "wallet.transfer",
+}
+_SMOOTH_EXPLICIT_APPROVAL_CATEGORIES = {
+    "account_external_post",
+    "browser_upload",
+    "file_delete",
+    "host_install",
+    "payment",
+}
+_SMOOTH_AUTO_APPROVE_ACTIONS = {
+    "browser.download",
+    "browser.submit",
+    "browser.screenshot",
+    "browser.vision_snapshot",
+    "file.copy",
+    "file.move",
+    "file.write",
+    "project.build",
+    "project.clone",
+    "project.install_deps",
+    "project.run",
+    "project.test",
+    "runtime.ensure",
+}
+_SMOOTH_AUTO_APPROVE_CATEGORIES = {
+    "browser_download",
+    "browser_interact",
+    "browser_read",
+    "browser_submit",
+    "file_write",
+    "managed_process",
+    "project_clone",
+    "project_dependency_install",
+    "project_deployment",
+}
 
 _DEFAULT_PERSONAL_AUTO_APPROVE_ACTIONS = {
     "browser.screenshot",
@@ -27,7 +75,6 @@ _DEFAULT_PERSONAL_AUTO_APPROVE_ACTIONS = {
     "project.build",
     "project.test",
     "runtime.ensure",
-    "media.render_edit",
     "media.export_artifact",
 }
 _DEFAULT_PERSONAL_AUTO_APPROVE_CATEGORIES = {
@@ -41,6 +88,7 @@ _DEFAULT_EXPLICIT_APPROVAL_ACTIONS = {
     "browser.submit",
     "browser.upload",
     "account.publish_post",
+    "media.render_edit",
     "host.install_software",
     "host.uninstall_software",
     "project.deployment.run",
@@ -119,6 +167,7 @@ _TERMINAL_BLOCK_REASON_CODES = {
 
 @dataclass(frozen=True)
 class SafetyApprovalPolicy:
+    governance_mode: str = GOVERNANCE_STRICT
     approval_profile: str = PROFILE_STRICT
     chat_visible_redaction: str = VISIBLE_REDACTION_STRICT
     approval_policy: dict[str, Any] = field(default_factory=dict)
@@ -129,6 +178,10 @@ class SafetyApprovalPolicy:
     @property
     def is_balanced_personal(self) -> bool:
         return self.approval_profile == PROFILE_BALANCED_PERSONAL
+
+    @property
+    def is_smooth(self) -> bool:
+        return self.governance_mode == GOVERNANCE_SMOOTH
 
     @property
     def uses_relaxed_visible_redaction(self) -> bool:
@@ -144,10 +197,35 @@ class SafetyApprovalPolicy:
         reason_codes: list[str] | tuple[str, ...] | None = None,
         terminal_command_policy: dict[str, Any] | None = None,
     ) -> bool:
-        if not self.is_balanced_personal:
+        if not self.is_balanced_personal and not self.is_smooth:
             return False
         normalized_action = _normalize_key(action)
         normalized_category = _normalize_key(action_category or "")
+        if normalized_action in _ALWAYS_EXPLICIT_APPROVAL_ACTIONS:
+            return False
+        if self.is_smooth:
+            if (
+                normalized_action in _SMOOTH_EXPLICIT_APPROVAL_ACTIONS
+                or normalized_category in _SMOOTH_EXPLICIT_APPROVAL_CATEGORIES
+            ):
+                return False
+            if bool((payload or {}).get("requires_human_approval")):
+                return False
+            if _contains_sensitive_payload(payload):
+                return False
+            if normalized_category == "browser_submit" and _contains_payment_payload(payload):
+                return False
+            if normalized_action == "terminal.run":
+                return self._terminal_can_skip_approval(
+                    payload=payload or {},
+                    reason_codes=reason_codes or (),
+                    terminal_command_policy=terminal_command_policy or {},
+                )
+            return (
+                normalized_action in _SMOOTH_AUTO_APPROVE_ACTIONS
+                or normalized_category in _SMOOTH_AUTO_APPROVE_CATEGORIES
+                or _risk_order(risk_level) <= _risk_order(RiskLevel.R3)
+            )
         profile_policy = self._profile_policy()
         require_actions = _string_set(
             profile_policy.get("require_approval_actions"),
@@ -158,6 +236,8 @@ class SafetyApprovalPolicy:
             default=_DEFAULT_EXPLICIT_APPROVAL_CATEGORIES,
         )
         if normalized_action in require_actions or normalized_category in require_categories:
+            return False
+        if bool((payload or {}).get("requires_human_approval")):
             return False
         if _contains_sensitive_payload(payload):
             return False
@@ -280,6 +360,9 @@ def classify_action_category(
 
 def _policy_from_safety_settings(safety: dict[str, Any]) -> SafetyApprovalPolicy:
     approval_policy = _mapping(safety.get("approval_policy"))
+    governance_mode = str(safety.get("governance_mode") or GOVERNANCE_STRICT)
+    if governance_mode not in {GOVERNANCE_SMOOTH, GOVERNANCE_BALANCED, GOVERNANCE_STRICT}:
+        governance_mode = GOVERNANCE_STRICT
     approval_profile = str(
         safety.get("approval_profile")
         or safety.get("profile")
@@ -292,7 +375,7 @@ def _policy_from_safety_settings(safety: dict[str, Any]) -> SafetyApprovalPolicy
         or approval_policy.get("chat_visible_redaction")
         or (
             VISIBLE_REDACTION_RELAXED
-            if approval_profile == PROFILE_BALANCED_PERSONAL
+            if governance_mode == GOVERNANCE_SMOOTH or approval_profile == PROFILE_BALANCED_PERSONAL
             else VISIBLE_REDACTION_STRICT
         )
     )
@@ -301,6 +384,7 @@ def _policy_from_safety_settings(safety: dict[str, Any]) -> SafetyApprovalPolicy
     if approval_profile not in {PROFILE_STRICT, PROFILE_BALANCED_PERSONAL}:
         approval_profile = PROFILE_STRICT
     return SafetyApprovalPolicy(
+        governance_mode=governance_mode,
         approval_profile=approval_profile,
         chat_visible_redaction=visible_profile,
         approval_policy=approval_policy,
@@ -322,9 +406,15 @@ def _default_safety_from_config(config: dict[str, Any]) -> dict[str, Any]:
             sandbox.get("terminal_policy_profile") or "task_artifact_sandbox"
         ),
         "approval_policy": _mapping(risk.get("approval_policy")),
+        "governance_mode": str(risk.get("governance_mode") or GOVERNANCE_STRICT),
         "approval_profile": str(risk.get("approval_profile") or PROFILE_STRICT),
         "chat_visible_redaction": str(
-            risk.get("chat_visible_redaction") or VISIBLE_REDACTION_STRICT
+            risk.get("chat_visible_redaction")
+            or (
+                VISIBLE_REDACTION_RELAXED
+                if str(risk.get("governance_mode") or "") == GOVERNANCE_SMOOTH
+                else VISIBLE_REDACTION_STRICT
+            )
         ),
     }
 
@@ -337,6 +427,16 @@ def _contains_sensitive_payload(payload: dict[str, Any] | None) -> bool:
     except TypeError:
         text = str(payload)
     return bool(_SECRET_RE.search(text))
+
+
+def _contains_payment_payload(payload: dict[str, Any] | None) -> bool:
+    if not payload:
+        return False
+    try:
+        text = json.dumps(payload, ensure_ascii=False, default=str).lower()
+    except TypeError:
+        text = str(payload).lower()
+    return any(marker in text for marker in ("payment", "pay", "checkout", "wallet", "card", "credit"))
 
 
 def _terminal_command_has_blocked_marker(command: str) -> bool:

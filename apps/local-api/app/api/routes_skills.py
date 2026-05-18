@@ -24,10 +24,14 @@ from app.schemas.skills import (
     SkillCandidateListResponse,
     SkillCandidatePromoteResponse,
     SkillCatalogSearchResponse,
+    SkillCuratorRunRequest,
+    SkillCuratorRunResponse,
     SkillEvalResponse,
     SkillDependencyEdgesResponse,
     SkillGrowthCandidateConsolidateRequest,
     SkillGrowthCandidateResponse,
+    SkillLifecycleActionRequest,
+    SkillLifecycleListResponse,
     SkillListResponse,
     SkillMatchRequest,
     SkillMatchResponse,
@@ -280,6 +284,40 @@ async def list_candidates(
     )
 
 
+@router.get("/lifecycle", response_model=SkillLifecycleListResponse)
+async def list_skill_lifecycle(
+    state: str | None = None,
+    created_by: str | None = None,
+    include_archived: bool = True,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillLifecycleListResponse:
+    return SkillLifecycleListResponse(
+        items=await registry.skill_plugin_service.list_skill_lifecycle(
+            state=state,
+            created_by=created_by,
+            include_archived=include_archived,
+        )
+    )
+
+
+@router.post("/curator/run", response_model=SkillCuratorRunResponse)
+async def run_skill_curator(
+    payload: SkillCuratorRunRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillCuratorRunResponse:
+    return SkillCuratorRunResponse(
+        **(
+            await registry.skill_plugin_service.run_curator(
+                stale_after_days=payload.stale_after_days,
+                archive_after_days=payload.archive_after_days,
+                dry_run=payload.dry_run,
+                trace_id=getattr(request.state, "trace_id", None),
+            )
+        ).model_dump(mode="json")
+    )
+
+
 @router.post("/candidates/{candidate_id}/promote", response_model=SkillCandidatePromoteResponse)
 async def promote_candidate(
     candidate_id: str,
@@ -345,6 +383,69 @@ async def disable_skill(
             )
         ]
     )
+
+
+@router.post("/{skill_id}/pin", response_model=SkillLifecycleListResponse)
+async def pin_skill(
+    skill_id: str,
+    payload: SkillLifecycleActionRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillLifecycleListResponse:
+    item = await registry.skill_plugin_service.pin_skill(
+        skill_id,
+        pinned=True,
+        actor_member_id=payload.actor_member_id,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return SkillLifecycleListResponse(items=[item])
+
+
+@router.post("/{skill_id}/unpin", response_model=SkillLifecycleListResponse)
+async def unpin_skill(
+    skill_id: str,
+    payload: SkillLifecycleActionRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillLifecycleListResponse:
+    item = await registry.skill_plugin_service.pin_skill(
+        skill_id,
+        pinned=False,
+        actor_member_id=payload.actor_member_id,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return SkillLifecycleListResponse(items=[item])
+
+
+@router.post("/{skill_id}/archive", response_model=SkillLifecycleListResponse)
+async def archive_skill(
+    skill_id: str,
+    payload: SkillLifecycleActionRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillLifecycleListResponse:
+    item = await registry.skill_plugin_service.archive_skill(
+        skill_id,
+        actor_member_id=payload.actor_member_id,
+        reason=payload.reason or "manual_archive",
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return SkillLifecycleListResponse(items=[item])
+
+
+@router.post("/{skill_id}/restore", response_model=SkillLifecycleListResponse)
+async def restore_skill(
+    skill_id: str,
+    payload: SkillLifecycleActionRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> SkillLifecycleListResponse:
+    item = await registry.skill_plugin_service.restore_skill(
+        skill_id,
+        actor_member_id=payload.actor_member_id,
+        trace_id=getattr(request.state, "trace_id", None),
+    )
+    return SkillLifecycleListResponse(items=[item])
 
 
 @router.post("/{skill_id}/eval", response_model=SkillEvalResponse)

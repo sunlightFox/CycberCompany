@@ -6,6 +6,7 @@ from app.services.channel_reliability import (
     build_correlation,
     no_turn_payload,
     orphan_turn_payload,
+    summarize_records,
     wrong_reuse_payload,
 )
 from fastapi.testclient import TestClient
@@ -48,6 +49,27 @@ def test_phase88_helper_payloads_use_canonical_taxonomy() -> None:
     assert orphan["turn_formation"]["queue_status"] == "queued"
     assert wrong_reuse["taxonomy"] == ["wrong_conversation_reuse"]
     assert wrong_reuse["failure_reason_codes"] == ["session_binding_mismatch"]
+
+
+def test_phase88_summary_counts_failure_reasons() -> None:
+    correlation = build_correlation(provider="wechat")
+    summary = summarize_records(
+        "wechat",
+        [
+            no_turn_payload(
+                correlation=correlation,
+                reason_code="pairing_rejected_or_missing",
+            ),
+            no_turn_payload(
+                correlation=correlation,
+                reason_code="ingress_policy_blocked",
+            ),
+        ],
+    )
+
+    assert summary["taxonomy_counts"]["no_turn"] == 2
+    assert summary["failure_reason_counts"]["pairing_rejected_or_missing"] == 1
+    assert summary["failure_reason_counts"]["ingress_policy_blocked"] == 1
 
 
 def test_phase88_ingress_context_and_metadata_carry_inbound_event_id(
@@ -165,6 +187,127 @@ def test_phase88_wechat_wrong_conversation_reuse_and_duplicate_are_visible(
     assert "duplicate_turn" in duplicate.json()["taxonomy"]
 
 
+def test_phase88_wechat_rejected_and_unpaired_inbound_are_visible_as_no_turn(
+    client: TestClient,
+) -> None:
+    _install_fake_wechat(client, GatewayWechatClient)
+    _bind_real_wechat(client)
+
+    GatewayWechatClient.events = [
+        _wechat_text_event(
+            "evt-phase88-group-blocked",
+            "wxid-phase88-group-peer",
+            "群里消息",
+            chat_type="group",
+        ),
+        _wechat_text_event(
+            "evt-phase88-unpaired",
+            "wxid-phase88-unpaired-peer",
+            "未配对私聊",
+        ),
+    ]
+    response = client.post("/api/channels/providers/wechat/poll-once")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+
+    assert payload["details"]["phase88"]["taxonomy_counts"]["no_turn"] == 2
+    assert payload["details"]["phase88"]["failure_reason_counts"]["ingress_policy_blocked"] == 1
+    assert (
+        payload["details"]["phase88"]["failure_reason_counts"][
+            "pairing_rejected_or_missing"
+        ]
+        == 1
+    )
+
+
+def test_phase88_wechat_submit_failures_classify_worker_and_bootstrap_causes(
+    client: TestClient,
+) -> None:
+    _install_fake_wechat(client, GatewayWechatClient)
+    _bind_real_wechat(client)
+    _pair_peer(client, "wxid-phase88-worker-disabled")
+    registry = cast(Any, client.app).state.registry
+    registry.wechat_gateway_service.set_worker_health_provider(
+        lambda: {"enabled": False, "running": False, "loop_status": "disabled", "workers": {}}
+    )
+
+    async def raise_submit_failure(**_: Any) -> Any:
+        raise RuntimeError("submit failed")
+
+    registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = (
+        raise_submit_failure
+    )
+    GatewayWechatClient.events = [
+        _wechat_text_event("evt-phase88-worker-disabled", "wxid-phase88-worker-disabled", "worker"),
+    ]
+    worker_disabled = client.post("/api/channels/providers/wechat/poll-once").json()
+    assert (
+        worker_disabled["details"]["phase88"]["failure_reason_counts"][
+            "worker_not_running_or_disabled"
+        ]
+        == 1
+    )
+
+    _pair_peer(client, "wxid-phase88-bootstrap")
+    registry.wechat_gateway_service.set_worker_health_provider(
+        lambda: {
+            "enabled": True,
+            "running": False,
+            "loop_status": "stopped",
+            "workers": {"wechat_inbound_worker": {"last_status": "healthy"}},
+        }
+    )
+    GatewayWechatClient.events = [
+        _wechat_text_event("evt-phase88-bootstrap", "wxid-phase88-bootstrap", "bootstrap"),
+    ]
+    bootstrap_failed = client.post("/api/channels/providers/wechat/poll-once").json()
+    assert (
+        bootstrap_failed["details"]["phase88"]["failure_reason_counts"][
+            "conversation_bootstrap_failed"
+        ]
+        == 1
+    )
+
+
+def test_phase88_wechat_runtime_missing_and_async_delivery_failures_reach_snapshot(
+    client: TestClient,
+) -> None:
+    _install_fake_wechat(client, GatewayWechatClient)
+    _bind_real_wechat(client)
+    _pair_peer(client, "wxid-phase88-runtime-missing")
+    registry = cast(Any, client.app).state.registry
+    registry.wechat_gateway_service.set_worker_health_provider(
+        lambda: {
+            "enabled": True,
+            "running": False,
+            "loop_status": "stopped",
+            "workers": {"wechat_inbound_worker": {"last_status": "healthy"}},
+        }
+    )
+    registry.wechat_gateway_service._channel_ingress_runtime = None
+
+    GatewayWechatClient.events = [
+        _wechat_text_event("evt-phase88-runtime-missing", "wxid-phase88-runtime-missing", "runtime"),
+    ]
+    runtime_missing = client.post("/api/channels/providers/wechat/poll-once").json()
+    assert (
+        runtime_missing["details"]["phase88"]["failure_reason_counts"][
+            "turn_created_but_runtime_missing"
+        ]
+        == 1
+    )
+
+    registry.wechat_gateway_service._async_failure_reason_counts[
+        "delivery_binding_pending_timeout"
+    ] += 1
+    registry.wechat_gateway_service._async_failure_reason_counts[
+        "delivery_failed_after_turn_completed"
+    ] += 2
+    snapshot = registry.wechat_gateway_service.reliability_snapshot()
+    assert snapshot["failure_reason_counts"]["delivery_binding_pending_timeout"] >= 1
+    assert snapshot["failure_reason_counts"]["delivery_failed_after_turn_completed"] >= 2
+
+
 def test_phase88_readiness_and_release_summary_expose_phase88_block(
     client: TestClient,
 ) -> None:
@@ -186,6 +329,7 @@ def test_phase88_readiness_and_release_summary_expose_phase88_block(
     assert summary["chat_mainline_readiness"]["phase88_channel_reliability_status"] == "ready"
     assert "phase88_channel_reliability" in summary
     assert summary["phase88_channel_reliability"]["contract_version"] == "phase88.channel_reliability.v1"
+    assert "failure_reason_counts" in summary["phase88_channel_reliability"]
     assert "duplicate_turn" in summary["phase88_channel_reliability"]["taxonomy"]
     assert "wrong_conversation_reuse" in summary["phase88_channel_reliability"]["taxonomy"]
 

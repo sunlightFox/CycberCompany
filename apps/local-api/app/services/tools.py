@@ -307,6 +307,10 @@ class ToolRuntime:
         *,
         trace_id: str | None = None,
     ) -> ToolExecuteResponse:
+        if request.tool_name.startswith("mcp."):
+            tool = await self.get_tool(request.tool_name)
+            if tool.status not in {"active", "approval_required"}:
+                raise AppError(ErrorCode.TOOL_NOT_FOUND, "工具未启用", status_code=404)
         active_request = request
         if self._chat_hook_runtime is not None:
             hook_result = await self._chat_hook_runtime.run_before_tool_call(
@@ -989,7 +993,7 @@ class ToolRuntime:
         media_args = {
             key: value
             for key, value in args.items()
-            if key not in {"media_id", "edit_plan_id"}
+            if key not in {"media_id", "edit_plan_id", "requires_human_approval"}
         }
         if name == "media.probe":
             response = await self._media.probe(

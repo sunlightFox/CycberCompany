@@ -620,6 +620,63 @@ class TaskDetail(TaskSummary):
     result: dict[str, Any] = Field(default_factory=dict)
 
 
+class TaskClosureRecord(ApiModel):
+    closure_record_id: EntityId
+    organization_id: EntityId
+    task_id: EntityId
+    release_gate_id: EntityId | None = None
+    source_eval_run_id: EntityId | None = None
+    domain: str
+    task_tier: str
+    delivery_status: str
+    delivery_blockers: list[str] = Field(default_factory=list)
+    handoff_reason: str | None = None
+    approval_interruption: bool = False
+    recovery_summary: dict[str, Any] = Field(default_factory=dict)
+    verification_status: str
+    once_success: bool = False
+    final_deliverable: bool = False
+    human_handoff: bool = False
+    error_recovered: bool = False
+    round_count: int = 0
+    tool_call_count: int = 0
+    replan_count: int = 0
+    stop_reason: str | None = None
+    untrusted_observation_triggered: bool = False
+    residual_risk_present: bool = False
+    created_at: datetime | None = None
+
+
+class TaskClosureScorecard(ApiModel):
+    domain: str
+    total_tasks: int = 0
+    final_deliverable_rate: float = 0.0
+    once_success_rate: float = 0.0
+    handoff_rate: float = 0.0
+    approval_interruption_rate: float = 0.0
+    recovery_success_rate: float | None = None
+    completed_unverified_count: int = 0
+    failed_verification_count: int = 0
+    average_round_count: float = 0.0
+    average_tool_call_count: float = 0.0
+    replan_rate: float = 0.0
+    stop_reason_distribution: dict[str, int] = Field(default_factory=dict)
+    blocker_codes: list[str] = Field(default_factory=list)
+    threshold_status: dict[str, bool] = Field(default_factory=dict)
+
+
+class TaskClosureTrendSnapshot(ApiModel):
+    domain: str
+    sample_size: int = 0
+    final_deliverable_rate: float = 0.0
+    once_success_rate: float = 0.0
+    handoff_rate: float = 0.0
+    approval_interruption_rate: float = 0.0
+    recovery_success_rate: float | None = None
+    delta: dict[str, float] = Field(default_factory=dict)
+    generated_at: datetime | None = None
+
+
 class TaskStep(ApiModel):
     step_id: EntityId
     organization_id: EntityId | None = None
@@ -858,6 +915,7 @@ class TaskReplay(ApiModel):
     agent_loop: AgentLoopState | None = None
     domain: str | None = None
     domain_request: dict[str, Any] = Field(default_factory=dict)
+    domain_result: dict[str, Any] = Field(default_factory=dict)
     steps: list[TaskStep] = Field(default_factory=list)
     events: list[TaskEvent] = Field(default_factory=list)
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)

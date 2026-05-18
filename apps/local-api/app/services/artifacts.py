@@ -56,7 +56,7 @@ class ArtifactStore:
             if self.task_dir(task_id) not in [target_dir, *target_dir.parents]:
                 raise AppError(
                     ErrorCode.ARTIFACT_WRITE_FAILED,
-                    "artifact 路径不合法",
+                    "artifact path is invalid",
                     status_code=422,
                 )
             _mkdir_p(target_dir)
@@ -96,7 +96,7 @@ class ArtifactStore:
                 action="artifact.created",
                 object_type="task_artifact",
                 object_id=artifact_id,
-                summary="任务工件已创建",
+                summary="task artifact created",
                 risk_level=RiskLevel.R1,
                 payload={
                     "artifact_id": artifact_id,
@@ -141,7 +141,7 @@ class ArtifactStore:
             if self.task_dir(task_id) not in [target_dir, *target_dir.parents]:
                 raise AppError(
                     ErrorCode.ARTIFACT_WRITE_FAILED,
-                    "artifact 路径不合法",
+                    "artifact path is invalid",
                     status_code=422,
                 )
             _mkdir_p(target_dir)
@@ -179,7 +179,7 @@ class ArtifactStore:
                 action="artifact.created",
                 object_type="task_artifact",
                 object_id=artifact_id,
-                summary="任务工件已创建",
+                summary="task artifact created",
                 risk_level=RiskLevel.R1,
                 payload={
                     "artifact_id": artifact_id,
@@ -206,13 +206,13 @@ class ArtifactStore:
     ) -> tuple[TaskArtifact, str]:
         row = await self._repo.get_artifact(artifact_id)
         if row is None:
-            raise AppError(ErrorCode.ARTIFACT_NOT_FOUND, "工件不存在", status_code=404)
+            raise AppError(ErrorCode.ARTIFACT_NOT_FOUND, "artifact not found", status_code=404)
         artifact = TaskArtifact(**row)
         path = self._path_from_uri(artifact.uri)
         if not _path_exists(path):
             raise AppError(
                 ErrorCode.ARTIFACT_NOT_FOUND,
-                "工件文件不存在",
+                "artifact file not found",
                 status_code=404,
                 details={"artifact_id": artifact_id},
             )
@@ -226,17 +226,26 @@ class ArtifactStore:
     async def open_download(self, artifact_id: str) -> tuple[TaskArtifact, Path]:
         row = await self._repo.get_artifact(artifact_id)
         if row is None:
-            raise AppError(ErrorCode.ARTIFACT_NOT_FOUND, "工件不存在", status_code=404)
+            raise AppError(ErrorCode.ARTIFACT_NOT_FOUND, "artifact not found", status_code=404)
         artifact = TaskArtifact(**row)
         path = self.path_for_artifact(artifact)
         if not _path_exists(path) or not _is_file(path):
             raise AppError(
                 ErrorCode.ARTIFACT_NOT_FOUND,
-                "工件文件不存在",
+                "artifact file not found",
                 status_code=404,
                 details={"artifact_id": artifact_id},
             )
         return artifact, path
+
+    async def get_artifact(self, artifact_id: str) -> TaskArtifact:
+        row = await self._repo.get_artifact(artifact_id)
+        if row is None:
+            raise AppError(ErrorCode.ARTIFACT_NOT_FOUND, "artifact not found", status_code=404)
+        return TaskArtifact(**row)
+
+    async def list_task_artifacts(self, task_id: str) -> list[TaskArtifact]:
+        return [TaskArtifact(**row) for row in await self._repo.list_artifacts(task_id)]
 
     def resolve_task_relative_path(self, task_id: str, value: str) -> Path:
         root = self.task_dir(task_id)
@@ -244,7 +253,7 @@ class ArtifactStore:
         if root not in [path, *path.parents]:
             raise AppError(
                 ErrorCode.TOOL_PERMISSION_DENIED,
-                "文件路径不能逃逸任务工件目录",
+                "file path escapes task artifact directory",
                 status_code=403,
             )
         if _is_sensitive_path(path):
@@ -268,7 +277,7 @@ class ArtifactStore:
         if root not in [path, *path.parents]:
             raise AppError(
                 ErrorCode.ARTIFACT_NOT_FOUND,
-                "工件路径不合法",
+                "artifact path is invalid",
                 status_code=404,
             )
         return path

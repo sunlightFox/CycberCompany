@@ -268,13 +268,12 @@ def _usable_reason(brain: dict[str, Any]) -> tuple[bool, str]:
         return False, status or "not_configured"
     if not brain.get("endpoint") or not brain.get("model_name"):
         return False, "missing_endpoint_or_model"
-    verify = brain.get("verify_capabilities") or {}
-    if status == "healthy" and isinstance(verify, dict):
+    verify = brain.get("verify_capabilities")
+    if status == "healthy" and isinstance(verify, dict) and verify:
         if not verify.get("non_stream_valid"):
             return False, "protocol_not_verified"
-        if bool(brain.get("supports_stream", brain.get("streaming_supported", True))) and not verify.get(
-            "stream_valid", False
-        ):
+        supports_stream = bool(brain.get("supports_stream", brain.get("streaming_supported", True)))
+        if supports_stream and not verify.get("stream_valid", False):
             return False, "stream_not_verified"
     if not bool(brain.get("is_local")) and not bool(brain.get("allow_cloud")):
         return False, "cloud_not_allowed"

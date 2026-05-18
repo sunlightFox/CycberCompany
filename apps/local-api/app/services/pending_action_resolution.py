@@ -34,7 +34,15 @@ def looks_like_resolution(text: str) -> bool:
 
 def is_confirm(text: str) -> bool:
     text = control_text(text)
-    normalized = text.strip().strip("。.!！?？~～ ")
+    normalized_cn = text.strip().strip("。?!！？~，,；; ")
+    compact_cn = re.sub(r"[\s，,。.!！?？；;~]+", "", text)
+    if normalized_cn in {"确认", "同意", "允许", "只允许这一次", "本次允许"}:
+        return True
+    if compact_cn in {"确认继续", "同意继续", "允许继续", "确认执行", "确认操作"}:
+        return True
+    if any(marker in text for marker in ["确认这次", "确认本次", "确认下载", "确认继续", "确认执行", "确认操作"]):
+        return True
+    normalized = text.strip().strip("。?!！？~")
     explicit_markers = [
         "确认下载",
         "确认这次",
@@ -43,7 +51,7 @@ def is_confirm(text: str) -> bool:
         "确认操作",
         "只允许这一次",
         "本次允许",
-        "允许这一次",
+        "允许这一回",
     ]
     return normalized in {"确认", "同意", "允许"} or any(
         marker in text for marker in explicit_markers
@@ -62,8 +70,13 @@ def is_always_allow(text: str) -> bool:
 
 def is_deny(text: str) -> bool:
     text = control_text(text)
-    normalized = text.strip().strip("。.!！?？~～ ")
-    exact = {"拒绝", "取消", "不允许", "不删除", "不要执行", "停止", "不用了"}
+    normalized_cn = text.strip().strip("。?!！？~，,；; ")
+    if normalized_cn in {"拒绝", "取消", "不允许", "不要删除", "不要执行", "停止", "不用了"}:
+        return True
+    if any(marker in text for marker in ["拒绝这次", "取消这次", "取消本次", "拒绝本次", "不允许这次", "停止这次", "算了"]):
+        return True
+    normalized = text.strip().strip("。?!！？~")
+    exact = {"拒绝", "取消", "不允许", "不要删除", "不要执行", "停止", "不用了"}
     contextual = [
         "拒绝这次",
         "取消这次",
@@ -71,6 +84,7 @@ def is_deny(text: str) -> bool:
         "拒绝本次",
         "不允许这次",
         "停止这次",
+        "算了",
     ]
     return normalized in exact or any(marker in text for marker in contextual)
 
@@ -79,13 +93,16 @@ def is_edit(text: str) -> bool:
     text = control_text(text)
     return any(marker in text for marker in ["改成", "修改", "换成"]) and any(
         marker in text
-        for marker in ["地址", "目标", "参数", "url", "URL", "标题", "正文", "内容"]
+        for marker in ["地址", "目标", "参数", "url", "URL", "标题", "正文", "内容", "评论", "消息", "标签"]
     )
 
 
 def is_ambiguous_continue(text: str) -> bool:
     text = control_text(text)
-    normalized = text.strip().strip("。.!！?？~～ ")
+    normalized_cn = text.strip().strip("。?!！？~，,；; ")
+    if normalized_cn in {"好的", "好", "嗯", "继续", "可以", "行", "走吧", "ok", "OK"}:
+        return True
+    normalized = text.strip().strip("。?!！？~")
     return normalized in {"好的", "好", "嗯", "继续", "可以", "行", "走吧", "ok", "OK"}
 
 
@@ -97,7 +114,7 @@ def control_text(text: str) -> str:
     normalized_prefix = prefix.strip().upper()
     if normalized_prefix.startswith(("CHAT-E2E-", "PHASE34-", "NAT-", "WECHAT-REAL-")):
         return suffix.strip()
-    suffix_normalized = suffix.strip().strip("。.!！?？~～ ")
+    suffix_normalized = suffix.strip().strip("。?!！？~")
     if suffix_normalized in {
         "好的",
         "好",
@@ -128,10 +145,19 @@ def looks_like_new_action_request(text: str) -> bool:
     text = control_text(text)
     lowered = text.lower()
     standalone_resolution = (
-        (is_confirm(text) or is_deny(text) or is_edit(text) or is_session_allow(text) or is_always_allow(text))
+        (
+            is_confirm(text)
+            or is_deny(text)
+            or is_edit(text)
+            or is_session_allow(text)
+            or is_always_allow(text)
+        )
         and "http://" not in lowered
         and "https://" not in lowered
-        and not any(marker in text for marker in ["请下载", "帮我下载", "请打开", "帮我打开", "截图留证", "下载完告诉我结果"])
+        and not any(
+            marker in text
+            for marker in ["请下载", "帮我下载", "请打开", "帮我打开", "截图留证", "下载完告诉我结果"]
+        )
     )
     if standalone_resolution:
         return False
@@ -143,7 +169,7 @@ def looks_like_new_action_request(text: str) -> bool:
                 "帮我下载",
                 "下载完告诉我结果",
                 "请打开",
-                "帮我看一下",
+                "帮我看一个",
                 "帮我看看",
                 "截图留证",
                 "保存页面截图",
@@ -161,14 +187,7 @@ def looks_like_new_action_request(text: str) -> bool:
             return True
     return any(
         marker in text or marker in lowered
-        for marker in [
-            "帮我下载",
-            "请下载",
-            "下载完告诉我结果",
-            "帮我安装",
-            "请安装",
-            "请打开",
-        ]
+        for marker in ["帮我下载", "请下载", "下载完告诉我结果", "帮我安装", "请安装", "请打开"]
     )
 
 
@@ -188,6 +207,27 @@ def edit_payload_for_action(action: dict[str, Any], text: str) -> dict[str, Any]
         if body:
             args["body"] = body
         return {"arguments": args} if args else None
+    if action_type == "external_platform.publish_content":
+        args: dict[str, Any] = {}
+        title = _extract_edited_title(text)
+        body = _extract_edited_body(text)
+        first_comment = _extract_after_markers(text, ("首条评论改成", "首评改成", "评论改成"))
+        tags = _extract_tags(text)
+        if title:
+            args["title"] = title
+        if body:
+            args["publish_text"] = body
+        if first_comment:
+            args["comment_text"] = first_comment
+        if tags:
+            args["tags"] = tags
+        return {"arguments": args} if args else None
+    if action_type == "external_platform.comment_content":
+        comment = _extract_after_markers(text, ("评论改成", "正文改成", "内容改成"))
+        return {"arguments": {"comment_text": comment}} if comment else None
+    if action_type == "external_platform.send_message":
+        message = _extract_after_markers(text, ("消息改成", "私信改成", "正文改成", "内容改成"))
+        return {"arguments": {"message_text": message}} if message else None
     if action_type in {"browser.download", "browser.open_url"}:
         url = first_url(text)
         if url:
@@ -198,12 +238,33 @@ def edit_payload_for_action(action: dict[str, Any], text: str) -> dict[str, Any]
 def _extract_edited_title(text: str) -> str | None:
     for marker in ("标题改成", "标题换成", "title 改成", "title换成"):
         if marker in text:
-            return text.split(marker, 1)[-1].strip(" ：:，,。")
+            return text.split(marker, 1)[-1].strip(" ：:，。")
     return None
 
 
 def _extract_edited_body(text: str) -> str | None:
     for marker in ("正文改成", "内容改成", "body 改成", "正文换成"):
         if marker in text:
-            return text.split(marker, 1)[-1].strip(" ：:，,。")
+            return text.split(marker, 1)[-1].strip(" ：:，。")
     return None
+
+
+def _extract_after_markers(text: str, markers: tuple[str, ...]) -> str | None:
+    for marker in markers:
+        if marker in text:
+            value = text.split(marker, 1)[-1].strip(" ：:，。")
+            if value:
+                return value
+    return None
+
+
+def _extract_tags(text: str) -> list[str]:
+    for marker in ("标签改成", "标签换成", "tag 改成", "tags 改成"):
+        if marker not in text:
+            continue
+        raw = text.split(marker, 1)[-1].strip(" ：:，。")
+        parts = re.split(r"[\s,，、#]+", raw)
+        tags = [part for part in parts if part]
+        if tags:
+            return tags
+    return []

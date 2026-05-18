@@ -46,6 +46,10 @@ from app.services.browser_policy import (
     browser_session_preflight,
 )
 from app.services.browser_sessions import BrowserSessionService
+from app.services.external_platform_extensions import (
+    ExternalPlatformExtensionRegistry,
+    ExternalPlatformRuntimeContext,
+)
 from app.services.external_platform_discovery import (
     DiscoveryCandidate,
     ExternalPlatformDiscoveryService,
@@ -98,6 +102,8 @@ class ExternalPlatformAdapterService:
         audit_service: AuditEventService,
         asset_broker: AssetBrokerService,
         browser_session_service: BrowserSessionService,
+        extension_registry: ExternalPlatformExtensionRegistry | None = None,
+        runtime_context: ExternalPlatformRuntimeContext | None = None,
     ) -> None:
         self._repo = repo
         self._platform_repo = platform_repo
@@ -106,6 +112,30 @@ class ExternalPlatformAdapterService:
         self._audit = audit_service
         self._asset_broker = asset_broker
         self._browser_sessions = browser_session_service
+        if extension_registry is None:
+            from app.external_platforms import register_bundled_external_platform_extensions
+
+            extension_registry = ExternalPlatformExtensionRegistry()
+            register_bundled_external_platform_extensions(extension_registry)
+        if runtime_context is None:
+            runtime_context = ExternalPlatformRuntimeContext(
+                external_platform_repo=platform_repo,
+                external_platform_adapter_repo=repo,
+                asset_repo=None,
+                asset_service=None,
+                asset_broker=asset_broker,
+                capability_service=None,
+                browser_session_service=browser_session_service,
+                artifact_store=None,
+                task_engine=None,
+                approval_service=approval_service,
+                tool_runtime=tool_runtime,
+                trace_service=None,
+                audit_service=audit_service,
+            )
+        self._extension_registry = extension_registry
+        self._external_platform_runtime_context = runtime_context
+        self._adapter_handlers = extension_registry.build_adapter_handlers(self)
         self._discovery = ExternalPlatformDiscoveryService(
             platform_repo=platform_repo,
             tool_runtime=tool_runtime,
@@ -267,6 +297,19 @@ class ExternalPlatformAdapterService:
         *,
         trace_id: str | None = None,
     ) -> ExternalPlatformAdapterPlanResponse:
+        handler = await self._adapter_handler_for_plan(
+            plan_id,
+            adapter_type=(request.adapter_type if request else None),
+        )
+        return await handler.compile_plan(plan_id, request, trace_id=trace_id)
+
+    async def _compile_plan_legacy(
+        self,
+        plan_id: str,
+        request: ExternalPlatformAdapterCompileRequest | None = None,
+        *,
+        trace_id: str | None = None,
+    ) -> ExternalPlatformAdapterPlanResponse:
         request = request or ExternalPlatformAdapterCompileRequest()
         plan = await self._plan(plan_id)
         adapter = await self._select_adapter(
@@ -344,6 +387,19 @@ class ExternalPlatformAdapterService:
         )
 
     async def execute_adapter(
+        self,
+        plan_id: str,
+        request: ExternalPlatformAdapterExecuteRequest | None = None,
+        *,
+        trace_id: str | None = None,
+    ) -> ExternalPlatformAdapterPlanResponse:
+        handler = await self._adapter_handler_for_plan(
+            plan_id,
+            adapter_type=(request.adapter_type if request else None),
+        )
+        return await handler.execute_adapter(plan_id, request, trace_id=trace_id)
+
+    async def _execute_adapter_legacy(
         self,
         plan_id: str,
         request: ExternalPlatformAdapterExecuteRequest | None = None,
@@ -1029,6 +1085,15 @@ class ExternalPlatformAdapterService:
         *,
         trace_id: str | None = None,
     ) -> ExternalPlatformAdapterPlanResponse:
+        handler = await self._adapter_handler_for_plan(plan_id, adapter_type=None)
+        return await handler.discover_adapter(plan_id, trace_id=trace_id)
+
+    async def _discover_adapter_legacy(
+        self,
+        plan_id: str,
+        *,
+        trace_id: str | None = None,
+    ) -> ExternalPlatformAdapterPlanResponse:
         plan = await self._plan(plan_id)
         if plan.status in {
             "awaiting_account",
@@ -1053,6 +1118,19 @@ class ExternalPlatformAdapterService:
         )
 
     async def resume_after_human(
+        self,
+        plan_id: str,
+        request: ExternalPlatformAdapterResumeRequest | None = None,
+        *,
+        trace_id: str | None = None,
+    ) -> ExternalPlatformAdapterPlanResponse:
+        handler = await self._adapter_handler_for_plan(
+            plan_id,
+            adapter_type=(request.adapter_type if request else None),
+        )
+        return await handler.resume_after_human(plan_id, request, trace_id=trace_id)
+
+    async def _resume_after_human_legacy(
         self,
         plan_id: str,
         request: ExternalPlatformAdapterResumeRequest | None = None,
@@ -1090,6 +1168,29 @@ class ExternalPlatformAdapterService:
                 force=True,
             ),
             trace_id=trace_id,
+        )
+
+    async def _adapter_handler_for_plan(
+        self,
+        plan_id: str,
+        *,
+        adapter_type: str | None,
+    ):  # type: ignore[no-untyped-def]
+        if adapter_type:
+            handler = self._adapter_handlers.get(str(adapter_type))
+            if handler is not None:
+                return handler
+        plan = await self._plan(plan_id)
+        execution_mode = str(plan.execution_mode or "").strip()
+        handler = self._adapter_handlers.get(execution_mode)
+        if handler is not None:
+            return handler
+        self._extension_registry.require_execution_mode(execution_mode)
+        raise AppError(
+            ErrorCode.CONFIG_ERROR,
+            f"No adapter handler registered for execution mode '{execution_mode}'",
+            status_code=500,
+            details={"execution_mode": execution_mode},
         )
 
     async def _discover_adapter_for_plan(

@@ -44,11 +44,28 @@ from app.services.audit import AuditEventService
 from app.services.capability import CapabilityGraphService, capability_request
 from app.services.checkpoints import rollback_availability_for_tool
 from app.services.skill_source_resolver import SkillSourceResolver
+from app.services.safety_policy import RuntimeSafetyPolicyService
 
 BLOCKED_TOOL_PATTERNS = {
     "terminal.run:*": "wildcard_terminal",
     "file:**": "wildcard_filesystem",
     "asset.secret:*": "asset_secret_access",
+}
+SMOOTH_SOFT_BLOCK_REASONS = {
+    "hardcoded_api_key",
+    "hardcoded_token",
+    "hardcoded_cookie",
+    "hardcoded_password",
+    "local_user_path",
+    "network_wildcard_requires_review",
+    "wildcard_terminal",
+    "wildcard_filesystem",
+}
+HARDLINE_BLOCK_REASONS = {
+    "asset_secret_access",
+    "hardcoded_private_key",
+    "hardcoded_mnemonic",
+    "sensitive_secret_path",
 }
 SENSITIVE_TEXT_PATTERNS = {
     "api_key": "hardcoded_api_key",
@@ -61,6 +78,9 @@ SENSITIVE_TEXT_PATTERNS = {
     "rm -rf": "destructive_shell",
     "c:\\users\\": "local_user_path",
     "/users/": "local_user_path",
+    ".ssh": "sensitive_secret_path",
+    "local_secrets.json": "sensitive_secret_path",
+    "master.key": "sensitive_secret_path",
 }
 HIGH_RISK_TOOLS = {"terminal.run", "browser.download", "browser.submit", "file.delete"}
 
@@ -76,6 +96,7 @@ class SkillGovernanceService:
         audit_service: AuditEventService,
         capability_service: CapabilityGraphService | None = None,
         source_resolver: SkillSourceResolver | None = None,
+        safety_policy_service: RuntimeSafetyPolicyService | None = None,
     ) -> None:
         self._repo = repo
         self._skills = skill_repo
@@ -84,6 +105,7 @@ class SkillGovernanceService:
         self._audit = audit_service
         self._capability = capability_service
         self._source_resolver = source_resolver
+        self._safety_policy = safety_policy_service
         self._safety = SafetyService()
 
     def set_source_resolver(self, source_resolver: SkillSourceResolver) -> None:
@@ -315,6 +337,21 @@ class SkillGovernanceService:
                 {"kind": "sensitivity_hits", "count": len(sensitivity_hits)}
             )
 
+        if await self._smooth_governance_enabled():
+            softened = [
+                reason
+                for reason in blocked_reasons
+                if reason in SMOOTH_SOFT_BLOCK_REASONS and reason not in HARDLINE_BLOCK_REASONS
+            ]
+            if softened:
+                warnings.extend(softened)
+                remediation.append("review_smooth_governance_warnings")
+                blocked_reasons = [
+                    reason
+                    for reason in blocked_reasons
+                    if reason not in SMOOTH_SOFT_BLOCK_REASONS or reason in HARDLINE_BLOCK_REASONS
+                ]
+
         blocked = bool(blocked_reasons)
         trust_level = "blocked" if blocked else _trust_from_manifest(manifest, risk_level, [])
         report = {
@@ -344,6 +381,12 @@ class SkillGovernanceService:
         }
         await self._repo.insert_static_analysis(report)
         return SkillStaticAnalysisReport(**report)
+
+    async def _smooth_governance_enabled(self) -> bool:
+        if self._safety_policy is None:
+            return False
+        policy = await self._safety_policy.get_policy()
+        return policy.is_smooth
 
     async def persist_preview_source(
         self,
@@ -1053,8 +1096,9 @@ class SkillGovernanceService:
         return SkillOutputTaintRecord(**data)
 
     def requires_runtime_grant(self, bundle: dict[str, Any], skill: SkillRecord) -> bool:
+        del skill
         manifest = bundle.get("manifest", {})
-        return _is_manifest_v2(manifest) or bool(skill.permission.get("tools"))
+        return _is_manifest_v2(manifest)
 
     async def _declared_tools_with_risk(self, manifest: dict[str, Any]) -> list[dict[str, Any]]:
         names = _manifest_tool_names(manifest)
@@ -1229,11 +1273,9 @@ def _trust_from_manifest(
 
 def _is_manifest_v2(manifest: dict[str, Any]) -> bool:
     revision = str(manifest.get("bundle_revision") or manifest.get("version") or "")
-    permissions = manifest.get("permissions") or {}
     return (
         str(manifest.get("manifest_version") or "") == "2"
         or revision.startswith("2")
-        or isinstance(permissions.get("tools"), list)
     )
 
 

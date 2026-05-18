@@ -49,10 +49,12 @@ class SkillMcpRepository:
             INSERT INTO plugin_bundles (
               bundle_id, organization_id, display_name, description, author, bundle_revision,
               source_type, source_uri, package_uri, manifest_hash, signature_status,
-              trust_level, status, permission_summary_json, risk_summary_json, manifest_json,
-              installed_by_member_id, installed_at, enabled_at, disabled_at, revoked_at,
-              created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              trust_level, status, extension_id, package_kind, source_format, canonical_version,
+              compatibility_status, compatibility_notes_json, binding_status,
+              binding_summary_json, permission_summary_json, risk_summary_json, manifest_json,
+              canonical_snapshot_json, installed_by_member_id, installed_at, enabled_at,
+              disabled_at, revoked_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(bundle_id) DO UPDATE SET
               display_name = excluded.display_name,
               description = excluded.description,
@@ -63,9 +65,18 @@ class SkillMcpRepository:
               manifest_hash = excluded.manifest_hash,
               signature_status = excluded.signature_status,
               trust_level = excluded.trust_level,
+              extension_id = excluded.extension_id,
+              package_kind = excluded.package_kind,
+              source_format = excluded.source_format,
+              canonical_version = excluded.canonical_version,
+              compatibility_status = excluded.compatibility_status,
+              compatibility_notes_json = excluded.compatibility_notes_json,
+              binding_status = excluded.binding_status,
+              binding_summary_json = excluded.binding_summary_json,
               permission_summary_json = excluded.permission_summary_json,
               risk_summary_json = excluded.risk_summary_json,
               manifest_json = excluded.manifest_json,
+              canonical_snapshot_json = excluded.canonical_snapshot_json,
               installed_by_member_id = excluded.installed_by_member_id,
               installed_at = excluded.installed_at,
               updated_at = excluded.updated_at
@@ -84,9 +95,18 @@ class SkillMcpRepository:
                 data["signature_status"],
                 data["trust_level"],
                 data["status"],
+                data.get("extension_id"),
+                data.get("package_kind", "plugin_bundle"),
+                data.get("source_format", "cycber_bundle_v1"),
+                data.get("canonical_version", "canonical.skill.v1"),
+                data.get("compatibility_status", "compatible"),
+                _json(data.get("compatibility_notes", [])),
+                data.get("binding_status", "not_required"),
+                _json(data.get("binding_summary", {})),
                 _json(data.get("permission_summary", {})),
                 _json(data.get("risk_summary", {})),
                 _json(data.get("manifest", {})),
+                _json(data.get("canonical_snapshot", {})),
                 data.get("installed_by_member_id"),
                 data.get("installed_at"),
                 data.get("enabled_at"),
@@ -125,9 +145,12 @@ class SkillMcpRepository:
         values = _json_update_fields(
             fields,
             {
+                "compatibility_notes": "compatibility_notes_json",
+                "binding_summary": "binding_summary_json",
                 "permission_summary": "permission_summary_json",
                 "risk_summary": "risk_summary_json",
                 "manifest": "manifest_json",
+                "canonical_snapshot": "canonical_snapshot_json",
             },
         )
         if not values:
@@ -174,9 +197,11 @@ class SkillMcpRepository:
               skill_id, organization_id, bundle_id, name, display_name, description,
               entrypoint_path, instructions, trigger_json, input_schema_json,
               output_schema_json, required_tools_json, required_assets_json,
-              permission_json, risk_policy_json, eval_summary_json, steps_json,
-              status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              permission_json, risk_policy_json, eval_summary_json, steps_json, extension_id,
+              runtime_kind, source_format, canonical_version, compatibility_status,
+              compatibility_notes_json, binding_status, binding_summary_json,
+              instruction_spec_json, execution_binding_json, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(skill_id) DO UPDATE SET
               display_name = excluded.display_name,
               description = excluded.description,
@@ -191,6 +216,16 @@ class SkillMcpRepository:
               risk_policy_json = excluded.risk_policy_json,
               eval_summary_json = excluded.eval_summary_json,
               steps_json = excluded.steps_json,
+              extension_id = excluded.extension_id,
+              runtime_kind = excluded.runtime_kind,
+              source_format = excluded.source_format,
+              canonical_version = excluded.canonical_version,
+              compatibility_status = excluded.compatibility_status,
+              compatibility_notes_json = excluded.compatibility_notes_json,
+              binding_status = excluded.binding_status,
+              binding_summary_json = excluded.binding_summary_json,
+              instruction_spec_json = excluded.instruction_spec_json,
+              execution_binding_json = excluded.execution_binding_json,
               updated_at = excluded.updated_at
             """,
             (
@@ -211,6 +246,16 @@ class SkillMcpRepository:
                 _json(data.get("risk_policy", {})),
                 _json(data.get("eval_summary", {})),
                 _json(data.get("steps", [])),
+                data.get("extension_id"),
+                data.get("runtime_kind", "workflow_bound"),
+                data.get("source_format", "cycber_bundle_v1"),
+                data.get("canonical_version", "canonical.skill.v1"),
+                data.get("compatibility_status", "compatible"),
+                _json(data.get("compatibility_notes", [])),
+                data.get("binding_status", "not_required"),
+                _json(data.get("binding_summary", {})),
+                _json(data.get("instruction_spec", {})),
+                _json(data.get("execution_binding", {})),
                 data["status"],
                 data["created_at"],
                 data["updated_at"],
@@ -259,6 +304,10 @@ class SkillMcpRepository:
                 "risk_policy": "risk_policy_json",
                 "eval_summary": "eval_summary_json",
                 "steps": "steps_json",
+                "compatibility_notes": "compatibility_notes_json",
+                "binding_summary": "binding_summary_json",
+                "instruction_spec": "instruction_spec_json",
+                "execution_binding": "execution_binding_json",
             },
         )
         if not values:
@@ -266,6 +315,133 @@ class SkillMcpRepository:
         assignments = ", ".join(f"{column} = ?" for column in values)
         await self._db.execute(
             f"UPDATE skills SET {assignments} WHERE skill_id = ?",
+            (*values.values(), skill_id),
+        )
+
+    async def upsert_skill_lifecycle(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO skill_lifecycle_records (
+              skill_id, organization_id, bundle_id, created_by, provenance,
+              use_count, success_count, failure_count, last_used_at, last_success_at,
+              last_failure_at, pinned, state, archived_at, archive_reason, trace_id,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(skill_id) DO UPDATE SET
+              bundle_id = excluded.bundle_id,
+              created_by = excluded.created_by,
+              provenance = excluded.provenance,
+              trace_id = COALESCE(excluded.trace_id, skill_lifecycle_records.trace_id),
+              updated_at = excluded.updated_at
+            """,
+            (
+                data["skill_id"],
+                data.get("organization_id", "org_default"),
+                data["bundle_id"],
+                data.get("created_by", "system"),
+                data.get("provenance", "unknown"),
+                data.get("use_count", 0),
+                data.get("success_count", 0),
+                data.get("failure_count", 0),
+                data.get("last_used_at"),
+                data.get("last_success_at"),
+                data.get("last_failure_at"),
+                1 if data.get("pinned") else 0,
+                data.get("state", "active"),
+                data.get("archived_at"),
+                data.get("archive_reason"),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def record_skill_lifecycle_use(
+        self,
+        skill_id: str,
+        *,
+        bundle_id: str,
+        status: str,
+        at: str,
+        trace_id: str | None = None,
+    ) -> None:
+        success_inc = 1 if status == "success" else 0
+        failure_inc = 1 if status == "failure" else 0
+        await self._db.execute(
+            """
+            INSERT INTO skill_lifecycle_records (
+              skill_id, organization_id, bundle_id, created_by, provenance,
+              use_count, success_count, failure_count, last_used_at, last_success_at,
+              last_failure_at, pinned, state, trace_id, created_at, updated_at
+            ) VALUES (?, 'org_default', ?, 'system', 'runtime', 1, ?, ?, ?, ?, ?, 0, 'active', ?, ?, ?)
+            ON CONFLICT(skill_id) DO UPDATE SET
+              use_count = skill_lifecycle_records.use_count + 1,
+              success_count = skill_lifecycle_records.success_count + excluded.success_count,
+              failure_count = skill_lifecycle_records.failure_count + excluded.failure_count,
+              last_used_at = excluded.last_used_at,
+              last_success_at = COALESCE(excluded.last_success_at, skill_lifecycle_records.last_success_at),
+              last_failure_at = COALESCE(excluded.last_failure_at, skill_lifecycle_records.last_failure_at),
+              trace_id = COALESCE(excluded.trace_id, skill_lifecycle_records.trace_id),
+              updated_at = excluded.updated_at
+            """,
+            (
+                skill_id,
+                bundle_id,
+                success_inc,
+                failure_inc,
+                at,
+                at if success_inc else None,
+                at if failure_inc else None,
+                trace_id,
+                at,
+                at,
+            ),
+        )
+
+    async def list_skill_lifecycle_records(
+        self,
+        *,
+        state: str | None = None,
+        created_by: str | None = None,
+        include_archived: bool = True,
+    ) -> list[dict[str, Any]]:
+        where = ["organization_id = 'org_default'"]
+        params: list[Any] = []
+        if state:
+            where.append("state = ?")
+            params.append(state)
+        elif not include_archived:
+            where.append("state != 'archived'")
+        if created_by:
+            where.append("created_by = ?")
+            params.append(created_by)
+        rows = await self._db.fetch_all(
+            f"""
+            SELECT *
+            FROM skill_lifecycle_records
+            WHERE {' AND '.join(where)}
+            ORDER BY updated_at DESC
+            """,
+            params,
+        )
+        return [_skill_lifecycle_from_row(dict(row)) for row in rows]
+
+    async def get_skill_lifecycle(self, skill_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM skill_lifecycle_records WHERE skill_id = ?",
+            (skill_id,),
+        )
+        return _skill_lifecycle_from_row(dict(row)) if row else None
+
+    async def update_skill_lifecycle(self, skill_id: str, fields: dict[str, Any]) -> None:
+        values = dict(fields)
+        if "pinned" in values:
+            values["pinned"] = 1 if values["pinned"] else 0
+        if not values:
+            return
+        assignments = ", ".join(f"{column} = ?" for column in values)
+        await self._db.execute(
+            f"UPDATE skill_lifecycle_records SET {assignments} WHERE skill_id = ?",
             (*values.values(), skill_id),
         )
 
@@ -645,6 +821,18 @@ class SkillMcpRepository:
         rows = await self._db.fetch_all(
             "SELECT * FROM mcp_tools WHERE server_id = ? ORDER BY tool_name ASC",
             (server_id,),
+        )
+        return [_mcp_tool_from_row(dict(row)) for row in rows]
+
+    async def list_active_mcp_tools(self) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT mt.*
+            FROM mcp_tools mt
+            INNER JOIN mcp_servers ms ON ms.server_id = mt.server_id
+            WHERE mt.status = 'active' AND ms.status IN ('ready', 'enabled', 'connected')
+            ORDER BY mt.registry_tool_name ASC
+            """
         )
         return [_mcp_tool_from_row(dict(row)) for row in rows]
 
@@ -1140,15 +1328,341 @@ class SkillMcpRepository:
         )
         return [_plugin_event_from_row(dict(row)) for row in rows]
 
+    async def upsert_extension_package(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO extension_packages (
+              extension_id, organization_id, bundle_id, display_name, description, package_kind,
+              source_type, source_format, source_uri, manifest_format, canonical_version,
+              compatibility_status, compatibility_notes_json, trust_level, version,
+              permission_envelope_json, manifest_json, canonical_snapshot_json,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(extension_id) DO UPDATE SET
+              bundle_id = excluded.bundle_id,
+              display_name = excluded.display_name,
+              description = excluded.description,
+              package_kind = excluded.package_kind,
+              source_type = excluded.source_type,
+              source_format = excluded.source_format,
+              source_uri = excluded.source_uri,
+              manifest_format = excluded.manifest_format,
+              canonical_version = excluded.canonical_version,
+              compatibility_status = excluded.compatibility_status,
+              compatibility_notes_json = excluded.compatibility_notes_json,
+              trust_level = excluded.trust_level,
+              version = excluded.version,
+              permission_envelope_json = excluded.permission_envelope_json,
+              manifest_json = excluded.manifest_json,
+              canonical_snapshot_json = excluded.canonical_snapshot_json,
+              updated_at = excluded.updated_at
+            """,
+            (
+                data["extension_id"],
+                data["organization_id"],
+                data["bundle_id"],
+                data["display_name"],
+                data.get("description"),
+                data["package_kind"],
+                data["source_type"],
+                data["source_format"],
+                data.get("source_uri"),
+                data.get("manifest_format"),
+                data.get("canonical_version", "canonical.skill.v1"),
+                data["compatibility_status"],
+                _json(data.get("compatibility_notes", [])),
+                data.get("trust_level", "restricted"),
+                data.get("version"),
+                _json(data.get("permission_envelope", {})),
+                _json(data.get("manifest", {})),
+                _json(data.get("canonical_snapshot", {})),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def get_extension_package(self, extension_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM extension_packages WHERE extension_id = ?",
+            (extension_id,),
+        )
+        return _extension_package_from_row(dict(row)) if row else None
+
+    async def get_extension_package_by_bundle(self, bundle_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            "SELECT * FROM extension_packages WHERE bundle_id = ?",
+            (bundle_id,),
+        )
+        return _extension_package_from_row(dict(row)) if row else None
+
+    async def list_extension_packages(self) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM extension_packages
+            WHERE organization_id = 'org_default'
+            ORDER BY created_at DESC
+            """
+        )
+        return [_extension_package_from_row(dict(row)) for row in rows]
+
+    async def upsert_extension_source(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO extension_sources (
+              source_id, extension_id, organization_id, source_type, source_uri, repository_id,
+              package_ref, github_ref, manifest_checksum, source_descriptor_json,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source_id) DO UPDATE SET
+              source_type = excluded.source_type,
+              source_uri = excluded.source_uri,
+              repository_id = excluded.repository_id,
+              package_ref = excluded.package_ref,
+              github_ref = excluded.github_ref,
+              manifest_checksum = excluded.manifest_checksum,
+              source_descriptor_json = excluded.source_descriptor_json,
+              updated_at = excluded.updated_at
+            """,
+            (
+                data["source_id"],
+                data["extension_id"],
+                data["organization_id"],
+                data["source_type"],
+                data["source_uri"],
+                data.get("repository_id"),
+                data.get("package_ref"),
+                data.get("github_ref"),
+                data.get("manifest_checksum"),
+                _json(data.get("source_descriptor", {})),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_extension_sources(self, extension_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            "SELECT * FROM extension_sources WHERE extension_id = ? ORDER BY created_at ASC",
+            (extension_id,),
+        )
+        return [_extension_source_from_row(dict(row)) for row in rows]
+
+    async def insert_extension_compatibility_report(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO extension_compatibility_reports (
+              report_id, extension_id, organization_id, bundle_id, source_format,
+              canonical_version, compatibility_status, compatibility_notes_json,
+              missing_items_json, warnings_json, compatibility_tier, smoke_check_json,
+              package_compatibility_json, blocked_reasons_json, stage, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["report_id"],
+                data["extension_id"],
+                data["organization_id"],
+                data.get("bundle_id"),
+                data["source_format"],
+                data.get("canonical_version", "canonical.skill.v1"),
+                data["compatibility_status"],
+                _json(data.get("compatibility_notes", [])),
+                _json(data.get("missing_items", [])),
+                _json(data.get("warnings", [])),
+                data.get("compatibility_tier", "manifest_compatible"),
+                _json(data.get("smoke_check", {})),
+                _json(data.get("package_compatibility", {})),
+                _json(data.get("blocked_reasons", [])),
+                data["stage"],
+                data["created_at"],
+            ),
+        )
+
+    async def list_extension_compatibility_reports(self, extension_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM extension_compatibility_reports
+            WHERE extension_id = ?
+            ORDER BY created_at DESC
+            """,
+            (extension_id,),
+        )
+        return [_extension_compatibility_from_row(dict(row)) for row in rows]
+
+    async def upsert_extension_binding_snapshot(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO extension_binding_snapshots (
+              snapshot_id, extension_id, organization_id, bundle_id, skill_id, binding_status,
+              binding_summary_json, details_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(snapshot_id) DO UPDATE SET
+              binding_status = excluded.binding_status,
+              binding_summary_json = excluded.binding_summary_json,
+              details_json = excluded.details_json,
+              updated_at = excluded.updated_at
+            """,
+            (
+                data["snapshot_id"],
+                data["extension_id"],
+                data["organization_id"],
+                data.get("bundle_id"),
+                data.get("skill_id"),
+                data["binding_status"],
+                _json(data.get("binding_summary", {})),
+                _json(data.get("details", {})),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_extension_binding_snapshots(self, extension_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM extension_binding_snapshots
+            WHERE extension_id = ?
+            ORDER BY created_at DESC
+            """,
+            (extension_id,),
+        )
+        return [_extension_binding_from_row(dict(row)) for row in rows]
+
+    async def upsert_extension_runtime_contribution(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO extension_runtime_contributions (
+              contribution_id, extension_id, organization_id, bundle_id, contribution_type,
+              runtime_kind, name, status, details_json, evidence_json, trace_id,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(contribution_id) DO UPDATE SET
+              status = excluded.status,
+              details_json = excluded.details_json,
+              evidence_json = excluded.evidence_json,
+              trace_id = excluded.trace_id,
+              updated_at = excluded.updated_at
+            """,
+            (
+                data["contribution_id"],
+                data["extension_id"],
+                data["organization_id"],
+                data.get("bundle_id"),
+                data["contribution_type"],
+                data.get("runtime_kind", "manifest"),
+                data.get("name"),
+                data.get("status", "registered_disabled"),
+                _json(data.get("details", {})),
+                _json(data.get("evidence", {})),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def list_extension_runtime_contributions(self, extension_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM extension_runtime_contributions
+            WHERE extension_id = ?
+            ORDER BY contribution_type ASC, name ASC, created_at ASC
+            """,
+            (extension_id,),
+        )
+        return [_extension_runtime_contribution_from_row(dict(row)) for row in rows]
+
+    async def update_extension_runtime_contributions_status(
+        self,
+        extension_id: str,
+        status: str,
+        *,
+        updated_at: str,
+        trace_id: str | None = None,
+    ) -> None:
+        await self._db.execute(
+            """
+            UPDATE extension_runtime_contributions
+            SET status = ?, updated_at = ?, trace_id = COALESCE(?, trace_id)
+            WHERE extension_id = ?
+            """,
+            (status, updated_at, trace_id, extension_id),
+        )
+
+    async def upsert_extension_diagnostic(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO extension_diagnostics (
+              diagnostic_id, extension_id, organization_id, bundle_id, status, summary_json,
+              compatibility_json, binding_json, mcp_json, config_json, secrets_json, env_json,
+              contributions_json, health_json, next_actions_json, trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(diagnostic_id) DO UPDATE SET
+              status = excluded.status,
+              summary_json = excluded.summary_json,
+              compatibility_json = excluded.compatibility_json,
+              binding_json = excluded.binding_json,
+              mcp_json = excluded.mcp_json,
+              config_json = excluded.config_json,
+              secrets_json = excluded.secrets_json,
+              env_json = excluded.env_json,
+              contributions_json = excluded.contributions_json,
+              health_json = excluded.health_json,
+              next_actions_json = excluded.next_actions_json,
+              trace_id = excluded.trace_id,
+              updated_at = excluded.updated_at
+            """,
+            (
+                data["diagnostic_id"],
+                data["extension_id"],
+                data["organization_id"],
+                data.get("bundle_id"),
+                data["status"],
+                _json(data.get("summary", {})),
+                _json(data.get("compatibility", {})),
+                _json(data.get("binding", {})),
+                _json(data.get("mcp", {})),
+                _json(data.get("config", {})),
+                _json(data.get("secrets", {})),
+                _json(data.get("env", {})),
+                _json(data.get("contributions", [])),
+                _json(data.get("health", {})),
+                _json(data.get("next_actions", [])),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def get_extension_diagnostic(self, extension_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM extension_diagnostics
+            WHERE extension_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (extension_id,),
+        )
+        return _extension_diagnostic_from_row(dict(row)) if row else None
+
 
 def _bundle_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["compatibility_notes"] = json.loads(row.pop("compatibility_notes_json") or "[]")
+    row["binding_summary"] = json.loads(row.pop("binding_summary_json") or "{}")
     row["permission_summary"] = json.loads(row.pop("permission_summary_json") or "{}")
     row["risk_summary"] = json.loads(row.pop("risk_summary_json") or "{}")
     row["manifest"] = json.loads(row.pop("manifest_json") or "{}")
+    row["canonical_snapshot"] = json.loads(row.pop("canonical_snapshot_json") or "{}")
     return row
 
 
 def _skill_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["compatibility_notes"] = json.loads(row.pop("compatibility_notes_json") or "[]")
+    row["binding_summary"] = json.loads(row.pop("binding_summary_json") or "{}")
+    row["instruction_spec"] = json.loads(row.pop("instruction_spec_json") or "{}")
+    row["execution_binding"] = json.loads(row.pop("execution_binding_json") or "{}")
     row["trigger"] = json.loads(row.pop("trigger_json") or "{}")
     row["input_schema"] = json.loads(row.pop("input_schema_json") or "{}")
     row["output_schema"] = json.loads(row.pop("output_schema_json") or "{}")
@@ -1167,6 +1681,14 @@ def _skill_run_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["artifact_ids"] = json.loads(row.pop("artifact_ids_json") or "[]")
     row["policy_snapshot"] = json.loads(row.pop("policy_snapshot_json", None) or "{}")
     row["resolved_asset_refs"] = json.loads(row.pop("resolved_asset_refs_json", None) or "[]")
+    return row
+
+
+def _skill_lifecycle_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["pinned"] = bool(row.get("pinned"))
+    row["use_count"] = int(row.get("use_count") or 0)
+    row["success_count"] = int(row.get("success_count") or 0)
+    row["failure_count"] = int(row.get("failure_count") or 0)
     return row
 
 
@@ -1224,6 +1746,56 @@ def _mcp_call_from_row(row: dict[str, Any]) -> dict[str, Any]:
 def _plugin_event_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["payload"] = json.loads(row.pop("payload_redacted_json") or "{}")
     row.pop("payload_json", None)
+    return row
+
+
+def _extension_package_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["compatibility_notes"] = json.loads(row.pop("compatibility_notes_json") or "[]")
+    row["permission_envelope"] = json.loads(row.pop("permission_envelope_json") or "{}")
+    row["manifest"] = json.loads(row.pop("manifest_json") or "{}")
+    row["canonical_snapshot"] = json.loads(row.pop("canonical_snapshot_json") or "{}")
+    return row
+
+
+def _extension_source_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["source_descriptor"] = json.loads(row.pop("source_descriptor_json") or "{}")
+    return row
+
+
+def _extension_compatibility_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["compatibility_notes"] = json.loads(row.pop("compatibility_notes_json") or "[]")
+    row["missing_items"] = json.loads(row.pop("missing_items_json") or "[]")
+    row["warnings"] = json.loads(row.pop("warnings_json") or "[]")
+    row["smoke_check"] = json.loads(row.pop("smoke_check_json", None) or "{}")
+    row["package_compatibility"] = json.loads(row.pop("package_compatibility_json", None) or "{}")
+    row["blocked_reasons"] = json.loads(row.pop("blocked_reasons_json", None) or "[]")
+    row["compatibility_tier"] = row.get("compatibility_tier") or "manifest_compatible"
+    return row
+
+
+def _extension_binding_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["binding_summary"] = json.loads(row.pop("binding_summary_json") or "{}")
+    row["details"] = json.loads(row.pop("details_json") or "{}")
+    return row
+
+
+def _extension_runtime_contribution_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["details"] = json.loads(row.pop("details_json") or "{}")
+    row["evidence"] = json.loads(row.pop("evidence_json") or "{}")
+    return row
+
+
+def _extension_diagnostic_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["summary"] = json.loads(row.pop("summary_json") or "{}")
+    row["compatibility"] = json.loads(row.pop("compatibility_json") or "{}")
+    row["binding"] = json.loads(row.pop("binding_json") or "{}")
+    row["mcp"] = json.loads(row.pop("mcp_json") or "{}")
+    row["config"] = json.loads(row.pop("config_json") or "{}")
+    row["secrets"] = json.loads(row.pop("secrets_json") or "{}")
+    row["env"] = json.loads(row.pop("env_json") or "{}")
+    row["contributions"] = json.loads(row.pop("contributions_json") or "[]")
+    row["health"] = json.loads(row.pop("health_json") or "{}")
+    row["next_actions"] = json.loads(row.pop("next_actions_json") or "[]")
     return row
 
 

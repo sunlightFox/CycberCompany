@@ -36,13 +36,17 @@ def context_decision(
     if include_summary:
         reasons.append("session_summary")
     if include_memory:
-        reasons.append("memory_explicit_query" if intent.primary_intent == "memory_query" else "memory_query_enabled")
+        reasons.append("memory_query_enabled")
+        if intent.primary_intent == "memory_query":
+            reasons.append("memory_explicit_query")
     if include_handles:
         reasons.append("asset_handle_summary_only")
     if mode.submode == "capability_boundary":
         reasons.extend(["capability_boundary_unavailable", "capability_unavailable"])
     if semantic and semantic.conflicts:
         reasons.append("context_conflict_detected")
+    if is_continuation and has_working_state:
+        reasons.append("dialogue_state_goal_continuation")
     return ContextDecision(
         include_recent_messages=include_recent,
         include_conversation_state=include_conversation_state,

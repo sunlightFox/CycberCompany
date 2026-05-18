@@ -40,7 +40,7 @@ class ToolDispatcher:
                     trace_id=trace_id,
                 )
             raise
-        if tool.status != "active":
+        if tool.status not in {"active", "approval_required"}:
             raise AppError(ErrorCode.TOOL_NOT_FOUND, "工具未启用", status_code=404)
         request = _sanitize_tool_request_for_execution(request)
         if request.idempotency_key:

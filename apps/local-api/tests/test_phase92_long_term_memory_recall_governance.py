@@ -67,7 +67,7 @@ def test_phase92_cross_session_preference_recall_and_correction_override(
     assert after_correction["items"][0]["memory_id"] != old_memory_id
     assert "风险" in after_correction["items"][0]["summary_text"]
     filtered = {item["memory_id"]: item["reason"] for item in after_correction["filtered"]}
-    assert filtered[old_memory_id] == "superseded"
+    assert filtered[old_memory_id] == "status_superseded"
 
 
 def test_phase92_stale_and_transient_memory_do_not_pollute_default_recall(

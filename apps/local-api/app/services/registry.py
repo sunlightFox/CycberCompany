@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from chat_runtime import ChatRuntime
 from shell_runtime import ShellRuntime
 from trace_service import TraceService, redact
 
 from app.core.config import AppConfig
+from app.core.errors import AppError
+from core_types import ErrorCode
 from app.db.repositories.agent_workbench_repo import AgentWorkbenchRepository
 from app.db.repositories.asset_repo import AssetRepository
 from app.db.repositories.brain_repo import BrainRepository
@@ -39,6 +42,8 @@ from app.db.repositories.skill_repository_repo import SkillRepositoryRepository
 from app.db.repositories.task_repo import TaskRepository
 from app.db.repositories.voice_repo import VoiceRepository
 from app.db.session import Database
+from app.channels import register_bundled_channel_extensions
+from app.external_platforms import register_bundled_external_platform_extensions
 from app.services.agent_workbench import AgentWorkbenchService
 from app.services.approvals import ApprovalService
 from app.services.artifacts import ArtifactStore
@@ -58,12 +63,12 @@ from app.services.browser_plan_runtime import BrowserPlanRuntime
 from app.services.browser_replay_store import BrowserReplayStore
 from app.services.browser_session_runtime import BrowserSessionRuntime
 from app.services.capability import CapabilityGraphService
-from app.services.channel_connectors import (
-    ChannelConnectorRegistry,
-    FeishuMockConnector,
-    FeishuOpenPlatformConnector,
-    WechatClawbotConnector,
-    WechatMockConnector,
+from app.services.channel_connectors import ChannelConnectorRegistry
+from app.services.channel_extensions import (
+    ChannelExtensionRegistry,
+    ChannelGatewayProtocol,
+    ChannelGatewayRegistry,
+    ChannelRuntimeContext,
 )
 from app.services.channel_approval_bridge import ChannelApprovalBridge
 from app.services.channel_session_context import ChannelSessionContext
@@ -90,11 +95,15 @@ from app.services.design_alignment import (
     SafetyDecisionService,
     VectorService,
 )
+from app.services.extensions import ExtensionService
 from app.services.execution_boundary import ExecutionBoundaryService
 from app.services.external_platform_actions import ExternalPlatformActionService
 from app.services.external_platform_adapters import ExternalPlatformAdapterService
+from app.services.external_platform_extensions import (
+    ExternalPlatformExtensionRegistry,
+    ExternalPlatformRuntimeContext,
+)
 from app.services.failure_experience import FailureExperienceService
-from app.services.feishu_gateway import FeishuChannelGatewayService
 from app.services.knowledge import KnowledgeService
 from app.services.mcp import MCPService
 from app.services.media import MediaService
@@ -103,6 +112,7 @@ from app.services.model_routing import ModelRoutingService
 from app.services.multimodal_understanding import MultimodalUnderstandingService
 from app.services.notifications import NotificationGatewayService
 from app.services.office_tools import OfficeToolService
+from app.schemas.media import VideoWorkflowCreateRequest, VideoWorkflowExecuteRequest
 from app.services.project_deployments import (
     HostInstallService,
     ProjectDeploymentService,
@@ -129,7 +139,7 @@ from app.services.session_runtime import SessionRuntime
 from app.services.tasks import TaskEngine
 from app.services.tools import ToolRuntime
 from app.services.voice import VoiceService
-from app.services.wechat_gateway import WechatChannelGatewayService
+from app.services.video_workflows import VideoWorkflowService
 
 
 @dataclass
@@ -152,6 +162,7 @@ class ServiceRegistry:
     agent_workbench_service: AgentWorkbenchService
     memory_service: MemoryService
     media_service: MediaService
+    video_workflow_service: VideoWorkflowService
     asset_service: AssetService
     asset_broker_service: AssetBrokerService
     capability_service: CapabilityGraphService
@@ -162,8 +173,10 @@ class ServiceRegistry:
     checkpoint_service: CheckpointService
     notification_gateway_service: NotificationGatewayService
     channel_binding_service: ChannelBindingService
-    wechat_gateway_service: WechatChannelGatewayService
-    feishu_gateway_service: FeishuChannelGatewayService
+    channel_extension_registry: ChannelExtensionRegistry
+    channel_gateway_registry: ChannelGatewayRegistry
+    wechat_gateway_service: ChannelGatewayProtocol
+    feishu_gateway_service: ChannelGatewayProtocol
     browser_session_service: BrowserSessionService
     autonomous_browser_workflow_service: BrowserWorkflowRuntime
     browser_workflow_runtime: BrowserWorkflowRuntime
@@ -176,9 +189,11 @@ class ServiceRegistry:
     host_install_service: HostInstallService
     external_platform_action_service: ExternalPlatformActionService
     external_platform_adapter_service: ExternalPlatformAdapterService
+    external_platform_extension_registry: ExternalPlatformExtensionRegistry
     tool_runtime: ToolRuntime
     skill_governance_service: SkillGovernanceService
     skill_plugin_service: SkillPluginService
+    extension_service: ExtensionService
     skill_repository_service: SkillRepositoryService
     mcp_service: MCPService
     supervisor_service: SupervisorService
@@ -232,6 +247,9 @@ class ServiceRegistry:
     retrieval: RetrievalRepository
     execution_boundary: ExecutionBoundaryRepository
     design_alignment: DesignAlignmentRepository
+
+    def channel_gateway(self, provider: str) -> ChannelGatewayProtocol:
+        return self.channel_gateway_registry.require(provider)
 
 
 def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime) -> ServiceRegistry:
@@ -421,6 +439,11 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         office_tool_service=office_tool_service,
         chat_hook_runtime=chat_hook_runtime,
     )
+    video_workflow_service = VideoWorkflowService(
+        repo=media_repo,
+        media_service=media_service,
+        tool_runtime=tool_runtime,
+    )
     task_engine = TaskEngine(
         repo=task_repo,
         member_repo=member_repo,
@@ -440,6 +463,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
         capability_service=capability_service,
+        safety_policy_service=safety_policy_service,
     )
     skill_repository_service = SkillRepositoryService(
         repo=skill_repository_repo,
@@ -465,8 +489,15 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         governance_service=skill_governance_service,
         repository_service=skill_repository_service,
         source_resolver=skill_source_resolver,
+        safety_policy_service=safety_policy_service,
     )
     skill_plugin_service.set_repository_service(skill_repository_service)
+    extension_service = ExtensionService(
+        repo=skill_mcp_repo,
+        task_repo=task_repo,
+        source_resolver=skill_source_resolver,
+        skill_plugin_service=skill_plugin_service,
+    )
     agent_workbench_service = AgentWorkbenchService(
         repo=agent_workbench_repo,
         chat_repo=chat_repo,
@@ -493,15 +524,88 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         skill_plugin_service=skill_plugin_service,
         mcp_service=mcp_service,
     )
+    skill_plugin_service.set_mcp_service(mcp_service)
     task_engine.set_extension_services(
         skill_plugin_service=skill_plugin_service,
         skill_governance_service=skill_governance_service,
         skill_repository_service=skill_repository_service,
         mcp_service=mcp_service,
     )
+    extension_service.set_task_engine(task_engine)
     task_engine.set_browser_evidence_provider(browser_session_service.list_task_evidence)
     task_engine.set_checkpoint_replay_provider(checkpoint_service.replay_checkpoint_data)
-    task_engine.set_media_replay_provider(media_service.replay_task_media)
+    async def media_replay_provider(task_id: str) -> list[dict[str, Any]]:
+        media_replay = await media_service.replay_task_media(task_id)
+        video_replay = await video_workflow_service.replay_task_video_workflows(task_id)
+        if not video_replay:
+            return media_replay
+        by_media = {str(item.get("media", {}).get("media_id")): item for item in media_replay}
+        for workflow in video_replay:
+            media_id = str(workflow.get("workflow", {}).get("media_id") or "")
+            if media_id in by_media:
+                by_media[media_id].setdefault("video_workflows", []).append(workflow)
+            else:
+                media_replay.append({"media": {"media_id": media_id}, "video_workflows": [workflow]})
+        return media_replay
+
+    task_engine.set_media_replay_provider(media_replay_provider)
+    async def execute_video_workflow_step(
+        task: dict[str, Any],
+        step: dict[str, Any],
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        step_input = dict(step.get("input") or {})
+        planner_context = dict(step_input.get("planner_context") or task.get("planner_context") or {})
+        workflow_profile = dict(step_input.get("workflow_profile") or planner_context.get("video_workflow_profile") or {})
+        workflow_id = str(
+            step_input.get("workflow_id")
+            or (step.get("output") or {}).get("workflow_id")
+            or ""
+        ).strip()
+        workflows = await media_repo.list_video_workflows_by_task(task["task_id"])
+        if not workflow_id and workflows:
+            workflow_id = str(workflows[-1]["workflow_id"])
+        if workflow_id:
+            workflow = await video_workflow_service.resume(
+                workflow_id,
+                step.get("approval_id"),
+                trace_id=trace_id,
+            )
+        else:
+            assets = await media_repo.list_assets_by_task(task["task_id"])
+            video_assets = [item for item in assets if str(item.get("media_type") or "") == "video"]
+            if not video_assets:
+                raise AppError(
+                    ErrorCode.MEDIA_ASSET_NOT_FOUND,
+                    "Video workflow task requires a task-bound video artifact before execution",
+                    status_code=409,
+                )
+            created = await video_workflow_service.create(
+                VideoWorkflowCreateRequest(
+                    task_id=task["task_id"],
+                    media_id=video_assets[-1]["media_id"],
+                    goal=str(step_input.get("goal") or task["goal"]),
+                    workflow_profile=workflow_profile,
+                ),
+                trace_id=trace_id,
+            )
+            workflow = await video_workflow_service.execute(
+                created.workflow.workflow_id,
+                VideoWorkflowExecuteRequest(approval_id=step.get("approval_id")),
+                trace_id=trace_id,
+            )
+        return {
+            "status": workflow.workflow.status,
+            "workflow_id": workflow.workflow.workflow_id,
+            "approval_id": workflow.workflow.approval_id,
+            "workflow": workflow.workflow.model_dump(mode="json"),
+            "steps": [item.model_dump(mode="json") for item in workflow.steps],
+            "media": workflow.media.model_dump(mode="json") if workflow.media is not None else None,
+            "next_step": workflow.next_step,
+            "message": workflow.message,
+        }
+
+    task_engine.set_video_workflow_executor(execute_video_workflow_step)
     notification_gateway_service = NotificationGatewayService(
         repo=notification_repo,
         asset_service=asset_service,
@@ -516,39 +620,19 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         approval_service=approval_service,
         notification_gateway=notification_gateway_service,
     )
-    wechat_config = config.channels.providers.get("wechat")
-    wechat_mock_config = config.channels.providers.get("wechat_mock")
-    feishu_config = config.channels.providers.get("feishu")
-    feishu_mock_config = config.channels.providers.get("feishu_mock")
-    if wechat_config is None:
-        from app.core.config import ChannelProviderSection
-
-        wechat_config = ChannelProviderSection()
-    if wechat_mock_config is None:
-        from app.core.config import ChannelProviderSection
-
-        wechat_mock_config = ChannelProviderSection(enabled=True, test_only=True)
-    if feishu_config is None:
-        from app.core.config import ChannelProviderSection
-
-        feishu_config = ChannelProviderSection()
-    if feishu_mock_config is None:
-        from app.core.config import ChannelProviderSection
-
-        feishu_mock_config = ChannelProviderSection(enabled=True, test_only=True)
-    wechat_state_dir = wechat_config.state_dir or (
-        config.storage.data_dir / "channel-providers" / "wechat"
-    )
-    feishu_state_dir = feishu_config.state_dir or (
-        config.storage.data_dir / "channel-providers" / "feishu"
+    channel_extension_registry = ChannelExtensionRegistry()
+    register_bundled_channel_extensions(channel_extension_registry)
+    for provider in config.channels.providers:
+        channel_extension_registry.require_provider(provider)
+    provider_configs = channel_extension_registry.normalized_provider_configs(
+        config.channels.providers,
+        config.storage.data_dir,
     )
     channel_connector_registry = ChannelConnectorRegistry(
-        [
-            WechatClawbotConnector(wechat_config, state_dir=wechat_state_dir),
-            WechatMockConnector(wechat_mock_config),
-            FeishuOpenPlatformConnector(feishu_config, state_dir=feishu_state_dir),
-            FeishuMockConnector(feishu_mock_config),
-        ]
+        channel_extension_registry.build_connectors(
+            provider_configs,
+            config.storage.data_dir,
+        )
     )
     channel_binding_service = ChannelBindingService(
         repo=channel_repo,
@@ -557,35 +641,32 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         capability=capability_service,
         notifications=notification_gateway_service,
         connectors=channel_connector_registry,
+        artifact_store=artifact_store,
         secret_store=secret_store,
         trace_service=trace_service,
         audit_service=audit_service,
     )
-    notification_gateway_service.register_provider(
-        "wechat_mock",
-        _ChannelNotificationProvider(channel_binding_service, voice_service=voice_service),
-    )
-    notification_gateway_service.register_provider(
-        "wechat",
-        _ChannelNotificationProvider(channel_binding_service, voice_service=voice_service),
-    )
-    notification_gateway_service.register_provider(
-        "feishu_mock",
-        _ChannelNotificationProvider(channel_binding_service, voice_service=voice_service),
-    )
-    notification_gateway_service.register_provider(
-        "feishu",
-        _ChannelNotificationProvider(channel_binding_service, voice_service=voice_service),
-    )
+    for provider, runtime in channel_extension_registry.build_notification_providers(
+        channel_binding_service,
+        voice_service,
+    ).items():
+        notification_gateway_service.register_provider(provider, runtime)
     approval_service.set_notification_callback(
         notification_gateway_service.notify_approval_required
     )
-    approval_service.set_resolution_callback(
-        lambda approval, trace_id: task_engine.handle_approval_resolved(
+
+    async def _handle_approval_resolution(approval: Any, trace_id: str | None) -> None:
+        await task_engine.handle_approval_resolved(
             approval.approval_id,
             trace_id=trace_id,
         )
-    )
+        await external_platform_action_service.continue_after_approval(
+            approval,
+            adapter_service=external_platform_adapter_service,
+            trace_id=trace_id,
+        )
+
+    approval_service.set_resolution_callback(_handle_approval_resolution)
     checkpoint_service.set_rollback_notification_callback(
         notification_gateway_service.notify_checkpoint_rollback
     )
@@ -717,6 +798,27 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         secret_store=secret_store,
         safety_policy_service=safety_policy_service,
     )
+    external_platform_extension_registry = ExternalPlatformExtensionRegistry()
+    register_bundled_external_platform_extensions(external_platform_extension_registry)
+    external_platform_runtime_context = ExternalPlatformRuntimeContext(
+        external_platform_repo=external_platform_repo,
+        external_platform_adapter_repo=external_platform_adapter_repo,
+        asset_repo=asset_repo,
+        asset_service=asset_service,
+        asset_broker=asset_broker_service,
+        capability_service=capability_service,
+        browser_session_service=browser_session_service,
+        artifact_store=artifact_store,
+        task_engine=task_engine,
+        approval_service=approval_service,
+        tool_runtime=tool_runtime,
+        trace_service=trace_service,
+        audit_service=audit_service,
+        safety_policy_service=safety_policy_service,
+        skill_plugin_service=skill_plugin_service,
+        skill_governance_service=skill_governance_service,
+        skill_repository_service=skill_repository_service,
+    )
     external_platform_action_service = ExternalPlatformActionService(
         repo=external_platform_repo,
         adapter_repo=external_platform_adapter_repo,
@@ -730,6 +832,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         approval_service=approval_service,
         trace_service=trace_service,
         audit_service=audit_service,
+        extension_registry=external_platform_extension_registry,
+        runtime_context=external_platform_runtime_context,
         safety_policy_service=safety_policy_service,
         skill_plugin_service=skill_plugin_service,
         skill_governance_service=skill_governance_service,
@@ -743,6 +847,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         audit_service=audit_service,
         asset_broker=asset_broker_service,
         browser_session_service=browser_session_service,
+        extension_registry=external_platform_extension_registry,
+        runtime_context=external_platform_runtime_context,
     )
     autonomous_browser_workflow_legacy_service = AutonomousBrowserWorkflowService(
         repo=browser_workflow_repo,
@@ -791,6 +897,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         scheduled_task_service,
         project_deployment_service,
         host_install_service,
+        external_platform_action_service,
+        external_platform_adapter_service,
         skill_plugin_service,
         skill_governance_service,
         tool_runtime=tool_runtime,
@@ -823,46 +931,33 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     channel_approval_bridge = ChannelApprovalBridge()
     skill_candidate_extractor = SkillCandidateExtractor()
     skill_promotion_runtime = SkillPromotionRuntime()
-    wechat_gateway_service = WechatChannelGatewayService(
-        repo=channel_repo,
+    channel_runtime_context = ChannelRuntimeContext(
+        provider_configs=provider_configs,
+        channel_repo=channel_repo,
         chat_repo=chat_repo,
-        chat_service=chat_service,
-        notifications=notification_gateway_service,
-        connectors=channel_connector_registry,
-        secret_store=secret_store,
         media_repo=media_repo,
-        data_dir=config.storage.data_dir,
+        chat_service=chat_service,
+        notification_gateway_service=notification_gateway_service,
+        channel_binding_service=channel_binding_service,
+        channel_connector_registry=channel_connector_registry,
+        artifact_store=artifact_store,
+        secret_store=secret_store,
         trace_service=trace_service,
         audit_service=audit_service,
-        config=wechat_config,
+        session_runtime=session_runtime,
+        channel_session_semantics=channel_session_semantics,
+        channel_session_context=channel_session_context,
+        channel_stream_bridge=channel_stream_bridge,
+        channel_approval_bridge=channel_approval_bridge,
+        channel_ingress_runtime=channel_ingress_runtime,
+        data_dir=config.storage.data_dir,
         multimodal_understanding=multimodal_understanding_service,
     )
-    wechat_gateway_service.set_channel_bridges(
-        session_context=channel_session_context,
-        stream_bridge=channel_stream_bridge,
-        approval_bridge=channel_approval_bridge,
-    )
-    wechat_gateway_service.set_channel_session_semantics_runtime(channel_session_semantics)
-    feishu_gateway_service = FeishuChannelGatewayService(
-        repo=channel_repo,
-        chat_repo=chat_repo,
-        chat_service=chat_service,
-        notifications=notification_gateway_service,
-        connectors=channel_connector_registry,
-        secret_store=secret_store,
-        data_dir=config.storage.data_dir,
-        trace_service=trace_service,
-        audit_service=audit_service,
-        config=feishu_config,
-    )
-    feishu_gateway_service.set_channel_bridges(
-        session_context=channel_session_context,
-        stream_bridge=channel_stream_bridge,
-        approval_bridge=channel_approval_bridge,
-    )
-    feishu_gateway_service.set_channel_session_semantics_runtime(channel_session_semantics)
-    wechat_gateway_service.set_channel_ingress_runtime(channel_ingress_runtime)
-    feishu_gateway_service.set_channel_ingress_runtime(channel_ingress_runtime)
+    channel_gateway_registry = ChannelGatewayRegistry()
+    for provider, gateway in channel_extension_registry.build_gateways(channel_runtime_context).items():
+        channel_gateway_registry.register(provider, gateway)
+    wechat_gateway_service = channel_gateway_registry.require("wechat")
+    feishu_gateway_service = channel_gateway_registry.require("feishu")
     chat_mainline_readiness_service = ChatMainlineReadinessService(
         root_dir=config.paths.root_dir,
         chat_runtime=chat_runtime,
@@ -874,8 +969,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         browser_workflow_runtime=browser_workflow_runtime,
         skill_plugin_service=skill_plugin_service,
         mcp_service=mcp_service,
-        wechat_gateway_service=wechat_gateway_service,
-        feishu_gateway_service=feishu_gateway_service,
+        channel_gateway_registry=channel_gateway_registry,
         release_gate_service=release_gate_service,
         chat_run_ledger_service=chat_run_ledger_service,
         chat_hook_runtime=chat_hook_runtime,
@@ -885,8 +979,12 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         report_builder=release_report_builder,
         chat_mainline_readiness_service=chat_mainline_readiness_service,
     )
-    background_worker_service.set_wechat_gateway(wechat_gateway_service)
-    background_worker_service.set_feishu_gateway(feishu_gateway_service)
+    if hasattr(wechat_gateway_service, "set_worker_health_provider"):
+        wechat_gateway_service.set_worker_health_provider(background_worker_service.health)
+    if hasattr(feishu_gateway_service, "set_worker_health_provider"):
+        feishu_gateway_service.set_worker_health_provider(background_worker_service.health)
+    background_worker_service.set_channel_gateway("wechat", wechat_gateway_service)
+    background_worker_service.set_channel_gateway("feishu", feishu_gateway_service)
     return ServiceRegistry(
         config=config,
         db=db,
@@ -911,6 +1009,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         agent_workbench_service=agent_workbench_service,
         memory_service=memory_service,
         media_service=media_service,
+        video_workflow_service=video_workflow_service,
         asset_service=asset_service,
         asset_broker_service=asset_broker_service,
         capability_service=capability_service,
@@ -921,6 +1020,8 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         checkpoint_service=checkpoint_service,
         notification_gateway_service=notification_gateway_service,
         channel_binding_service=channel_binding_service,
+        channel_extension_registry=channel_extension_registry,
+        channel_gateway_registry=channel_gateway_registry,
         wechat_gateway_service=wechat_gateway_service,
         feishu_gateway_service=feishu_gateway_service,
         browser_session_service=browser_session_service,
@@ -935,9 +1036,11 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         host_install_service=host_install_service,
         external_platform_action_service=external_platform_action_service,
         external_platform_adapter_service=external_platform_adapter_service,
+        external_platform_extension_registry=external_platform_extension_registry,
         tool_runtime=tool_runtime,
         skill_governance_service=skill_governance_service,
         skill_plugin_service=skill_plugin_service,
+        extension_service=extension_service,
         skill_repository_service=skill_repository_service,
         mcp_service=mcp_service,
         supervisor_service=supervisor_service,
@@ -992,84 +1095,3 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         execution_boundary=execution_boundary_repo,
         design_alignment=design_alignment_repo,
     )
-
-
-class _ChannelNotificationProvider:
-    def __init__(self, channels: ChannelBindingService, *, voice_service: VoiceService) -> None:
-        self._channels = channels
-        self._voice = voice_service
-
-    async def send(self, *, channel, message):  # type: ignore[no-untyped-def]
-        provider_state_ref = None
-        if isinstance(channel.provider_config, dict):
-            provider_state_ref = channel.provider_config.get("provider_state_ref")
-        from app.services.notifications import ProviderDeliveryResult
-
-        voice_reply = message.metadata.get("voice_reply") if isinstance(message.metadata, dict) else None
-        if (
-            isinstance(voice_reply, dict)
-            and voice_reply.get("requested")
-            and not voice_reply.get("should_render")
-        ):
-            return ProviderDeliveryResult(
-                status="rejected",
-                error_code="message_rejected",
-                error_summary=str(voice_reply.get("reason") or "voice reply was not rendered"),
-                response_summary={
-                    "retryable": False,
-                    "delivery_kind": "audio",
-                    "reason": "voice_reply_not_rendered",
-                },
-            )
-        if isinstance(voice_reply, dict) and voice_reply.get("should_render"):
-            render_job_id = voice_reply.get("render_job_id")
-            if not render_job_id:
-                return ProviderDeliveryResult(
-                    status="rejected",
-                    error_code="message_rejected",
-                    error_summary="voice reply missing render_job_id",
-                    response_summary={"retryable": False, "delivery_kind": "audio"},
-                )
-            try:
-                audio_bytes, content_type, filename = await self._voice.load_render_job_audio(
-                    str(render_job_id)
-                )
-            except Exception as exc:
-                return ProviderDeliveryResult(
-                    status="rejected",
-                    error_code="message_rejected",
-                    error_summary=str(redact(str(exc))),
-                    response_summary={
-                        "retryable": False,
-                        "delivery_kind": "audio",
-                        "reason": "voice_audio_unavailable",
-                    },
-                )
-            result = await self._channels.send_channel_audio(
-                provider=channel.provider,
-                provider_state_ref=provider_state_ref,
-                recipient=message.recipient,
-                audio_bytes=audio_bytes,
-                content_type=content_type,
-                filename=filename,
-            )
-            return ProviderDeliveryResult(
-                status=result.status,
-                provider_message_id=result.provider_message_id,
-                response_summary=result.response_summary,
-                error_code=result.error_code,
-                error_summary=result.error_summary,
-            )
-        result = await self._channels.send_channel_text(
-            provider=channel.provider,
-            provider_state_ref=provider_state_ref,
-            recipient=message.recipient,
-            text=message.body_redacted,
-        )
-        return ProviderDeliveryResult(
-            status=result.status,
-            provider_message_id=result.provider_message_id,
-            response_summary=result.response_summary,
-            error_code=result.error_code,
-            error_summary=result.error_summary,
-        )

@@ -23,6 +23,7 @@ from app.api import (
     routes_chat,
     routes_checkpoints,
     routes_execution_boundary,
+    routes_extensions,
     routes_external_platform,
     routes_health,
     routes_knowledge,
@@ -141,6 +142,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_approvals.router)
     app.include_router(routes_tools.router)
     app.include_router(routes_execution_boundary.router)
+    app.include_router(routes_extensions.router)
     app.include_router(routes_external_platform.router)
     app.include_router(routes_media.router)
     app.include_router(routes_voice.router)

@@ -30,12 +30,14 @@ from app.services.brain_decision_support import (
 )
 from app.services.chat_intent_router import (
     direct_only_requested,
+    format_sensitive_direct_answer_requested,
     is_explicit_download_request,
     is_file_mutation_request,
     is_readonly_route_request,
     is_host_filesystem_list_request,
     is_host_software_install_request,
     is_office_document_request,
+    is_skill_or_mcp_concept_request,
     is_webpage_read_request,
 )
 
@@ -61,6 +63,7 @@ def intent_decision(
     needs_task = False
     primary = "casual_chat"
     direct_only = direct_only_requested(clean)
+    format_sensitive_request = format_sensitive_direct_answer_requested(clean)
     has_pending_confirmation = _has_pending_confirmation(working_state)
     readonly_route = is_readonly_route_request(clean)
     if unknown_input(clean):
@@ -94,6 +97,10 @@ def intent_decision(
         primary = "complex_dialogue"
         secondary.append("make_plan")
         rule_hits.append("phase51_advice_strategy_direct")
+    elif format_sensitive_request and is_skill_or_mcp_concept_request(clean):
+        primary = "simple_question"
+        secondary.extend(["explain_concept", "strict_format_reply"])
+        rule_hits.append("format_sensitive_skill_mcp_explanation")
     elif concept_explanation_request(clean):
         primary = "simple_question"
         secondary.append("explain_concept")
@@ -138,12 +145,12 @@ def intent_decision(
     elif "取消" in clean or "重试" in clean:
         primary = "cancel_or_retry"
         rule_hits.append("cancel_retry")
-    elif skill_request(clean):
+    elif skill_request(clean) and not format_sensitive_request:
         primary = "skill_request"
         needs_skill = capability_available(capability_snapshot, "skill_engine")
         needs_task = needs_skill
         rule_hits.append("skill_keyword")
-    elif mcp_request(clean):
+    elif mcp_request(clean) and not format_sensitive_request:
         primary = "mcp_request"
         needs_mcp = capability_available(capability_snapshot, "mcp")
         needs_task = needs_mcp

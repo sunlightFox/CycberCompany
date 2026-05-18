@@ -412,7 +412,7 @@ async def runtime_topology(
                 ],
                 status="compat_shell",
                 details={
-                    **registry.wechat_gateway_service.runtime_diagnostic(),
+                    **registry.channel_gateway("wechat").runtime_diagnostic(),
                     "cleanup": _cleanup_details(
                         role="compat_shell",
                         allowed_to_grow=False,
@@ -444,7 +444,7 @@ async def runtime_topology(
                 ],
                 status="compat_shell",
                 details={
-                    **registry.feishu_gateway_service.runtime_diagnostic(),
+                    **registry.channel_gateway("feishu").runtime_diagnostic(),
                     "cleanup": _cleanup_details(
                         role="compat_shell",
                         allowed_to_grow=False,

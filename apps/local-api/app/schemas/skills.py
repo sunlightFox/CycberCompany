@@ -9,9 +9,11 @@ from core_types import (
     PluginBundle,
     PluginEvent,
     SkillCandidateRecord,
+    SkillCuratorRunResult,
     SkillDependencyEdge,
     SkillEvalRun,
     SkillGrowthCandidate,
+    SkillLifecycleRecord,
     SkillMatch,
     SkillMarketplaceHealthRecord,
     SkillMarketplaceInstallRecord,
@@ -67,6 +69,25 @@ class SkillCandidatePromoteResponse(ApiModel):
     bundle: PluginBundle
     skills: list[SkillRecord] = Field(default_factory=list)
     status: str
+
+
+class SkillLifecycleListResponse(ApiModel):
+    items: list[SkillLifecycleRecord] = Field(default_factory=list)
+
+
+class SkillCuratorRunRequest(ApiModel):
+    stale_after_days: int = Field(default=30, ge=1, le=3650)
+    archive_after_days: int = Field(default=90, ge=1, le=3650)
+    dry_run: bool = False
+
+
+class SkillCuratorRunResponse(SkillCuratorRunResult):
+    pass
+
+
+class SkillLifecycleActionRequest(ApiModel):
+    actor_member_id: EntityId = "mem_xiaoyao"
+    reason: str | None = None
 
 
 class SkillCandidateDecisionRequest(ApiModel):
