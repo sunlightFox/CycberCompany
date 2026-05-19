@@ -1019,6 +1019,24 @@ class ChatRepository:
             return None
         return self._turn_from_row(dict(row))
 
+    async def list_recent_turns(
+        self,
+        conversation_id: str,
+        *,
+        limit: int = 8,
+    ) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM chat_turns
+            WHERE conversation_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (conversation_id, limit),
+        )
+        return [self._turn_from_row(dict(row)) for row in rows]
+
     async def update_turn(self, turn_id: str, **fields: Any) -> None:
         if not fields:
             return

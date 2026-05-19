@@ -10,6 +10,7 @@ from response_composer.opening_copy import opening_copy
 from trace_service import redact
 
 from app.core.time import utc_now_iso
+from app.services.action_result_summary import summarize_completed_action_result
 from app.services.chat_visible_guard import visible_text_guard
 from app.services.pending_action_resolution import is_deny as _is_deny
 from app.services.pending_action_resolution import is_edit as _is_edit
@@ -48,6 +49,9 @@ def natural_interaction_payload(
     session_grant: dict[str, Any] | None = None,
     block_reason: str | None = None,
     action_result: dict[str, Any] | None = None,
+    turn_response_kind: str = "action_request",
+    action_state: str = "idle",
+    evidence_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     options = list(reply_options or [])
     return {
@@ -61,6 +65,9 @@ def natural_interaction_payload(
         "clear_pending": clear_pending,
         "session_grant": session_grant or {},
         "action_result": action_result or {},
+        "turn_response_kind": turn_response_kind,
+        "action_state": action_state,
+        "evidence_gate": evidence_gate or {},
     }
 
 
@@ -136,6 +143,9 @@ def natural_quality_guard(
     state_disclosed: bool,
     boundary_disclosed: bool,
     next_step_provided: bool,
+    current_message_priority: bool = True,
+    evidence_required_before_done: bool = True,
+    guard_sources: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     base_guard = base if isinstance(base, dict) else {}
     checks = dict(base_guard.get("checks") or {})
@@ -146,6 +156,8 @@ def natural_quality_guard(
             "next_step_provided": bool(next_step_provided),
             "no_false_done": True,
             "no_internal_terms": True,
+            "current_message_priority": bool(current_message_priority),
+            "evidence_required_before_done": bool(evidence_required_before_done),
         }
     )
     violations = list(base_guard.get("violations") or [])
@@ -167,6 +179,7 @@ def natural_quality_guard(
         "strict_format_preserved": bool(base_guard.get("strict_format_preserved", True)),
         "visible_text_hash": str(base_guard.get("visible_text_hash") or visible_hash(text)),
         "natural_action": {"status": status},
+        "guard_sources": guard_sources or {},
     }
 
 
@@ -243,6 +256,12 @@ def action_status_facts(
     )
     canonical_status = canonical_action_status(status, default="requested")
     detail_status = canonical_action_status(getattr(detail, "status", "") or canonical_status)
+    completed_summary = summarize_completed_action_result(
+        label=label,
+        target=target,
+        artifact_refs=list(action.get("artifact_refs") or []),
+        result_summary=str(getattr(detail, "result_summary", "") or ""),
+    )
     semantics = normalize_action_status_semantics(
         {
             "status": canonical_status,
@@ -273,6 +292,7 @@ def action_status_facts(
         "failed": detail_status == "failed_with_reason",
         "failure_reason": failure_reason,
         "evidence_summary": "结果可以通过任务记录、结果记录或过程记录复核。",
+        "completed_summary": completed_summary,
         "action_status_semantics": semantics,
     }
 
@@ -561,3 +581,30 @@ def session_grant(action: dict[str, Any], session_id: str | None) -> dict[str, A
         "risk_level": action.get("risk_level"),
         "created_at": utc_now_iso(),
     }
+
+
+def after_resolution_text(label: str, resolution: str, *, detail: Any | None) -> str:
+    status = canonical_action_status(getattr(detail, "status", "") or "")
+    if resolution == "edited":
+        prefix = _natural_copy("after_edited", seed=label, label=label)
+    elif resolution == "session":
+        prefix = _natural_copy("after_session", seed=label, label=label)
+    else:
+        prefix = _natural_copy("after_once", seed=label, label=label)
+    completed_summary = summarize_completed_action_result(
+        label=label,
+        target=str(getattr(detail, "title", "") or getattr(detail, "requested_software", "") or ""),
+        artifact_refs=list(getattr(detail, "artifact_refs", []) or []),
+        result_summary=str(getattr(detail, "result_summary", "") or ""),
+    )
+    if not status:
+        return f"{prefix} 我已经按你的确认继续往下走了，结果会按真实进展继续告诉你。"
+    if status == "completed_with_evidence":
+        if completed_summary:
+            return f"{prefix} 这一步我已经确认继续并且处理完成了，当前结果是：{completed_summary}。"
+        return f"{prefix} 这一步我已经确认继续并且处理完成了，结果和记录都能回看。"
+    if status in {"partially_completed", "waiting_for_approval", "planned"}:
+        return f"{prefix} 我已经按你的确认继续往下推了，但这一步还没有完成，我会按实际进展继续回你。"
+    if status in {"failed_with_reason", "blocked_by_boundary"}:
+        return f"{prefix} 但这一步没有顺利完成；你想重试、缩小范围，还是只保留方案都可以。"
+    return f"{prefix} 当前状态是 {status}，下一步我会按实际结果说。"

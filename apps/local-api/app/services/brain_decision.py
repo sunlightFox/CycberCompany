@@ -28,11 +28,14 @@ from app.services.chat_intent_router import (
     is_office_document_request,
     is_webpage_read_request,
 )
-from app.services.brain_clarification_decider import clarification_decision as _clarification_decision
 from app.services.brain_context_decider import context_decision as _context_decision
 from app.services.brain_decision_support import summary as _summary
 from app.services.brain_mode_decider import mode_decision as _mode_decision
 from app.services.brain_route_decider import intent_decision as _intent_decision
+from app.services.turn_response_router import (
+    clarification_policy_for_turn as _clarification_policy_for_turn,
+    route_turn_response as _route_turn_response,
+)
 from app.services.failure_experience import FailureExperienceService
 from app.services.dialogue_semantics import (
     DialogueStateService,
@@ -150,8 +153,28 @@ class BrainDecisionService:
             dialogue_state=dialogue_state,
             semantic=semantic,
         )
+        turn_response = _route_turn_response(text, intent=intent, semantic=semantic)
+        intent = intent.model_copy(
+            update={
+                "turn_response_kind": turn_response["turn_response_kind"],
+                "turn_response_reason_codes": list(turn_response.get("reason_codes") or []),
+                "reason_codes": [
+                    *list(intent.reason_codes),
+                    *[
+                        code
+                        for code in list(turn_response.get("reason_codes") or [])
+                        if code not in intent.reason_codes
+                    ],
+                ],
+            }
+        )
         mode = _mode_decision(intent, capability_snapshot)
-        clarification = _clarification_decision(text, intent, mode, semantic)
+        clarification = _clarification_policy_for_turn(
+            text,
+            turn_response_kind=intent.turn_response_kind,
+            intent=intent,
+            semantic=semantic,
+        )
         if clarification["needs_clarification"]:
             mode = mode.model_copy(
                 update={
@@ -250,6 +273,8 @@ class BrainDecisionService:
             mode=mode,
             context=context,
             clarification=clarification,
+            turn_response_kind=intent.turn_response_kind,
+            turn_response_reason_codes=list(intent.turn_response_reason_codes),
             dialogue_state=dialogue_state.model_dump(mode="json") if dialogue_state else None,
             semantic_intent_candidates=[semantic.model_dump(mode="json")],
             low_confidence_review=review.model_dump(mode="json") if review else None,

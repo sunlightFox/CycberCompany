@@ -40,6 +40,8 @@ class ModelRouteDecision(ApiModel):
 
 class IntentDecision(ApiModel):
     primary_intent: str
+    turn_response_kind: str = "clarification_required"
+    turn_response_reason_codes: list[str] = Field(default_factory=list)
     secondary_intents: list[str] = Field(default_factory=list)
     semantic_candidates: list[dict[str, Any]] = Field(default_factory=list)
     conflicts: list[str] = Field(default_factory=list)
@@ -99,6 +101,8 @@ class BrainDecisionBundle(ApiModel):
     mode: ModeDecision
     context: ContextDecision
     clarification: dict[str, Any] = Field(default_factory=dict)
+    turn_response_kind: str = "clarification_required"
+    turn_response_reason_codes: list[str] = Field(default_factory=list)
     dialogue_state: dict[str, Any] | None = None
     semantic_intent_candidates: list[dict[str, Any]] = Field(default_factory=list)
     low_confidence_review: dict[str, Any] | None = None
@@ -181,6 +185,78 @@ class LowConfidenceDecisionReview(ApiModel):
     status: str = "fallback"
     trace_id: EntityId | None = None
     created_at: str | None = None
+
+
+class ExecutionEvidenceDecision(ApiModel):
+    status: str = "idle"
+    is_complete: bool = False
+    missing_evidence_types: list[str] = Field(default_factory=list)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    reason_codes: list[str] = Field(default_factory=list)
+
+
+class TurnEnvelope(ApiModel):
+    session_key: str = ""
+    provider: str = "local"
+    thread_key: str = ""
+    sender_key: str = ""
+    source_message_id: str = ""
+    raw_text: str = ""
+    normalized_text: str = ""
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
+    context_refs: list[dict[str, Any]] = Field(default_factory=list)
+    queue_policy: str = "immediate"
+    reply_to_turn_id: str | None = None
+    latest_instruction_override: bool = False
+    active_pending_action_ref: str | None = None
+    last_active_action_ref: str | None = None
+    last_completed_action_ref: str | None = None
+    last_artifact_refs: list[dict[str, Any]] = Field(default_factory=list)
+    last_visible_reply_kind: str | None = None
+
+
+class TurnContinuationDecision(ApiModel):
+    turn_kind: str = "fresh_request"
+    bound_action_ref: str | None = None
+    bound_pending_ref: str | None = None
+    bound_artifact_ref: str | None = None
+    continuation_confidence: float = 0.0
+    reason_codes: list[str] = Field(default_factory=list)
+
+
+class ActionLedgerEntry(ApiModel):
+    action_ref: str
+    session_key: str = ""
+    provider: str = "local"
+    route_type: str = ""
+    intent: str = ""
+    user_visible_goal: str = ""
+    target_summary: str = ""
+    approval_state: str = "not_required"
+    execution_state: str = "idle"
+    started_at: str | None = None
+    ended_at: str | None = None
+    artifact_refs: list[dict[str, Any]] = Field(default_factory=list)
+    last_tool_result_refs: list[dict[str, Any]] = Field(default_factory=list)
+    superseded_by: str | None = None
+    reason_codes: list[str] = Field(default_factory=list)
+
+
+class EvidenceLedgerEntry(ApiModel):
+    action_ref: str
+    evidence_type: str = ""
+    ref: dict[str, Any] = Field(default_factory=dict)
+    status: str = "recorded"
+    created_at: str | None = None
+    reason_codes: list[str] = Field(default_factory=list)
+
+
+class VisibleReplyPlan(ApiModel):
+    reply_mode: str = "normal"
+    source: str = "fallback"
+    text: str = ""
+    bound_action_ref: str | None = None
+    reason_codes: list[str] = Field(default_factory=list)
 
 
 class SemanticReviewRequest(ApiModel):

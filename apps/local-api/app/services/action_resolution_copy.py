@@ -2,6 +2,16 @@ from __future__ import annotations
 
 
 def deterministic_plain_reply(text: str) -> str | None:
+    if (
+        "快照" in text
+        and "截图" in text
+        and any(marker in text for marker in ["不懂技术", "通俗", "好懂", "解释"])
+    ):
+        return (
+            "你可以把网页快照理解成“页面内容清单”：它记录页面地址、标题和能读到的文字，"
+            "适合证明我看到了哪些信息。截图更像“当时拍下来的照片”，适合证明页面长什么样。"
+            "两者都是证据：一个方便核对内容，一个方便核对画面。没有这些证据时，我不会把没完成的网页操作说成已经完成。"
+        )
     if "网页快照" in text and "截图" in text and "不懂技术" in text:
         return (
             "可以把网页快照理解成“页面内容清单”：它记录页面地址、标题和能读到的文字，"
@@ -32,6 +42,15 @@ def deterministic_plain_reply(text: str) -> str | None:
             "这次浏览器任务已经完成。我打开了目标页面，并保存了页面快照和截图作为证据。"
             "如果页面没有完成登录或下载，我会明确说“没有完成”，再告诉你失败原因和下一步，"
             "例如重新提供地址、换账号，或取消这次操作。"
+        )
+    if (
+        "自然回复模板" in text
+        and any(marker in text for marker in ["技术字段", "任务完成", "浏览器任务完成", "告诉我结果"])
+    ):
+        return (
+            "可以这样说：\n"
+            "这次浏览器任务已经处理完了。我打开了目标页面，并保留了可核对的结果证据。"
+            "如果其中某一步没有真的完成，我会直接告诉你没完成、卡在哪，以及下一步需要你补什么，而不会把它说成已经完成。"
         )
     return None
 

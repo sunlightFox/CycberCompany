@@ -19,6 +19,7 @@ from app.services.chat_intent_router import (
     is_webpage_read_request,
     office_skill_input,
     parse_office_chat_request,
+    terminal_command,
     webpage_read_url,
 )
 from app.services.registry import ServiceRegistry
@@ -83,6 +84,17 @@ def test_phase57_router_does_not_treat_plain_report_as_ppt() -> None:
 def test_phase57_router_keeps_skill_mcp_concept_direct_when_user_says_no_task() -> None:
     decision = ChatIntentRouter().decide("解释一下 Skill 和 MCP 有什么区别，不要创建任务。")
     assert decision.route_type == "skill_mcp_concept"
+
+
+def test_phase57_router_keeps_repo_test_meta_discussion_on_chat_chain() -> None:
+    router = ChatIntentRouter()
+
+    assert router.decide("只用一句话说，你接下来能怎么帮我推进后端测试。").route_type == "default"
+    assert router.decide("我们后面只聊后端测试，你先定三条原则。").route_type == "default"
+    assert (
+        router.decide("结合前面 20 轮测试，按先风险后结论的偏好，给我一个收尾结论和一个下一步。").route_type
+        == "default"
+    )
 
 
 def test_phase57_office_skill_input_extracts_excel_rows_and_ppt_slide_count() -> None:
@@ -157,6 +169,20 @@ def test_phase57_router_detects_readonly_webpage_read(text: str) -> None:
     assert extracted_url.startswith("https://example.com")
 
 
+def test_phase57_router_detects_title_only_webpage_read() -> None:
+    text = "只告诉我 https://example.com/page 这个页面的标题是什么"
+    decision = ChatIntentRouter().decide(text)
+    assert decision.route_type == "browser_read_page"
+    assert is_webpage_read_request(text) is True
+
+
+def test_phase57_router_accepts_bare_readonly_terminal_command() -> None:
+    assert terminal_command("pwd") == "pwd"
+    decision = ChatIntentRouter().decide("pwd")
+    assert decision.route_type == "terminal_readonly_command"
+    assert decision.metadata["command"] == "pwd"
+
+
 def test_phase57_router_detects_browser_search_with_citation() -> None:
     text = "请用浏览器搜索 chat main chain regression，并总结结果，必须说明证据来源。"
     decision = ChatIntentRouter().decide(text)
@@ -187,6 +213,16 @@ def test_phase57_router_detects_desktop_native_request() -> None:
 def test_phase57_router_keeps_browser_side_effects_out_of_readonly_route(text: str) -> None:
     assert ChatIntentRouter().decide(text).route_type != "browser_read_page"
     assert is_webpage_read_request(text) is False
+
+
+def test_phase57_router_promotes_browser_page_actions_to_workflow_route() -> None:
+    decision = ChatIntentRouter().decide(
+        "打开 https://example.com/login，用测试账号 demo 和密码 demo 登录，然后截图留证。"
+    )
+
+    assert decision.route_type == "browser_page_action"
+    assert decision.requires_confirmation is True
+    assert decision.reason_code == "browser_page_action_requires_workflow"
 
 
 def test_phase57_brain_decision_marks_host_uninstall_as_task_request(client: TestClient) -> None:

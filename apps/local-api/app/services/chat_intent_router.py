@@ -107,6 +107,16 @@ class ChatIntentRouter:
                 task_goal=clean,
                 safe_user_summary=_safe_summary(clean),
             )
+        if is_browser_page_action_request(clean):
+            return ChatRouteDecision(
+                route_type="browser_page_action",
+                confidence=0.9,
+                reason_code="browser_page_action_requires_workflow",
+                requires_confirmation=True,
+                task_goal=clean,
+                safe_user_summary=_safe_summary(clean),
+                metadata={"url": _first_url(clean)},
+            )
         if is_download_topic_only(clean):
             return ChatRouteDecision(
                 route_type="download_topic",
@@ -288,12 +298,12 @@ def _has_implied_office_action(text: str, document_type: str) -> bool:
         "\u4ecb\u7ecd",
         "\u539f\u7406",
         "\u533a\u522b",
-        "鏄粈涔?",
-        "鎬庝箞鐢?",
-        "瑙ｉ噴",
-        "浠嬬粛",
-        "鍘熺悊",
-        "鍖哄埆",
+        "是什么",
+        "怎么用",
+        "解释",
+        "介绍",
+        "原理",
+        "区别",
     ]
     if any(marker in clean or marker in lowered for marker in informational_markers):
         return False
@@ -356,6 +366,7 @@ def host_software_action(text: str) -> str | None:
 
 def extract_host_software_name(text: str) -> str:
     clean = _clean(text)
+    clean = re.sub(r"^\s*再(?:次)?", " ", clean)
     for delimiter in ["安装后", "装好后", "然后", "再卸载", "并卸载", "，", ",", "。"]:
         if delimiter in clean:
             clean = clean.split(delimiter, 1)[0]
@@ -411,6 +422,8 @@ def repo_execution_route(text: str) -> str | None:
     lowered = clean.lower()
     if _direct_only(clean):
         return None
+    if _looks_like_browser_page_action(clean):
+        return None
     if not any(
         marker in clean or marker in lowered
         for marker in [
@@ -429,18 +442,21 @@ def repo_execution_route(text: str) -> str | None:
         ]
     ):
         return None
+    action_text = _without_direct_only_markers(clean)
+    if _repo_meta_discussion_request(action_text):
+        return None
     if any(
-        marker in clean or marker in lowered
+        marker in action_text or marker in lowered
         for marker in ["只读", "readonly", "read only", "看看代码", "阅读代码", "读一下", "读读"]
     ):
         return "repo_readonly_request"
-    if any(marker in clean or marker in lowered for marker in ["修复失败", "fix after failure", "失败后修", "测试失败"]):
+    if any(marker in action_text or marker in lowered for marker in ["修复失败", "fix after failure", "失败后修", "测试失败"]):
         return "repo_fix_after_failure"
-    if any(marker in clean or marker in lowered for marker in ["重构", "refactor"]):
+    if any(marker in action_text or marker in lowered for marker in ["重构", "refactor"]):
         return "repo_refactor_request"
-    if any(marker in clean or marker in lowered for marker in ["pytest", "测试", "验证", "typecheck", "lint"]):
+    if any(marker in action_text or marker in lowered for marker in _REPO_TEST_ACTION_MARKERS):
         return "repo_test_request"
-    if any(marker in clean or marker in lowered for marker in ["patch", "bugfix", "改代码", "修改代码", "修复 bug", "修 bug", "补丁"]):
+    if any(marker in action_text or marker in lowered for marker in _REPO_PATCH_ACTION_MARKERS):
         return "repo_patch_request"
     return None
 
@@ -449,6 +465,8 @@ def code_hosting_route(text: str) -> str | None:
     clean = _clean(text)
     lowered = clean.lower()
     if _direct_only(clean):
+        return None
+    if _looks_like_browser_page_action(clean):
         return None
     has_provider = any(
         marker in clean or marker in lowered
@@ -476,6 +494,29 @@ def code_hosting_route(text: str) -> str | None:
     if any(marker in clean or marker in lowered for marker in ["push", "branch", "同步", "sync", "merge"]):
         return "code_hosting_sync_request"
     return "code_hosting_readonly_request"
+
+
+def _looks_like_browser_page_action(text: str) -> bool:
+    lowered = str(text or "").lower()
+    if "http://" not in lowered and "https://" not in lowered:
+        return False
+    return any(
+        marker in lowered
+        for marker in (
+            "打开",
+            "页面",
+            "网页",
+            "浏览器",
+            "下载",
+            "登录",
+            "login",
+            "截图",
+            "截屏",
+            "screenshot",
+            "账号",
+            "密码",
+        )
+    )
 
 
 def is_explicit_download_request(text: str) -> bool:
@@ -522,17 +563,19 @@ def is_browser_search_request(text: str) -> bool:
         return False
     if _has_browser_side_effect_marker(clean, lowered):
         return False
-    if any(marker in clean for marker in ["不要搜索", "别搜索", "不搜索"]):
+    if any(marker in clean for marker in ("不要搜索", "别搜索", "不搜索")):
         return False
     has_browser_marker = any(
         marker in clean or marker in lowered
-        for marker in ["浏览器搜索", "用浏览器搜索", "search", "搜索一下", "搜一下", "查一下"]
+        for marker in ("浏览器搜索", "用浏览器搜索", "search", "搜索一下", "搜一下", "查一下")
     )
+    if not has_browser_marker and any(marker in clean for marker in ("搜一次", "再搜一次", "再用浏览器搜一次")):
+        has_browser_marker = True
     if not has_browser_marker:
         return False
     return any(
         marker in clean or marker in lowered
-        for marker in ["总结", "概括", "结果", "搜", "搜索", "search", "证据来源", "来源"]
+        for marker in ("总结", "概括", "结果", "搜", "搜索", "search", "证据来源", "来源")
     )
 
 
@@ -541,13 +584,15 @@ def browser_search_requires_citation(text: str) -> bool:
     lowered = clean.lower()
     return any(
         marker in clean or marker in lowered
-        for marker in ["证据来源", "来源", "引用", "citation", "source"]
+        for marker in ("证据来源", "来源", "引用", "citation", "source")
     )
 
 
 def browser_search_query(text: str) -> str:
     clean = _clean(text)
     query = clean
+    for marker in ("再用浏览器搜一次", "再搜一次", "搜一次"):
+        query = query.replace(marker, " ")
     replacements = [
         "请用浏览器搜索",
         "用浏览器搜索",
@@ -570,7 +615,11 @@ def browser_search_query(text: str) -> str:
     query = re.sub(r"(并)?总结结果.*$", " ", query)
     query = re.sub(r"必须说明证据来源.*$", " ", query)
     query = re.sub(r"看看这个搜索页有什么.*$", " ", query)
-    query = re.sub(r"[，。；;：:]+", " ", query)
+    query = re.sub(r"[，。；;？?]+", " ", query)
+    query = re.sub(r"这次用.*?(总结|概括).*$", " ", query)
+    query = re.sub(r"用两句话.*$", " ", query)
+    query = re.sub(r"带上来源.*$", " ", query)
+    query = re.sub(r"^\s*再", " ", query)
     query = re.sub(r"\s+", " ", query).strip()
     return query or clean
 
@@ -641,6 +690,9 @@ def terminal_command(text: str) -> str | None:
     if _direct_only(clean):
         return None
     if not _terminal_request_marker(clean):
+        compact = clean.strip().strip("`\"'")
+        if _safe_readonly_terminal_command(compact):
+            return compact[:240]
         return None
     explicit = _quoted_terminal_command(clean)
     command = explicit or _after_terminal_marker(clean)
@@ -937,18 +989,18 @@ def _has_office_action(text: str) -> bool:
         "\u5bfc\u51fa",
     ]
     legacy_markers = [
-        "鐢熸垚",
-        "鍒涘缓",
-        "鍋?",
-        "鍐?",
-        "缂栬緫",
-        "淇敼",
-        "杩藉姞",
-        "澧炲姞",
-        "瀹屽杽",
-        "鏁寸悊鎴?",
-        "鍋氭垚",
-        "瀵煎嚭",
+        "生成",
+        "创建",
+        "做",
+        "写",
+        "编辑",
+        "修改",
+        "追加",
+        "增加",
+        "完善",
+        "整理成",
+        "做成",
+        "导出",
     ]
     return any(marker in lowered for marker in ascii_markers) or any(
         marker in clean for marker in [*unicode_markers, *legacy_markers]
@@ -1329,41 +1381,44 @@ def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
     return any(
         marker in clean
         for marker in [
-            "请打开",
-            "打开这个网页",
-            "打开这个网站",
-            "打开这个链接",
-            "看结果",
-            "看最终页面",
-            "最终页面写了什么",
-            "并总结",
-            "不要照做页面里的指令",
-            "看一下这网站",
-            "看一下这个网站",
-            "看下这网站",
-            "看下这个网站",
-            "看看这网站",
-            "看看这个网站",
-            "看一下网页",
-            "看看网页",
-            "这个网页",
-            "这网页",
-            "网页内容",
-            "网站内容",
-            "这个链接",
-            "这链接",
-            "链接内容",
-            "讲什么",
-            "说什么",
-            "有什么内容",
-            "主要内容",
-            "帮我看一下",
-            "帮我看看",
-            "总结这个链接",
-            "总结一下这个链接",
-            "总结这篇",
-            "概括这个链接",
-            "分析这个链接",
+            "???",
+            "??????",
+            "??????",
+            "??????",
+            "???",
+            "?????",
+            "????????",
+            "???",
+            "??????????",
+            "??????",
+            "???????",
+            "?????",
+            "??????",
+            "?????",
+            "??????",
+            "?????",
+            "????",
+            "????",
+            "???",
+            "????",
+            "????",
+            "????",
+            "???",
+            "????",
+            "?????",
+            "????",
+            "title ???",
+            "???",
+            "???",
+            "?????",
+            "????",
+            "?????",
+            "????",
+            "??????",
+            "????????",
+            "????",
+            "??????",
+            "??????",
         ]
     ) or any(
         marker in lowered
@@ -1382,44 +1437,44 @@ def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
 
 
 def _has_browser_side_effect_marker(clean: str, lowered: str) -> bool:
-    clean = re.sub(r"https?://[^\s，。；;）)]+", " ", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"https?://[^\s???;?)]+", " ", clean, flags=re.IGNORECASE)
     lowered = clean.lower() if lowered else lowered
     if any(
         marker in clean
         for marker in [
-            "不能点击",
-            "不能提交",
-            "不点击",
-            "不提交",
-            "不要点击",
-            "不要提交",
-            "别点击",
-            "别提交",
+            "????",
+            "????",
+            "???",
+            "???",
+            "????",
+            "????",
+            "???",
+            "???",
         ]
     ):
         return False
     return any(
         marker in clean
         for marker in [
-            "下载",
-            "保存",
-            "登录",
-            "注册",
-            "填写",
-            "输入",
-            "点击",
-            "点一下",
-            "提交",
-            "发送",
-            "发布",
-            "上传",
-            "购买",
-            "下单",
-            "支付",
-            "转账",
-            "截图",
-            "截屏",
-            "导出",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "???",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
         ]
     ) or any(
         marker in lowered
@@ -1447,19 +1502,19 @@ def _has_browser_side_effect_marker(clean: str, lowered: str) -> bool:
 def _readonly_login_page_inspection(clean: str, lowered: str) -> bool:
     if not _has_webpage_read_marker(clean, lowered):
         return False
-    noun_markers = ["登录页", "登录页面", "什么字段", "哪些字段", "表单字段", "页面写了什么"]
+    noun_markers = ["???", "????", "????", "????", "????", "??????"]
     if not any(marker in clean for marker in noun_markers):
         return False
     imperative_markers = [
-        "帮我登录",
-        "请登录",
-        "登录一下",
-        "用测试账号",
-        "输入密码",
-        "输入账号",
-        "提交登录",
-        "然后截图",
-        "截图留证",
+        "????",
+        "???",
+        "????",
+        "?????",
+        "????",
+        "????",
+        "????",
+        "????",
+        "????",
     ]
     return not any(marker in clean for marker in imperative_markers)
 
@@ -1528,3 +1583,364 @@ def _clean(text: str) -> str:
 
 def _safe_summary(text: str) -> str:
     return _clean(text)[:120]
+
+
+DIRECT_ONLY_MARKERS_CANONICAL = (
+    "\u53ea\u89e3\u91ca",
+    "\u53ea\u7ed9\u65b9\u6848",
+    "\u4e0d\u8981\u6267\u884c",
+    "\u4e0d\u8981\u5047\u88c5\u6267\u884c",
+    "\u522b\u5047\u88c5\u6267\u884c",
+    "\u4e0d\u8981\u58f0\u79f0\u6267\u884c",
+    "\u4e0d\u80fd\u70b9\u51fb",
+    "\u4e0d\u80fd\u63d0\u4ea4",
+    "\u4e0d\u70b9\u5f00",
+    "\u4e0d\u63d0\u4ea4",
+    "\u4e0d\u8981\u70b9\u51fb",
+    "\u4e0d\u8981\u63d0\u4ea4",
+    "\u4e0d\u8981\u521b\u5efa\u4efb\u52a1",
+    "\u4e0d\u8981\u8c03\u7528\u5de5\u5177",
+)
+
+
+def office_document_type(text: str) -> str | None:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if any(marker in lowered for marker in ("excel", "xlsx")) or any(
+        marker in clean
+        for marker in ("\u8868\u683c", "\u5de5\u4f5c\u7c3f", "\u9500\u552e\u6570\u636e", "\u7ecf\u8425\u6570\u636e")
+    ):
+        return "excel"
+    if any(marker in lowered for marker in ("ppt", "pptx", "powerpoint")) or any(
+        marker in clean
+        for marker in ("\u6f14\u793a\u7a3f", "\u5e7b\u706f\u7247", "\u6c47\u62a5\u9875", "\u6f14\u793a\u6587\u7a3f")
+    ):
+        return "ppt"
+    if re.search(r"(?<![a-z])word(?![a-z])", lowered) or "docx" in lowered or any(
+        marker in clean
+        for marker in ("\u6587\u6863", "\u5468\u62a5", "\u62a5\u544a", "\u7a3f\u4ef6")
+    ):
+        return "word"
+    return None
+
+
+def _direct_only(text: str) -> bool:
+    return any(marker in text for marker in DIRECT_ONLY_MARKERS_CANONICAL)
+
+
+def _without_direct_only_markers(text: str) -> str:
+    result = text
+    for marker in DIRECT_ONLY_MARKERS_CANONICAL:
+        result = result.replace(marker, " ")
+    return _clean(result)
+
+
+def is_skill_or_mcp_concept_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    action_text = _without_direct_only_markers(clean)
+    if any(
+        marker in action_text
+        for marker in (
+            "\u751f\u6210",
+            "\u521b\u5efa",
+            "\u505a\u4e00\u4e2a",
+            "\u505a\u4e00\u4efd",
+            "\u7f16\u8f91",
+            "\u4fee\u6539",
+        )
+    ):
+        return False
+    if any(
+        marker in lowered
+        for marker in (
+            "generate",
+            "create",
+            "edit",
+            "modify",
+            "build",
+        )
+    ):
+        return False
+    concept_markers = (
+        "\u662f\u4ec0\u4e48",
+        "\u600e\u4e48\u914d\u7f6e",
+        "\u5982\u4f55\u914d\u7f6e",
+        "\u89e3\u91ca",
+        "\u4ecb\u7ecd",
+        "\u539f\u7406",
+        "\u533a\u522b",
+        "what is",
+        "explain",
+        "difference",
+        "compare",
+        "how to configure",
+    )
+    target_markers = ("skill", "\u6280\u80fd", "mcp")
+    return any(marker in clean or marker in lowered for marker in target_markers) and any(
+        marker in clean or marker in lowered for marker in concept_markers
+    )
+
+
+def _negative_download_constraint(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    return any(
+        marker in clean or marker in lowered
+        for marker in (
+            "\u4e0d\u8981\u771f\u7684\u4e0b\u8f7d",
+            "\u4e0d\u8981\u4e0b\u8f7d",
+            "\u522b\u4e0b\u8f7d",
+            "\u53ea\u8bf4\u660e",
+            "\u53ea\u89e3\u91ca",
+            "do not download",
+            "don't download",
+            "without downloading",
+        )
+    )
+
+
+def is_download_topic_only(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    topic_markers = (
+        "artifact \u4e0b\u8f7d",
+        "\u4e0b\u8f7d\u7aef\u70b9",
+        "\u4e0b\u8f7d\u63a5\u53e3",
+        "download endpoint",
+        "download api",
+    )
+    return any(marker in clean or marker in lowered for marker in topic_markers) or (
+        _negative_download_constraint(clean)
+        and any(marker in clean or marker in lowered for marker in ("\u4e0b\u8f7d", "download"))
+    )
+
+
+def is_explicit_download_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if _direct_only(clean):
+        return False
+    if _negative_download_constraint(clean):
+        return False
+    if "\u4e0b\u8f7d" not in clean and "download" not in lowered:
+        return False
+    if is_download_topic_only(clean):
+        return False
+    if _first_url(clean):
+        return True
+    explicit_target = any(
+        marker in clean
+        for marker in (
+            "\u4e0b\u8f7d\u6587\u4ef6",
+            "\u4e0b\u8f7d\u62a5\u8868",
+            "\u4e0b\u8f7d\u56fe\u7247",
+            "\u4e0b\u8f7d\u8fd9\u4e2a",
+            "\u4e0b\u8f7d\u8fd9\u4efd",
+        )
+    )
+    return explicit_target and any(
+        marker in clean for marker in ("\u4fdd\u5b58", "\u62ff\u5230", "\u7ed9\u6211", "\u544a\u8bc9\u6211\u7ed3\u679c")
+    )
+
+
+def is_browser_page_action_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if _direct_only(clean):
+        return False
+    if not _first_url(clean):
+        return False
+    if is_explicit_download_request(clean):
+        return False
+    if is_webpage_read_request(clean):
+        return False
+    action_markers = (
+        "\u6253\u5f00",
+        "\u767b\u5f55",
+        "\u70b9\u51fb",
+        "\u63d0\u4ea4",
+        "\u586b\u5199",
+        "\u8f93\u5165",
+        "\u4e0a\u4f20",
+        "\u622a\u56fe",
+        "\u622a\u56fe\u7559\u8bc1",
+        "\u64cd\u4f5c",
+        "open",
+        "login",
+        "log in",
+        "click",
+        "submit",
+        "fill",
+        "type",
+        "upload",
+        "screenshot",
+    )
+    return any(marker in clean or marker in lowered for marker in action_markers)
+
+
+# Phase 112 hardening overrides:
+# Keep these canonical helpers at file end so they win over older mojibake variants.
+def office_document_type(text: str) -> str | None:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if any(marker in lowered for marker in ("excel", "xlsx")) or any(
+        marker in clean for marker in ("表格", "工作簿", "销售数据", "经营数据")
+    ):
+        return "excel"
+    if any(marker in lowered for marker in ("ppt", "pptx", "powerpoint")) or any(
+        marker in clean for marker in ("演示稿", "幻灯片", "汇报页", "演示文稿")
+    ):
+        return "ppt"
+    if re.search(r"(?<![a-z])word(?![a-z])", lowered) or "docx" in lowered or any(
+        marker in clean for marker in ("文档", "周报", "报告", "稿件")
+    ):
+        return "word"
+    return None
+
+
+def _direct_only(text: str) -> bool:
+    return any(
+        marker in text
+        for marker in (
+            "只解释",
+            "只给方案",
+            "不要执行",
+            "不要假装执行",
+            "别假装执行",
+            "不要声称执行",
+            "不能点击",
+            "不能提交",
+            "不点开",
+            "不提交",
+            "不要点击",
+            "不要提交",
+            "不要创建任务",
+            "不要调用工具",
+        )
+    )
+
+
+def _without_direct_only_markers(text: str) -> str:
+    result = text
+    for marker in (
+        "只解释",
+        "只给方案",
+        "不要执行",
+        "不要假装执行",
+        "别假装执行",
+        "不要声称执行",
+        "不能点击",
+        "不能提交",
+        "不点开",
+        "不提交",
+        "不要点击",
+        "不要提交",
+        "不要创建任务",
+        "不要调用工具",
+    ):
+        result = result.replace(marker, " ")
+    return _clean(result)
+
+
+_REPO_META_DISCUSSION_MARKERS = (
+    "怎么帮",
+    "如何帮",
+    "一句话",
+    "一段话",
+    "原则",
+    "收尾",
+    "结论",
+    "下一步",
+    "总结",
+    "概括",
+    "偏好",
+    "只聊",
+    "解释",
+    "说明",
+    "为什么",
+)
+_REPO_EXECUTION_VERBS = (
+    "读代码",
+    "看看代码",
+    "阅读代码",
+    "检查",
+    "review",
+    "评审",
+    "审查",
+    "跑",
+    "执行",
+    "修复",
+    "修改",
+    "改代码",
+    "重构",
+    "refactor",
+    "patch",
+    "bugfix",
+)
+_REPO_TEST_ACTION_MARKERS = (
+    "pytest",
+    "typecheck",
+    "lint",
+    "测试",
+    "验证",
+    "跑",
+    "执行",
+    "检查",
+)
+_REPO_PATCH_ACTION_MARKERS = (
+    "patch",
+    "bugfix",
+    "改代码",
+    "修改代码",
+    "修复 bug",
+    "修 bug",
+    "补丁",
+    "修复",
+    "修改",
+)
+
+
+def _repo_meta_discussion_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    has_meta_marker = any(
+        marker in clean or marker in lowered for marker in _REPO_META_DISCUSSION_MARKERS
+    )
+    if not has_meta_marker:
+        return False
+    return not any(
+        marker in clean or marker in lowered for marker in _REPO_EXECUTION_VERBS
+    )
+
+
+def is_skill_or_mcp_concept_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    action_text = _without_direct_only_markers(clean)
+    if any(
+        marker in action_text for marker in ("生成", "创建", "做一个", "做一份", "编辑", "修改")
+    ):
+        return False
+    if any(
+        marker in lowered for marker in ("generate", "create", "edit", "modify", "build")
+    ):
+        return False
+    concept_markers = (
+        "是什么",
+        "怎么配置",
+        "如何配置",
+        "解释",
+        "介绍",
+        "原理",
+        "区别",
+        "what is",
+        "explain",
+        "difference",
+        "compare",
+        "how to configure",
+    )
+    target_markers = ("skill", "技能", "mcp")
+    return any(marker in clean or marker in lowered for marker in target_markers) and any(
+        marker in clean or marker in lowered for marker in concept_markers
+    )

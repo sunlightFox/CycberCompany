@@ -34,6 +34,12 @@ def test_phase109_readiness_quantifies_real_world_stability_gaps(
     assert bundles["wechat_real_smoke"]["summary_present"] is True
     assert bundles["wechat_real_smoke"]["p0_gap_count"] >= 1
     assert bundles["wechat_real_smoke"]["no_turn_count"] >= 1
+    phase114 = readiness["phase_readiness"]["phase114_mainline_observability_closure"]
+    assert phase114["details"]["top_blockers"][0]["source"] in {
+        "phase109_real_world_maturity_recheck",
+        "phase110_channel_routing_stability",
+    }
+    assert phase114["details"]["top_blockers"][0]["impacted_segment"] == "routing"
 
 
 def test_phase109_release_summary_exposes_maturity_grade_and_evidence(

@@ -170,6 +170,8 @@ def normalize_action_status_semantics(
         "tool_ref": dict(data.get("tool_ref") or {}),
         "artifact_refs": artifact_refs,
     }
+    if str(data.get("completed_summary") or "").strip():
+        semantics["completed_summary"] = str(data.get("completed_summary") or "").strip()
     if str(data.get("failure_summary") or "").strip():
         semantics["failure_summary"] = str(data.get("failure_summary") or "").strip()
     if str(data.get("failure_reason") or "").strip():
@@ -205,4 +207,5 @@ def mirrored_status_payload(
         "remaining_parts": list(normalized.get("remaining_parts") or []),
         "pending_work": list(normalized.get("pending_work") or []),
         "artifact_refs": list(normalized.get("artifact_refs") or []),
+        "completed_summary": normalized.get("completed_summary"),
     }

@@ -42,6 +42,13 @@ def test_phase113_release_summary_marks_smoke_suite_drift_with_shared_reason_cod
         ],
         "command_matrix": {"smoke": ".\\scripts\\check.ps1 -Profile smoke"},
         "slow_test_report": {"source": "pytest --durations=20", "lines": []},
+        "maturity_dashboard_summary": {
+            "phase116_contract_version": "phase116.maturity_dashboard.v1",
+            "dashboard_status": "partial",
+            "top_blockers": [],
+            "priority_queue_preview": [],
+            "release_readiness": {"status": "go_with_findings", "p0_blocker_count": 0},
+        },
     }
     report_path = report_dir / "check-99999999T999998Z.json"
     report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -54,3 +61,6 @@ def test_phase113_release_summary_marks_smoke_suite_drift_with_shared_reason_cod
     assert signal_summary["phase105_latest_smoke_report_blockers"] == [
         "phase105_latest_smoke_signal_suite_drift"
     ]
+    assert payload["maturity_dashboard_summary"]["phase116_contract_version"] == (
+        "phase116.maturity_dashboard.v1"
+    )

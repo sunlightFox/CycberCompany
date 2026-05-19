@@ -4160,7 +4160,7 @@ def _steps_for_goal(
             {
                 "step_key": "compose_report",
                 "step_type": "compose",
-                "title": "鐢熸垚浠诲姟鎶ュ憡",
+                "title": "生成任务报告",
                 "risk_level": "R1",
                 "input": {},
             }
@@ -4393,6 +4393,9 @@ def _code_hosting_request_type(request: TaskCreateRequest) -> str | None:
         return explicit
     planner_context = dict(request.planner_context or {})
     route_intent = str(planner_context.get("route_intent") or planner_context.get("intent") or "")
+    browser_like_goal = _looks_like_browser_page_action(
+        f"{request.goal} {' '.join(str(item) for item in request.success_criteria)}"
+    )
     if route_intent in {
         "code_hosting_readonly_request",
         "code_hosting_sync_request",
@@ -4400,7 +4403,13 @@ def _code_hosting_request_type(request: TaskCreateRequest) -> str | None:
         "code_hosting_review_request",
         "code_hosting_release_request",
     }:
+        if browser_like_goal:
+            return None
         return route_intent
+    if _suppresses_repo_or_hosting_inference(route_intent):
+        return None
+    if browser_like_goal:
+        return None
     text = f"{request.goal} {' '.join(str(item) for item in request.success_criteria)}".lower()
     has_provider = any(marker in text for marker in ["github", "代码托管", "远程仓库", "github.com"])
     has_hosting_action = any(
@@ -4525,6 +4534,9 @@ def _repo_request_type(request: TaskCreateRequest) -> str | None:
         return explicit
     planner_context = dict(request.planner_context or {})
     route_intent = str(planner_context.get("route_intent") or planner_context.get("intent") or "")
+    browser_like_goal = _looks_like_browser_page_action(
+        f"{request.goal} {' '.join(str(item) for item in request.success_criteria)}"
+    )
     if route_intent in {
         "repo_readonly_request",
         "repo_patch_request",
@@ -4532,7 +4544,13 @@ def _repo_request_type(request: TaskCreateRequest) -> str | None:
         "repo_fix_after_failure",
         "repo_refactor_request",
     }:
+        if browser_like_goal:
+            return None
         return route_intent
+    if _suppresses_repo_or_hosting_inference(route_intent):
+        return None
+    if browser_like_goal:
+        return None
     text = f"{request.goal} {' '.join(str(item) for item in request.success_criteria)}".lower()
     if not any(
         marker in text
@@ -4562,6 +4580,37 @@ def _repo_request_type(request: TaskCreateRequest) -> str | None:
     if any(marker in text for marker in ["修改", "补丁", "patch", "写代码", "改代码", "bugfix", "修复"]):
         return "repo_patch_request"
     return None
+
+
+def _suppresses_repo_or_hosting_inference(route_intent: str) -> bool:
+    return route_intent in {
+        "browser_download",
+        "browser_page_action",
+        "file_mutation_task",
+    }
+
+
+def _looks_like_browser_page_action(text: str) -> bool:
+    lowered = str(text or "").lower()
+    if "http://" not in lowered and "https://" not in lowered:
+        return False
+    return any(
+        marker in lowered
+        for marker in (
+            "打开",
+            "页面",
+            "网页",
+            "浏览器",
+            "下载",
+            "登录",
+            "login",
+            "截图",
+            "截屏",
+            "screenshot",
+            "账号",
+            "密码",
+        )
+    )
 
 
 def _repo_steps_for_request(
@@ -5173,6 +5222,7 @@ def _extension_runtime_context(
         "bundle_id": bundle_id or None,
         "selected_skill_id": selected_skill_id or None,
         "selected_match": selected_match,
+        "package_contract": dict(extension_task.get("package_contract") or {}),
         "runtime_snapshot": runtime_snapshot,
         "runnable_state": str(extension_task.get("runnable_state") or "").strip() or None,
         "selected_capabilities": list(extension_task.get("selected_capabilities") or []),
@@ -5202,6 +5252,8 @@ def _merge_extension_runtime_result_context(
         merged.setdefault("selected_capabilities", context["selected_capabilities"])
     if context.get("runnable_state"):
         merged.setdefault("runnable_state", context["runnable_state"])
+    if context.get("package_contract"):
+        merged.setdefault("extension_package_contract", context["package_contract"])
     if runtime_snapshot:
         merged.setdefault("extension_runtime_snapshot", runtime_snapshot)
         merged.setdefault("runtime_snapshot", runtime_snapshot)
@@ -5334,18 +5386,22 @@ def _phase111_deliverable_proof(
         ):
             present_proof_types.append("typed_output_or_artifact")
     elif domain == "extension_ecosystem":
-        required_proof_types = [
-            "runtime_snapshot",
-            "runtime_sync",
-            "runtime_contribution",
-        ]
+        runtime_deliverable_proof = dict(extension_runtime_snapshot.get("deliverable_proof") or {})
+        required_proof_types = list(runtime_deliverable_proof.get("required") or [])
+        if not required_proof_types:
+            required_proof_types = [
+                "runtime_snapshot",
+                "runtime_sync",
+                "runtime_contribution",
+            ]
         if extension_runtime_snapshot:
-            present_proof_types.append("runtime_snapshot")
-        if extension_runtime_snapshot.get("runtime_sync_state") == "synced":
+            present_proof_types = list(runtime_deliverable_proof.get("present") or [])
+            if "runtime_snapshot" not in present_proof_types:
+                present_proof_types.append("runtime_snapshot")
+        if "runtime_sync" in required_proof_types and extension_runtime_snapshot.get("runtime_sync_state") == "synced":
             present_proof_types.append("runtime_sync")
-        if (
-            dict(extension_runtime_snapshot.get("deliverable_proof") or {}).get("final_deliverable")
-            is True
+        if "runtime_contribution" in required_proof_types and (
+            runtime_deliverable_proof.get("final_deliverable") is True
             or any(
                 int(value or 0) > 0
                 for value in dict(
@@ -5354,6 +5410,7 @@ def _phase111_deliverable_proof(
             )
         ):
             present_proof_types.append("runtime_contribution")
+        present_proof_types = sorted(set(present_proof_types))
     else:
         required_proof_types = ["visible_summary"]
         if str(result.get("summary") or "").strip():
@@ -5457,3 +5514,20 @@ def _phase111_completion_semantics(
         "blocking_reasons": sorted({str(item) for item in blocking_reasons if str(item).strip()}),
         "visible_summary": visible_summary,
     }
+
+
+def _title_from_goal(goal: str) -> str:
+    text = " ".join(goal.strip().split())
+    lowered = text.lower()
+    if _looks_like_browser_page_action(text):
+        parts: list[str] = []
+        if "打开" in text or "open" in lowered:
+            parts.append("打开网页")
+        if "登录" in text or "login" in lowered or "log in" in lowered:
+            parts.append("登录")
+        if "截图" in text or "截屏" in text or "screenshot" in lowered:
+            parts.append("截图留证")
+        if "下载" in text or "download" in lowered:
+            parts.append("下载文件")
+        return ("并".join(parts) if parts else "浏览器页面操作")[:32]
+    return text[:32] or "新任务"

@@ -346,7 +346,7 @@ def test_phase99_xiaohongshu_plan_binds_skill_and_writes_draft_artifact(
         post_url="http://127.0.0.1/notes/note-1",
         real_platform=True,
     )
-    account = _create_account(client, display_name="灏忕孩涔︽祴璇曡处鍙?", test_whitelist=True)
+    account = _create_account(client, display_name="小红书测试账号", test_whitelist=True)
     for action, risk in [("login", RiskLevel.R2), ("publish_content", RiskLevel.R4)]:
         _grant(client, account["asset_id"], action, risk)
     media_artifact_id = anyio.run(_write_text_artifact, client, "phase99-cover.txt", "cover bytes")
@@ -403,7 +403,7 @@ def test_phase99_real_xiaohongshu_compile_includes_media_upload_steps(
             real_platform=True,
             human_resume=True,
         )
-        account = _create_account(client, display_name="灏忕孩涔︽祴璇曡处鍙?", test_whitelist=True)
+        account = _create_account(client, display_name="小红书测试账号", test_whitelist=True)
         for action, risk in [("login", RiskLevel.R2), ("publish_content", RiskLevel.R4)]:
             _grant(client, account["asset_id"], action, risk)
         media_artifact_id = anyio.run(_write_text_artifact, client, "phase99-image.txt", "image bytes")
@@ -1016,7 +1016,7 @@ def _register_publish_adapter(
 ) -> dict[str, Any]:
     publish_flow: dict[str, Any] = {
         "start_url": start_url,
-        "default_title": "闃舵娴嬭瘯鏍囬",
+        "default_title": "阶段测试标题",
         "selectors": {
             "upload": "#upload",
             "title": "#title",

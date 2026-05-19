@@ -31,6 +31,7 @@ from app.services.brain_decision_support import (
 from app.services.chat_intent_router import (
     direct_only_requested,
     format_sensitive_direct_answer_requested,
+    is_browser_page_action_request,
     is_explicit_download_request,
     is_file_mutation_request,
     is_readonly_route_request,
@@ -40,6 +41,7 @@ from app.services.chat_intent_router import (
     is_skill_or_mcp_concept_request,
     is_webpage_read_request,
 )
+from app.services.chat_turn_input_facts import looks_like_execution_state_explanation_request
 
 
 def intent_decision(
@@ -142,6 +144,10 @@ def intent_decision(
     elif _approval_response(clean, has_pending_confirmation):
         primary = "approval_response"
         rule_hits.append("approval_response")
+    elif has_pending_confirmation and looks_like_execution_state_explanation_request(clean):
+        primary = "simple_question"
+        secondary.append("pending_execution_state_explanation")
+        rule_hits.append("pending_execution_state_explanation")
     elif "取消" in clean or "重试" in clean:
         primary = "cancel_or_retry"
         rule_hits.append("cancel_retry")
@@ -159,6 +165,11 @@ def intent_decision(
         primary = "task_request"
         needs_task = True
         rule_hits.append("real_task_request")
+    elif is_browser_page_action_request(clean):
+        primary = "task_request"
+        needs_tool = True
+        needs_task = True
+        rule_hits.append("browser_page_action")
     elif tool_request(clean):
         primary = "task_request"
         needs_tool = True
@@ -217,6 +228,7 @@ def intent_decision(
             semantic.tool_intents
             and not direct_only
             and not readonly_route
+            and not (has_pending_confirmation and looks_like_execution_state_explanation_request(clean))
             and not safe_plan_only(clean)
             and not persona_boundary_question(clean)
             and not advice_strategy_direct(clean)

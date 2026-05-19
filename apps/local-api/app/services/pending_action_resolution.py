@@ -235,6 +235,119 @@ def edit_payload_for_action(action: dict[str, Any], text: str) -> dict[str, Any]
     return None
 
 
+def is_confirm(text: str) -> bool:
+    text = control_text(text)
+    normalized = text.strip().strip("。?!！？~；; ")
+    compact = re.sub(r"[\s，,。?!！？；;~]+", "", normalized)
+    if normalized in {"确认", "同意", "允许", "只允许这一次", "本次允许"}:
+        return True
+    if compact in {"确认继续", "同意继续", "允许继续", "确认执行", "确认操作"}:
+        return True
+    return any(
+        marker in text
+        for marker in ("确认这次", "确认本次", "确认下载", "确认继续", "确认执行", "确认操作", "允许这一回")
+    )
+
+
+def is_session_allow(text: str) -> bool:
+    text = control_text(text)
+    return "\u672c\u4f1a\u8bdd" in text and any(
+        marker in text for marker in ("\u5141\u8bb8", "\u540c\u7c7b", "\u90fd\u53ef\u4ee5")
+    )
+
+
+def is_always_allow(text: str) -> bool:
+    text = control_text(text)
+    return any(
+        marker in text for marker in ("\u603b\u662f\u5141\u8bb8", "\u4ee5\u540e\u90fd\u5141\u8bb8", "\u6c38\u4e45\u5141\u8bb8")
+    )
+
+
+def is_deny(text: str) -> bool:
+    text = control_text(text)
+    normalized = text.strip().strip("。?!！？~；; ")
+    if normalized in {
+        "拒绝",
+        "取消",
+        "不允许",
+        "不要删除",
+        "不要执行",
+        "停止",
+        "不用了",
+        "不要继续",
+        "别继续",
+    }:
+        return True
+    return any(
+        marker in text
+        for marker in (
+            "\u62d2\u7edd\u8fd9\u6b21",
+            "\u53d6\u6d88\u8fd9\u6b21",
+            "\u53d6\u6d88\u672c\u6b21",
+            "\u62d2\u7edd\u672c\u6b21",
+            "\u4e0d\u5141\u8bb8\u8fd9\u6b21",
+            "\u505c\u6b62\u8fd9\u6b21",
+            "\u7b97\u4e86",
+            "拒绝这次",
+            "拒绝这次操作",
+            "拒绝本次",
+            "取消这次",
+            "取消本次",
+            "不要继续",
+            "别继续",
+            "停止这次",
+        )
+    )
+
+
+def is_edit(text: str) -> bool:
+    text = control_text(text)
+    return any(marker in text for marker in ("\u6539\u6210", "\u4fee\u6539", "\u6362\u6210")) and any(
+        marker in text
+        for marker in ("\u5730\u5740", "\u76ee\u6807", "\u53c2\u6570", "url", "URL", "\u6807\u9898", "\u6b63\u6587", "\u5185\u5bb9", "\u8bc4\u8bba", "\u6d88\u606f", "\u6807\u7b7e")
+    )
+
+
+def looks_like_new_action_request(text: str) -> bool:
+    text = control_text(text)
+    lowered = text.lower()
+    request_markers = (
+        "\u8bf7\u4e0b\u8f7d",
+        "\u5e2e\u6211\u4e0b\u8f7d",
+        "\u4e0b\u8f7d\u5b8c\u544a\u8bc9\u6211\u7ed3\u679c",
+        "\u8bf7\u6253\u5f00",
+        "\u5e2e\u6211\u6253\u5f00",
+        "\u5e2e\u6211\u770b\u4e00\u4e0b",
+        "\u5e2e\u6211\u770b\u770b",
+        "\u622a\u56fe\u7559\u8bc1",
+        "\u4fdd\u5b58\u9875\u9762\u622a\u56fe",
+        "\u767b\u5f55",
+        "\u622a\u56fe",
+        "\u4e0b\u8f7d",
+    )
+    explanation_markers = (
+        "\u9700\u8981\u786e\u8ba4\u65f6",
+        "\u7528\u666e\u901a\u4e2d\u6587\u8bf4\u660e",
+        "\u4e0d\u8981\u5c55\u793a\u6280\u672f id",
+        "\u4e0d\u8981\u5c55\u793a\u6280\u672f",
+    )
+    standalone_resolution = (
+        (is_confirm(text) or is_deny(text) or is_edit(text) or is_session_allow(text) or is_always_allow(text))
+        and "http://" not in lowered
+        and "https://" not in lowered
+        and not any(marker in text for marker in request_markers)
+    )
+    if standalone_resolution:
+        return False
+    if any(marker in text for marker in explanation_markers) and any(
+        marker in text for marker in request_markers
+    ):
+        return True
+    if "http://" in lowered or "https://" in lowered:
+        return any(marker in text or marker in lowered for marker in request_markers)
+    return any(marker in text or marker in lowered for marker in request_markers)
+
+
 def _extract_edited_title(text: str) -> str | None:
     for marker in ("标题改成", "标题换成", "title 改成", "title换成"):
         if marker in text:
@@ -268,3 +381,29 @@ def _extract_tags(text: str) -> list[str]:
         if tags:
             return tags
     return []
+
+
+def is_confirm(text: str) -> bool:
+    text = control_text(text)
+    normalized = text.strip().strip("。?!！？~ ")
+    compact = re.sub(r"[\s，,。?!！？；;~]+", "", normalized)
+    if normalized in {"确认", "同意", "允许", "只允许这一次", "本次允许"}:
+        return True
+    if compact in {"确认继续", "同意继续", "允许继续", "确认执行", "确认操作"}:
+        return True
+    return any(
+        marker in text
+        for marker in ("确认这次", "确认本次", "确认下载", "确认继续", "确认执行", "确认操作", "允许这一回", "只允许这一次")
+    )
+def is_confirm(text: str) -> bool:
+    text = control_text(text)
+    normalized = text.strip().strip("。?!！？~ ")
+    compact = re.sub(r"[\s，,。?!！？；;~]+", "", normalized)
+    if normalized in {"确认", "同意", "允许", "只允许这一次", "本次允许"}:
+        return True
+    if compact in {"确认继续", "同意继续", "允许继续", "确认执行", "确认操作"}:
+        return True
+    return any(
+        marker in text
+        for marker in ("确认这次", "确认本次", "确认下载", "确认继续", "确认执行", "确认操作", "允许这一回", "只允许这一次")
+    )

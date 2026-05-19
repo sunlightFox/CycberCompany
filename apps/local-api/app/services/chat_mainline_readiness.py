@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from app.services.extensions import _PHASE115_GOLDEN_BUNDLE_SPECS
+from app.services.extensions_compat import import_extension_from_root
 from app.services.gate_signal_plane import smoke_signal_suite_summary
 
 
@@ -286,6 +288,8 @@ class ChatMainlineReadinessService:
         "phase110_channel_routing_stability": "docs/开发计划/110-第一百一十阶段-渠道路由稳定性与NoTurn根因收敛.md",
         "phase111_task_delivery_evidence": "docs/开发计划/111-第一百一十一阶段-任务交付证据与可见完成态硬化.md",
         "phase112_extension_runtime_sync_closure": "docs/开发计划/112-第一百一十二阶段-扩展运行时同步与执行闭环补齐.md",
+        "phase113_check_matrix_execution_restored": "docs/开发计划/113-第一百一十三阶段-质量门禁执行恢复与检查矩阵跑通.md",
+        "phase114_mainline_observability_closure": "docs/开发计划/114-第一百一十四阶段-真实场景稳定性与主链路可观测性收口.md",
         "phase92_long_term_memory_recall_governance": "docs/开发计划/92-第九十二阶段-长期记忆检索成熟化与跨会话召回闭环.md",
         "phase107_memory_semantic_contract_unification": "docs/开发计划/107-第一百零七阶段-长期记忆语义契约统一与纠错闭环硬化.md",
         "phase94_failure_experience_governance": "docs/开发计划/94-第九十四阶段-失败经验记忆治理与回归候选闭环.md",
@@ -297,6 +301,8 @@ class ChatMainlineReadinessService:
         "phase83_hooks": "docs/开发计划/83-第八十三阶段-Hook与扩展点契约.md",
         "phase84_acceptance_matrix": "docs/开发计划/84-第八十四阶段-聊天主链路测试与验收矩阵.md",
         "phase85_execution_batches": "docs/开发计划/85-第八十五阶段-聊天主链路实施任务拆解.md",
+        "phase115_golden_extension_packages": "docs/开发计划/115-第一百一十五阶段-黄金扩展包与扩展生态样板闭环.md",
+        "phase116_maturity_dashboard_unification": "docs/开发计划/116-第一百一十六阶段-成熟度看板与发布门禁统一化.md",
     }
     _PHASE_TESTS = {
         "phase101_extension_capability_runtime": "apps/local-api/tests/test_phase101_extension_capability_runtime.py",
@@ -323,6 +329,8 @@ class ChatMainlineReadinessService:
         "phase110_channel_routing_stability": "apps/local-api/tests/test_phase110_channel_routing_stability.py",
         "phase111_task_delivery_evidence": "apps/local-api/tests/test_phase111_task_delivery_evidence.py",
         "phase112_extension_runtime_sync_closure": "apps/local-api/tests/test_phase112_extension_runtime_sync_closure.py",
+        "phase113_check_matrix_execution_restored": "apps/local-api/tests/test_phase113_gate_check_reconciliation.py",
+        "phase114_mainline_observability_closure": "apps/local-api/tests/test_phase114_mainline_observability_closure.py",
         "phase92_long_term_memory_recall_governance": "apps/local-api/tests/test_phase92_long_term_memory_recall_governance.py",
         "phase107_memory_semantic_contract_unification": "apps/local-api/tests/test_phase107_memory_semantic_contract_unification.py",
         "phase94_failure_experience_governance": "apps/local-api/tests/test_phase94_failure_experience_governance.py",
@@ -334,6 +342,8 @@ class ChatMainlineReadinessService:
         "phase83_hook_runtime_contract": "apps/local-api/tests/test_phase83_hook_runtime_contract.py",
         "phase84_chat_mainline_acceptance_matrix": "apps/local-api/tests/test_phase84_chat_mainline_acceptance_matrix.py",
         "phase85_execution_batches_control_plane": "apps/local-api/tests/test_phase85_execution_batches_control_plane.py",
+        "phase115_golden_extension_packages": "apps/local-api/tests/test_phase115_golden_extension_packages.py",
+        "phase116_maturity_dashboard_unification": "apps/local-api/tests/test_phase116_maturity_dashboard_unification.py",
     }
 
     def __init__(
@@ -507,17 +517,8 @@ class ChatMainlineReadinessService:
         phase_readiness["phase111_task_delivery_evidence"] = phase111
         phase112 = self._phase112(phase111=phase111)
         phase_readiness["phase112_extension_runtime_sync_closure"] = phase112
-        blocking_gaps = [
-            {
-                "phase": phase,
-                "status": details["status"],
-                "blocking_reasons": details["blocking_reasons"],
-                "source_of_truth": details["source_of_truth"],
-            }
-            for phase, details in phase_readiness.items()
-            if details["status"] != "ready"
-        ]
-
+        phase113 = self._phase113(phase105=phase105)
+        phase_readiness["phase113_check_matrix_execution_restored"] = phase113
         evidence_refs = (
             [
                 self._evidence_ref(path, "doc")
@@ -535,6 +536,40 @@ class ChatMainlineReadinessService:
                 {"type": "service", "path": "apps/local-api/app/services/chat_response.py"},
             ]
         )
+        phase114 = await self._phase114(
+            phase109=phase109,
+            phase110=phase110,
+            phase111=phase111,
+            phase113=phase113,
+            evidence_refs=evidence_refs,
+        )
+        phase_readiness["phase114_mainline_observability_closure"] = phase114
+        phase115 = await self._phase115(
+            phase112=phase112,
+            phase114=phase114,
+        )
+        phase_readiness["phase115_golden_extension_packages"] = phase115
+        phase116 = await self._phase116(
+            phase109=phase109,
+            phase110=phase110,
+            phase111=phase111,
+            phase112=phase112,
+            phase113=phase113,
+            phase114=phase114,
+            phase115=phase115,
+            evidence_refs=evidence_refs,
+        )
+        phase_readiness["phase116_maturity_dashboard_unification"] = phase116
+        blocking_gaps = [
+            {
+                "phase": phase,
+                "status": details["status"],
+                "blocking_reasons": details["blocking_reasons"],
+                "source_of_truth": details["source_of_truth"],
+            }
+            for phase, details in phase_readiness.items()
+            if details["status"] != "ready"
+        ]
 
         return {
             "phase76_control_plane_version": self.CONTROL_PLANE_VERSION,
@@ -576,9 +611,55 @@ class ChatMainlineReadinessService:
                 "phase110_channel_routing_stability": dict(phase110.get("details") or {}),
                 "phase111_task_delivery_evidence": dict(phase111.get("details") or {}),
                 "phase112_extension_runtime_sync_closure": dict(phase112.get("details") or {}),
+                "phase113_check_matrix_execution_restored": dict(phase113.get("details") or {}),
+                "phase114_mainline_observability_closure": dict(phase114.get("details") or {}),
+                "phase115_golden_extension_packages": dict(phase115.get("details") or {}),
+                "phase116_maturity_dashboard_unification": dict(phase116.get("details") or {}),
                 "phase_docs_present": phase_docs_present,
                 "phase_tests_present": phase_tests_present,
             },
+        }
+
+    async def mainline_observability(self) -> dict[str, Any]:
+        readiness = await self.diagnostic()
+        phase114 = dict(
+            dict(readiness.get("phase_readiness") or {}).get(
+                "phase114_mainline_observability_closure"
+            )
+            or {}
+        )
+        details = dict(phase114.get("details") or {})
+        return {
+            "contract_version": details.get("phase114_contract_version")
+            or "phase114.mainline_observability.v1",
+            "status": phase114.get("status") or "partial",
+            "ready_conditions": list(details.get("ready_conditions") or []),
+            "mainline_rates": dict(details.get("mainline_rates") or {}),
+            "segmented_views": dict(details.get("segmented_views") or {}),
+            "top_blockers": list(details.get("top_blockers") or []),
+            "replay_alignment": dict(details.get("replay_alignment") or {}),
+            "evidence_refs": list(details.get("evidence_refs") or readiness.get("evidence_refs") or []),
+        }
+
+    async def maturity_dashboard(self) -> dict[str, Any]:
+        readiness = await self.diagnostic()
+        phase116 = dict(
+            dict(readiness.get("phase_readiness") or {}).get(
+                "phase116_maturity_dashboard_unification"
+            )
+            or {}
+        )
+        details = dict(phase116.get("details") or {})
+        return {
+            "contract_version": details.get("phase116_contract_version")
+            or "phase116.maturity_dashboard.v1",
+            "status": phase116.get("status") or "partial",
+            "release_readiness": dict(details.get("release_readiness") or {}),
+            "dimensions": list(details.get("dimensions") or []),
+            "priority_queue": list(details.get("priority_queue") or []),
+            "top_blockers": list(details.get("top_blockers") or []),
+            "evidence_refs": list(details.get("evidence_refs") or readiness.get("evidence_refs") or []),
+            "upstream_contracts": dict(details.get("upstream_contracts") or {}),
         }
 
     def _phase77(
@@ -1955,6 +2036,814 @@ class ChatMainlineReadinessService:
             },
         )
 
+    def _phase113(self, *, phase105: dict[str, Any]) -> dict[str, Any]:
+        blockers: list[str] = []
+        latest_smoke = self._latest_root_check_report(profile="smoke") or {}
+        if phase105.get("status") != "ready":
+            blockers.append("phase105_gate_signal_plane_not_ready")
+        if not self._relative_exists(self._PHASE_DOCS["phase113_check_matrix_execution_restored"]):
+            blockers.append("phase113_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase113_check_matrix_execution_restored"]):
+            blockers.append("phase113_test_missing")
+        if not latest_smoke:
+            blockers.append("phase113_latest_smoke_report_missing")
+        elif str(latest_smoke.get("status") or "") != "passed":
+            blockers.append("phase113_latest_smoke_report_not_passed")
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase113_check_matrix_execution_restored"],
+                "scripts/check.ps1",
+                "config/gate_signal_plane.json",
+                self._PHASE_TESTS["phase113_check_matrix_execution_restored"],
+            ],
+            blockers=blockers,
+            next_owner="scripts/check.ps1",
+            details={
+                "phase113_contract_version": "phase113.check_matrix_execution_restored.v1",
+                "latest_smoke_profile": str(latest_smoke.get("profile") or "not_run"),
+                "latest_smoke_status": str(latest_smoke.get("status") or "not_run"),
+                "latest_smoke_contract_version": str(
+                    latest_smoke.get("check_contract_version") or ""
+                ),
+                "signal_suite_count": len(list(latest_smoke.get("signal_suites") or [])),
+            },
+        )
+
+    async def _phase114(
+        self,
+        *,
+        phase109: dict[str, Any],
+        phase110: dict[str, Any],
+        phase111: dict[str, Any],
+        phase113: dict[str, Any],
+        evidence_refs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        observability = await self._phase114_summary(
+            phase109=phase109,
+            phase110=phase110,
+            phase111=phase111,
+            phase113=phase113,
+            evidence_refs=evidence_refs,
+        )
+        blockers: list[str] = list(observability.get("blocking_reasons") or [])
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase114_mainline_observability_closure"],
+                "apps/local-api/app/services/chat_mainline_readiness.py",
+                "apps/local-api/app/services/release.py",
+                "apps/local-api/app/api/routes_system.py",
+                self._PHASE_TESTS["phase114_mainline_observability_closure"],
+            ],
+            blockers=blockers,
+            next_owner="apps/local-api/app/services/chat_mainline_readiness.py",
+            details=observability,
+        )
+
+    async def _phase114_summary(
+        self,
+        *,
+        phase109: dict[str, Any],
+        phase110: dict[str, Any],
+        phase111: dict[str, Any],
+        phase113: dict[str, Any],
+        evidence_refs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        repo = self._release_gate_service._repo
+        table_names = set(await repo.table_names())
+        phase103_summary = await self._release_gate_service._phase103_report_summary(None)
+        phase109_details = dict(phase109.get("details") or {})
+        phase110_details = dict(phase110.get("details") or {})
+        phase111_details = dict(phase111.get("details") or {})
+        gateway_snapshots = {
+            "wechat": getattr(
+                self._channel_gateway_registry.require("wechat"),
+                "reliability_snapshot",
+                lambda: {},
+            )(),
+            "feishu": getattr(
+                self._channel_gateway_registry.require("feishu"),
+                "reliability_snapshot",
+                lambda: {},
+            )(),
+        }
+        mainline_rates = await self._phase114_mainline_rates(
+            repo=repo,
+            table_names=table_names,
+            gateway_snapshots=gateway_snapshots,
+            phase103_summary=phase103_summary,
+        )
+        segmented_views = await self._phase114_segmented_views(
+            repo=repo,
+            table_names=table_names,
+            gateway_snapshots=gateway_snapshots,
+            phase103_summary=phase103_summary,
+        )
+        top_blockers = self._phase114_top_blockers(
+            phase109_details=phase109_details,
+            phase110_details=phase110_details,
+            phase103_summary=phase103_summary,
+        )
+        replay_alignment = {
+            "routing_replay_fields_present": bool(
+                phase110_details.get("routing_replay_fields")
+            )
+            and bool(phase110_details.get("session_route_replay_fields")),
+            "task_replay_trace_channel_linkable": bool(
+                phase110_details.get("routing_replay_fields")
+            )
+            and bool(phase110_details.get("route_identity_fields"))
+            and bool(phase109_details.get("evidence_bundles")),
+            "top_blockers_mapped_to_stage": all(
+                bool(item.get("impacted_segment")) for item in top_blockers
+            ),
+            "routing_replay_fields": list(phase110_details.get("routing_replay_fields") or []),
+            "session_route_replay_fields": list(
+                phase110_details.get("session_route_replay_fields") or []
+            ),
+            "route_identity_fields": list(phase110_details.get("route_identity_fields") or []),
+        }
+        missing_metrics = [
+            key
+            for key, value in mainline_rates.items()
+            if not isinstance(value, dict) or value.get("sample_size", 0) <= 0 or value.get("rate") is None
+        ]
+        ready_conditions = [
+            "phase109/phase110/phase111/phase113 are ready",
+            "chat mainline observability endpoint exposes a legal contract",
+            "release summary and readiness share the same mainline metrics",
+            "turn/queue/execution/approval/delivery metrics are all visible",
+            "routing-class p0 blockers are cleared from top blockers",
+        ]
+        blocking_reasons: list[str] = []
+        dependency_statuses = {
+            "phase109_real_world_maturity_recheck": str(phase109.get("status") or "missing"),
+            "phase110_channel_routing_stability": str(phase110.get("status") or "missing"),
+            "phase111_task_delivery_evidence": str(phase111.get("status") or "missing"),
+            "phase113_check_matrix_execution_restored": str(phase113.get("status") or "missing"),
+        }
+        if any(status != "ready" for status in dependency_statuses.values()):
+            blocking_reasons.append("phase114_dependency_not_ready")
+        if not self._relative_exists(self._PHASE_DOCS["phase114_mainline_observability_closure"]):
+            blocking_reasons.append("phase114_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase114_mainline_observability_closure"]):
+            blocking_reasons.append("phase114_test_missing")
+        if missing_metrics:
+            blocking_reasons.append("phase114_mainline_metric_visibility_missing")
+        if any(
+            item.get("impacted_segment") == "routing" and item.get("severity") == "p0"
+            for item in top_blockers
+        ):
+            blocking_reasons.append("phase114_routing_p0_blocker_present")
+        if not replay_alignment["routing_replay_fields_present"]:
+            blocking_reasons.append("phase114_routing_replay_alignment_missing")
+        return {
+            "phase114_contract_version": "phase114.mainline_observability.v1",
+            "dependency_statuses": dependency_statuses,
+            "ready_conditions": ready_conditions,
+            "mainline_rates": mainline_rates,
+            "segmented_views": segmented_views,
+            "top_blockers": top_blockers,
+            "replay_alignment": replay_alignment,
+            "evidence_refs": evidence_refs,
+            "missing_metrics": missing_metrics,
+            "phase103_contract_version": str(phase103_summary.get("contract_version") or ""),
+            "phase111_contract_version": str(
+                phase111_details.get("phase111_contract_version") or ""
+            ),
+            "blocking_reasons": blocking_reasons,
+        }
+
+    async def _phase115(
+        self,
+        *,
+        phase112: dict[str, Any],
+        phase114: dict[str, Any],
+    ) -> dict[str, Any]:
+        details = await self._phase115_summary(
+            phase112=phase112,
+            phase114=phase114,
+        )
+        blockers: list[str] = list(details.get("blocking_reasons") or [])
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase115_golden_extension_packages"],
+                "config/skill-repositories/fixtures/clawhub-xiaohongshu-content-platform",
+                "config/skill-repositories/fixtures/clawhub-github-pr-workflow",
+                "config/skill-repositories/fixtures/clawhub-email-draft",
+                self._PHASE_TESTS["phase115_golden_extension_packages"],
+            ],
+            blockers=blockers,
+            next_owner="config/skill-repositories/fixtures",
+            details=details,
+        )
+
+    async def _phase115_summary(
+        self,
+        *,
+        phase112: dict[str, Any],
+        phase114: dict[str, Any],
+    ) -> dict[str, Any]:
+        phase103_summary = await self._release_gate_service._phase103_report_summary(None)
+        release_text = self._read_text("apps/local-api/app/services/release.py")
+        inventory = [self._phase115_fixture_inventory(bundle_id, spec) for bundle_id, spec in _PHASE115_GOLDEN_BUNDLE_SPECS.items()]
+        extension_scorecard = dict(
+            dict(phase103_summary.get("per_domain_scorecard") or {}).get("extension_ecosystem") or {}
+        )
+        coverage = {
+            "inventory_count": len(inventory),
+            "importable_count": sum(1 for item in inventory if item.get("importable") is True),
+            "delivery_template_count": sum(
+                1
+                for item in inventory
+                if dict(item.get("task_delivery_template") or {}).get("artifact_path")
+            ),
+            "runtime_snapshot_template_count": sum(
+                1 for item in inventory if item.get("runtime_snapshot_contract") == "phase112.extension_runtime_snapshot.v1"
+            ),
+        }
+        blockers: list[str] = []
+        if phase112.get("status") != "ready":
+            blockers.append("phase115_dependency_phase112_not_ready")
+        if phase114.get("status") != "ready":
+            blockers.append("phase115_dependency_phase114_not_ready")
+        if not self._relative_exists(self._PHASE_DOCS["phase115_golden_extension_packages"]):
+            blockers.append("phase115_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase115_golden_extension_packages"]):
+            blockers.append("phase115_test_missing")
+        if "phase115_golden_extension_packages" not in release_text:
+            blockers.append("release_summary_phase115_missing")
+        if any(item.get("importable") is not True for item in inventory):
+            blockers.append("phase115_fixture_import_failed")
+        if any(item.get("missing_artifacts") for item in inventory):
+            blockers.append("phase115_fixture_structure_incomplete")
+        if any(
+            not dict(item.get("task_delivery_template") or {}).get("artifact_path")
+            for item in inventory
+        ):
+            blockers.append("phase115_task_delivery_template_missing")
+        threshold_status = dict(extension_scorecard.get("threshold_status") or {})
+        if not threshold_status.get("final_deliverable_rate", True):
+            blockers.append("phase115_extension_ecosystem_deliverable_rate_regressed")
+        return {
+            "phase115_contract_version": "phase115.golden_extension_packages.v1",
+            "package_contract_version": "phase115.golden_extension_package.v1",
+            "golden_package_inventory": inventory,
+            "inventory_coverage": coverage,
+            "diagnostics_contract_fields": [
+                "missing_bindings",
+                "runtime_sync_missing",
+                "external_runtime_required",
+            ],
+            "runtime_snapshot_contract": "phase112.extension_runtime_snapshot.v1",
+            "extension_ecosystem_scorecard": {
+                "total_tasks": int(extension_scorecard.get("total_tasks") or 0),
+                "final_deliverable_rate": extension_scorecard.get("final_deliverable_rate"),
+                "threshold_status": threshold_status,
+            },
+            "dependency_statuses": {
+                "phase112_extension_runtime_sync_closure": str(phase112.get("status") or "missing"),
+                "phase114_mainline_observability_closure": str(phase114.get("status") or "missing"),
+            },
+            "blocking_reasons": blockers,
+        }
+
+    async def _phase116(
+        self,
+        *,
+        phase109: dict[str, Any],
+        phase110: dict[str, Any],
+        phase111: dict[str, Any],
+        phase112: dict[str, Any],
+        phase113: dict[str, Any],
+        phase114: dict[str, Any],
+        phase115: dict[str, Any],
+        evidence_refs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        details = await self._phase116_summary(
+            phase109=phase109,
+            phase110=phase110,
+            phase111=phase111,
+            phase112=phase112,
+            phase113=phase113,
+            phase114=phase114,
+            phase115=phase115,
+            evidence_refs=evidence_refs,
+        )
+        blockers = list(details.get("blocking_reasons") or [])
+        status = "ready" if not blockers else "partial"
+        return self._phase_item(
+            status=status,
+            sources=[
+                self._PHASE_DOCS["phase116_maturity_dashboard_unification"],
+                "apps/local-api/app/api/routes_system.py",
+                "apps/local-api/app/schemas/system.py",
+                "apps/local-api/app/services/chat_mainline_readiness.py",
+                "apps/local-api/app/services/release.py",
+                "scripts/check.ps1",
+                self._PHASE_TESTS["phase116_maturity_dashboard_unification"],
+            ],
+            blockers=blockers,
+            next_owner="apps/local-api/app/services/chat_mainline_readiness.py",
+            details=details,
+        )
+
+    async def _phase116_summary(
+        self,
+        *,
+        phase109: dict[str, Any],
+        phase110: dict[str, Any],
+        phase111: dict[str, Any],
+        phase112: dict[str, Any],
+        phase113: dict[str, Any],
+        phase114: dict[str, Any],
+        phase115: dict[str, Any],
+        evidence_refs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        phase109_details = dict(phase109.get("details") or {})
+        phase110_details = dict(phase110.get("details") or {})
+        phase111_details = dict(phase111.get("details") or {})
+        phase112_details = dict(phase112.get("details") or {})
+        phase113_details = dict(phase113.get("details") or {})
+        phase114_details = dict(phase114.get("details") or {})
+        phase115_details = dict(phase115.get("details") or {})
+        phase105 = self._phase105()
+        phase105_details = dict(phase105.get("details") or {})
+        release_text = self._read_text("apps/local-api/app/services/release.py")
+        routes_text = self._read_text("apps/local-api/app/api/routes_system.py")
+        phase103_summary = await self._release_gate_service._phase103_report_summary(None)
+
+        dimensions = [
+            self._phase116_dimension(
+                key="stability",
+                contract_version=phase109_details.get("phase109_contract_version"),
+                phase_key="phase109_real_world_maturity_recheck",
+                phase_item=phase109,
+                blockers=[
+                    self._phase116_blocker_entry(
+                        code=code,
+                        source_phase="phase109_real_world_maturity_recheck",
+                        dimension="stability",
+                        next_owner=phase109.get("next_owner_module"),
+                        evidence_ref={
+                            "phase": "phase109_real_world_maturity_recheck",
+                            "maturity_grade": phase109_details.get("maturity_grade"),
+                        },
+                    )
+                    for code in list(phase109.get("blocking_reasons") or [])
+                ],
+                evidence_refs=[
+                    {
+                        "phase": "phase109_real_world_maturity_recheck",
+                        "bundles": list(phase109_details.get("evidence_bundles") or []),
+                    }
+                ],
+            ),
+            self._phase116_dimension(
+                key="routing",
+                contract_version=phase110_details.get("phase110_contract_version"),
+                phase_key="phase110_channel_routing_stability",
+                phase_item=phase110,
+                blockers=[
+                    *[
+                        self._phase116_blocker_entry(
+                            code=code,
+                            source_phase="phase110_channel_routing_stability",
+                            dimension="routing",
+                            next_owner=phase110.get("next_owner_module"),
+                            evidence_ref={
+                                "phase": "phase110_channel_routing_stability",
+                                "routing_replay_fields": list(
+                                    phase110_details.get("routing_replay_fields") or []
+                                ),
+                            },
+                        )
+                        for code in list(phase110.get("blocking_reasons") or [])
+                    ],
+                    *[
+                        self._phase116_blocker_entry_from_phase114(
+                            item,
+                            dimension="routing",
+                            next_owner=phase110.get("next_owner_module"),
+                        )
+                        for item in list(phase114_details.get("top_blockers") or [])
+                        if str(dict(item).get("impacted_segment") or "") == "routing"
+                    ],
+                ],
+                evidence_refs=[
+                    {
+                        "phase": "phase110_channel_routing_stability",
+                        "routing_replay_fields": list(
+                            phase110_details.get("routing_replay_fields") or []
+                        ),
+                        "route_identity_fields": list(
+                            phase110_details.get("route_identity_fields") or []
+                        ),
+                    }
+                ],
+            ),
+            self._phase116_dimension(
+                key="delivery",
+                contract_version=phase111_details.get("phase111_contract_version"),
+                phase_key="phase111_task_delivery_evidence",
+                phase_item=phase111,
+                blockers=[
+                    *[
+                        self._phase116_blocker_entry(
+                            code=code,
+                            source_phase="phase111_task_delivery_evidence",
+                            dimension="delivery",
+                            next_owner=phase111.get("next_owner_module"),
+                            evidence_ref={
+                                "phase": "phase111_task_delivery_evidence",
+                                "completion_requires": list(
+                                    phase111_details.get("completion_requires") or []
+                                ),
+                            },
+                        )
+                        for code in list(phase111.get("blocking_reasons") or [])
+                    ],
+                    *[
+                        self._phase116_blocker_entry_from_phase114(
+                            item,
+                            dimension="delivery",
+                            next_owner=phase111.get("next_owner_module"),
+                        )
+                        for item in list(phase114_details.get("top_blockers") or [])
+                        if str(dict(item).get("impacted_segment") or "") == "delivery"
+                    ],
+                    *[
+                        self._phase116_blocker_entry(
+                            code=str(item.get("code") or item.get("metric") or "phase103_blocker"),
+                            source_phase="phase103_task_closure_gate",
+                            dimension="delivery",
+                            next_owner=phase111.get("next_owner_module"),
+                            evidence_ref={
+                                "phase": "phase103_task_closure_gate",
+                                "domain": item.get("domain"),
+                            },
+                        )
+                        for item in list(phase103_summary.get("blocking_reasons") or [])
+                    ],
+                ],
+                evidence_refs=[
+                    {
+                        "phase": "phase103_task_closure_gate",
+                        "overall_metrics": dict(phase103_summary.get("overall_metrics") or {}),
+                    }
+                ],
+            ),
+            self._phase116_dimension(
+                key="extension",
+                contract_version=phase115_details.get("phase115_contract_version")
+                or phase112_details.get("phase112_contract_version"),
+                phase_key="phase115_golden_extension_packages",
+                phase_item=phase115,
+                blockers=[
+                    *[
+                        self._phase116_blocker_entry(
+                            code=code,
+                            source_phase="phase112_extension_runtime_sync_closure",
+                            dimension="extension",
+                            next_owner=phase112.get("next_owner_module"),
+                            evidence_ref={
+                                "phase": "phase112_extension_runtime_sync_closure",
+                                "runtime_snapshot_contract": phase112_details.get(
+                                    "runtime_snapshot_contract"
+                                ),
+                            },
+                        )
+                        for code in list(phase112.get("blocking_reasons") or [])
+                    ],
+                    *[
+                        self._phase116_blocker_entry(
+                            code=code,
+                            source_phase="phase115_golden_extension_packages",
+                            dimension="extension",
+                            next_owner=phase115.get("next_owner_module"),
+                            evidence_ref={
+                                "phase": "phase115_golden_extension_packages",
+                                "inventory_coverage": dict(
+                                    phase115_details.get("inventory_coverage") or {}
+                                ),
+                            },
+                        )
+                        for code in list(phase115.get("blocking_reasons") or [])
+                    ],
+                ],
+                evidence_refs=[
+                    {
+                        "phase": "phase115_golden_extension_packages",
+                        "golden_package_inventory": list(
+                            phase115_details.get("golden_package_inventory") or []
+                        ),
+                    }
+                ],
+            ),
+            self._phase116_dimension(
+                key="quality",
+                contract_version=phase113_details.get("phase113_contract_version"),
+                phase_key="phase113_check_matrix_execution_restored",
+                phase_item=phase113,
+                blockers=[
+                    *[
+                        self._phase116_blocker_entry(
+                            code=code,
+                            source_phase="phase113_check_matrix_execution_restored",
+                            dimension="quality",
+                            next_owner=phase113.get("next_owner_module"),
+                            evidence_ref={
+                                "phase": "phase113_check_matrix_execution_restored",
+                                "latest_smoke_status": phase113_details.get("latest_smoke_status"),
+                            },
+                        )
+                        for code in list(phase113.get("blocking_reasons") or [])
+                    ],
+                    *[
+                        self._phase116_blocker_entry(
+                            code=code,
+                            source_phase="phase105_gate_signal_plane_governance",
+                            dimension="quality",
+                            next_owner="scripts/check.ps1",
+                            evidence_ref={
+                                "phase": "phase105_gate_signal_plane_governance",
+                            },
+                        )
+                        for code in list(phase105_details.get("latest_smoke_report_blockers") or [])
+                    ],
+                ],
+                evidence_refs=[
+                    {
+                        "phase": "phase113_check_matrix_execution_restored",
+                        "latest_smoke_status": phase113_details.get("latest_smoke_status"),
+                    }
+                ],
+            ),
+        ]
+        all_blockers = [
+            dict(blocker)
+            for dimension in dimensions
+            for blocker in list(dimension.get("blockers") or [])
+        ]
+        priority_queue = self._phase116_priority_queue(all_blockers)
+        top_blockers = priority_queue[:8]
+        p0_blockers = [item for item in priority_queue if str(item.get("severity") or "") == "P0"]
+        upstream_contracts = {
+            "phase109_real_world_maturity_recheck": str(
+                phase109_details.get("phase109_contract_version") or ""
+            ),
+            "phase110_channel_routing_stability": str(
+                phase110_details.get("phase110_contract_version") or ""
+            ),
+            "phase111_task_delivery_evidence": str(
+                phase111_details.get("phase111_contract_version") or ""
+            ),
+            "phase112_extension_runtime_sync_closure": str(
+                phase112_details.get("phase112_contract_version") or ""
+            ),
+            "phase113_check_matrix_execution_restored": str(
+                phase113_details.get("phase113_contract_version") or ""
+            ),
+            "phase114_mainline_observability_closure": str(
+                phase114_details.get("phase114_contract_version") or ""
+            ),
+            "phase115_golden_extension_packages": str(
+                phase115_details.get("phase115_contract_version") or ""
+            ),
+        }
+        blockers: list[str] = []
+        if not self._relative_exists(self._PHASE_DOCS["phase116_maturity_dashboard_unification"]):
+            blockers.append("phase116_doc_missing")
+        if not self._relative_exists(self._PHASE_TESTS["phase116_maturity_dashboard_unification"]):
+            blockers.append("phase116_test_missing")
+        if "/maturity-dashboard" not in routes_text:
+            blockers.append("phase116_system_api_missing")
+        if "phase116_maturity_dashboard_unification" not in release_text:
+            blockers.append("phase116_release_summary_missing")
+        if len(dimensions) != 5:
+            blockers.append("phase116_dimension_inventory_incomplete")
+        if p0_blockers:
+            blockers.extend(
+                str(item.get("blocker_code") or "phase116_p0_blocker_present")
+                for item in p0_blockers
+            )
+        return {
+            "phase116_contract_version": "phase116.maturity_dashboard.v1",
+            "ready_conditions": [
+                "phase109 through phase115 signals are attached to the shared dashboard",
+                "system maturity dashboard endpoint is registered",
+                "release summary consumes the same phase116 contract",
+                "all five maturity dimensions are present",
+                "no P0 blockers remain",
+            ],
+            "status": "ready" if not blockers else "partial",
+            "dimensions": dimensions,
+            "priority_queue": priority_queue,
+            "top_blockers": top_blockers,
+            "release_readiness": {
+                "status": "no_go"
+                if p0_blockers
+                else ("go_with_findings" if priority_queue else "ready"),
+                "p0_blocker_count": len(p0_blockers),
+                "blocking_contract_drifts": [
+                    str(item.get("blocker_code") or "")
+                    for item in p0_blockers
+                    if "contract_drift" in str(item.get("blocker_code") or "")
+                    or "signal_suite_drift" in str(item.get("blocker_code") or "")
+                ],
+            },
+            "upstream_contracts": upstream_contracts,
+            "evidence_refs": evidence_refs,
+            "blocking_reasons": blockers,
+        }
+
+    def _phase116_dimension(
+        self,
+        *,
+        key: str,
+        contract_version: str | None,
+        phase_key: str,
+        phase_item: dict[str, Any],
+        blockers: list[dict[str, Any]],
+        evidence_refs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return {
+            "key": key,
+            "status": "ready" if not blockers and phase_item.get("status") == "ready" else "partial",
+            "contract_version": contract_version,
+            "blockers": blockers,
+            "evidence_refs": evidence_refs,
+            "next_owner": phase_item.get("next_owner_module"),
+            "upstream_phase_keys": [phase_key],
+        }
+
+    def _phase116_blocker_entry(
+        self,
+        *,
+        code: str,
+        source_phase: str,
+        dimension: str,
+        next_owner: str | None,
+        evidence_ref: dict[str, Any] | None = None,
+        count: int = 1,
+    ) -> dict[str, Any]:
+        return {
+            "blocker_code": str(code or "unknown_blocker"),
+            "category": self._phase116_blocker_category(code, source_phase, dimension),
+            "severity": self._phase116_blocker_severity(code, source_phase, dimension),
+            "source_phase": source_phase,
+            "dimension": dimension,
+            "next_owner": next_owner,
+            "count": int(count),
+            "evidence_ref": evidence_ref or {"phase": source_phase},
+            "recommended_next_step": self._phase116_recommended_step(code, dimension),
+        }
+
+    def _phase116_blocker_entry_from_phase114(
+        self,
+        item: dict[str, Any],
+        *,
+        dimension: str,
+        next_owner: str | None,
+    ) -> dict[str, Any]:
+        blocker_code = str(item.get("blocker_code") or "phase114_blocker")
+        return {
+            "blocker_code": blocker_code,
+            "category": self._phase116_blocker_category(
+                blocker_code,
+                str(item.get("source") or "phase114_mainline_observability_closure"),
+                dimension,
+            ),
+            "severity": str(item.get("severity") or "P1").upper(),
+            "source_phase": str(item.get("source") or "phase114_mainline_observability_closure"),
+            "dimension": dimension,
+            "next_owner": next_owner,
+            "count": int(item.get("count") or 0),
+            "evidence_ref": dict(item.get("evidence_ref") or {"phase": "phase114"}),
+            "recommended_next_step": str(item.get("recommended_next_step") or ""),
+        }
+
+    def _phase116_priority_queue(self, blockers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        severity_rank = {"P0": 0, "P1": 1, "P2": 2}
+        return sorted(
+            blockers,
+            key=lambda item: (
+                severity_rank.get(str(item.get("severity") or "P2"), 3),
+                str(item.get("dimension") or ""),
+                -int(item.get("count") or 0),
+                str(item.get("blocker_code") or ""),
+            ),
+        )
+
+    def _phase116_blocker_category(self, code: str, source_phase: str, dimension: str) -> str:
+        key = str(code or "")
+        if "contract_drift" in key or "signal_suite_drift" in key:
+            return "governance_gap"
+        if dimension == "extension":
+            return "ecosystem_gap"
+        if "doc_missing" in key or "test_missing" in key or "release_summary" in key:
+            return "governance_gap"
+        if source_phase.startswith("phase109") or "evidence" in key:
+            return "evidence_gap"
+        return "runtime_fix"
+
+    def _phase116_blocker_severity(self, code: str, source_phase: str, dimension: str) -> str:
+        key = str(code or "")
+        if (
+            dimension == "routing"
+            or "routing" in key
+            or key in {
+                "phase105_latest_smoke_report_missing",
+                "phase105_latest_smoke_contract_drift",
+                "phase105_latest_smoke_signal_suite_drift",
+                "phase113_latest_smoke_report_missing",
+                "extension_runtime_sync_missing",
+                "phase115_fixture_import_failed",
+                "phase115_fixture_structure_incomplete",
+                "phase115_extension_ecosystem_deliverable_rate_regressed",
+            }
+            or source_phase == "phase103_task_closure_gate"
+        ):
+            return "P0"
+        if "doc_missing" in key or "test_missing" in key:
+            return "P2"
+        return "P1"
+
+    def _phase116_recommended_step(self, code: str, dimension: str) -> str:
+        key = str(code or "")
+        if dimension == "routing" or "routing" in key:
+            return "replay the routing path and reconcile channel diagnostics with route identity fields"
+        if dimension == "quality":
+            return "re-run .\\scripts\\check.ps1 -Profile smoke and reconcile the latest smoke report contract"
+        if dimension == "extension":
+            return "reconcile runtime snapshot, golden package lifecycle, and extension delivery proof coverage"
+        if dimension == "delivery":
+            return "verify deliverable proof and phase103 closure blockers for the affected domain"
+        return "inspect long-run evidence bundles and close the dominant stability blocker first"
+
+    def _phase115_fixture_inventory(self, bundle_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+        fixture_path = str(spec.get("fixture_path") or "")
+        root = self._root_dir / fixture_path
+        manifest_path = root / "bundle.yaml"
+        skill_path = root / "SKILL.md"
+        missing_artifacts = [
+            name
+            for name, exists in {
+                "bundle.yaml": manifest_path.exists(),
+                "SKILL.md": skill_path.exists(),
+            }.items()
+            if not exists
+        ]
+        importable = False
+        compatibility_status = "missing"
+        task_delivery_template: dict[str, Any] = {}
+        compatibility_notes: list[str] = []
+        if not missing_artifacts:
+            try:
+                imported = import_extension_from_root(
+                    root,
+                    source_type="local_directory",
+                    source_uri=str(root),
+                )
+                importable = True
+                compatibility_status = str(imported.package.compatibility_status or "compatible")
+                compatibility_notes = list(imported.package.compatibility_notes or [])
+                manifest = dict(imported.package.manifest or {})
+                steps = list(manifest.get("steps") or [])
+                first_step = dict(steps[0] or {}) if steps else {}
+                task_delivery_template = {
+                    "artifact_path": str(dict(first_step.get("args") or {}).get("path") or "") or None,
+                    "tool_name": str(first_step.get("tool_name") or "") or None,
+                }
+            except Exception as exc:  # pragma: no cover - defensive readiness capture
+                compatibility_status = "blocked"
+                compatibility_notes = [f"import_failed:{type(exc).__name__}"]
+        return {
+            "bundle_id": bundle_id,
+            "domain": spec.get("domain"),
+            "fixture_path": fixture_path,
+            "owner": spec.get("owner"),
+            "intent": spec.get("intent"),
+            "importable": importable,
+            "compatibility_status": compatibility_status,
+            "compatibility_notes": compatibility_notes,
+            "missing_artifacts": missing_artifacts,
+            "task_delivery_template": task_delivery_template,
+            "diagnostics_template": {
+                "required_fields": [
+                    "missing_bindings",
+                    "runtime_sync_missing",
+                    "external_runtime_required",
+                ]
+            },
+            "runtime_snapshot_contract": "phase112.extension_runtime_snapshot.v1",
+        }
+
     def _phase78(
         self,
         channel_diag: dict[str, Any],
@@ -2470,6 +3359,343 @@ class ChatMainlineReadinessService:
         except (OSError, json.JSONDecodeError):
             return {}
         return payload if isinstance(payload, dict) else {}
+
+    async def _phase114_mainline_rates(
+        self,
+        *,
+        repo: Any,
+        table_names: set[str],
+        gateway_snapshots: dict[str, dict[str, Any]],
+        phase103_summary: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        turn_created = await self._phase114_count_rows(
+            repo,
+            table_names,
+            "chat_turn_ledgers",
+        )
+        turn_queued = await self._phase114_count_rows(
+            repo,
+            table_names,
+            "chat_run_ledgers",
+            "WHERE stage = ? AND event_type = ?",
+            ("turn_accept", "turn.accepted"),
+        )
+        turn_completed = await self._phase114_count_rows(
+            repo,
+            table_names,
+            "chat_turn_ledgers",
+            "WHERE status = ?",
+            ("completed",),
+        )
+        no_turn = sum(
+            int(dict(snapshot.get("taxonomy_counts") or {}).get("no_turn") or 0)
+            for snapshot in gateway_snapshots.values()
+        )
+        approvals_created = await self._phase114_count_rows(repo, table_names, "approvals")
+        approvals_resolved = await self._phase114_count_rows(
+            repo,
+            table_names,
+            "approvals",
+            "WHERE resolved_at IS NOT NULL",
+        )
+        phase103_overall = dict(phase103_summary.get("overall_metrics") or {})
+        deliverable_sample = int(phase103_overall.get("total_tasks") or 0)
+        ingress_attempted = turn_created + no_turn
+        return {
+            "turn_created_rate": self._phase114_rate(turn_created, ingress_attempted),
+            "turn_queued_rate": self._phase114_rate(turn_queued, turn_created),
+            "turn_completed_rate": self._phase114_rate(turn_completed, turn_queued),
+            "approval_resolution_rate": self._phase114_rate(
+                approvals_resolved,
+                approvals_created,
+            ),
+            "final_deliverable_rate": self._phase114_rate_value(
+                float(phase103_overall.get("final_deliverable_rate") or 0.0),
+                deliverable_sample,
+            ),
+        }
+
+    async def _phase114_segmented_views(
+        self,
+        *,
+        repo: Any,
+        table_names: set[str],
+        gateway_snapshots: dict[str, dict[str, Any]],
+        phase103_summary: dict[str, Any],
+    ) -> dict[str, list[dict[str, Any]]]:
+        by_channel: list[dict[str, Any]] = []
+        for channel in ["local", "wechat", "feishu"]:
+            turn_created = await self._phase114_count_rows(
+                repo,
+                table_names,
+                "chat_turn_ledgers",
+                "WHERE COALESCE(channel, ?) = ?",
+                ("local", channel),
+            )
+            turn_queued = await self._phase114_count_rows(
+                repo,
+                table_names,
+                "chat_run_ledgers",
+                "WHERE stage = ? AND event_type = ? AND turn_id IN (SELECT turn_id FROM chat_turn_ledgers WHERE COALESCE(channel, ?) = ?)",
+                ("turn_accept", "turn.accepted", "local", channel),
+            )
+            turn_completed = await self._phase114_count_rows(
+                repo,
+                table_names,
+                "chat_turn_ledgers",
+                "WHERE COALESCE(channel, ?) = ? AND status = ?",
+                ("local", channel, "completed"),
+            )
+            no_turn = int(
+                dict(gateway_snapshots.get(channel, {}).get("taxonomy_counts") or {}).get("no_turn")
+                or 0
+            )
+            ingress_attempted = turn_created + no_turn
+            by_channel.append(
+                {
+                    "key": channel,
+                    "label": channel,
+                    "sample_size": ingress_attempted,
+                    "mainline_rates": {
+                        "turn_created_rate": self._phase114_rate(turn_created, ingress_attempted),
+                        "turn_queued_rate": self._phase114_rate(turn_queued, turn_created),
+                        "turn_completed_rate": self._phase114_rate(turn_completed, turn_queued),
+                        "approval_resolution_rate": self._phase114_rate_value(None, 0),
+                        "final_deliverable_rate": self._phase114_rate_value(None, 0),
+                    },
+                    "details": {
+                        "no_turn_count": no_turn,
+                    },
+                }
+            )
+        by_domain = []
+        for domain, raw in dict(phase103_summary.get("per_domain_scorecard") or {}).items():
+            item = dict(raw or {})
+            sample_size = int(item.get("total_tasks") or 0)
+            by_domain.append(
+                {
+                    "key": domain,
+                    "label": domain,
+                    "sample_size": sample_size,
+                    "mainline_rates": {
+                        "turn_created_rate": self._phase114_rate_value(None, 0),
+                        "turn_queued_rate": self._phase114_rate_value(None, 0),
+                        "turn_completed_rate": self._phase114_rate_value(None, 0),
+                        "approval_resolution_rate": self._phase114_rate_value(
+                            float(item.get("approval_interruption_rate") or 0.0)
+                            if sample_size > 0
+                            else None,
+                            sample_size,
+                        ),
+                        "final_deliverable_rate": self._phase114_rate_value(
+                            float(item.get("final_deliverable_rate") or 0.0)
+                            if sample_size > 0
+                            else None,
+                            sample_size,
+                        ),
+                    },
+                    "details": {
+                        "blocker_codes": list(item.get("blocker_codes") or []),
+                        "delivery_status_counts": dict(item.get("delivery_status_counts") or {}),
+                    },
+                }
+            )
+        by_runtime_path = [
+            {
+                "key": "channel_ingress",
+                "label": "channel_ingress",
+                "sample_size": sum(item["sample_size"] for item in by_channel if item["key"] != "local"),
+                "mainline_rates": {
+                    "turn_created_rate": self._phase114_rate_value(None, 0),
+                    "turn_queued_rate": self._phase114_rate_value(None, 0),
+                    "turn_completed_rate": self._phase114_rate_value(None, 0),
+                    "approval_resolution_rate": self._phase114_rate_value(None, 0),
+                    "final_deliverable_rate": self._phase114_rate_value(None, 0),
+                },
+                "details": {
+                    "channels": ["wechat", "feishu"],
+                },
+            },
+            {
+                "key": "task_closure",
+                "label": "task_closure",
+                "sample_size": int(dict(phase103_summary.get("overall_metrics") or {}).get("total_tasks") or 0),
+                "mainline_rates": {
+                    "turn_created_rate": self._phase114_rate_value(None, 0),
+                    "turn_queued_rate": self._phase114_rate_value(None, 0),
+                    "turn_completed_rate": self._phase114_rate_value(None, 0),
+                    "approval_resolution_rate": self._phase114_rate_value(None, 0),
+                    "final_deliverable_rate": self._phase114_rate_value(
+                        float(
+                            dict(phase103_summary.get("overall_metrics") or {}).get(
+                                "final_deliverable_rate"
+                            )
+                            or 0.0
+                        )
+                        if int(
+                            dict(phase103_summary.get("overall_metrics") or {}).get("total_tasks")
+                            or 0
+                        )
+                        > 0
+                        else None,
+                        int(dict(phase103_summary.get("overall_metrics") or {}).get("total_tasks") or 0),
+                    ),
+                },
+                "details": {
+                    "source": "phase103_task_closure_gate",
+                },
+            },
+        ]
+        return {
+            "by_channel": by_channel,
+            "by_domain": by_domain,
+            "by_runtime_path": by_runtime_path,
+        }
+
+    def _phase114_top_blockers(
+        self,
+        *,
+        phase109_details: dict[str, Any],
+        phase110_details: dict[str, Any],
+        phase103_summary: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        blockers: list[dict[str, Any]] = []
+        likely_primary_causes = list(
+            dict(phase109_details.get("no_turn_diagnostics") or {}).get("likely_primary_causes") or []
+        )
+        for item in likely_primary_causes:
+            cause_code = str(item.get("cause_code") or "")
+            classification = str(item.get("classification") or "runtime_gap")
+            blockers.append(
+                {
+                    "blocker_code": cause_code,
+                    "source": "phase109_real_world_maturity_recheck",
+                    "impacted_segment": self._phase114_segment_for_blocker(cause_code, classification),
+                    "count": int(item.get("count") or 0),
+                    "severity": str(item.get("priority") or "p1"),
+                    "replay_ref": {
+                        "phase": "phase109_real_world_maturity_recheck",
+                        "kind": "evidence_bundle",
+                    },
+                    "evidence_ref": {
+                        "phase": "phase109_real_world_maturity_recheck",
+                        "classification": classification,
+                    },
+                    "recommended_next_step": str(item.get("recommended_next_step") or ""),
+                }
+            )
+        for group, count in dict(phase110_details.get("runtime_no_turn_reason_group_counts") or {}).items():
+            if int(count or 0) <= 0:
+                continue
+            blockers.append(
+                {
+                    "blocker_code": f"{group}_runtime_no_turn",
+                    "source": "phase110_channel_routing_stability",
+                    "impacted_segment": self._phase114_segment_for_blocker(group, "runtime_gap"),
+                    "count": int(count or 0),
+                    "severity": "p0" if group == "routing" else "p1",
+                    "replay_ref": {
+                        "phase": "phase110_channel_routing_stability",
+                        "group": group,
+                    },
+                    "evidence_ref": {
+                        "phase": "phase110_channel_routing_stability",
+                        "group": group,
+                    },
+                    "recommended_next_step": self._phase114_recommended_step(
+                        group, "runtime_gap"
+                    ),
+                }
+            )
+        for item in list(phase103_summary.get("blocking_reasons") or []):
+            blocker_code = str(item.get("code") or item.get("metric") or "phase103_blocker")
+            blockers.append(
+                {
+                    "blocker_code": blocker_code,
+                    "source": "phase103_task_closure_gate",
+                    "impacted_segment": self._phase114_segment_for_blocker(
+                        blocker_code, "delivery_gap"
+                    ),
+                    "count": int(item.get("count") or 1),
+                    "severity": "p1",
+                    "replay_ref": {
+                        "phase": "phase103_task_closure_gate",
+                        "domain": item.get("domain"),
+                    },
+                    "evidence_ref": {
+                        "phase": "phase103_task_closure_gate",
+                        "domain": item.get("domain"),
+                    },
+                    "recommended_next_step": self._phase114_recommended_step(
+                        blocker_code, "delivery_gap"
+                    ),
+                }
+            )
+        blockers.sort(
+            key=lambda item: (
+                0 if item.get("severity") == "p0" else 1,
+                -int(item.get("count") or 0),
+                str(item.get("blocker_code") or ""),
+            )
+        )
+        return blockers[:8]
+
+    async def _phase114_count_rows(
+        self,
+        repo: Any,
+        table_names: set[str],
+        table: str,
+        where: str | None = None,
+        params: tuple[Any, ...] = (),
+    ) -> int:
+        if table not in table_names:
+            return 0
+        return int(await repo.count_rows(table, where, params))
+
+    def _phase114_rate(self, numerator: int, denominator: int) -> dict[str, Any]:
+        rate = None if denominator <= 0 else round(numerator / denominator, 4)
+        return {
+            "rate": rate,
+            "numerator": int(numerator),
+            "denominator": int(denominator),
+            "sample_size": int(denominator),
+        }
+
+    def _phase114_rate_value(self, rate: float | None, sample_size: int) -> dict[str, Any]:
+        denominator = int(sample_size)
+        numerator = 0 if rate is None else int(round(rate * denominator))
+        return {
+            "rate": None if denominator <= 0 or rate is None else round(float(rate), 4),
+            "numerator": numerator,
+            "denominator": denominator,
+            "sample_size": denominator,
+        }
+
+    def _phase114_segment_for_blocker(self, code: str, classification: str) -> str:
+        key = str(code or "")
+        if key in {"routing", "routing_path_not_stable"} or key.startswith("routing_"):
+            return "routing"
+        if key in {"worker", "worker_not_running_or_disabled"} or key.startswith("worker_"):
+            return "worker"
+        if "approval" in key or key == "pending_approval":
+            return "approval"
+        if "deliver" in key or "publish" in key or "verification" in key:
+            return "delivery"
+        if classification == "evidence_gap":
+            return "ingress"
+        return "ingress"
+
+    def _phase114_recommended_step(self, code: str, classification: str) -> str:
+        segment = self._phase114_segment_for_blocker(code, classification)
+        if segment == "routing":
+            return "replay routing path using channel diagnostics and route identity fields"
+        if segment == "worker":
+            return "verify worker health and resume handoff path from gateway snapshot"
+        if segment == "approval":
+            return "trace approval creation and resolution events to clear pending approval debt"
+        if segment == "delivery":
+            return "reconcile deliverable proof, verification, and visible delivery evidence"
+        return "inspect ingress evidence bundle and trace alignment for the failing path"
 
     def _latest_root_check_report(self, *, profile: str | None = None) -> dict[str, Any]:
         report_dir = self._root_dir / "data" / "check-reports"

@@ -7,6 +7,10 @@ from trace_service import redact
 from app.core.time import new_id, utc_now_iso
 from app.db.repositories.chat_repo import ChatRepository
 from app.schemas.context_runtime import SilentContinuityRecord
+from app.services.chat_continuity_kernel import (
+    build_action_ledger_entry,
+    build_evidence_ledger_entries,
+)
 
 
 class SilentContinuityService:
@@ -24,13 +28,37 @@ class SilentContinuityService:
         status: str,
     ) -> SilentContinuityRecord:
         profile_updates = _profile_updates_from_turn(user_text)
-        commitments: list[str] = []
         topic_anchor = _topic_anchor(user_text, presence_payload)
+        structured = dict(response_plan.get("structured_payload") or {})
+        action_ledger = build_action_ledger_entry(
+            turn=turn,
+            response_plan=response_plan,
+            assistant_text=assistant_text,
+        )
+        evidence_ledger = build_evidence_ledger_entries(
+            action_ledger=action_ledger,
+            evidence_gate=dict(
+                structured.get("evidence_gate")
+                or dict(structured.get("natural_interaction") or {}).get("evidence_gate")
+                or {}
+            ),
+            response_plan=response_plan,
+        )
         record = SilentContinuityRecord(
-            continuity_summary=_continuity_summary(user_text, assistant_text, topic_anchor, status),
+            continuity_summary=_continuity_summary(
+                user_text,
+                assistant_text,
+                topic_anchor,
+                status,
+            ),
             user_state_hint=_user_state_hint(user_text, presence_payload),
-            assistant_commitments=commitments,
-            followup_candidates=[],
+            assistant_commitments=[],
+            followup_candidates=_followup_candidates(
+                user_text=user_text,
+                assistant_text=assistant_text,
+                action_ledger=action_ledger,
+                evidence_ledger=evidence_ledger,
+            ),
             topic_anchor=topic_anchor,
             expiry_policy={"type": "session", "ttl_hours": 24},
             source_turn_id=str(turn["turn_id"]),
@@ -102,7 +130,9 @@ class SilentContinuityService:
 def _profile_updates_from_turn(user_text: str) -> dict[str, Any]:
     updates: dict[str, Any] = {}
     text = str(user_text)
-    explicit_preference = any(marker in text for marker in ["记住", "以后都", "我的偏好", "回复偏好"])
+    explicit_preference = any(
+        marker in text for marker in ["记住", "以后都", "我的偏好", "回复偏好"]
+    )
     if not explicit_preference:
         return updates
     if "先给结论" in text and "风险" in text:
@@ -121,20 +151,63 @@ def _profile_updates_from_turn(user_text: str) -> dict[str, Any]:
     if avoidances:
         updates["style_avoidances"] = avoidances
     return updates
+
+
 def _topic_anchor(user_text: str, presence_payload: dict[str, Any]) -> str | None:
-    conversation_state = dict(presence_payload.get("presence_state", {}).get("conversation_state", {}))
+    conversation_state = dict(
+        presence_payload.get("presence_state", {}).get("conversation_state", {})
+    )
     return str(conversation_state.get("active_topic") or user_text[:48]).strip() or None
 
 
-def _continuity_summary(user_text: str, assistant_text: str, topic_anchor: str | None, status: str) -> str:
-    return f"主题={topic_anchor or '当前对话'}；用户={str(redact(user_text))[:120]}；回复={str(redact(assistant_text))[:160]}；状态={status}"
+def _continuity_summary(
+    user_text: str,
+    assistant_text: str,
+    topic_anchor: str | None,
+    status: str,
+) -> str:
+    return (
+        f"主题={topic_anchor or '当前对话'}；用户={str(redact(user_text))[:120]}；"
+        f"回复={str(redact(assistant_text))[:160]}；状态={status}"
+    )
 
 
 def _user_state_hint(user_text: str, presence_payload: dict[str, Any]) -> str | None:
-    relationship_state = dict(presence_payload.get("presence_state", {}).get("relationship_state", {}))
+    relationship_state = dict(
+        presence_payload.get("presence_state", {}).get("relationship_state", {})
+    )
     pressure = str(relationship_state.get("user_pressure") or "")
     if pressure and pressure != "steady":
         return pressure
     if any(marker in user_text for marker in ["急", "赶", "焦虑"]):
         return "urgent"
     return None
+
+
+def _followup_candidates(
+    *,
+    user_text: str,
+    assistant_text: str,
+    action_ledger: dict[str, Any] | None,
+    evidence_ledger: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not action_ledger:
+        return []
+    prompts = ["recent_result", "current_status", "missing_evidence"]
+    if list(action_ledger.get("artifact_refs") or []):
+        prompts.append("generated_artifact")
+    if str(action_ledger.get("route_type") or "") == "browser_read_page":
+        prompts.append("page_title")
+    return [
+        {
+            "kind": "action_continuity",
+            "prompt": prompt,
+            "reply_preview": str(redact(assistant_text))[:120],
+            "source_text": str(redact(user_text))[:120],
+            "action_ledger": dict(action_ledger),
+            "evidence_ledger": [
+                dict(item) for item in evidence_ledger if isinstance(item, dict)
+            ],
+        }
+        for prompt in prompts
+    ][:6]

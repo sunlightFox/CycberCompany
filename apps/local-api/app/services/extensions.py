@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from core_types import (
@@ -203,6 +204,7 @@ class ExtensionService:
             contributions=diagnostic["contributions"],
             health=diagnostic["health"],
             next_actions=diagnostic["next_actions"],
+            package_contract=diagnostic["package_contract"],
             runtime_snapshot=diagnostic["runtime_snapshot"],
         )
 
@@ -305,6 +307,7 @@ class ExtensionService:
             required_approvals=diagnostic["summary"].get("required_approvals", []),
             selected_capabilities=diagnostic["contributions"],
             next_actions=diagnostic["next_actions"],
+            package_contract=diagnostic["package_contract"],
             runtime_snapshot=diagnostic["runtime_snapshot"],
         )
 
@@ -405,6 +408,7 @@ class ExtensionService:
                 "selected_skill_id": selected_skill_id,
                 "selected_match": dict(selected_match),
                 "runtime_snapshot": runtime_snapshot,
+                "package_contract": dict(plan.package_contract or {}),
                 "selected_capabilities": list(plan.selected_capabilities or []),
                 "runnable_state": plan.runnable_state,
             },
@@ -500,6 +504,13 @@ class ExtensionService:
             trace_id=trace_id,
         )
         driver_health = self._runtime_drivers.health_all(runtime_context)
+        package_contract = _extension_package_contract(
+            package={**package, **(bundle_row or {})},
+            canonical=canonical,
+            source_root=runtime_context.source_root,
+            binding_snapshots=binding_snapshots,
+            contributions=contributions,
+        )
         next_actions = _diagnostic_next_actions(
             canonical=canonical,
             missing_bindings=missing_bindings,
@@ -522,6 +533,9 @@ class ExtensionService:
                 "blocked_by": reports[0].get("blocked_reasons", []) if reports else [],
                 "required_approvals": [],
                 "runtime_drivers": [item["driver_id"] for item in driver_health],
+                "missing_bindings": missing_bindings,
+                "runtime_sync_missing": status != "ready",
+                "external_runtime_required": status == "external_runtime_required",
             },
             "compatibility": reports[0] if reports else {},
             "binding": {
@@ -536,9 +550,11 @@ class ExtensionService:
             "contributions": contributions,
             "health": _runtime_health_summary(contributions, driver_health=driver_health),
             "next_actions": next_actions,
+            "package_contract": package_contract,
             "runtime_snapshot": _extension_runtime_snapshot(
                 extension_id=extension_id,
                 package={**package, **(bundle_row or {})},
+                package_contract=package_contract,
                 binding_snapshots=binding_snapshots,
                 contributions=contributions,
                 driver_health=driver_health,
@@ -831,6 +847,7 @@ def _extension_runtime_snapshot(
     *,
     extension_id: str,
     package: dict[str, Any],
+    package_contract: dict[str, Any],
     binding_snapshots: list[dict[str, Any]],
     contributions: list[dict[str, Any]],
     driver_health: list[dict[str, Any]],
@@ -868,19 +885,38 @@ def _extension_runtime_snapshot(
         runtime_sync_state = "synced"
     elif bundle_status == "enabled" and contributions:
         runtime_sync_state = "synced"
+    elif (
+        bundle_status == "enabled"
+        and not contributions
+        and not missing_bindings
+        and str(package_contract.get("runtime_sync_mode") or "") == "binding_only"
+    ):
+        runtime_sync_state = "synced"
     present_proof = ["diagnostic_snapshot"]
     if binding_snapshots:
         present_proof.append("binding_snapshot")
     if contributions:
         present_proof.append("runtime_contribution")
+    if dict(package_contract.get("task_delivery_template") or {}).get("artifact_path"):
+        present_proof.append("task_delivery_template")
+    required_proof = (
+        ["binding_snapshot", "runtime_contribution", "diagnostic_snapshot"]
+        if contributions
+        else ["binding_snapshot", "diagnostic_snapshot", "task_delivery_template"]
+    )
+    final_deliverable = runtime_sync_state == "synced" and all(
+        item in present_proof for item in required_proof
+    )
     return {
         "contract_version": "phase112.extension_runtime_snapshot.v1",
+        "phase115_contract_version": "phase115.golden_extension_package.v1",
         "extension_id": extension_id,
         "bundle_status": bundle_status,
         "binding_status": binding_status,
         "diagnostic_status": diagnostic_status,
         "lifecycle_status": lifecycle_status,
         "runtime_sync_state": runtime_sync_state,
+        "runtime_sync_mode": package_contract.get("runtime_sync_mode") or "driver_bound",
         "missing_bindings": missing_bindings,
         "contribution_status_counts": contribution_status_counts,
         "contribution_type_counts": contribution_type_counts,
@@ -888,12 +924,121 @@ def _extension_runtime_snapshot(
             str(item.get("driver_id") or "unknown"): str(item.get("status") or "unknown")
             for item in driver_health
         },
+        "package_contract": package_contract,
         "deliverable_proof": {
-            "required": ["binding_snapshot", "runtime_contribution", "diagnostic_snapshot"],
+            "required": required_proof,
             "present": present_proof,
-            "final_deliverable": runtime_sync_state == "synced" and bool(contributions),
+            "final_deliverable": final_deliverable,
         },
     }
+
+
+_PHASE115_GOLDEN_BUNDLE_SPECS: dict[str, dict[str, Any]] = {
+    "clawhub-xiaohongshu-content-platform": {
+        "domain": "content_platform",
+        "fixture_path": "config/skill-repositories/fixtures/clawhub-xiaohongshu-content-platform",
+        "intent": "content_platform",
+        "owner": "config/skill-repositories/fixtures",
+    },
+    "clawhub-github-pr-workflow": {
+        "domain": "code_hosting",
+        "fixture_path": "config/skill-repositories/fixtures/clawhub-github-pr-workflow",
+        "intent": "code_hosting",
+        "owner": "config/skill-repositories/fixtures",
+    },
+    "clawhub-email-draft": {
+        "domain": "office_productivity",
+        "fixture_path": "config/skill-repositories/fixtures/clawhub-email-draft",
+        "intent": "email_draft",
+        "owner": "config/skill-repositories/fixtures",
+    },
+}
+
+
+def _extension_package_contract(
+    *,
+    package: dict[str, Any],
+    canonical: dict[str, Any],
+    source_root: Any,
+    binding_snapshots: list[dict[str, Any]],
+    contributions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    bundle_id = str(package.get("bundle_id") or "")
+    golden_spec = dict(_PHASE115_GOLDEN_BUNDLE_SPECS.get(bundle_id) or {})
+    root = source_root if isinstance(source_root, Path) else None
+    manifest_path = root / "bundle.yaml" if root is not None else None
+    skill_path = root / "SKILL.md" if root is not None else None
+    task_delivery_template = _package_task_delivery_template(package, canonical)
+    visible_output_type = "artifact_markdown" if task_delivery_template.get("artifact_path") else "runtime_only"
+    has_contributions = bool(contributions)
+    runtime_sync_mode = "driver_bound" if has_contributions else "binding_only"
+    proof_types = (
+        ["binding_snapshot", "runtime_contribution", "diagnostic_snapshot"]
+        if has_contributions
+        else ["binding_snapshot", "diagnostic_snapshot", "task_delivery_template"]
+    )
+    return {
+        "contract_version": "phase115.golden_extension_package.v1",
+        "bundle_id": bundle_id,
+        "extension_id": str(package.get("extension_id") or ""),
+        "golden_package": bool(golden_spec),
+        "golden_package_domain": golden_spec.get("domain"),
+        "fixture_path": golden_spec.get("fixture_path") or (str(root) if root is not None else None),
+        "owner": golden_spec.get("owner") or "apps/local-api/app/services/extensions.py",
+        "intent": golden_spec.get("intent"),
+        "runtime_sync_mode": runtime_sync_mode,
+        "surface_coverage": {
+            "has_bundle_manifest": bool(manifest_path and manifest_path.exists()),
+            "has_skill_markdown": bool(skill_path and skill_path.exists()),
+            "has_binding_snapshot": bool(binding_snapshots),
+            "has_runtime_contribution": has_contributions,
+            "has_task_delivery_template": bool(task_delivery_template.get("artifact_path")),
+        },
+        "proof_contract": {
+            "required": proof_types,
+            "visible_output_type": visible_output_type,
+        },
+        "task_delivery_template": task_delivery_template,
+    }
+
+
+def _package_task_delivery_template(package: dict[str, Any], canonical: dict[str, Any]) -> dict[str, Any]:
+    manifest = dict(package.get("manifest") or canonical.get("manifest") or {})
+    skills = list(canonical.get("skills") or [])
+    artifact_path = None
+    required_inputs: list[str] = []
+    declared_tools: list[str] = []
+    steps = list(manifest.get("steps") or [])
+    if steps:
+        first_step = dict(steps[0] or {})
+        declared_tools.append(str(first_step.get("tool_name") or ""))
+        artifact_path = str(dict(first_step.get("args") or {}).get("path") or "") or None
+        required_inputs = sorted(set(_template_placeholders(dict(first_step.get("args") or {}).get("content"))))
+    elif skills:
+        first_skill = dict(skills[0] or {})
+        instruction = dict(first_skill.get("instruction_spec") or {})
+        declared_tools = [
+            str(item.get("tool_name") or "")
+            for item in list(first_skill.get("required_tools") or [])
+            if str(item.get("tool_name") or "").strip()
+        ]
+        required_inputs = sorted(
+            str(key)
+            for key in dict(instruction.get("input_schema") or {}).get("properties", {}).keys()
+        )
+    return {
+        "artifact_path": artifact_path,
+        "required_inputs": required_inputs,
+        "declared_tools": [item for item in declared_tools if item],
+    }
+
+
+def _template_placeholders(content: Any) -> list[str]:
+    import re
+
+    if not isinstance(content, str):
+        return []
+    return re.findall(r"{([a-zA-Z0-9_]+)}", content)
 
 
 def _extension_source_root(sources: list[dict[str, Any]]) -> Any:

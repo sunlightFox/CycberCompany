@@ -209,19 +209,27 @@ class ToolSafetyBridge:
             control in {"approval", "strong_approval"}
             for control in (boundary_required_controls or ())
         )
+        browser_download_requires_approval = tool.tool_name == "browser.download"
         if boundary_requires_approval and not request.task_id:
             raise AppError(
                 ErrorCode.TOOL_APPROVAL_REQUIRED,
-                "楂橀闄╁伐鍏峰繀椤荤粦瀹氫换鍔″苟鍒涘缓瀹℃壒",
+                "高风险工具必须绑定任务并创建审批",
                 status_code=409,
             )
-        if not boundary_requires_approval and _risk_order(risk_level) < _risk_order(RiskLevel.R3):
+        if (
+            not boundary_requires_approval
+            and not browser_download_requires_approval
+            and _risk_order(risk_level) < _risk_order(RiskLevel.R3)
+        ):
             return None
         if self._runtime._safety_policy is not None:
             policy = await self._runtime._safety_policy.get_policy(
                 organization_id=organization_id
             )
-            if not boundary_requires_approval and policy.should_skip_approval(
+            if (
+                not boundary_requires_approval
+                and not browser_download_requires_approval
+                and policy.should_skip_approval(
                 action=tool.tool_name,
                 risk_level=risk_level,
                 action_category=classify_action_category(
@@ -237,6 +245,7 @@ class ToolSafetyBridge:
                 ),
                 payload=request.args,
                 terminal_command_policy=terminal_command_policy or {},
+            )
             ):
                 return None
         task_id = request.task_id

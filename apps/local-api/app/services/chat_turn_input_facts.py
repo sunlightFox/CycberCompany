@@ -2,8 +2,9 @@ from __future__ import annotations
 
 
 def looks_like_explicit_continuation(text: str) -> bool:
+    raw = str(text or "")
     return any(
-        marker in str(text or "")
+        marker in raw
         for marker in (
             "继续刚才",
             "接着刚才",
@@ -33,32 +34,17 @@ def looks_like_execution_state_explanation_request(user_text: str) -> bool:
             "为什么没往下做",
             "还差什么",
             "为什么停住了",
+            "不要说已完成",
+            "不要伪称完成",
+            "还没真正执行",
+            "等什么证据",
+            "要等什么证据",
         )
     ):
         return True
     return (
-        any(
-            marker in raw
-            for marker in (
-                "还没",
-                "没继续",
-                "没执行",
-                "卡住",
-                "状态",
-                "进度",
-            )
-        )
-        and any(
-            marker in raw
-            for marker in (
-                "任务",
-                "操作",
-                "执行",
-                "步骤",
-                "刚才",
-                "那个",
-            )
-        )
+        ("?" in raw or "？" in raw)
+        and any(marker in raw for marker in ("状态", "进度", "证据", "完成", "执行", "任务", "步骤"))
     )
 
 
@@ -90,42 +76,21 @@ def looks_like_plain_analysis_request(text: str) -> bool:
         if marker not in raw:
             continue
         marker_index = raw.find(marker)
-        prefix = raw[max(0, marker_index - 6):marker_index]
+        prefix = raw[max(0, marker_index - 6) : marker_index]
         if any(neg in prefix for neg in negative_prefixes):
             continue
         has_positive_action_marker = True
         break
     return any(
         marker in raw
-        for marker in (
-            "分析",
-            "对比",
-            "比较",
-            "解释",
-            "设计",
-            "方案",
-            "验收",
-            "模板",
-            "讨论",
-            "优化",
-        )
+        for marker in ("分析", "对比", "比较", "解释", "设计", "方案", "验收", "模板", "讨论", "优化")
     ) and not has_positive_action_marker
 
 
 def looks_like_latest_instruction_override(text: str) -> bool:
     raw = str(text or "").strip()
     return any(
-        marker in raw
-        for marker in (
-            "停，改成",
-            "停,改成",
-            "改成只",
-            "改成先",
-            "不要再",
-            "先别",
-            "只讨论",
-            "只做",
-        )
+        marker in raw for marker in ("停，改成", "停 改成", "改成只", "改成先", "不要再", "先别", "只讨论", "只做")
     )
 
 
@@ -135,18 +100,7 @@ def needs_recent_history_lookup(text: str) -> bool:
         return False
     return any(
         marker in raw
-        for marker in (
-            "刚才",
-            "前面",
-            "上一条",
-            "上个",
-            "偏好",
-            "顺序",
-            "优先级",
-            "记住",
-            "继续",
-            "接着",
-        )
+        for marker in ("刚才", "前面", "上一条", "上个", "偏好", "顺序", "优先级", "记住", "继续", "接着")
     )
 
 
@@ -159,20 +113,7 @@ def looks_like_short_followup(text: str) -> bool:
         return False
     return any(
         compact.startswith(marker) or marker in compact
-        for marker in (
-            "再",
-            "继续",
-            "接着",
-            "补",
-            "展开",
-            "改短",
-            "改得",
-            "改成",
-            "按",
-            "保持",
-            "加一",
-            "加个",
-        )
+        for marker in ("再", "继续", "接着", "说", "展开", "改短", "改得", "改成", "按", "保持", "加一", "加个")
     )
 
 
@@ -217,20 +158,14 @@ def latest_instruction_topic(user_text: str) -> str | None:
     for marker in ("改成", "只讨论", "只做", "先别", "不要再"):
         if marker not in raw:
             continue
-        candidate = raw.split(marker, 1)[-1].strip(" ，,。")
+        candidate = raw.split(marker, 1)[-1].strip(" ：:，。")
         if candidate:
             return candidate[:80]
     return None
 
 
 def looks_like_ambiguous_clarification_followup(user_text: str) -> bool:
-    compact = (
-        str(user_text or "")
-        .strip()
-        .replace("，", "")
-        .replace(",", "")
-        .strip("。.!！?？~～ ")
-    )
+    compact = str(user_text or "").strip().replace("，", "").replace(",", "").strip("。?!？！~")
     if not compact or len(compact) > 18:
         return False
     return compact in {
@@ -255,11 +190,5 @@ def looks_like_voice_reply_request(text: str) -> bool:
     raw = str(text or "")
     return any(
         marker in raw.lower()
-        for marker in (
-            "语音回复",
-            "voice reply",
-            "voice-response",
-            "读给我听",
-            "发语音",
-        )
+        for marker in ("语音回复", "voice reply", "voice-response", "读给我听", "发语音")
     )

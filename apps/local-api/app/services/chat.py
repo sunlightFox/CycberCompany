@@ -52,6 +52,7 @@ from app.schemas.chat_quality import (
     ResponsePolicyRequest,
 )
 from app.services.action_dialogue_mapper import ActionDialogueMapperService
+from app.services.action_result_summary import summarize_completed_action_result
 from app.services.asset_broker import AssetBrokerService
 from app.services.audit import AuditEventService
 from app.services.brain_decision import BrainDecisionService
@@ -131,6 +132,7 @@ from app.services.model_gateway import ModelProtocolGateway
 from app.services.model_routing import ModelRoutingService
 from app.services.natural_chat import (
     NaturalChatActionGateway,
+    pending_action_from_approval,
     response_plan_for_pending_action,
     set_visible_redaction_profile,
 )
@@ -807,7 +809,7 @@ class ChatService(ChatFacadeShellMixin):
                 output_data={"error_code": ErrorCode.MODEL_PROTOCOL_ERROR.value},
                 error_code=ErrorCode.MODEL_PROTOCOL_ERROR.value,
             )
-            raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "缁窇淇娌℃湁杩斿洖鍙敤鏂囨湰")
+            raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "续跑修订没有返回可用文本")
         await self._trace.end_span(
             revision_span,
             output_data={
@@ -982,12 +984,12 @@ class ChatService(ChatFacadeShellMixin):
             boundary_notice = (
                 "我是本地智能体成员，不是真人，也没有隐藏账号或绕过系统的能力。"
                 "我不能私下替你登录别人的账号，也不能跳过授权直接拿到隐藏入口。"
-                "鐧诲綍銆佸伐鍏枫€佹枃浠躲€佹祻瑙堝櫒鍜屽閮ㄥ姩浣滈兘寰楀厛璧板畨鍏ㄦ祦绋嬶紝"
+                "登录、工具、文件、浏览器和外部动作都得先走安全流程，"
                 "该确认的地方我会先停一下，并把可做与不可做的边界说清楚。"
             )
             response_plan = response_plan.model_copy(
                 update={
-                    "title": "鑳藉姏杈圭晫",
+                    "title": "能力边界",
                     "style": "safety_boundary",
                     "safety_notice": response_plan.safety_notice or boundary_notice,
                     "boundary_notice": response_plan.boundary_notice or boundary_notice,
@@ -1186,7 +1188,7 @@ class ChatService(ChatFacadeShellMixin):
         if hook_result.get("blocked"):
             raise AppError(
                 ErrorCode.TOOL_PERMISSION_DENIED,
-                "鏈€缁堝洖澶嶈 hook 娌荤悊闃绘柇",
+                "最终回复被 hook 治理阻断",
                 status_code=422,
                 details={"reason_code": hook_result.get("reason_code")},
             )
@@ -1704,6 +1706,11 @@ class ChatService(ChatFacadeShellMixin):
     ) -> dict[str, Any]:
         canonical_status = canonical_action_status(status, default="requested")
         detail_canonical = canonical_action_status(detail_status or canonical_status, default=canonical_status)
+        completed_summary = summarize_completed_action_result(
+            label=action_label,
+            target=target,
+            result_summary=evidence_summary,
+        )
         reason_codes = status_reason_codes(
             "approval_required" if approval_pending else None,
             "task_created" if task_created else None,
@@ -1749,6 +1756,7 @@ class ChatService(ChatFacadeShellMixin):
             "failed": detail_canonical == "failed_with_reason" or canonical_status in {"failed_with_reason", "blocked_by_boundary"},
             "failure_reason": failure_reason,
             "evidence_summary": evidence_summary,
+            "completed_summary": completed_summary,
             "route_semantics": {"route": route},
             "action_status_semantics": semantics,
             "action_dialogue": self._build_action_dialogue_decision(
@@ -2648,8 +2656,71 @@ class ChatService(ChatFacadeShellMixin):
             route_resolution.failure_code or ErrorCode.MODEL_ROUTE_NOT_FOUND.value
         )
         reason_codes = brain_decision.intent.reason_codes if brain_decision else []
+        recent_messages: list[dict[str, Any]] | None = None
+        route_decision = self._intent_router.decide(user_text)
+        if route_decision.office_request is not None:
+            async for event in self._direct_routes_runtime.handle_office_chat_request(
+                turn,
+                events,
+                user_text,
+                route_decision.office_request,
+                root_span_id,
+                trace_id=turn.get("trace_id"),
+            ):
+                yield event
+            return
+        if route_decision.route_type == "host_filesystem_list":
+            async for event in self._direct_routes_runtime.handle_host_filesystem_list(
+                turn,
+                events,
+                route_decision.metadata,
+                root_span_id,
+                trace_id=turn.get("trace_id"),
+            ):
+                yield event
+            return
+        if route_decision.route_type == "browser_read_page":
+            async for event in self._direct_routes_runtime.handle_browser_read_page(
+                turn,
+                events,
+                route_decision.metadata,
+                root_span_id,
+                trace_id=turn.get("trace_id"),
+            ):
+                yield event
+            return
+        if route_decision.route_type in {
+            "browser_search_readonly",
+            "browser_search_with_citation",
+        }:
+            async for event in self._direct_routes_runtime.handle_browser_search_readonly(
+                turn,
+                events,
+                route_decision,
+                root_span_id,
+                trace_id=turn.get("trace_id"),
+            ):
+                yield event
+            return
+        if route_decision.route_type == "terminal_readonly_command":
+            async for event in self._direct_routes_runtime.handle_terminal_readonly_command(
+                turn,
+                events,
+                route_decision.metadata,
+                root_span_id,
+                trace_id=turn.get("trace_id"),
+            ):
+                yield event
+            return
         if code == ErrorCode.MODEL_NOT_CONFIGURED:
-            deterministic_text = _deterministic_no_model_reply(user_text)
+            recent_messages = await self._chat_repo.list_recent_messages(
+                turn["conversation_id"],
+                limit=12,
+            )
+            deterministic_text = _deterministic_no_model_reply(
+                user_text,
+                recent_messages=recent_messages,
+            )
             if deterministic_text:
                 response_plan = self._response_plan_for_status(
                     turn,
@@ -2686,7 +2757,10 @@ class ChatService(ChatFacadeShellMixin):
             code == ErrorCode.MODEL_NOT_CONFIGURED
             and "phase51_advice_strategy_direct" in reason_codes
         ):
-            text = _strategy_advice_fallback_text(user_text)
+            text = _strategy_advice_fallback_text(
+                user_text,
+                recent_messages=recent_messages,
+            )
             response_plan = self._response_plan_for_status(
                 turn,
                 summary=text,
@@ -2722,7 +2796,7 @@ class ChatService(ChatFacadeShellMixin):
         if intent == "boundary_question" and code == ErrorCode.MODEL_NOT_CONFIGURED:
             boundary_text = (
                 "我不是隐藏真人账号，也不会绕过系统替你登录或直接操作。"
-                "娑夊強鐧诲綍銆佸伐鍏枫€佹枃浠躲€佹祻瑙堝櫒鍜屽閮ㄥ姩浣滄椂锛屾垜浼氬厛璧板畨鍏ㄦ祦绋嬶紝"
+                "涉及登录、工具、文件、浏览器和外部动作时，我会先走安全流程，"
                 "该确认的地方会停住等你点头。"
             )
             response_plan = self._response_plan_for_status(
@@ -2777,12 +2851,12 @@ class ChatService(ChatFacadeShellMixin):
             turn,
             events,
             code,
-            self._composer.compose_failure(code, "娌℃湁鍙敤妯″瀷璺敱"),
+            self._composer.compose_failure(code, "没有可用模型路由"),
             root_span_id,
             persist_assistant=True,
             response_plan=self._response_plan_for_status(
                 turn,
-                summary=self._composer.compose_failure(code, "娌℃湁鍙敤妯″瀷璺敱"),
+                summary=self._composer.compose_failure(code, "没有可用模型路由"),
             ).model_copy(
                 update={
                     "structured_payload": {

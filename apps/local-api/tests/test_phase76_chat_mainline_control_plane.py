@@ -31,6 +31,9 @@ def test_phase76_chat_mainline_readiness_endpoint_exposes_control_plane_truth(
     assert "phase91_host_decomposition_governance" in payload["phase_readiness"]
     assert "phase108_runtime_host_decomposition_closure" in payload["phase_readiness"]
     assert "phase109_real_world_maturity_recheck" in payload["phase_readiness"]
+    assert "phase114_mainline_observability_closure" in payload["phase_readiness"]
+    assert "phase115_golden_extension_packages" in payload["phase_readiness"]
+    assert "phase116_maturity_dashboard_unification" in payload["phase_readiness"]
     assert "phase85_execution_batches" in payload["phase_readiness"]
     assert payload["runtime_facts"]["session_runtime_role"] == "entry_runtime"
     assert payload["runtime_facts"]["chat_service_host"].endswith("/chat.py")
@@ -109,6 +112,11 @@ def test_phase76_release_summary_includes_chat_mainline_readiness(
     assert "phase108_runtime_host_decomposition_closure_status" in readiness
     assert "phase109_real_world_maturity_recheck_status" in readiness
     assert "phase109_no_turn_diagnostics" in readiness
+    assert "phase114_mainline_observability_closure_status" in readiness
+    assert "phase114_mainline_rates" in readiness
+    assert "phase114_top_blockers" in readiness
+    assert "phase115_golden_extension_packages_status" in readiness
+    assert "phase115_golden_package_inventory" in readiness
     assert "strict_format_continuity_gate" in readiness
     assert "false_boundary_rate" in readiness
     assert "natural_continuation_pass_rate" in readiness
@@ -136,6 +144,15 @@ def test_phase76_release_summary_includes_chat_mainline_readiness(
         "/api/system/chat-mainline-readiness"
     ).json()["phase_readiness"]
     assert "phase109_real_world_maturity_recheck" in client.get(
+        "/api/system/chat-mainline-readiness"
+    ).json()["phase_readiness"]
+    assert "phase114_mainline_observability_closure" in client.get(
+        "/api/system/chat-mainline-readiness"
+    ).json()["phase_readiness"]
+    assert "phase115_golden_extension_packages" in client.get(
+        "/api/system/chat-mainline-readiness"
+    ).json()["phase_readiness"]
+    assert "phase116_maturity_dashboard_unification" in client.get(
         "/api/system/chat-mainline-readiness"
     ).json()["phase_readiness"]
 

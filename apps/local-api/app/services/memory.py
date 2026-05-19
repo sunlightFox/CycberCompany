@@ -1420,37 +1420,37 @@ class MemoryService:
         )
         if result.blocked:
             response = (
-                "这条内容涉及敏感信息，我不会写入长期记忆。"
+                "这条内容涉及敏感信息，我不会把它写入长期记忆。"
                 "如果你只是想让我记住处理方式，请用占位符描述，不要贴真实 token、密码或私钥。"
             )
         elif command.kind == "block":
-            response = "好的，这条不会写入长期记忆；后续我也不会把它当作偏好或事实主动使用。"
+            response = "好的，这条不会写入长期记忆；后续我也不会把它当作长期偏好、长期规则或事实主动使用。"
         elif command.kind == "correction" and result.memories:
             if any(memory.supersedes for memory in result.memories):
                 response = (
-                    f"已纠正记忆：{_memory_summary_for_reply(result.memories)}\n"
-                    "我会用这条新记录替代旧说法；如果你在当前对话里再次改口，我会以最新要求为准。"
+                    f"这条长期记忆已纠正：{_memory_summary_for_reply(result.memories)}\n"
+                    "后面我会按这条新的长期记忆回答；如果你在当前对话里再改口，我会以最新要求为准。"
                 )
             else:
                 response = (
-                    f"已记录这次纠正：{_memory_summary_for_reply(result.memories)}\n"
-                    "没有找到可精确取代的旧记忆，所以我把它作为新的可追溯记录保存。"
+                    f"这条长期记忆纠正已记录：{_memory_summary_for_reply(result.memories)}\n"
+                    "暂时没有找到可精确替代的旧记忆，所以我先把它作为新的长期记忆记录下来。"
                 )
         elif result.memories:
             response = (
-                f"记好了：{_memory_summary_for_reply(result.memories)}\n"
-                "后面同一批聊天里，我会优先按这条偏好或事实组织回复；"
-                "如果你临时改口，我会以新的要求为准。"
+                f"长期记忆已写入：{_memory_summary_for_reply(result.memories)}\n"
+                "后面同一批聊天里，我会优先按这条偏好、规则或事实组织回复；如果你临时改口，我会以新的要求为准。"
+                ""
             )
         elif result.candidates and result.candidates[0].decision == "discarded_duplicate":
             response = (
-                "这条我已经记过了，不会重复写入。"
-                "后续仍会按已有记录使用；如果要改写它，可以直接说“纠正记忆：...”"
+                "这条长期记忆我已经记过了，不会重复写入。"
+                "后续仍会按已有记忆使用；如果你要改写它，可以直接说“纠正记忆：...”。"
             )
         else:
             response = (
                 "我没有把这条写入长期记忆。"
-                "通常是因为它更像临时对话内容，或缺少足够明确的偏好、事实或纠正对象。"
+                "通常是因为它更像临时对话内容，或者还不够稳定，暂时不适合进入长期记忆。"
             )
         return MemoryCommandResult(
             handled=True,

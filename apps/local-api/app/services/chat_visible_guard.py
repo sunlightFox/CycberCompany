@@ -107,7 +107,7 @@ def visible_text_guard(text: str, *, profile: str | None = None) -> str:
     result = re.sub(r"\bapr_[A-Za-z0-9_-]+", "确认编号", result)
     result = re.sub(r"\b(?:toolcall|tool_call|call)_[A-Za-z0-9_-]+", "工具记录", result)
     result = re.sub(r"\b(?:tsk|task)_[A-Za-z0-9_-]+", "任务记录", result)
-    return result
+    return _collapse_repeated_visible_text(result)
 
 
 def _normalize_visible_profile(profile: str) -> str:
@@ -121,3 +121,41 @@ def _relaxed_visible_redact(text: str) -> str:
     for pattern, replacement in _RELAXED_SENSITIVE_LOCAL_PATH_PATTERNS:
         result = pattern.sub(replacement, result)
     return result
+
+
+def _collapse_repeated_visible_text(text: str) -> str:
+    stripped = str(text or "").strip()
+    if len(stripped) < 24:
+        return stripped
+    for repeat_count in range(4, 1, -1):
+        if len(stripped) % repeat_count != 0:
+            continue
+        chunk = stripped[: len(stripped) // repeat_count].strip()
+        if len(chunk) < 24:
+            continue
+        if not any(marker in chunk for marker in ('\n', '。', '？', '！', '{', '}', '[', ']')):
+            continue
+        if chunk * repeat_count == stripped:
+            return chunk
+    anchored = _collapse_repeated_sectioned_reply(stripped)
+    if anchored != stripped:
+        return anchored
+    return stripped
+
+
+def _collapse_repeated_sectioned_reply(text: str) -> str:
+    anchors = ("结论：", "依据：", "下一步", "风险：")
+    for anchor in anchors:
+        first = text.find(anchor)
+        if first < 0:
+            continue
+        second = text.find(anchor, first + len(anchor))
+        if second <= first:
+            continue
+        between = text[first:second]
+        if not any(other in between for other in anchors if other != anchor):
+            continue
+        if second < max(80, len(text) // 3):
+            continue
+        return text[:second].rstrip()
+    return text

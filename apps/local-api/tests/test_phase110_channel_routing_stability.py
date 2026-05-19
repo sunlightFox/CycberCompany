@@ -59,6 +59,10 @@ def test_phase110_readiness_exposes_routing_contract_and_replay_fields(
     assert "session_peer_ref_redacted" in phase110["details"]["session_route_replay_fields"]
     assert phase110["details"]["runtime_no_turn_reason_group_counts"].get("routing", 0) >= 0
     assert "routing" in phase110["details"]["evidence_no_turn_group_counts"]
+    phase114 = readiness.json()["phase_readiness"]["phase114_mainline_observability_closure"]
+    replay_alignment = phase114["details"]["replay_alignment"]
+    assert replay_alignment["routing_replay_fields_present"] is True
+    assert "dedupe_key" in replay_alignment["routing_replay_fields"]
 
 
 def test_phase110_channel_context_and_release_summary_carry_routing_replay_contract(

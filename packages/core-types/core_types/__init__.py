@@ -173,9 +173,12 @@ from core_types.memory import (
     RegressionCandidateRecord,
 )
 from core_types.model import (
+    ActionLedgerEntry,
     BrainDecisionBundle,
     ContextDecision,
     DialogueState,
+    EvidenceLedgerEntry,
+    ExecutionEvidenceDecision,
     IntentDecision,
     LowConfidenceDecisionReview,
     ModeDecision,
@@ -187,6 +190,9 @@ from core_types.model import (
     SemanticReviewRequest,
     SemanticReviewResult,
     SemanticReviewSuggestion,
+    TurnContinuationDecision,
+    TurnEnvelope,
+    VisibleReplyPlan,
 )
 from core_types.notification import (
     InboundMessage,

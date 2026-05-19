@@ -68,6 +68,19 @@ def test_phase106_format_sensitive_skill_mcp_request_stays_direct_in_brain_inten
     assert decision.execution_policy == "no_task"
 
 
+def test_phase106_pending_execution_state_question_stays_direct_in_brain_intent() -> None:
+    decision = intent_decision(
+        "假设浏览器下载那一步还没真正执行，不要说已完成。你通常要等什么证据？",
+        "low",
+        capability_snapshot={},
+        working_state={"pending_confirmation": {"actions": [{"action_type": "browser.download"}]}},
+    )
+
+    assert decision.primary_intent == "simple_question"
+    assert "pending_execution_state_explanation" in decision.reason_codes
+    assert decision.execution_policy == "no_task"
+
+
 def test_phase106_format_sensitive_requests_preserve_json_and_table_without_route_pollution(
     client: TestClient,
     monkeypatch,

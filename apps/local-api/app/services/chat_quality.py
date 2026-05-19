@@ -557,3 +557,41 @@ def _follow_ups_for_status(status: str) -> list[str]:
     if status == "professional_safety_boundary":
         return ["整理咨询清单", "说明风险边界", "改成通用科普"]
     return ["继续按这三点展开", "生成验收清单", "补充异常场景"]
+def _readonly_browser_secret_url_context(lowered: str) -> bool:
+    if "http://" not in lowered and "https://" not in lowered:
+        return False
+    if not re.search(r"[?&](?:token|password)=", lowered):
+        return False
+    read_markers = (
+        "\u8bf7\u6253\u5f00",
+        "\u6253\u5f00",
+        "\u770b\u7ed3\u679c",
+        "\u770b\u770b",
+        "\u8bb2\u4ec0\u4e48",
+        "\u6709\u4ec0\u4e48\u5b57\u6bb5",
+        "\u54ea\u4e9b\u5b57\u6bb5",
+        "\u9875\u9762\u5199\u4e86\u4ec0\u4e48",
+        "open",
+        "look at",
+        "show",
+        "read",
+        "result",
+        "field",
+    )
+    side_effect_markers = (
+        "\u4e0b\u8f7d",
+        "\u622a\u56fe",
+        "\u4fdd\u5b58",
+        "\u63d0\u4ea4",
+        "\u53d1\u9001",
+        "\u8d2d\u4e70",
+        "\u4e0b\u5355",
+        "\u652f\u4ed8",
+        "download",
+        "submit",
+        "purchase",
+        "pay",
+    )
+    return any(marker in lowered for marker in read_markers) and not any(
+        marker in lowered for marker in side_effect_markers
+    )

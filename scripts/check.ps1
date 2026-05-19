@@ -191,6 +191,62 @@ function Get-PytestSlowDurationLines {
   }
 }
 
+function Get-MaturityDashboardSummary {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string] $OverallStatus,
+    [Parameter(Mandatory = $true)]
+    [object[]] $SignalSuites
+  )
+
+  $blockers = @()
+  if ($Profile -eq "smoke") {
+    if ($SignalSuites.Count -eq 0) {
+      $blockers += [ordered]@{
+        blocker_code = "phase105_smoke_signal_suites_missing"
+        category = "governance_gap"
+        severity = "P0"
+        source_phase = "phase105_gate_signal_plane_governance"
+        dimension = "quality"
+        next_owner = "scripts/check.ps1"
+        evidence_ref = [ordered]@{ phase = "phase105_gate_signal_plane_governance" }
+        recommended_next_step = "reconcile gate_signal_plane.json and restore the smoke signal suite inventory"
+      }
+    }
+    if ($OverallStatus -ne "passed") {
+      $blockers += [ordered]@{
+        blocker_code = "phase113_latest_smoke_report_not_passed"
+        category = "runtime_fix"
+        severity = "P1"
+        source_phase = "phase113_check_matrix_execution_restored"
+        dimension = "quality"
+        next_owner = "scripts/check.ps1"
+        evidence_ref = [ordered]@{
+          phase = "phase113_check_matrix_execution_restored"
+          profile = "smoke"
+        }
+        recommended_next_step = "re-run .\scripts\check.ps1 -Profile smoke and inspect the failing smoke command log"
+      }
+    }
+  }
+
+  $priorityQueue = @(
+    $blockers |
+      Sort-Object @{ Expression = { if ($_.severity -eq "P0") { 0 } elseif ($_.severity -eq "P1") { 1 } else { 2 } } }, dimension, blocker_code
+  )
+  $p0Blockers = @($priorityQueue | Where-Object { $_.severity -eq "P0" })
+  return [ordered]@{
+    phase116_contract_version = "phase116.maturity_dashboard.v1"
+    dashboard_status = if ($p0Blockers.Count -gt 0) { "partial" } elseif ($priorityQueue.Count -gt 0) { "partial" } else { "ready" }
+    top_blockers = @($priorityQueue | Select-Object -First 5)
+    priority_queue_preview = @($priorityQueue | Select-Object -First 8)
+    release_readiness = [ordered]@{
+      status = if ($p0Blockers.Count -gt 0) { "no_go" } elseif ($priorityQueue.Count -gt 0) { "go_with_findings" } else { "ready" }
+      p0_blocker_count = $p0Blockers.Count
+    }
+  }
+}
+
 function Write-CheckReport {
   param(
     [Parameter(Mandatory = $true)]
@@ -231,6 +287,7 @@ function Write-CheckReport {
   foreach ($entry in (New-CommandMatrix).GetEnumerator()) {
     $commandMatrix[[string]$entry.Key] = [string]$entry.Value
   }
+  $maturityDashboardSummary = Get-MaturityDashboardSummary -OverallStatus $OverallStatus -SignalSuites $signalSuites
   $report = [ordered]@{
     run_id = $runId
     root = $root
@@ -248,6 +305,7 @@ function Write-CheckReport {
       lines = @($script:slowDurationLines | ForEach-Object { [string]$_ })
     }
     command_matrix = $commandMatrix
+    maturity_dashboard_summary = $maturityDashboardSummary
   }
   if ($null -ne $script:failureContext) {
     $failureContext = [ordered]@{}
@@ -478,6 +536,7 @@ function Invoke-PowerChatIssueGate {
 
 function Invoke-NaturalChatIssueGate {
   $name = "chat_e2e_natural_issue_gate"
+  # 11-自然聊天待优化结论.md
   $filePath = Resolve-ChatDocFile -DirSuffix "2026-04-30" -Pattern "11-*.md"
   $logPath = Join-Path $reportRoot "$runId-$name.log"
   $started = (Get-Date).ToUniversalTime()

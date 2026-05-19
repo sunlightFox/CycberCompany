@@ -1103,6 +1103,62 @@ def test_phase54_wechat_outbound_attachment_selection_prefers_primary_office_out
     ]
 
 
+def test_phase54_wechat_outbound_attachment_selection_uses_completed_summary_signal(
+    client: TestClient,
+) -> None:
+    registry = cast(Any, client.app).state.registry
+    task = client.post("/api/tasks", json={"goal": "phase54 completed summary attachments"}).json()
+    task_id = task["task_id"]
+    artifact_store = registry.artifact_store
+    word_artifact = _run_async(
+        client,
+        lambda: artifact_store.write_bytes(
+            task_id=task_id,
+            organization_id="org_default",
+            display_name="board-review.docx",
+            content=b"phase54-docx",
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            artifact_type="office_document",
+        ),
+    )
+
+    selection = _run_async(
+        client,
+        lambda: _wechat_outbound_attachment_selection(
+            artifacts=artifact_store,
+            turn={},
+            message={
+                "content": {
+                    "response_plan": {
+                        "artifact_refs": [
+                            {
+                                "artifact_id": word_artifact.artifact_id,
+                                "display_name": word_artifact.display_name,
+                                "content_type": word_artifact.content_type,
+                            }
+                        ],
+                        "structured_payload": {
+                            "action_status": {
+                                "completed_summary": "已产出文件 board-review.docx",
+                            },
+                            "task_status": {"task_id": task_id},
+                        },
+                    }
+                }
+            },
+            user_text="好的",
+            final_text="这一步已经完成了。",
+        ),
+    )
+
+    assert selection["scene"] == "office_document"
+    assert selection["should_send_attachments"] is True
+    assert "completed_summary_mentions_generated_document" in selection["selection_reason_codes"]
+    assert [item["display_name"] for item in selection["selected_attachments"]] == [
+        "board-review.docx"
+    ]
+
+
 def test_phase54_wechat_notification_provider_sends_text_then_attachments(
     client: TestClient,
 ) -> None:

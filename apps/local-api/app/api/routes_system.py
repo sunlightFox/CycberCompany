@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from app.api.dependencies import get_registry
 from app.schemas.system import (
     BootstrapStatus,
+    MaturityDashboardResponse,
+    ChatMainlineObservabilityResponse,
     ChatMainlineReadinessResponse,
     DesignGapsResponse,
     RuntimeContractsResponse,
@@ -736,6 +738,24 @@ async def chat_mainline_readiness(
 ) -> ChatMainlineReadinessResponse:
     return ChatMainlineReadinessResponse(
         **(await registry.chat_mainline_readiness_service.diagnostic())
+    )
+
+
+@router.get("/chat-mainline-observability", response_model=ChatMainlineObservabilityResponse)
+async def chat_mainline_observability(
+    registry: ServiceRegistry = Depends(get_registry),
+) -> ChatMainlineObservabilityResponse:
+    return ChatMainlineObservabilityResponse(
+        **(await registry.chat_mainline_readiness_service.mainline_observability())
+    )
+
+
+@router.get("/maturity-dashboard", response_model=MaturityDashboardResponse)
+async def maturity_dashboard(
+    registry: ServiceRegistry = Depends(get_registry),
+) -> MaturityDashboardResponse:
+    return MaturityDashboardResponse(
+        **(await registry.chat_mainline_readiness_service.maturity_dashboard())
     )
 
 

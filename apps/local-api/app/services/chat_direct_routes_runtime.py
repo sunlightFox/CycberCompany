@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 from chat_runtime import canonical_route_name
@@ -548,6 +549,19 @@ class ChatDirectRoutesRuntime:
                 ),
                 task_status={"status": "blocked_by_boundary", "reason": "browser_snapshot_unavailable"},
             )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **dict(response_plan.structured_payload or {}),
+                        "route_semantics": {
+                            "route": "browser_read_page",
+                            "model_called": False,
+                            "task_created": False,
+                            "tool_created": False,
+                        },
+                    }
+                }
+            )
             async for event in self._complete_without_model(
                 turn,
                 events,
@@ -572,6 +586,19 @@ class ChatDirectRoutesRuntime:
                     evidence_summary=text,
                 ),
                 task_status={"status": "blocked_by_boundary", "reason": "missing_url"},
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **dict(response_plan.structured_payload or {}),
+                        "route_semantics": {
+                            "route": "browser_read_page",
+                            "model_called": False,
+                            "task_created": False,
+                            "tool_created": False,
+                        },
+                    }
+                }
             )
             async for event in self._complete_without_model(
                 turn,
@@ -953,6 +980,19 @@ class ChatDirectRoutesRuntime:
                 ),
                 task_status={"status": "blocked_by_boundary", "reason": "terminal_unavailable"},
             )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **dict(response_plan.structured_payload or {}),
+                        "route_semantics": {
+                            "route": "terminal_readonly_command",
+                            "model_called": False,
+                            "task_created": False,
+                            "tool_created": False,
+                        },
+                    }
+                }
+            )
             async for event in self._complete_without_model(
                 turn,
                 events,
@@ -965,6 +1005,7 @@ class ChatDirectRoutesRuntime:
                 yield event
             return
         command = str(metadata.get("command") or "").strip()
+        execution_command = command
         if not command:
             text = "我没拿到可执行的系统命令，所以没有运行。"
             response_plan = self._response_plan_for_action_status(
@@ -978,6 +1019,19 @@ class ChatDirectRoutesRuntime:
                     evidence_summary=text,
                 ),
                 task_status={"status": "blocked_by_boundary", "reason": "missing_command"},
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **dict(response_plan.structured_payload or {}),
+                        "route_semantics": {
+                            "route": "terminal_readonly_command",
+                            "model_called": False,
+                            "task_created": False,
+                            "tool_created": False,
+                        },
+                    }
+                }
             )
             async for event in self._complete_without_model(
                 turn,
@@ -1035,6 +1089,43 @@ class ChatDirectRoutesRuntime:
             ChatEventType.TASK_CREATED,
             {"task_id": task.task_id, "title": task.title, "status": task.status.value},
         )
+        if command.lower() == "pwd":
+            text = f"当前工作目录是：{Path.cwd()}"
+            response_plan = self._response_plan_for_action_status(
+                turn,
+                facts=self._action_status_facts_for_turn(
+                    turn,
+                    status="completed",
+                    route="terminal_readonly_command",
+                    action_label="执行只读命令",
+                    evidence_summary=text,
+                ),
+                task_status={"status": "completed_with_evidence", "reason": "terminal_readonly_command"},
+            )
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **dict(response_plan.structured_payload or {}),
+                        "route_semantics": {
+                            "route": "terminal_readonly_command",
+                            "model_called": False,
+                            "task_created": True,
+                            "tool_created": False,
+                        },
+                    }
+                }
+            )
+            async for event in self._complete_without_model(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent="terminal_readonly_command",
+                mode=TaskMode.WORKFLOW.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            return
         try:
             response = await self._tool_runtime.execute(
                 ToolExecuteRequest(
@@ -1045,8 +1136,8 @@ class ChatDirectRoutesRuntime:
                     channel="local",
                     member_id=turn["member_id"],
                     tool_name="terminal.run",
-                    args={"command": command, "chat_readonly_command": True},
-                    idempotency_key=f"chat:{turn['turn_id']}:terminal.run:{command}",
+                    args={"command": execution_command, "chat_readonly_command": True},
+                    idempotency_key=f"chat:{turn['turn_id']}:terminal.run:{execution_command}",
                 ),
                 trace_id=trace_id,
             )

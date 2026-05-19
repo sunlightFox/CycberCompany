@@ -203,6 +203,8 @@ class BrainDecisionPreviewResponse(ApiModel):
     mode: ModeDecision
     context: ContextDecision
     clarification: dict[str, Any] = Field(default_factory=dict)
+    turn_response_kind: str = "clarification_required"
+    turn_response_reason_codes: list[str] = Field(default_factory=list)
     dialogue_state: DialogueState | None = None
     semantic_intent_candidates: list[SemanticIntentCandidate] = Field(default_factory=list)
     low_confidence_review: LowConfidenceDecisionReview | None = None

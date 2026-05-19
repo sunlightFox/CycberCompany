@@ -117,20 +117,6 @@ class ChatTurnExecutionOrchestrator:
             turn["brain_decision_id"] = ctx.brain_decision.brain_decision_id
             turn["intent"] = ctx.brain_decision.intent.primary_intent
             turn["mode"] = ctx.brain_decision.mode.mode
-        task_coordinator = getattr(facade, "_task_coordinator", None)
-        scheduled_intent = None
-        if task_coordinator is not None:
-            scheduled_parser = getattr(task_coordinator, "scheduled_intents", None)
-            if scheduled_parser is not None and hasattr(scheduled_parser, "parse"):
-                scheduled_intent = scheduled_parser.parse(user_text)
-        if scheduled_intent is not None:
-            ctx.direct_response_override = {
-                "intent": "scheduled_task_request",
-                "mode": TaskMode.DIRECT.value,
-                "text": "定时任务已创建好了。我会按你说的时间处理这件事：每天上午 9 点整理一次今天的待办。",
-                "reason_codes": ["scheduled_task_intent_coordinator"],
-            }
-            return
         deterministic_text = _deterministic_no_model_reply(user_text)
         if deterministic_text is not None:
             ctx.direct_response_override = {
@@ -356,7 +342,7 @@ class ChatTurnExecutionOrchestrator:
         if scheduled_request is not None and facade._scheduled_tasks is not None:
             from app.schemas.scheduled_tasks import ScheduledTaskCreateRequest
             scheduled_task = await facade._scheduled_tasks.create(ScheduledTaskCreateRequest(conversation_id=turn["conversation_id"], owner_member_id=turn["member_id"], title=scheduled_request.title, goal=scheduled_request.goal, schedule=scheduled_request.schedule, execution_policy={"attendance": "unattended"}, constraints={"source": "chat_text", "phase": "phase36"}, created_by_member_id=facade._default_user_id()), trace_id=trace_id)
-            text = "定时任务已经建好了。到时间后我会先按后台流程往下推；一碰到下载、登录、删除、终端或外发这类高风险动作，我会停一下，再找你确认。"
+            text = _scheduled_task_created_reply(goal=str(scheduled_task.goal or scheduled_request.goal), schedule=dict(scheduled_task.schedule or scheduled_request.schedule), next_run_at=scheduled_task.next_run_at.isoformat() if scheduled_task.next_run_at else None)
             response_plan = facade._response_plan_for_status(turn, summary=text, task_status={"scheduled_task_id": scheduled_task.scheduled_task_id, "status": scheduled_task.status, "next_run_at": scheduled_task.next_run_at.isoformat() if scheduled_task.next_run_at else None, "background_execution_policy": scheduled_task.execution_policy})
             yield await emit(ChatEventType.INTENT_DETECTED, {"intent": "scheduled_task_request", "reason_codes": ["phase36_scheduled_task_text"]})
             yield await emit(ChatEventType.MODE_SELECTED, {"mode": TaskMode.DIRECT.value, "needs_tool": False})
@@ -1335,3 +1321,45 @@ class ChatTurnExecutionOrchestrator:
         yield await facade._emit_and_record(turn_id, trace_id, events, ChatEventType.ROUTE_SELECTED, model_route.model_dump(mode="json"))
         async for event in facade._run_model_path(turn, events, context, privacy.redacted_text, model_route.primary_brain_id, model_route.fallback_brain_ids, model_route.model_params.model_dump(mode="json"), root_span_id, intent=intent, mode=mode.value):
             yield event
+
+
+
+def _scheduled_task_created_reply(
+    *,
+    goal: str,
+    schedule: dict[str, Any],
+    next_run_at: str | None,
+) -> str:
+    next_run_text = (
+        f"下一次执行时间是 {next_run_at}。"
+        if next_run_at
+        else "下一次执行时间会按这个调度规则计算。"
+    )
+    return (
+        f"定时任务已经建好了，目标是：{goal}。"
+        f"调度方式是：{_human_schedule_text(schedule)}。"
+        f"{next_run_text}"
+        "到点后我会先按后台流程往下推；如果过程中碰到下载、删除、终端、登录或外发这类高风险动作，我会停一下，再找你确认。"
+    )
+
+
+def _human_schedule_text(schedule: dict[str, Any]) -> str:
+    kind = str(schedule.get("type") or "").strip().lower()
+    timezone = str(schedule.get("timezone") or "Asia/Shanghai")
+    if kind == "daily":
+        return f"每天 {schedule.get('time') or '09:00'}（{timezone}）"
+    if kind == "weekly":
+        days = schedule.get("days") or []
+        days_text = "、".join(str(item) for item in days) if isinstance(days, list) and days else "每周"
+        return f"{days_text} {schedule.get('time') or '09:00'}（{timezone}）"
+    if kind == "interval":
+        seconds = int(schedule.get("every_seconds") or schedule.get("seconds") or 0)
+        if seconds > 0 and seconds % 3600 == 0:
+            return f"每隔 {seconds // 3600} 小时"
+        if seconds > 0 and seconds % 60 == 0:
+            return f"每隔 {seconds // 60} 分钟"
+        if seconds > 0:
+            return f"每隔 {seconds} 秒"
+    if kind == "once":
+        return f"一次性任务，执行时间 {schedule.get('run_at') or schedule.get('at') or '待定'}"
+    return kind or "未知调度"

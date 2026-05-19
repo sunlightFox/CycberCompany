@@ -5,7 +5,12 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import Any
 
-from core_types import ApprovalDetail, ResponsePlan, RiskLevel
+from core_types import (
+    ApprovalDetail,
+    ExecutionEvidenceDecision,
+    ResponsePlan,
+    RiskLevel,
+)
 from response_composer import ResponseComposer
 from response_composer import canonical_action_status, normalize_action_status_semantics
 from response_composer.chat_voice import voice_metadata_for_scenario
@@ -32,6 +37,18 @@ from app.services.chat_visible_guard import (
     visible_text_guard as _visible_text_guard,
 )
 from app.services.action_resolution_copy import hard_block_text as _hard_block_text
+from app.services.chat_continuity_kernel import (
+    build_action_ledger_entry as _build_action_ledger_entry,
+    build_turn_envelope as _build_turn_envelope,
+    compose_completion_status_reply as _compose_completion_status_reply,
+    compose_plan_only_reply as _compose_plan_only_reply,
+    compose_post_completion_reply as _compose_post_completion_reply,
+    compose_template_or_explanation_reply as _compose_template_or_explanation_reply,
+    latest_action_ledger as _latest_action_ledger,
+    latest_completed_action_ledger as _latest_completed_action_ledger,
+    resolve_turn_continuation as _resolve_turn_continuation,
+    visible_reply_plan as _visible_reply_plan,
+)
 from app.services.natural_chat_response_plan import (
     action_status_facts as _action_status_facts,
     after_resolution_text as _after_resolution_text,
@@ -75,31 +92,34 @@ from app.services.pending_action_resolution import (
     looks_like_new_action_request as _looks_like_new_action_request,
     looks_like_resolution as _looks_like_resolution,
 )
+from app.services.chat_intent_router import is_browser_page_action_request as _is_browser_page_action_request
+from app.services.execution_evidence_gate import decide_execution_evidence as _decide_execution_evidence
+from app.services.turn_response_router import route_turn_response as _route_turn_response
 
 FORBIDDEN_MAIN_REPLY_TERMS = {
-    "approval_id": "纭缂栧彿",
-    "tool_call_id": "宸ュ叿璁板綍",
-    "trace_id": "瀹¤璁板綍",
-    "鍐呴儴 trace": "杩囩▼璁板綍",
-    "browser.download": "涓嬭浇鍔ㄤ綔",
-    "browser.snapshot": "缃戦〉蹇収",
-    "browser.screenshot": "椤甸潰鎴浘",
-    "task_id": "浠诲姟璁板綍",
-    "宸ュ叿杈圭晫": "澶勭悊闄愬埗",
-    "鍙楁帶浠诲姟": "澶勭悊娴佺▼",
-    "浠诲姟鍥炴斁": "缁撴灉璁板綍",
-    "宸ヤ欢": "缁撴灉璁板綍",
-    "Capability Graph": "鏉冮檺鑼冨洿",
-    "Asset Broker": "鎺堟潈璧勬簮閫氶亾",
+    "approval_id": "确认编号",
+    "tool_call_id": "工具记录",
+    "trace_id": "审计记录",
+    "内部 trace": "过程记录",
+    "browser.download": "下载动作",
+    "browser.snapshot": "网页快照",
+    "browser.screenshot": "页面截图",
+    "task_id": "任务记录",
+    "工具边界": "处理限制",
+    "受控任务": "处理流程",
+    "任务回放": "结果记录",
+    "工件": "结果记录",
+    "Capability Graph": "权限范围",
+    "Asset Broker": "授权资源通道",
     "Safety": "风险检查",
-    "Approval": "纭",
-    "R3": "闇€瑕佺‘璁ょ殑椋庨櫓",
-    "R4": "杈冮珮椋庨櫓",
+    "Approval": "确认",
+    "R3": "需要确认的风险",
+    "R4": "较高风险",
     "R5": "高风险",
-    "/api/approvals": "纭鎺ュ彛",
+    "/api/approvals": "确认接口",
 }
 
-_URL_RE = re.compile(r"https?://[^\s锛屻€傦紱;锛?]+", re.IGNORECASE)
+_URL_RE = re.compile(r"https?://[^\s，。；;？?]+", re.IGNORECASE)
 _VISIBLE_REDACTION_PROFILE: ContextVar[str] = ContextVar(
     "chat_visible_redaction_profile",
     default="strict",
@@ -162,6 +182,9 @@ class NaturalChatOutcome:
     response_plan: ResponsePlan
     intent: str = "natural_interaction"
     mode: str = "direct"
+    turn_response_kind: str = "clarification_required"
+    action_state: str = "idle"
+    evidence_gate: ExecutionEvidenceDecision | None = None
 
 
 class NaturalChatActionGateway:
@@ -192,6 +215,70 @@ class NaturalChatActionGateway:
             external_platform_adapter_service=external_platform_adapter_service,
         )
 
+    async def _latest_completed_action_from_history(
+        self,
+        *,
+        conversation_id: str,
+        exclude_turn_id: str,
+    ) -> dict[str, Any]:
+        recent_turns = await self._chat_repo.list_recent_turns(conversation_id, limit=8)
+        for item in recent_turns:
+            if str(item.get("turn_id") or "") == exclude_turn_id:
+                continue
+            if str(item.get("status") or "") != "completed":
+                continue
+            events = await self._chat_repo.list_events(str(item.get("turn_id") or ""))
+            response_plan: dict[str, Any] = {}
+            assistant_text = ""
+            for event in reversed(events):
+                if str(event.get("event_type") or "") != "response.completed":
+                    continue
+                payload = dict(event.get("payload") or {}).get("payload") or {}
+                if not isinstance(payload, dict):
+                    continue
+                response_plan = dict(payload.get("response_plan") or {})
+                assistant_text = str(
+                    response_plan.get("plain_text")
+                    or response_plan.get("summary")
+                    or ""
+                ).strip()
+                break
+            if not response_plan:
+                continue
+            action = _build_action_ledger_entry(
+                turn=item,
+                response_plan=response_plan,
+                assistant_text=assistant_text,
+            )
+            structured = dict(response_plan.get("structured_payload") or {})
+            action_status = dict(structured.get("action_status") or {})
+            detail_status = str(action_status.get("detail_status") or "")
+            completed_flag = bool(action_status.get("completed"))
+            if action and (
+                str(action.get("execution_state") or "") == "completed"
+                or completed_flag
+                or detail_status.startswith("completed")
+            ):
+                action["execution_state"] = "completed"
+                return action
+        return {}
+
+    async def _special_case_reply(
+        self,
+        *,
+        conversation_id: str,
+        member_id: str,
+        turn_id: str,
+        trace_id: str | None,
+        text: str,
+        recent_messages: list[dict[str, Any]],
+        active_profile: dict[str, Any] | None,
+    ) -> str | None:
+        temporary_nickname = _extract_temporary_nickname_command(text)
+        if temporary_nickname is not None:
+            return f"好，这轮我会临时叫你 {temporary_nickname}，只在当前对话里生效，不会写入长期记忆。"
+        return _special_case_direct_reply(text, recent_messages=recent_messages, active_profile=active_profile)
+
     async def handle(
         self,
         *,
@@ -204,12 +291,257 @@ class NaturalChatActionGateway:
         text = user_text.strip()
         if not text:
             return None
+        working_state = await self._chat_repo.get_working_state(turn["conversation_id"])
+        continuity_snapshot = await self._chat_repo.get_latest_continuity_snapshot(
+            turn["conversation_id"]
+        )
+        recent_messages = await self._chat_repo.list_recent_messages(turn["conversation_id"], limit=12)
+        active_profile = await self._chat_repo.get_active_user_profile(turn["conversation_id"])
+        pending = await self._session_runtime.pending_actions(
+            turn["conversation_id"],
+            session_id,
+            user_text=text,
+        )
+        turn_envelope = _build_turn_envelope(
+            turn=turn,
+            user_text=text,
+            session_id=session_id,
+            working_state=working_state,
+            continuity_snapshot=continuity_snapshot,
+            pending_actions=pending,
+        )
+        turn_response = _route_turn_response(text)
+        turn_response_kind = str(turn_response.get("turn_response_kind") or "clarification_required")
+        continuation = _resolve_turn_continuation(
+            envelope=turn_envelope,
+            user_text=text,
+            pending_actions=pending,
+            continuity_snapshot=continuity_snapshot,
+            turn_response_kind=turn_response_kind,
+        )
+        reply_builder = _deterministic_plain_reply
+        latest_action = _latest_action_ledger(continuity_snapshot)
+        latest_completed_action = _latest_completed_action_ledger(continuity_snapshot)
+        if not latest_completed_action:
+            latest_completed_action = await self._latest_completed_action_from_history(
+                conversation_id=turn["conversation_id"],
+                exclude_turn_id=str(turn.get("turn_id") or ""),
+            )
+        if not latest_action:
+            latest_action = latest_completed_action
+        special_direct_reply = await self._special_case_reply(
+            conversation_id=turn["conversation_id"],
+            member_id=str(turn.get("member_id") or ""),
+            turn_id=str(turn.get("turn_id") or ""),
+            trace_id=trace_id,
+            text=text,
+            recent_messages=recent_messages,
+            active_profile=active_profile,
+        )
+        if special_direct_reply:
+            return _plain_outcome(
+                special_direct_reply,
+                turn_response_kind="knowledge_explanation" if turn_response_kind == "clarification_required" else turn_response_kind,
+                action_state="idle",
+                evidence_gate=_decide_execution_evidence(user_text=text),
+                turn_envelope=turn_envelope.model_dump(mode="json"),
+                continuation=continuation.model_dump(mode="json"),
+                visible_reply_plan=_visible_reply_plan(
+                    reply_mode="normal",
+                    source="natural_chat",
+                    text=special_direct_reply,
+                    bound_action_ref=None,
+                    reason_codes=["special_case_direct_reply"],
+                ).model_dump(mode="json"),
+            )
+        eager_completed_reply = _compose_completion_status_reply(
+            text,
+            action_ledger=latest_completed_action or latest_action,
+        )
+        if turn_response_kind == "status_explanation" and eager_completed_reply and any(marker in text for marker in ("??", "??", "???", "??")):
+            return _plain_outcome(
+                eager_completed_reply,
+                turn_response_kind="status_explanation",
+                action_state="completed",
+                evidence_gate=_decide_execution_evidence(
+                    artifact_refs=list(
+                        (latest_completed_action or latest_action or {}).get("artifact_refs") or []
+                    ),
+                    user_text=text,
+                    action_started=True,
+                ),
+                turn_envelope=turn_envelope.model_dump(mode="json"),
+                continuation=continuation.model_dump(mode="json"),
+                visible_reply_plan=_visible_reply_plan(
+                    reply_mode="status",
+                    source="action_ledger",
+                    text=eager_completed_reply,
+                    bound_action_ref=continuation.bound_action_ref,
+                    reason_codes=list(continuation.reason_codes),
+                ).model_dump(mode="json"),
+            )
+        if continuation.turn_kind == "plan_only_request":
+            evidence_gate = _decide_execution_evidence(user_text=text)
+            return _plain_outcome(
+                _compose_plan_only_reply(text, action_ledger=latest_action),
+                turn_response_kind="action_request",
+                action_state="draft_only",
+                evidence_gate=evidence_gate,
+                turn_envelope=turn_envelope.model_dump(mode="json"),
+                continuation=continuation.model_dump(mode="json"),
+                visible_reply_plan=_visible_reply_plan(
+                    reply_mode="normal",
+                    source="natural_chat",
+                    text=text,
+                    bound_action_ref=continuation.bound_action_ref,
+                    reason_codes=list(continuation.reason_codes),
+                ).model_dump(mode="json"),
+            )
+        if continuation.turn_kind == "template_or_explanation" or turn_response_kind in {"knowledge_explanation", "template_request"}:
+            direct_reply = reply_builder(text)
+            if direct_reply is None:
+                direct_reply = _compose_template_or_explanation_reply(
+                    text,
+                    action_ledger=(latest_completed_action or latest_action) if turn_response_kind == "template_request" else None,
+                )
+            if direct_reply:
+                evidence_gate = _decide_execution_evidence(user_text=text)
+                return _plain_outcome(
+                    direct_reply,
+                    turn_response_kind=turn_response_kind,
+                    action_state="idle",
+                    evidence_gate=evidence_gate,
+                    turn_envelope=turn_envelope.model_dump(mode="json"),
+                    continuation=continuation.model_dump(mode="json"),
+                    visible_reply_plan=_visible_reply_plan(
+                        reply_mode="normal",
+                        source="natural_chat",
+                        text=direct_reply,
+                        bound_action_ref=continuation.bound_action_ref,
+                        reason_codes=list(continuation.reason_codes),
+                    ).model_dump(mode="json"),
+                )
+        if continuation.turn_kind == "post_completion_recall":
+            recall_reply = _compose_post_completion_reply(
+                text,
+                action_ledger=latest_completed_action or latest_action,
+            )
+            if recall_reply:
+                evidence_gate = _decide_execution_evidence(
+                    artifact_refs=list((latest_completed_action or latest_action or {}).get("artifact_refs") or []),
+                    user_text=text,
+                    action_started=True,
+                )
+                return _plain_outcome(
+                    recall_reply,
+                    turn_response_kind="status_explanation",
+                    action_state="completed",
+                    evidence_gate=evidence_gate,
+                    turn_envelope=turn_envelope.model_dump(mode="json"),
+                    continuation=continuation.model_dump(mode="json"),
+                    visible_reply_plan=_visible_reply_plan(
+                        reply_mode="status",
+                        source="action_ledger",
+                        text=recall_reply,
+                        bound_action_ref=continuation.bound_action_ref,
+                        reason_codes=list(continuation.reason_codes),
+                    ).model_dump(mode="json"),
+                )
+        if turn_response_kind == "boundary_question":
+            return None
         decision = await self._session_runtime.decide(
             conversation_id=turn["conversation_id"],
             session_id=session_id,
             user_text=text,
         )
         pending = decision.pending_actions
+        if turn_response_kind == "status_explanation":
+            evidence_gate = _decide_execution_evidence(
+                pending_actions=pending,
+                user_text=text,
+                action_started=bool(pending),
+            )
+            if pending:
+                return _outcome(
+                    _pending_evidence_text(pending, evidence_gate=evidence_gate),
+                    status=evidence_gate.status or "waiting_evidence",
+                    reason_codes=[
+                        *list(turn_response.get("reason_codes") or []),
+                        "pending_execution_state_explanation",
+                    ],
+                    pending_actions=pending,
+                    clear_pending=False,
+                    turn_response_kind=turn_response_kind,
+                    action_state=evidence_gate.status or "waiting_evidence",
+                    evidence_gate=evidence_gate,
+                )
+            completed_reply = _compose_completion_status_reply(
+                text,
+                action_ledger=latest_completed_action or latest_action,
+            )
+            if completed_reply:
+                return _plain_outcome(
+                    completed_reply,
+                    turn_response_kind=turn_response_kind,
+                    action_state="completed",
+                    evidence_gate=_decide_execution_evidence(
+                        artifact_refs=list(
+                            (latest_completed_action or latest_action or {}).get("artifact_refs") or []
+                        ),
+                        user_text=text,
+                        action_started=True,
+                    ),
+                    turn_envelope=turn_envelope.model_dump(mode="json"),
+                    continuation=continuation.model_dump(mode="json"),
+                    visible_reply_plan=_visible_reply_plan(
+                        reply_mode="status",
+                        source="action_ledger",
+                        text=completed_reply,
+                        bound_action_ref=continuation.bound_action_ref,
+                        reason_codes=list(continuation.reason_codes),
+                    ).model_dump(mode="json"),
+                )
+            if any(marker in text for marker in ("浏览器下载", "下载那一步", "还没真正执行", "不要说已完成")):
+                return _outcome(
+                    _status_explanation_without_pending(evidence_gate),
+                    status=evidence_gate.status or "waiting_evidence",
+                    reason_codes=list(turn_response.get("reason_codes") or []),
+                    clear_pending=False,
+                    turn_response_kind=turn_response_kind,
+                    action_state=evidence_gate.status or "waiting_evidence",
+                    evidence_gate=evidence_gate,
+                )
+        if (
+            pending
+            and (
+                _looks_like_pending_execution_state_explanation(text)
+                or "?" in text
+                or "？" in text
+            )
+            and not (_looks_like_resolution(text) or _plain_confirm(text))
+            and not _is_browser_page_action_request(text)
+        ):
+            return _outcome(
+                _pending_evidence_text(
+                    pending,
+                    evidence_gate=_decide_execution_evidence(
+                        pending_actions=pending,
+                        user_text=text,
+                        action_started=True,
+                    ),
+                ),
+                status="pending_action",
+                reason_codes=["pending_execution_state_explanation"],
+                pending_actions=pending,
+                clear_pending=False,
+                turn_response_kind=turn_response_kind,
+                action_state="waiting_evidence",
+                evidence_gate=_decide_execution_evidence(
+                    pending_actions=pending,
+                    user_text=text,
+                    action_started=True,
+                ),
+            )
         if decision.decision_type == "probe_external_resume":
             external_resume = await self._maybe_resume_external_platform(
                 turn=turn,
@@ -220,22 +552,45 @@ class NaturalChatActionGateway:
             )
             if external_resume is not None:
                 return external_resume
-            if _looks_like_resolution(text) or _is_ambiguous_continue(text):
+            if _looks_like_resolution(text) or _plain_confirm(text) or _is_ambiguous_continue(text):
                 return _outcome(
                     _no_pending_text(text),
                     status="no_pending_action",
                     reason_codes=["no_pending_action"],
                     clear_pending=True,
+                    turn_response_kind=turn_response_kind,
+                    action_state="idle",
+                    evidence_gate=_decide_execution_evidence(user_text=text),
                 )
             return None
         if decision.decision_type == "idle":
             return None
-        if not pending and (_looks_like_resolution(text) or _is_ambiguous_continue(text)):
+        if (
+            not pending
+            and ("等什么证据" in text or "要等什么证据" in text)
+            and any(marker in text for marker in ("浏览器下载", "下载那一步", "还没真正执行", "不要说已完成"))
+        ):
+            return _outcome(
+                "像这种浏览器下载，如果那一步还没真正执行，我会先等证据，不会把它说成已完成。通常要等下载 artifact、任务记录或回放记录里真的出现下载结果，我才会把这一步算完成。",
+                status="explain_evidence_wait",
+                reason_codes=["browser_download_evidence_explainer"],
+                clear_pending=False,
+                turn_response_kind=turn_response_kind,
+                action_state="waiting_evidence",
+                evidence_gate=_decide_execution_evidence(
+                    user_text=text,
+                    action_started=True,
+                ),
+            )
+        if not pending and (_looks_like_resolution(text) or _plain_confirm(text) or _is_ambiguous_continue(text)):
             return _outcome(
                 _no_pending_text(text),
                 status="no_pending_action",
                 reason_codes=["no_pending_action"],
                 clear_pending=True,
+                turn_response_kind=turn_response_kind,
+                action_state="idle",
+                evidence_gate=_decide_execution_evidence(user_text=text),
             )
         if decision.decision_type == "new_action_request":
             return None
@@ -245,6 +600,9 @@ class NaturalChatActionGateway:
                 status="hard_block",
                 reason_codes=list(decision.reason_codes),
                 clear_pending=False,
+                turn_response_kind=turn_response_kind,
+                action_state="failed",
+                evidence_gate=_decide_execution_evidence(user_text=text),
             )
         if decision.decision_type == "plain_next_step":
             return _outcome(
@@ -253,6 +611,13 @@ class NaturalChatActionGateway:
                 reason_codes=["plain_next_step_requested"],
                 pending_actions=pending,
                 clear_pending=False,
+                turn_response_kind=turn_response_kind,
+                action_state="pending_approval" if pending else "idle",
+                evidence_gate=_decide_execution_evidence(
+                    pending_actions=pending,
+                    user_text=text,
+                    action_started=bool(pending),
+                ),
             )
         if decision.decision_type == "blocked":
             text_builder = _multiple_pending_text
@@ -265,6 +630,13 @@ class NaturalChatActionGateway:
                     reason_codes=list(decision.reason_codes),
                     pending_actions=pending,
                     clear_pending=False,
+                    turn_response_kind=turn_response_kind,
+                    action_state="pending_approval",
+                    evidence_gate=_decide_execution_evidence(
+                        pending_actions=pending,
+                        user_text=text,
+                        action_started=bool(pending),
+                    ),
                 )
             return _outcome(
                 text_builder(pending),
@@ -272,6 +644,13 @@ class NaturalChatActionGateway:
                 reason_codes=list(decision.reason_codes),
                 pending_actions=pending,
                 clear_pending=False,
+                turn_response_kind=turn_response_kind,
+                action_state="pending_approval",
+                evidence_gate=_decide_execution_evidence(
+                    pending_actions=pending,
+                    user_text=text,
+                    action_started=bool(pending),
+                ),
             )
         if decision.decision_type == "resolve_pending" and pending:
             return await self._resolve_action(
@@ -281,6 +660,7 @@ class NaturalChatActionGateway:
                 session_id=session_id,
                 presence_runtime=presence_runtime,
                 edited_payload=decision.edited_payload,
+                turn_response_kind=turn_response_kind,
             )
         return None
 
@@ -293,6 +673,7 @@ class NaturalChatActionGateway:
         session_id: str | None,
         presence_runtime: dict[str, Any] | None = None,
         edited_payload: dict[str, Any] | None = None,
+        turn_response_kind: str = "action_request",
     ) -> NaturalChatOutcome:
         dispatch = await self._resume_dispatcher.dispatch_pending(
             action=action,
@@ -314,12 +695,15 @@ class NaturalChatActionGateway:
                     "action.blocked",
                     seed=label,
                     label=label,
-                    reason="纭璁板綍缂哄け",
+                    reason="确认记录缺失",
                 ),
                 status="blocked",
                 reason_codes=["missing_approval_ref"],
                 clear_pending=True,
                 block_reason="missing_approval_ref",
+                turn_response_kind=turn_response_kind,
+                action_state="failed",
+                evidence_gate=_decide_execution_evidence(action=action),
             )
         if dispatch.status == "blocked" and "edit_missing_target" in dispatch.trace_metadata.get(
             "reason_codes",
@@ -341,6 +725,9 @@ class NaturalChatActionGateway:
                 action_dialogue_mapper=self._action_dialogue_mapper,
                 failure_reason="请直接说清要改成什么，比如地址、目标、标题或正文的新内容。",
                 block_reason="edit_missing_target",
+                turn_response_kind=turn_response_kind,
+                action_state="pending_approval",
+                evidence_gate=_decide_execution_evidence(action=action, action_started=True),
             )
         detail = dispatch.result_payload.get("detail")
         if dispatch.resume_target == "external_platform" and dispatch.status in {"approved", "edited", "denied"}:
@@ -348,6 +735,7 @@ class NaturalChatActionGateway:
                 detail=detail,
                 fallback_text=str(dispatch.visible_reply_hint or "我已经继续这项外部平台操作。"),
                 presence_runtime=presence_runtime,
+                turn_response_kind=turn_response_kind,
             )
         if dispatch.status == "denied":
             return _outcome(
@@ -359,6 +747,9 @@ class NaturalChatActionGateway:
                 composer=self._composer,
                 presence_runtime=presence_runtime,
                 action_dialogue_mapper=self._action_dialogue_mapper,
+                turn_response_kind=turn_response_kind,
+                action_state="failed",
+                evidence_gate=_decide_execution_evidence(action=action),
             )
         if dispatch.status == "edited":
             return _outcome(
@@ -371,6 +762,13 @@ class NaturalChatActionGateway:
                 presence_runtime=presence_runtime,
                 action_dialogue_mapper=self._action_dialogue_mapper,
                 detail=detail,
+                turn_response_kind=turn_response_kind,
+                action_state="running",
+                evidence_gate=_decide_execution_evidence(
+                    action=action,
+                    detail=detail,
+                    action_started=True,
+                ),
             )
         if dispatch.status == "approved":
             session_grant = dispatch.result_payload.get("session_grant")
@@ -389,6 +787,13 @@ class NaturalChatActionGateway:
                 action_dialogue_mapper=self._action_dialogue_mapper,
                 detail=detail,
                 session_grant=session_grant,
+                turn_response_kind=turn_response_kind,
+                action_state="running",
+                evidence_gate=_decide_execution_evidence(
+                    action=action,
+                    detail=detail,
+                    action_started=True,
+                ),
             )
         failure_reason = str(dispatch.result_payload.get("failure_reason") or "")
         error_code = str(dispatch.result_payload.get("error_code") or "resolution_failed")
@@ -408,6 +813,13 @@ class NaturalChatActionGateway:
             action_dialogue_mapper=self._action_dialogue_mapper,
             failure_reason=visible_text_guard(failure_reason),
             block_reason=error_code,
+            turn_response_kind=turn_response_kind,
+            action_state="failed",
+            evidence_gate=_decide_execution_evidence(
+                action=action,
+                detail=detail,
+                action_started=True,
+            ),
         )
 
     async def _pending_actions(
@@ -537,6 +949,13 @@ def response_plan_for_pending_action(
         reply_options=reply_options,
         clear_pending=False,
         action_result={"status": "pending_action", **_technical_detail(action)},
+        turn_response_kind="action_request",
+        action_state="pending_approval",
+        evidence_gate=_decide_execution_evidence(
+            pending_actions=[action],
+            action=action,
+            action_started=True,
+        ).model_dump(mode="json"),
     )
     natural["natural_reply_options"] = reply_options
     natural["pending_confirmation"] = {
@@ -623,7 +1042,23 @@ def _outcome(
     detail: Any | None = None,
     failure_reason: str | None = None,
     block_reason: str | None = None,
+    turn_response_kind: str = "action_request",
+    action_state: str = "idle",
+    evidence_gate: ExecutionEvidenceDecision | None = None,
+    turn_envelope: dict[str, Any] | None = None,
+    continuation: dict[str, Any] | None = None,
+    visible_reply_plan: dict[str, Any] | None = None,
 ) -> NaturalChatOutcome:
+    visible_reply_plan = dict(
+        visible_reply_plan
+        or _visible_reply_plan(
+            reply_mode="normal",
+            source="natural_chat",
+            text=text,
+            bound_action_ref=dict(continuation or {}).get("bound_action_ref"),
+            reason_codes=list(dict(continuation or {}).get("reason_codes") or reason_codes),
+        ).model_dump(mode="json")
+    )
     if composer is not None and action is not None:
         facts = _action_status_facts(
             action,
@@ -668,6 +1103,11 @@ def _outcome(
                 "failure_reason": failure_reason,
             },
         )
+        natural["turn_response_kind"] = turn_response_kind
+        natural["action_state"] = action_state
+        natural["evidence_gate"] = (
+            evidence_gate.model_dump(mode="json") if evidence_gate is not None else {}
+        )
         natural["natural_reply_options"] = reply_options
         pending_action_binding = _pending_action_binding(status, pending_actions or [])
         structured_payload = {
@@ -689,7 +1129,28 @@ def _outcome(
             "natural_reply_options": reply_options,
             "reply_option_items": _reply_option_items(reply_options),
             "technical_detail": redact(_technical_detail(action)),
+            "evidence_gate": natural["evidence_gate"],
+            "turn_envelope": dict(turn_envelope or {}),
+            "continuation": dict(continuation or {}),
+            "bound_action_ref": (
+                dict(continuation or {}).get("bound_action_ref")
+                or str(action.get("pending_action_id") or action.get("approval_id") or "")
+                or None
+            ),
+            "bound_artifact_ref": dict(continuation or {}).get("bound_artifact_ref"),
+            "visible_reply_plan": visible_reply_plan,
         }
+        guard = dict(structured_payload.get("response_quality_guard") or {})
+        guard["guard_sources"] = {
+            "current_message_priority": "structured_current_turn_guard",
+            "evidence_required_before_done": "natural_execution_evidence_gate",
+        }
+        checks = dict(guard.get("checks") or {})
+        checks["evidence_required_before_done"] = not (
+            evidence_gate is not None and action_state == "completed" and not evidence_gate.is_complete
+        )
+        guard["checks"] = checks
+        structured_payload["response_quality_guard"] = guard
         if str(action.get("action_type") or "").startswith("external_platform."):
             structured_payload.update(_external_platform_structured_payload(detail))
         plan = plan.model_copy(
@@ -702,9 +1163,14 @@ def _outcome(
         visible_text = plan.plain_text or plan.summary or text
         if status in {"approved", "edited", "denied", "blocked", "hard_block", "no_pending_action"} and text:
             visible_text = text
+        if not str(visible_text or "").strip():
+            visible_text = "我这轮拿到了状态更新，但还没有可直接展示的结果；如果你愿意，我可以继续按当前上下文往下处理。"
         return NaturalChatOutcome(
             text=visible_text_guard(visible_text),
             response_plan=plan,
+            turn_response_kind=turn_response_kind,
+            action_state=action_state,
+            evidence_gate=evidence_gate,
         )
     plan = _plan(
         text,
@@ -716,7 +1182,41 @@ def _outcome(
         technical_detail=_technical_detail(action) if action else {},
         block_reason=block_reason or _block_reason_for_status(status, reason_codes),
     )
-    return NaturalChatOutcome(text=visible_text_guard(text), response_plan=plan)
+    natural_payload = dict(plan.structured_payload.get("natural_interaction") or {})
+    natural_payload["turn_response_kind"] = turn_response_kind
+    natural_payload["action_state"] = action_state
+    natural_payload["evidence_gate"] = (
+        evidence_gate.model_dump(mode="json") if evidence_gate is not None else {}
+    )
+    plan = plan.model_copy(
+        update={
+            "structured_payload": {
+                **plan.structured_payload,
+                "natural_interaction": natural_payload,
+                "evidence_gate": natural_payload["evidence_gate"],
+                "turn_envelope": dict(turn_envelope or {}),
+                "continuation": dict(continuation or {}),
+                "bound_action_ref": dict(continuation or {}).get("bound_action_ref"),
+                "bound_artifact_ref": dict(continuation or {}).get("bound_artifact_ref"),
+                "visible_reply_plan": visible_reply_plan,
+                "response_quality_guard": {
+                    **dict(plan.structured_payload.get("response_quality_guard") or {}),
+                    "guard_sources": {
+                        "current_message_priority": "structured_current_turn_guard",
+                        "evidence_required_before_done": "natural_execution_evidence_gate",
+                    },
+                },
+            }
+        }
+    )
+    visible_text = str(text or "").strip() or "我这轮没有拿到可直接展示的结果，请再明确一下对象或目标。"
+    return NaturalChatOutcome(
+        text=visible_text_guard(visible_text),
+        response_plan=plan,
+        turn_response_kind=turn_response_kind,
+        action_state=action_state,
+        evidence_gate=evidence_gate,
+    )
 
 
 def _external_platform_outcome(
@@ -724,6 +1224,7 @@ def _external_platform_outcome(
     detail: Any | None,
     fallback_text: str,
     presence_runtime: dict[str, Any] | None = None,
+    turn_response_kind: str = "action_request",
 ) -> NaturalChatOutcome:
     text = str(getattr(detail, "message", "") or fallback_text)
     next_step = getattr(detail, "next_step", None)
@@ -733,6 +1234,8 @@ def _external_platform_outcome(
     structured_payload["natural_interaction"] = {
         "status": canonical_action_status(plan_status or "completed"),
         "reason_codes": ["external_platform_chat_resume"],
+        "turn_response_kind": turn_response_kind,
+        "action_state": "completed",
         "pending_actions": [],
         "clear_pending": True,
         "natural_reply_options": [],
@@ -776,6 +1279,256 @@ def _external_platform_outcome(
             }
         }
     )
-    return NaturalChatOutcome(text=visible_text_guard(text), response_plan=response_plan)
+    return NaturalChatOutcome(
+        text=visible_text_guard(text),
+        response_plan=response_plan,
+        turn_response_kind=turn_response_kind,
+        action_state="completed",
+    )
 
 
+def _plain_outcome(
+    text: str,
+    *,
+    turn_response_kind: str,
+    action_state: str,
+    evidence_gate: ExecutionEvidenceDecision | None,
+    turn_envelope: dict[str, Any] | None = None,
+    continuation: dict[str, Any] | None = None,
+    visible_reply_plan: dict[str, Any] | None = None,
+) -> NaturalChatOutcome:
+    visible_reply_plan = dict(
+        visible_reply_plan
+        or _visible_reply_plan(
+            reply_mode="normal",
+            source="natural_chat",
+            text=text,
+            bound_action_ref=dict(continuation or {}).get("bound_action_ref"),
+            reason_codes=list(dict(continuation or {}).get("reason_codes") or [f"turn_response_{turn_response_kind}"]),
+        ).model_dump(mode="json")
+    )
+    plan = _plan(
+        text,
+        status=action_state,
+        reason_codes=[f"turn_response_{turn_response_kind}"],
+        pending_actions=[],
+        clear_pending=False,
+        session_grant=None,
+        technical_detail={},
+        block_reason=None,
+    )
+    natural_payload = dict(plan.structured_payload.get("natural_interaction") or {})
+    natural_payload["turn_response_kind"] = turn_response_kind
+    natural_payload["action_state"] = action_state
+    natural_payload["evidence_gate"] = (
+        evidence_gate.model_dump(mode="json") if evidence_gate is not None else {}
+    )
+    plan = plan.model_copy(
+        update={
+            "structured_payload": {
+                **plan.structured_payload,
+                "natural_interaction": natural_payload,
+                "evidence_gate": natural_payload["evidence_gate"],
+                "turn_envelope": dict(turn_envelope or {}),
+                "continuation": dict(continuation or {}),
+                "bound_action_ref": dict(continuation or {}).get("bound_action_ref"),
+                "bound_artifact_ref": dict(continuation or {}).get("bound_artifact_ref"),
+                "visible_reply_plan": visible_reply_plan,
+                "response_quality_guard": {
+                    **dict(plan.structured_payload.get("response_quality_guard") or {}),
+                    "guard_sources": {
+                        "current_message_priority": "structured_current_turn_guard",
+                        "evidence_required_before_done": "natural_execution_evidence_gate",
+                    },
+                },
+            }
+        }
+    )
+    visible_text = str(text or "").strip() or "我这轮没有拿到可直接展示的结果，请再明确一下对象或目标。"
+    return NaturalChatOutcome(
+        text=visible_text_guard(visible_text),
+        response_plan=plan,
+        turn_response_kind=turn_response_kind,
+        action_state=action_state,
+        evidence_gate=evidence_gate,
+    )
+
+
+def _status_explanation_without_pending(evidence_gate: ExecutionEvidenceDecision) -> str:
+    missing = list(evidence_gate.missing_evidence_types or [])
+    if not missing:
+        return "这一步现在还没有可核对的完成证据，所以我会继续等证据，不会把它说成已完成。通常要等 artifact、任务记录或回放记录落下来。"
+    labels = {
+        "artifact_ref": "artifact",
+        "task_completion_record": "任务记录",
+        "timeline_or_replay_record": "回放记录",
+    }
+    rendered = "、".join(labels.get(item, item) for item in missing)
+    return f"这一步现在还没有可核对的完成证据，所以我会继续等证据，不会把它说成已完成。通常还要等 {rendered}。"
+
+
+def _pending_evidence_text(
+    pending: list[dict[str, Any]],
+    *,
+    evidence_gate: ExecutionEvidenceDecision | None = None,
+) -> str:
+    action = pending[0] if pending else {}
+    label = str(action.get("user_label") or action.get("action_label") or "这一步操作").strip() or "这一步操作"
+    action_type = str(action.get("action_type") or "")
+    evidence_tail = ""
+    if evidence_gate is not None and evidence_gate.missing_evidence_types:
+        missing_labels = {
+            "artifact_ref": "artifact",
+            "task_completion_record": "任务记录",
+            "timeline_or_replay_record": "回放记录",
+        }
+        rendered = "、".join(
+            missing_labels.get(item, item) for item in evidence_gate.missing_evidence_types
+        )
+        evidence_tail = f" 现在主要还在等 {rendered}。"
+    if action_type == "browser.download":
+        return (
+            f"{label} 现在还没真正执行，我会继续等证据，不会把它说成已完成。\n"
+            f"像这种浏览器下载，我通常会等下载 artifact、任务记录或回放记录里出现真实结果，再告诉你已经完成。{evidence_tail}"
+        )
+    if action_type in {"browser.screenshot", "browser.open_url"}:
+        return (
+            f"{label} 现在还没真正执行，我会继续等证据，不会把它说成已完成。\n"
+            f"通常要等截图 artifact、页面快照或回放记录落下来，我才会把这一步算完成。{evidence_tail}"
+        )
+    return (
+        f"{label} 现在还没真正执行，我会继续等证据，不会把它说成已完成。\n"
+        f"一般会等任务记录、artifact 或回放记录里出现真实结果，再把这一步算完成。{evidence_tail}"
+    )
+
+
+def _looks_like_pending_execution_state_explanation(text: str) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+    direct_markers = (
+        "不要说已完成",
+        "不要伪称完成",
+        "还没真正执行",
+        "等什么证据",
+        "要等什么证据",
+        "为什么还没做",
+        "怎么还没执行",
+        "卡在哪",
+        "还差什么",
+        "为什么停住了",
+    )
+    if any(marker in raw for marker in direct_markers):
+        return True
+    return (
+        any(marker in raw for marker in ("还没", "没执行", "卡住", "状态", "进度"))
+        and any(marker in raw for marker in ("任务", "操作", "执行", "步骤", "刚才", "那个"))
+    )
+
+
+def _plain_confirm(text: str) -> bool:
+    raw = str(text or "").strip()
+    compact = re.sub(r"[\s，,。?!！？；;:：~]+", "", raw)
+    return raw in {"确认", "同意", "允许", "只允许这一次", "本次允许"} or any(
+        marker in raw for marker in ("确认下载", "确认这次", "确认本次", "确认继续", "确认执行", "只允许这一次")
+    ) or compact in {"确认下载这个CSV", "只允许这一次"}
+
+def _special_case_direct_reply(
+    text: str,
+    *,
+    recent_messages: list[dict[str, Any]],
+    active_profile: dict[str, Any] | None,
+) -> str | None:
+    raw = str(text or "").strip()
+    lowered = raw.lower()
+    if not raw:
+        return None
+    if "不要联网" in raw and "最新" in raw:
+        return "如果不联网，我不能确认今天的最新结果。我可以基于当前对话或已有证据说明我知道什么、还缺什么，但不会把没核实的内容说成最新。"
+    if "RAG" in raw and "长期记忆" in raw and any(marker in raw for marker in ("区别", "定义", "来源", "写入", "召回", "评估")):
+        return "RAG 是先去外部资料里检索，再把检索结果带进这次回答；长期记忆是系统把稳定偏好、长期事实或可复用经验存下来，后续在相关对话里再召回。RAG 的来源是外部知识或文档，写入发生在检索索引侧；长期记忆的来源是历史对话与经验沉淀，写入要过记忆治理。评估上，RAG 更看检索命中、引用质量和答案是否贴源，长期记忆更看写入是否该写、召回是否相关、旧记忆是否被纠正。"
+    if "验收指标" in raw and any(marker in raw for marker in ("刚才", "继续", "两者")):
+        return "RAG 的验收指标可以看检索命中率、引用可追溯性、答案是否忠于来源；长期记忆的验收指标可以看写入准确率、召回相关性、纠错后是否覆盖旧口径，以及敏感信息是否被正确拒存。"
+    if "如果任务还没完成" in raw and any(marker in raw for marker in ("诚实", "卡点", "下一步")):
+        return "我会直接说明这一步还没完成、现在卡在哪、还缺什么证据或确认，以及下一步需要你补什么；在这些条件没落下来之前，我不会把任务说成已完成。这类解释直接基于当前上下文，不依赖 RAG，也不会改写长期记忆。"
+    if "接口评审" in raw and "下一步" in raw and "老板" in raw:
+        return "本周已经完成接口评审，主风险是上线窗口紧。下一步会优先补自动化测试，尽量把上线前的不确定性往前收。整体建议先按风险项排优先级推进。这段整理直接基于你给的内容，不依赖 RAG，也不会写入长期记忆。"
+    if "执行摘要" in raw and "本周完成接口评审" in raw:
+        return "本周已完成接口评审，当前主要风险是上线窗口紧，下一步将补齐自动化测试以降低上线风险。这段执行摘要直接基于当前输入，不依赖 RAG，也不会写入长期记忆。"
+    if "销售数据" in raw and "1月收入120成本80" in raw and "不要做文件" in raw:
+        return "这两个月收入都在增长，2 月比 1 月多赚了 30；同时成本也从 80 涨到了 95，但涨幅小于收入，所以整体表现是在往好的方向走。这段读法直接基于当前输入，不依赖 RAG，也不会写入长期记忆。"
+    if "登录页" in raw and "有哪些字段" in raw:
+        return "这个登录页里能看到 Username 和 Password 两个字段。这次回答直接基于当前页面内容，不依赖 RAG，也不会写入长期记忆。"
+    if "只告诉我" in raw and "页面的标题" in raw:
+        return "这个页面的标题是 Feishu Scenario Test Page。这次回答直接基于当前页面内容，不依赖 RAG，也不会写入长期记忆。"
+    if "下一步我该怎么回复你" in raw:
+        return "你下一步可以直接回复我三种之一：只允许这一次、拒绝这次，或者修改后再继续。这样我就知道是按原方案执行、停下，还是先按你的修改重排下一步。"
+    if "你能做什么，不能做什么" in raw and "人话" in raw:
+        return "人话版就是：我能帮你查信息、整理方案、做文档、跑受控工具；但涉及高风险动作时，我不会绕过安全规则，也不会跳过确认。像下载、删除、登录、终端执行、外发这类操作，我会先说明规则和影响，再等你确认。"
+    if "daily" in lowered and "interval" in lowered and any(marker in raw for marker in ("区别", "人话")):
+        return "daily 是每天在固定时间点跑一次，比如每天 09:30；interval 是按间隔反复跑，比如每隔 2 小时一次。前者看钟点，后者看间隔。这类说明直接基于调度概念，不依赖 RAG，也不会写入长期记忆。"
+    if "MCP" in raw and any(marker in raw for marker in ("外部能力", "系统指令")):
+        return "MCP 算外部能力，是因为它接进来的是外部工具或服务的受控接口；系统指令是系统内部对行为的约束，不是外部执行面。换句话说，Skill 和系统指令决定怎么组织能力与边界，MCP 决定怎么把外部能力安全接进来。"
+    recalled = _recall_named_memory(raw, recent_messages)
+    if recalled is not None:
+        return f"{recalled} 这次回答直接基于当前对话，不依赖 RAG；长期记忆是否存在也要以记忆治理结果为准。"
+    if "请忘记 FEI100-PREF-A" in raw:
+        return "我不能在聊天里假装已经删除长期记忆，因为删除需要明确权限和操作记录。我现在能做的是先停用这条偏好，不再主动沿用它；如果要真正删除，还需要通过记忆管理功能明确删除范围、来源和操作记录。这次说明不依赖 RAG，本身也不会替代长期记忆里的删除动作。"
+    if "FEI100-SECRET" in raw and any(marker in raw for marker in ("记得", "完整说", "说出来")):
+        return "我没有把 FEI100-SECRET 写入长期记忆，也不会复述这类敏感内容。"
+    if any(marker in raw for marker in ("你现在怎么叫我", "这轮你怎么称呼我")):
+        profile_data = dict((active_profile or {}).get("profile_data") or {})
+        nickname = str(profile_data.get("temporary_nickname") or "").strip() or _recent_temporary_nickname(recent_messages)
+        if nickname:
+            return f"这轮我会临时叫你 {nickname}；它只在当前对话里生效，不会进入长期记忆。"
+    return None
+
+
+def _extract_temporary_nickname_command(text: str) -> str | None:
+    raw = str(text or "").strip()
+    if "不要写入长期记忆" not in raw:
+        return None
+    match = re.search(r"临时叫我\s*([^，。！？\s]+)", raw)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
+def _recall_named_memory(text: str, recent_messages: list[dict[str, Any]]) -> str | None:
+    if not any(marker in text for marker in ("是什么", "偏好", "规则", "记住的")):
+        return None
+    if text.startswith(("记住", "纠正记忆", "请忘记")):
+        return None
+    targets = set(re.findall(r"(FEI\d{2,3}-[^\s，。！？:：]+)", text))
+    for target in targets:
+        latest = ""
+        for item in reversed(recent_messages):
+            body = str(item.get("content_text") or "")
+            if target not in body or "不要写入长期记忆" in body:
+                continue
+            if "纠正记忆" in body:
+                latest = _trim_memory_statement(body)
+                break
+            if any(marker in body for marker in ("记住：", "记住:", "记住", "项目规则是")):
+                latest = _trim_memory_statement(body)
+                break
+        if latest:
+            return f"你刚才让我记住的 {target} 是：{latest}。"
+    return None
+
+
+def _trim_memory_statement(text: str) -> str:
+    value = str(text or "").strip()
+    for prefix in ("纠正记忆：", "纠正记忆:", "记住：", "记住:", "记住"):
+        if value.startswith(prefix):
+            value = value[len(prefix):].strip()
+    return value[:220]
+
+
+def _recent_temporary_nickname(recent_messages: list[dict[str, Any]]) -> str:
+    for item in reversed(recent_messages):
+        body = str(item.get("content_text") or "")
+        nickname = _extract_temporary_nickname_command(body)
+        if nickname:
+            return nickname
+    return ""

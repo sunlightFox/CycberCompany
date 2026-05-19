@@ -84,6 +84,97 @@ class ChatMainlineReadinessResponse(ApiModel):
     runtime_facts: dict[str, Any] = Field(default_factory=dict)
 
 
+class MainlineRateSummary(ApiModel):
+    rate: float | None = None
+    numerator: int = 0
+    denominator: int = 0
+    sample_size: int = 0
+
+
+class MainlineSegmentView(ApiModel):
+    key: str
+    label: str
+    sample_size: int = 0
+    mainline_rates: dict[str, MainlineRateSummary] = Field(default_factory=dict)
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class MainlineBlockerSummary(ApiModel):
+    blocker_code: str
+    source: str
+    impacted_segment: str
+    count: int = 0
+    severity: str = "p1"
+    replay_ref: dict[str, Any] | None = None
+    evidence_ref: dict[str, Any] | None = None
+    recommended_next_step: str | None = None
+
+
+class MainlineReplayAlignment(ApiModel):
+    routing_replay_fields_present: bool = False
+    task_replay_trace_channel_linkable: bool = False
+    top_blockers_mapped_to_stage: bool = False
+    routing_replay_fields: list[str] = Field(default_factory=list)
+    session_route_replay_fields: list[str] = Field(default_factory=list)
+    route_identity_fields: list[str] = Field(default_factory=list)
+
+
+class ChatMainlineObservabilityResponse(ApiModel):
+    contract_version: str
+    status: str
+    ready_conditions: list[str] = Field(default_factory=list)
+    mainline_rates: dict[str, MainlineRateSummary] = Field(default_factory=dict)
+    segmented_views: dict[str, list[MainlineSegmentView]] = Field(default_factory=dict)
+    top_blockers: list[MainlineBlockerSummary] = Field(default_factory=list)
+    replay_alignment: MainlineReplayAlignment
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class MaturityBlockerSummary(ApiModel):
+    blocker_code: str
+    category: str
+    severity: str
+    source_phase: str
+    dimension: str
+    next_owner: str | None = None
+    count: int = 0
+    evidence_ref: dict[str, Any] | None = None
+    recommended_next_step: str | None = None
+
+
+class MaturityDimensionSummary(ApiModel):
+    key: str
+    status: str
+    contract_version: str | None = None
+    blockers: list[MaturityBlockerSummary] = Field(default_factory=list)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    next_owner: str | None = None
+    upstream_phase_keys: list[str] = Field(default_factory=list)
+
+
+class MaturityPriorityQueueItem(ApiModel):
+    blocker_code: str
+    category: str
+    severity: str
+    source_phase: str
+    dimension: str
+    next_owner: str | None = None
+    count: int = 0
+    evidence_ref: dict[str, Any] | None = None
+    recommended_next_step: str | None = None
+
+
+class MaturityDashboardResponse(ApiModel):
+    contract_version: str
+    status: str
+    release_readiness: dict[str, Any] = Field(default_factory=dict)
+    dimensions: list[MaturityDimensionSummary] = Field(default_factory=list)
+    priority_queue: list[MaturityPriorityQueueItem] = Field(default_factory=list)
+    top_blockers: list[MaturityBlockerSummary] = Field(default_factory=list)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    upstream_contracts: dict[str, str] = Field(default_factory=dict)
+
+
 class SessionRuntimeResponse(ApiModel):
     runtime: str
     executor: str

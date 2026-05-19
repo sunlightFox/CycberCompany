@@ -83,6 +83,7 @@ class ExtensionDiagnosticResponse(ApiModel):
     contributions: list[dict[str, Any]] = Field(default_factory=list)
     health: dict[str, Any] = Field(default_factory=dict)
     next_actions: list[dict[str, Any]] = Field(default_factory=list)
+    package_contract: dict[str, Any] = Field(default_factory=dict)
     runtime_snapshot: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -108,6 +109,7 @@ class ExtensionPlanRunResponse(ApiModel):
     required_approvals: list[dict[str, Any]] = Field(default_factory=list)
     selected_capabilities: list[dict[str, Any]] = Field(default_factory=list)
     next_actions: list[dict[str, Any]] = Field(default_factory=list)
+    package_contract: dict[str, Any] = Field(default_factory=dict)
     runtime_snapshot: dict[str, Any] = Field(default_factory=dict)
 
 

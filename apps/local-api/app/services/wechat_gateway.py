@@ -2353,6 +2353,8 @@ async def _wechat_outbound_attachment_selection(
     scene = _attachment_scene(structured, candidates)
     explicit_request = _looks_like_attachment_request(user_text)
     reply_implies_document = _reply_mentions_generated_document(final_text)
+    completed_summary = _attachment_completed_summary(structured)
+    completed_summary_implies_document = _reply_mentions_generated_document(completed_summary)
     reason_codes: list[str] = []
     if explicit_request:
         reason_codes.append("explicit_attachment_request")
@@ -2360,10 +2362,13 @@ async def _wechat_outbound_attachment_selection(
         reason_codes.append(f"scene:{scene}")
     if reply_implies_document:
         reason_codes.append("reply_mentions_generated_document")
+    if completed_summary_implies_document:
+        reason_codes.append("completed_summary_mentions_generated_document")
     should_send = bool(candidates) and (
         explicit_request
         or scene in {"office_document", "office_text"}
         or reply_implies_document
+        or completed_summary_implies_document
     )
     selected = _sort_wechat_attachment_candidates(candidates, user_text=user_text, scene=scene)
     suppressed = []
@@ -2533,6 +2538,9 @@ def _attachment_scene(structured: dict[str, Any], candidates: list[dict[str, Any
     office_payload = structured.get("office_productivity")
     if isinstance(office_payload, dict):
         return "office_document" if any(_is_primary_attachment(item) for item in candidates) else "office_text"
+    completed_summary = _attachment_completed_summary(structured)
+    if _reply_mentions_generated_document(completed_summary):
+        return "office_document" if any(_is_primary_attachment(item) for item in candidates) else "office_text"
     if any(
         str(item.get("artifact_type") or "")
         in {"mail_draft", "calendar_plan", "office_action_record"}
@@ -2565,6 +2573,7 @@ def _looks_like_attachment_request(text: str) -> bool:
 def _reply_mentions_generated_document(text: str) -> bool:
     lowered = text.lower()
     markers = (
+        "已产出文件",
         "已整理成文档",
         "已生成草稿",
         "已输出结果文件",
@@ -2575,6 +2584,16 @@ def _reply_mentions_generated_document(text: str) -> bool:
         "file is ready",
     )
     return any(marker in lowered for marker in markers)
+
+
+def _attachment_completed_summary(structured: dict[str, Any]) -> str:
+    action_status = structured.get("action_status")
+    if isinstance(action_status, dict):
+        return str(action_status.get("completed_summary") or "")
+    semantics = structured.get("action_status_semantics")
+    if isinstance(semantics, dict):
+        return str(semantics.get("completed_summary") or "")
+    return ""
 
 
 def _sort_wechat_attachment_candidates(

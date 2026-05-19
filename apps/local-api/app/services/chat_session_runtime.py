@@ -25,6 +25,14 @@ from app.services.pending_action_resolution import (
 )
 
 
+def _plain_confirm(text: str) -> bool:
+    raw = str(text or "").strip()
+    compact = "".join(ch for ch in raw if ch not in " \t\r\n，,。?!！？；;:：~")
+    return raw in {"确认", "同意", "允许", "只允许这一次", "本次允许"} or any(
+        marker in raw for marker in ("确认下载", "确认这次", "确认本次", "确认继续", "确认执行", "只允许这一次")
+    ) or compact in {"确认下载这个CSV", "只允许这一次"}
+
+
 @dataclass(frozen=True)
 class SessionRuntimeDecision:
     decision_type: str
@@ -101,7 +109,7 @@ class ChatSessionRuntime:
             session_id,
             user_text=text,
         )
-        resolution_signal = looks_like_resolution(text)
+        resolution_signal = looks_like_resolution(text) or _plain_confirm(text)
         ambiguous_continue = is_ambiguous_continue(text)
         text_is_new_action = looks_like_new_action_request(text)
         external_resume_signal = (
@@ -447,7 +455,7 @@ class ChatSessionResumeDispatcher:
                 trace_metadata={"reason_codes": ["natural_language_deny"]},
             )
         if plan.status == "awaiting_approval" and plan.approval_id and (
-            is_confirm(text) or is_session_allow(text) or is_ambiguous_continue(text)
+            is_confirm(text) or _plain_confirm(text) or is_session_allow(text) or is_ambiguous_continue(text)
         ):
             await self._approvals.approve(
                 str(plan.approval_id),
@@ -470,7 +478,7 @@ class ChatSessionResumeDispatcher:
                 trace_metadata={"reason_codes": ["natural_language_once"]},
             )
         if plan.status == "awaiting_human" and (
-            is_confirm(text) or is_ambiguous_continue(text) or "已登录" in text or "继续" in text
+            is_confirm(text) or _plain_confirm(text) or is_ambiguous_continue(text) or "已登录" in text or "继续" in text
         ):
             detail = await self._external_platform_actions.resume_from_chat(
                 plan=plan,

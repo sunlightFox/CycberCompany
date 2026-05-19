@@ -1086,6 +1086,12 @@ def _response_quality_guard(
                 "opener_policy",
             }
         },
+        "guard_sources": {
+            "current_message_priority": "structured_current_turn_guard",
+            "evidence_required_before_done": (
+                "completion_evidence_gate" if _has_completion_evidence(completion_evidence) else "visible_text_heuristic"
+            ),
+        },
     }
 
 
@@ -1933,6 +1939,9 @@ def _compose_action_status_text(facts: dict[str, Any]) -> str:
         tail = f" 还没完成的部分：{'、'.join(remaining[:3])}。" if remaining else ""
         return f"{label}这一步目前只完成了一部分。{_friendly_evidence_text(evidence, seed=seed)}{tail}"
     if status == "completed_with_evidence":
+        completed_summary = _completed_summary_text(semantics, facts)
+        if completed_summary:
+            return opening_copy("task.completed", seed, title=label) + f"当前结果是：{completed_summary}。"
         evidence = str(semantics.get("evidence_summary") or facts.get("evidence_summary") or "").strip()
         return opening_copy("task.completed", seed, title=label) + _friendly_evidence_text(
             evidence,
@@ -1997,6 +2006,26 @@ def _friendly_evidence_text(evidence: str, *, seed: str = "") -> str:
             ),
         )
     return text
+
+
+def _completed_summary_text(semantics: dict[str, Any], facts: dict[str, Any]) -> str:
+    summary = str(semantics.get("completed_summary") or facts.get("completed_summary") or "").strip()
+    if summary:
+        return summary
+    action_label = str(facts.get("action_label") or "").strip()
+    target = str(facts.get("target") or "").strip()
+    evidence = str(semantics.get("evidence_summary") or facts.get("evidence_summary") or "").strip()
+    progress_markers = (
+        "已经开始推进",
+        "我会按实际结果继续汇报",
+        "后面如果你要继续改",
+        "直接告诉我想补哪一段",
+    )
+    if evidence and not any(marker in evidence for marker in progress_markers):
+        return evidence[:160].rstrip()
+    if action_label and target and target not in action_label:
+        return f"{action_label}，目标是 {target}"
+    return action_label or target
 
 
 def _soften_action_text(text: str) -> str:

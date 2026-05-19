@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.services.channel_stream_bridge import ChannelStreamBridge
 from app.services.chat_response import ChatResponseCoordinator
+from app.services.chat_visible_guard import visible_text_guard
 
 
 def test_phase81_response_coordinator_finalizes_authoritative_visible_text() -> None:
@@ -220,6 +221,36 @@ def test_phase81_response_coordinator_merges_standardized_response_filter() -> N
     ]
     assert finalized.response_filter["filtered_segments"]
     assert "approval_id" not in finalized.plain_text.lower()
+
+
+def test_phase81_visible_text_guard_collapses_repeated_json_and_boundary_reply() -> None:
+    json_reply = (
+        '{"risk":"low","conclusion":"已收到。当前要求明确：只输出包含 risk 和 conclusion 两个字段的 JSON。"}'
+        '{"risk":"low","conclusion":"已收到。当前要求明确：只输出包含 risk 和 conclusion 两个字段的 JSON。"}'
+    )
+    boundary_reply = (
+        "不行，我不能假装自己是真人同事，也没有什么“隐藏账号”可以帮你登录。\n\n"
+        "下一步我能帮你的是：给你一套合规登录排查清单。"
+    )
+    duplicated_boundary_reply = boundary_reply + boundary_reply
+    sectioned_reply = (
+        "不行，这个我不能配合。\n\n"
+        "结论：我不能假装自己是真人同事，也没有隐藏账号。\n\n"
+        "依据：这涉及身份冒充和未授权登录。\n\n"
+        "下一步我能帮你的是：给你一套合规登录排查清单。"
+    )
+    duplicated_sectioned_reply = (
+        sectioned_reply
+        + "\n\n结论：我不能假装自己是真人同事，也没有隐藏账号。\n\n"
+        "依据：这涉及身份冒充和未授权登录。\n\n"
+        "下一步我能帮你的是：给你一套合规登录排查清单。"
+    )
+
+    assert visible_text_guard(json_reply) == (
+        '{"risk":"low","conclusion":"已收到。当前要求明确：只输出包含 risk 和 conclusion 两个字段的 JSON。"}'
+    )
+    assert visible_text_guard(duplicated_boundary_reply) == boundary_reply
+    assert visible_text_guard(duplicated_sectioned_reply) == sectioned_reply
 
 
 def _create_turn(

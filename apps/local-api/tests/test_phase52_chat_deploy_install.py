@@ -221,6 +221,19 @@ def test_phase52_chat_host_uninstall_confirm_auto_executes(
     assert detail.status_code == 200, detail.text
     assert detail.json()["status"] == "uninstalled"
 
+    followup = _turn(
+        client,
+        "phase52-host-uninstall-confirm",
+        "你现在是已经卸完了，还是还在等什么证据？",
+        conversation_id=body["conversation_id"],
+    )
+    assert followup["status"] == "completed"
+    followup_text = _reply_from_events(_events(client, followup["turn_id"]))
+    assert "已经完成" in followup_text
+    assert "等额外证据" in followup_text
+    assert "卸载 QQ" in followup_text
+    assert "已经开始推进" not in followup_text
+
 
 def test_phase52_chat_host_install_confirm_requires_post_install_verification(
     client: TestClient,
@@ -455,6 +468,56 @@ def test_phase52_release_eval_and_diagnostic_summary(client: TestClient) -> None
     )
     diag_summary = json.loads(diagnostic_path.read_text(encoding="utf-8"))
     assert "phase52_chat_deploy_host_install" in diag_summary
+
+
+def test_phase52_chat_host_uninstall_repeat_request_still_targets_qq(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_resolve_host_package_candidate(
+        software: str,
+    ) -> project_deployments.HostPackageCandidate:
+        assert software == "uninstall QQ"
+        return project_deployments.HostPackageCandidate(
+            source_type="winget",
+            package_id="Tencent.QQ",
+            publisher="Tencent",
+            confidence=0.96,
+            match_reason="test_uninstall_candidate",
+            version="1.0.0",
+            name="QQ",
+        )
+
+    monkeypatch.setattr(
+        project_deployments,
+        "_resolve_windows_uninstall_candidate",
+        lambda software: None,
+    )
+    monkeypatch.setattr(
+        project_deployments,
+        "_windows_uninstall_lookup_supported",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        project_deployments,
+        "_resolve_host_package_candidate",
+        fake_resolve_host_package_candidate,
+    )
+
+    first = _turn(client, "phase52-host-uninstall-repeat", "帮我卸载 QQ。")
+    assert first["status"] == "completed"
+
+    second = _turn(
+        client,
+        "phase52-host-uninstall-repeat",
+        "再帮我卸载 QQ。",
+        conversation_id=first["conversation_id"],
+    )
+    assert second["status"] == "completed"
+    payload = _completed_payload(_events(client, second["turn_id"]))["response_plan"][
+        "structured_payload"
+    ]
+    assert payload["host_install_plan"]["requested_software"] == "QQ"
 
 
 def _turn(
