@@ -5,7 +5,7 @@ from typing import Any
 
 from chat_runtime import ChatRuntime
 from shell_runtime import ShellRuntime
-from trace_service import TraceService, redact
+from trace_service import TraceService
 
 from app.core.config import AppConfig
 from app.core.errors import AppError
@@ -45,6 +45,7 @@ from app.db.session import Database
 from app.channels import register_bundled_channel_extensions
 from app.external_platforms import register_bundled_external_platform_extensions
 from app.services.agent_workbench import AgentWorkbenchService
+from app.services.agent_runtime import AgentRuntime
 from app.services.approvals import ApprovalService
 from app.services.artifacts import ArtifactStore
 from app.services.asset import AssetService
@@ -104,6 +105,7 @@ from app.services.external_platform_extensions import (
     ExternalPlatformRuntimeContext,
 )
 from app.services.failure_experience import FailureExperienceService
+from app.services.heart_runtime import HeartRuntimeService
 from app.services.knowledge import KnowledgeService
 from app.services.mcp import MCPService
 from app.services.media import MediaService
@@ -112,6 +114,13 @@ from app.services.model_routing import ModelRoutingService
 from app.services.multimodal_understanding import MultimodalUnderstandingService
 from app.services.notifications import NotificationGatewayService
 from app.services.office_tools import OfficeToolService
+from app.services.persona_runtime import PersonaRuntimeService
+from app.services.plane_registry import (
+    CapabilityPlaneRegistry,
+    ControlPlaneRegistry,
+    PolicyPlaneRegistry,
+    RuntimePlaneRegistry,
+)
 from app.schemas.media import VideoWorkflowCreateRequest, VideoWorkflowExecuteRequest
 from app.services.project_deployments import (
     HostInstallService,
@@ -123,6 +132,7 @@ from app.services.release import ReleaseGateService
 from app.services.release_gate_runtime import ReleaseGateRuntime
 from app.services.release_report_builder import ReleaseReportBuilder
 from app.services.retrieval import RetrievalDiagnosticsService
+from app.services.response_quality_runtime import ResponseQualityRuntimeService
 from app.services.scheduled_tasks import ScheduledTaskService
 from app.services.secrets import SecretStore
 from app.services.safety_policy import RuntimeSafetyPolicyService
@@ -137,6 +147,7 @@ from app.services.skill_source_resolver import SkillSourceResolver
 from app.services.supervisor import SupervisorService
 from app.services.session_runtime import SessionRuntime
 from app.services.tasks import TaskEngine
+from app.services.tone_policy_runtime import TonePolicyRuntimeService
 from app.services.tools import ToolRuntime
 from app.services.voice import VoiceService
 from app.services.video_workflows import VideoWorkflowService
@@ -152,6 +163,7 @@ class ServiceRegistry:
     bootstrap_service: BootstrapService
     chat_service: ChatService
     chat_runtime: ChatRuntime
+    agent_runtime: AgentRuntime
     session_runtime: SessionRuntime
     channel_ingress_runtime: ChannelIngressRuntime
     channel_session_semantics_runtime: ChannelSessionSemanticsRuntime
@@ -219,6 +231,10 @@ class ServiceRegistry:
     brain_decision_service: BrainDecisionService
     model_routing_service: ModelRoutingService
     secret_store: SecretStore
+    control_plane_registry: ControlPlaneRegistry
+    runtime_registry: RuntimePlaneRegistry
+    capability_registry: CapabilityPlaneRegistry
+    policy_registry: PolicyPlaneRegistry
     shells: ShellRepository
     organization: OrganizationRepository
     members: MemberRepository
@@ -716,6 +732,12 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         trace_service=trace_service,
         audit_service=audit_service,
     )
+    persona_runtime = PersonaRuntimeService(persona_heart_service=persona_heart_service)
+    heart_runtime = HeartRuntimeService(persona_heart_service=persona_heart_service)
+    tone_policy_runtime = TonePolicyRuntimeService(persona_heart_service=persona_heart_service)
+    response_quality_runtime = ResponseQualityRuntimeService(
+        persona_heart_service=persona_heart_service
+    )
     settings_service = SettingsService(
         repo=settings_repo,
         model_routing_config=config.model_routing,
@@ -916,9 +938,15 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         chat_hook_runtime=chat_hook_runtime,
     )
     chat_runtime = chat_service._runtime_impl
+    agent_runtime = AgentRuntime(chat_runtime=chat_runtime)
+    chat_service._agent_runtime = agent_runtime
+    chat_runtime._bind_context(chat_service)
+    chat_runtime._agent_runtime = agent_runtime
+    chat_service._execution._runner = agent_runtime.run_turn
     session_runtime = SessionRuntime(
         chat_runtime=chat_runtime,
         chat_repo=chat_repo,
+        agent_runtime=agent_runtime,
     )
     channel_session_semantics = ChannelSessionSemanticsRuntime()
     channel_ingress_runtime = ChannelIngressRuntime(
@@ -961,6 +989,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     chat_mainline_readiness_service = ChatMainlineReadinessService(
         root_dir=config.paths.root_dir,
         chat_runtime=chat_runtime,
+        agent_runtime=agent_runtime,
         chat_service=chat_service,
         session_runtime=session_runtime,
         channel_session_semantics_runtime=channel_session_semantics,
@@ -985,6 +1014,39 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         feishu_gateway_service.set_worker_health_provider(background_worker_service.health)
     background_worker_service.set_channel_gateway("wechat", wechat_gateway_service)
     background_worker_service.set_channel_gateway("feishu", feishu_gateway_service)
+    control_plane_registry = ControlPlaneRegistry(
+        routes={
+            "chat": "/api/chat/*",
+            "system": "/api/system/*",
+        },
+        startup={
+            "bootstrap_service": "bootstrap_service",
+            "shell_runtime": "shell_runtime",
+        },
+        workers={
+            "background_worker_service": "background_worker_service",
+            "scheduled_task_service": "scheduled_task_service",
+        },
+    )
+    runtime_registry = RuntimePlaneRegistry(
+        session_runtime=session_runtime,
+        chat_runtime=chat_runtime,
+        agent_runtime=agent_runtime,
+        channel_ingress_runtime=channel_ingress_runtime,
+    )
+    capability_registry = CapabilityPlaneRegistry(
+        browser_search_capability=chat_service._browser_search_capability,
+        browser_research_runtime=chat_service._browser_research_runtime,
+        tool_runtime=tool_runtime,
+        skill_runtime=skill_plugin_service,
+        mcp_runtime=mcp_service,
+    )
+    policy_registry = PolicyPlaneRegistry(
+        persona_runtime=persona_runtime,
+        heart_runtime=heart_runtime,
+        tone_policy_runtime=tone_policy_runtime,
+        response_quality_runtime=response_quality_runtime,
+    )
     return ServiceRegistry(
         config=config,
         db=db,
@@ -999,6 +1061,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         ),
         chat_service=chat_service,
         chat_runtime=chat_runtime,
+        agent_runtime=agent_runtime,
         session_runtime=session_runtime,
         channel_ingress_runtime=channel_ingress_runtime,
         channel_session_semantics_runtime=channel_session_semantics,
@@ -1066,6 +1129,10 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         brain_decision_service=brain_decision_service,
         model_routing_service=model_routing_service,
         secret_store=secret_store,
+        control_plane_registry=control_plane_registry,
+        runtime_registry=runtime_registry,
+        capability_registry=capability_registry,
+        policy_registry=policy_registry,
         shells=ShellRepository(db),
         organization=organization_repo,
         members=member_repo,

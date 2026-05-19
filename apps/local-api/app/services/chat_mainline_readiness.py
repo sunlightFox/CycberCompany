@@ -351,6 +351,7 @@ class ChatMainlineReadinessService:
         *,
         root_dir: Path,
         chat_runtime: Any,
+        agent_runtime: Any | None = None,
         chat_service: Any,
         session_runtime: Any,
         channel_session_semantics_runtime: Any,
@@ -366,6 +367,7 @@ class ChatMainlineReadinessService:
     ) -> None:
         self._root_dir = root_dir
         self._chat_runtime = chat_runtime
+        self._agent_runtime = agent_runtime
         self._chat_service = chat_service
         self._session_runtime = session_runtime
         self._channel_session_semantics_runtime = channel_session_semantics_runtime
@@ -668,21 +670,21 @@ class ChatMainlineReadinessService:
         chat_runtime_diag: dict[str, Any],
     ) -> dict[str, Any]:
         blockers: list[str] = []
-        if session_diag.get("delegates_to") != "chat_runtime":
-            blockers.append("session_runtime_not_delegating_to_chat_runtime")
+        if session_diag.get("delegates_to") not in {"chat_runtime", "agent_runtime"}:
+            blockers.append("session_runtime_not_delegating_to_runtime_owner")
         if "run_turn" not in list(session_diag.get("public_entrypoints") or []):
             blockers.append("turn_runtime_entrypoints_incomplete")
         if session_diag.get("ownership_mode") != "proxy_only":
             blockers.append("session_runtime_not_proxy_only")
         if chat_runtime_diag.get("runtime") != "chat_runtime":
             blockers.append("chat_runtime_topology_missing")
-        if chat_runtime_diag.get("ownership_mode") != "exclusive_runtime_host":
-            blockers.append("chat_runtime_not_exclusive_owner")
+        if chat_runtime_diag.get("ownership_mode") not in {"exclusive_runtime_host", "compat_facade"}:
+            blockers.append("chat_runtime_not_runtime_entry")
         if (
             getattr(self._chat_service._execution._runner, "__self__", None)
-            is not self._chat_runtime
+            not in {self._chat_runtime, getattr(self, "_agent_runtime", None)}
         ):
-            blockers.append("turn_execution_manager_not_bound_to_chat_runtime")
+            blockers.append("turn_execution_manager_not_bound_to_runtime_owner")
         compat_methods = [
             "_execute_turn",
             "_execute_turn_impl",
@@ -712,23 +714,23 @@ class ChatMainlineReadinessService:
         chat_runtime_diag: dict[str, Any],
     ) -> dict[str, Any]:
         blockers: list[str] = []
-        if session_diag.get("delegates_to") != "chat_runtime":
-            blockers.append("session_runtime_not_delegating_to_chat_runtime")
+        if session_diag.get("delegates_to") not in {"chat_runtime", "agent_runtime"}:
+            blockers.append("session_runtime_not_delegating_to_runtime_owner")
         if session_diag.get("ownership_mode") != "proxy_only":
             blockers.append("session_runtime_not_proxy_only")
-        if session_diag.get("state_machine_owner") != "chat_runtime":
+        if session_diag.get("state_machine_owner") not in {"chat_runtime", "agent_runtime"}:
             blockers.append("session_runtime_state_machine_owner_mismatch")
-        if session_diag.get("event_source") != "chat_runtime":
+        if session_diag.get("event_source") not in {"chat_runtime", "agent_runtime"}:
             blockers.append("session_runtime_event_source_mismatch")
         if chat_runtime_diag.get("runtime") != "chat_runtime":
             blockers.append("chat_runtime_topology_missing")
-        if chat_runtime_diag.get("ownership_mode") != "exclusive_runtime_host":
-            blockers.append("chat_runtime_not_exclusive_owner")
-        if chat_runtime_diag.get("execution_owner") != "chat_runtime":
+        if chat_runtime_diag.get("ownership_mode") not in {"exclusive_runtime_host", "compat_facade"}:
+            blockers.append("chat_runtime_not_runtime_entry")
+        if chat_runtime_diag.get("execution_owner") not in {"chat_runtime", "agent_runtime"}:
             blockers.append("chat_runtime_execution_owner_mismatch")
-        if chat_runtime_diag.get("state_machine_owner") != "chat_runtime":
+        if chat_runtime_diag.get("state_machine_owner") not in {"chat_runtime", "agent_runtime"}:
             blockers.append("chat_runtime_state_machine_owner_mismatch")
-        if chat_runtime_diag.get("event_source") != "chat_runtime":
+        if chat_runtime_diag.get("event_source") not in {"chat_runtime", "agent_runtime"}:
             blockers.append("chat_runtime_event_source_mismatch")
         compat_methods = [
             "_create_turn_impl",
@@ -3904,7 +3906,7 @@ class ChatMainlineReadinessService:
         feishu_diag: dict[str, Any],
     ) -> bool:
         return (
-            session_diag.get("delegates_to") == "chat_runtime"
+            session_diag.get("delegates_to") in {"chat_runtime", "agent_runtime"}
             and channel_diag.get("runtime") == "channel_ingress_runtime"
             and wechat_diag.get("ingress_runtime") == "channel_ingress_runtime"
             and feishu_diag.get("ingress_runtime") == "channel_ingress_runtime"

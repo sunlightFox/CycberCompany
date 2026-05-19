@@ -7,6 +7,7 @@ from typing import Any, cast
 import pytest
 from app.services.chat_intent_router import (
     ChatIntentRouter,
+    browser_research_plan,
     browser_search_query,
     browser_search_requires_citation,
     extract_host_software_name,
@@ -79,6 +80,23 @@ def test_phase57_router_respects_negative_action_constraints(
 def test_phase57_router_does_not_treat_plain_report_as_ppt() -> None:
     decision = ChatIntentRouter().decide("请总结这次测试汇报的重点，不要创建任务。")
     assert decision.route_type != "office_document"
+
+
+def test_phase57_router_keeps_structured_summary_request_on_chat_chain() -> None:
+    decision = ChatIntentRouter().decide(
+        "把下面素材总结成一个一级标题加两段段落，不要表格，也不要创建任务。素材：本周 API 稳定性回顾，订单查询出现两次 500。"
+    )
+    assert decision.route_type == "default"
+    assert decision.office_request is None
+
+
+def test_phase57_router_does_not_fallback_to_office_for_heading_table_paragraph_summary() -> None:
+    decision = ChatIntentRouter().decide(
+        "请严格按一级标题 + 表格 + 结论段落输出下面素材，表格列至少包含项、状态、备注。素材：前端需要更清晰的错误提示；后端本周先修分页查询慢；测试补一组导出链路回归；目标是周五前完成。"
+    )
+
+    assert decision.route_type == "default"
+    assert decision.office_request is None
 
 
 def test_phase57_router_keeps_skill_mcp_concept_direct_when_user_says_no_task() -> None:
@@ -188,9 +206,70 @@ def test_phase57_router_detects_browser_search_with_citation() -> None:
     decision = ChatIntentRouter().decide(text)
     assert decision.route_type == "browser_search_with_citation"
     assert decision.requires_confirmation is False
+    assert decision.browser_research_plan is not None
+    assert decision.browser_research_plan.citation_required is True
     assert is_browser_search_request(text) is True
     assert browser_search_requires_citation(text) is True
     assert "chat main chain regression" in browser_search_query(text)
+
+
+def test_phase57_router_detects_natural_company_research_search_with_citation() -> None:
+    text = "请用浏览器搜索 星海智研 这家公司怎么样，整理成整体印象、可能优势、需要留意的风险三部分，并说明证据来源。"
+    decision = ChatIntentRouter().decide(text)
+    assert decision.route_type == "browser_search_with_citation"
+    assert is_browser_search_request(text) is True
+    assert browser_search_requires_citation(text) is True
+    assert "星海智研" in browser_search_query(text)
+
+
+def test_phase57_router_marks_popular_explainer_browser_search() -> None:
+    text = (
+        "请用浏览器搜索 海盐为什么要加碘，整理成核心结论、常见误区、怎么理解三部分，"
+        "用通俗一点、像科普一样的方式说明，并标注证据来源。"
+    )
+    decision = ChatIntentRouter().decide(text)
+    assert decision.route_type == "browser_search_with_citation"
+    assert decision.browser_research_plan is not None
+    assert decision.browser_research_plan.presentation_style == "popular_explainer"
+    assert decision.browser_research_plan.requested_sections == ["核心结论", "常见误区", "怎么理解"]
+
+
+def test_phase57_browser_research_plan_contract_uses_existing_heuristics() -> None:
+    plan = browser_research_plan(
+        "请用浏览器搜索 海盐为什么要加碘，整理成核心结论、常见误区、怎么理解三部分，用通俗一点、像科普一样的方式说明，并标注证据来源。"
+    )
+
+    assert plan.query == "海盐为什么要加碘"
+    assert plan.citation_required is True
+    assert plan.requested_sections == ["核心结论", "常见误区", "怎么理解"]
+    assert plan.presentation_style == "popular_explainer"
+
+
+def test_phase57_router_detects_natural_appointment_research_search_with_citation() -> None:
+    text = "请用浏览器搜索 安和妇产医院 产检怎么预约，整理成预约方式、所需准备、注意事项三部分，并说明证据来源。"
+    decision = ChatIntentRouter().decide(text)
+    assert decision.route_type == "browser_search_with_citation"
+    assert is_browser_search_request(text) is True
+    assert browser_search_requires_citation(text) is True
+    assert "安和妇产医院" in browser_search_query(text)
+
+
+def test_phase57_router_detects_timeliness_material_research_with_citation() -> None:
+    text = "请用浏览器搜索 近期日本签证材料要求，整理成主要变化、常见材料、提交前确认三部分，并说明证据来源。"
+    decision = ChatIntentRouter().decide(text)
+    assert decision.route_type == "browser_search_with_citation"
+    assert is_browser_search_request(text) is True
+    assert browser_search_requires_citation(text) is True
+    assert browser_search_query(text) == "近期日本签证材料要求"
+
+
+def test_phase57_router_detects_price_trend_research_with_citation() -> None:
+    text = "请用浏览器搜索 某产品价格趋势，整理成看到的情况、可参考点、下单前确认三部分，并说明证据来源。"
+    decision = ChatIntentRouter().decide(text)
+    assert decision.route_type == "browser_search_with_citation"
+    assert is_browser_search_request(text) is True
+    assert browser_search_requires_citation(text) is True
+    assert browser_search_query(text) == "某产品价格趋势"
 
 
 def test_phase57_router_detects_desktop_native_request() -> None:

@@ -6,6 +6,7 @@ from typing import Any
 from app.services import chat as chat_module
 from app.services.brain_route_decider import intent_decision
 from app.services.channel_stream_bridge import ChannelStreamBridge
+from app.services.chat_memory import ChatMemoryCoordinator
 from app.services.chat_intent_router import ChatIntentRouter
 from brain.adapters import CancelToken, ModelChatRequest, ModelStreamEvent
 from fastapi.testclient import TestClient
@@ -33,6 +34,8 @@ async def _phase106_stream_chat(
         reply = 'def phase106_answer() -> str:\n    return "format-stable"'
     elif "plain text only" in lowered and "routing isolation" in lowered:
         reply = "Routing isolation stays on the main chat chain."
+    elif "一级标题加两段段落" in prompt or "one heading and two paragraphs" in lowered:
+        reply = "# API 稳定性回顾\n\n订单查询在上线后 3 天内出现两次 500，当前已经通过超时保护、索引补充和回归用例补齐完成首轮止血。\n\n剩余风险在于夜间流量峰值还没复测，所以结论可以先下到阶段性稳定，不能直接写成完全关闭。"
     else:
         reply = "phase106"
     yield ModelStreamEvent(event="started")
@@ -54,6 +57,23 @@ def test_phase106_format_sensitive_office_comparison_does_not_hard_route_office(
 
     assert decision.route_type == "default"
     assert decision.office_request is None
+
+
+def test_phase106_structured_summary_request_does_not_hard_route_office() -> None:
+    decision = ChatIntentRouter().decide(
+        "把下面素材总结成一个一级标题加两段段落，不要表格。素材：本周 API 稳定性回顾，订单查询出现两次 500。"
+    )
+
+    assert decision.route_type == "default"
+    assert decision.office_request is None
+
+
+def test_phase106_structured_summary_request_does_not_hard_route_repo() -> None:
+    decision = ChatIntentRouter().decide(
+        "把下面会议纪要整理成一个一级标题加 4 条行动项列表。素材：前端补错误提示；后端修分页查询；测试补一组导出链路回归；周五前完成。"
+    )
+
+    assert decision.route_type == "default"
 
 
 def test_phase106_format_sensitive_skill_mcp_request_stays_direct_in_brain_intent() -> None:
@@ -79,6 +99,61 @@ def test_phase106_pending_execution_state_question_stays_direct_in_brain_intent(
     assert decision.primary_intent == "simple_question"
     assert "pending_execution_state_explanation" in decision.reason_codes
     assert decision.execution_policy == "no_task"
+
+
+def test_phase106_structured_summary_with_preference_stays_out_of_memory_query() -> None:
+    decision = intent_decision(
+        "按我刚刚设定的结构偏好，总结下面素材。",
+        "low",
+        capability_snapshot={},
+    )
+
+    assert decision.primary_intent == "summarization"
+    assert decision.execution_policy == "no_task"
+
+
+def test_phase106_structured_summary_with_permission_text_stays_out_of_boundary_question() -> None:
+    decision = intent_decision(
+        "按我刚刚设定的结构偏好，总结下面素材。素材：GraphQL 的风险是缓存策略和权限治理更复杂。",
+        "low",
+        capability_snapshot={},
+    )
+
+    assert decision.primary_intent == "summarization"
+    assert "persona_boundary_question" not in decision.reason_codes
+
+
+def test_phase106_structured_summary_with_preference_stays_out_of_direct_memory_query() -> None:
+    coordinator = ChatMemoryCoordinator()
+
+    assert (
+        coordinator.explicit_memory_query(
+            "按我刚刚设定的结构偏好，总结下面素材。素材：GraphQL 的风险是缓存策略和权限治理更复杂。"
+        )
+        is False
+    )
+
+
+def test_phase106_preference_application_closeout_stays_out_of_direct_memory_query() -> None:
+    coordinator = ChatMemoryCoordinator()
+
+    assert (
+        coordinator.explicit_memory_query(
+            "结合我们前面 20 轮的测试，按先风险后结论的偏好，给我一个收尾结论和一个下一步。"
+        )
+        is False
+    )
+
+
+def test_phase106_summary_preference_correction_is_treated_as_memory_command() -> None:
+    coordinator = ChatMemoryCoordinator()
+
+    assert (
+        coordinator.explicit_memory_command(
+            "CHAT-KNOWLEDGE-SUMMARY-20：修正一下，这轮接下来的总结不要表格了，改成标题 + 两段段落。"
+        )
+        is True
+    )
 
 
 def test_phase106_format_sensitive_requests_preserve_json_and_table_without_route_pollution(
@@ -169,6 +244,33 @@ def test_phase106_response_plan_and_channel_bridge_keep_code_and_plain_text_cons
     assert delivery["plain_text"] == plain_text
     assert delivery["final_text_source"] == "response_plan_plain_text"
     assert delivery["fallback_used"] is False
+
+
+def test_phase106_structured_summary_request_preserves_heading_and_paragraph_shape(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(chat_module.OpenAICompatibleClient, "stream_chat", _phase106_stream_chat)
+    brain_id = _create_local_brain(client)
+    client.patch("/api/members/mem_xiaoyao/default-brain", json={"brain_id": brain_id})
+    conversation_id = _conversation_id(client)
+
+    created = _create_turn(
+        client,
+        conversation_id,
+        "phase106-structured-summary",
+        "把下面素材总结成一个一级标题加两段段落，不要表格。素材：本周 API 稳定性回顾，订单查询出现两次 500。",
+    )
+    events = _parse_sse(client.get(created["stream_url"]).text)
+    completed = next(item for item in events if item["event"] == "response.completed")
+    plan = completed["payload"]["response_plan"]
+    text = plan["plain_text"]
+
+    assert text.startswith("# API 稳定性回顾")
+    assert "\n\n订单查询在上线后 3 天内出现两次 500" in text
+    assert "\n\n剩余风险在于夜间流量峰值还没复测" in text
+    assert "| " not in text
+    assert plan["structured_payload"]["response_quality_guard"]["strict_format_preserved"] is True
 
 
 def _create_local_brain(client: TestClient) -> str:

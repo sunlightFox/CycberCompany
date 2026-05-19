@@ -1,0 +1,17 @@
+[
+  {
+    "theme": "降低系统腔",
+    "symptom": "回复出现明显书面汇报味、命令式过渡语或通用模板句。",
+    "priority": "high"
+  },
+  {
+    "theme": "强化格式服从",
+    "symptom": "三行、JSON、纯 prose 这类硬约束场景容易失真。",
+    "priority": "high"
+  },
+  {
+    "theme": "保留边界但更像聊天",
+    "symptom": "拒绝和确认语气如果太硬，会影响微信聊天自然度。",
+    "priority": "medium"
+  }
+]

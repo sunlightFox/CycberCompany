@@ -1,0 +1,9 @@
+{
+  "items": [
+    {
+      "case_id": "wx-natural-001",
+      "owner_area": "routing",
+      "reason": "missing_observed_reply,no_turn"
+    }
+  ]
+}

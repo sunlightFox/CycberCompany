@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.schemas.browser_research import BrowserResearchPlan
+
 OFFICE_BUNDLE_BY_TYPE = {
     "word": {"generate": "clawhub-word-report", "edit": "clawhub-word-edit"},
     "excel": {
@@ -40,6 +42,7 @@ class ChatRouteDecision:
     task_goal: str | None = None
     safe_user_summary: str | None = None
     office_request: OfficeChatRequest | None = None
+    browser_research_plan: BrowserResearchPlan | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def as_payload(self) -> dict[str, Any]:
@@ -51,6 +54,11 @@ class ChatRouteDecision:
             "task_goal": self.task_goal,
             "safe_user_summary": self.safe_user_summary,
             "office_request": self.office_request.__dict__ if self.office_request else None,
+            "browser_research_plan": (
+                self.browser_research_plan.model_dump(mode="json")
+                if self.browser_research_plan is not None
+                else None
+            ),
             "metadata": self.metadata,
         }
 
@@ -60,12 +68,14 @@ class ChatIntentRouter:
         clean = _clean(text)
         if not clean:
             return ChatRouteDecision("empty", 0.0, "empty_text")
+        structured_summary_request = is_structured_summary_request(clean)
         format_sensitive_request = _format_sensitive_direct_answer_request(clean)
         office_request = parse_office_chat_request(clean)
         if office_request is None:
             document_type = office_document_type(clean)
             if (
                 document_type is not None
+                and not structured_summary_request
                 and not format_sensitive_request
                 and not _direct_only(clean)
                 and not _negative_office_generation_constraint(clean)
@@ -136,25 +146,28 @@ class ChatIntentRouter:
                 metadata={"url": webpage_read_url(clean)},
             )
         if is_browser_search_request(clean):
-            require_citation = browser_search_requires_citation(clean)
+            plan = browser_research_plan(clean)
             return ChatRouteDecision(
                 route_type=(
                     "browser_search_with_citation"
-                    if require_citation
+                    if plan.citation_required
                     else "browser_search_readonly"
                 ),
-                confidence=0.9 if require_citation else 0.86,
+                confidence=0.9 if plan.citation_required else 0.86,
                 reason_code=(
                     "browser_search_with_citation"
-                    if require_citation
+                    if plan.citation_required
                     else "browser_search_readonly"
                 ),
                 requires_confirmation=False,
                 task_goal=None,
                 safe_user_summary=_safe_summary(clean),
+                browser_research_plan=plan,
                 metadata={
-                    "query": browser_search_query(clean),
-                    "require_citation": require_citation,
+                    "query": plan.query,
+                    "require_citation": plan.citation_required,
+                    "requested_sections": list(plan.requested_sections),
+                    "presentation_style": plan.presentation_style,
                 },
             )
         code_hosting = code_hosting_route(clean)
@@ -257,6 +270,8 @@ def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
     clean = _clean(text)
     if _direct_only(clean):
         return None
+    if is_structured_summary_request(clean):
+        return None
     if _format_sensitive_direct_answer_request(clean) and not _has_office_action(clean):
         return None
     if is_host_filesystem_list_request(clean):
@@ -332,6 +347,74 @@ def office_document_type(text: str) -> str | None:
 
 def is_office_document_request(text: str) -> bool:
     return parse_office_chat_request(text) is not None
+
+
+def is_structured_summary_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    summary_markers = [
+        "总结",
+        "总结成",
+        "概括",
+        "整理成",
+        "归纳",
+        "提炼",
+        "改写成",
+        "梳理",
+        "分析质量",
+        "summary",
+        "summarize",
+        "rewrite",
+        "organize",
+    ]
+    structure_markers = [
+        "标题",
+        "一级标题",
+        "二级标题",
+        "小标题",
+        "行动项",
+        "关键观察",
+        "段落",
+        "自然段",
+        "表格",
+        "markdown 表格",
+        "markdown table",
+        "列表",
+        "要点",
+        "编号",
+        "三条",
+        "两段",
+        "一段",
+        "只输出标题",
+        "不要表格",
+        "不要列表",
+        "不要 markdown",
+        "不要markdown",
+        "标题 +",
+        "表格 +",
+        "结论段落",
+        "bullet",
+    ]
+    office_action_markers = [
+        "生成",
+        "创建",
+        "做一个",
+        "做一份",
+        "产出",
+        "导出",
+        "写入",
+        "保存",
+        "做成word",
+        "做成excel",
+        "做成ppt",
+        "生成word",
+        "生成excel",
+        "生成ppt",
+    ]
+    has_summary = any(marker in clean or marker in lowered for marker in summary_markers)
+    has_structure = any(marker in clean or marker in lowered for marker in structure_markers)
+    has_office_action = any(marker in clean or marker in lowered for marker in office_action_markers)
+    return has_structure and (has_summary or "素材：" in clean or "素材:" in clean) and not has_office_action
 
 
 def is_host_software_install_request(text: str) -> bool:
@@ -421,6 +504,8 @@ def repo_execution_route(text: str) -> str | None:
     clean = _clean(text)
     lowered = clean.lower()
     if _direct_only(clean):
+        return None
+    if is_structured_summary_request(clean):
         return None
     if _looks_like_browser_page_action(clean):
         return None
@@ -872,6 +957,8 @@ def is_skill_or_mcp_concept_request(text: str) -> bool:
 def _format_sensitive_direct_answer_request(text: str) -> bool:
     clean = _clean(text)
     lowered = clean.lower()
+    if is_structured_summary_request(clean):
+        return True
     if not any(
         marker in clean or marker in lowered
         for marker in [
@@ -1378,103 +1465,73 @@ def _negative_office_generation_constraint(text: str) -> bool:
 
 
 def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
-    return any(
-        marker in clean
-        for marker in [
-            "???",
-            "??????",
-            "??????",
-            "??????",
-            "???",
-            "?????",
-            "????????",
-            "???",
-            "??????????",
-            "??????",
-            "???????",
-            "?????",
-            "??????",
-            "?????",
-            "??????",
-            "?????",
-            "????",
-            "????",
-            "???",
-            "????",
-            "????",
-            "????",
-            "???",
-            "????",
-            "?????",
-            "????",
-            "title ???",
-            "???",
-            "???",
-            "?????",
-            "????",
-            "?????",
-            "????",
-            "??????",
-            "????????",
-            "????",
-            "??????",
-            "??????",
-        ]
-    ) or any(
-        marker in lowered
-        for marker in [
-            "summarize this link",
-            "summarise this link",
-            "what is this page",
-            "what's this page",
-            "what does this link say",
-            "read this page",
-            "review this website",
-            "page content",
-            "website content",
-        ]
-    )
+    cn_markers = [
+        "看一下这网站有什么内容",
+        "这个网页讲什么",
+        "这个页面讲什么",
+        "这个链接主要说什么",
+        "这个链接讲什么",
+        "这个网站讲什么",
+        "总结这个链接",
+        "总结这个网页",
+        "看看这个网页",
+        "看看这个网站",
+        "看这个网页",
+        "看这个网站",
+        "网页讲什么",
+        "页面讲什么",
+        "链接讲什么",
+        "主要说什么",
+        "有什么内容",
+        "页面标题",
+        "标题是什么",
+        "title 是什么",
+        "title是什么",
+    ]
+    en_markers = [
+        "summarize this link",
+        "summarise this link",
+        "what is this page",
+        "what's this page",
+        "what does this link say",
+        "read this page",
+        "review this website",
+        "page content",
+        "website content",
+    ]
+    return any(marker in clean for marker in cn_markers) or any(marker in lowered for marker in en_markers)
 
 
 def _has_browser_side_effect_marker(clean: str, lowered: str) -> bool:
-    clean = re.sub(r"https?://[^\s???;?)]+", " ", clean, flags=re.IGNORECASE)
-    lowered = clean.lower() if lowered else lowered
-    if any(
-        marker in clean
-        for marker in [
-            "????",
-            "????",
-            "???",
-            "???",
-            "????",
-            "????",
-            "???",
-            "???",
-        ]
+    clean = re.sub(r"https?://[^\s，。；;）)]+", " ", clean, flags=re.IGNORECASE)
+    for harmless_phrase in (
+        "提交前确认",
+        "下单前确认",
+        "出发前确认",
+        "办理前确认",
+        "如何核对",
+        "怎么核对",
     ):
-        return False
+        clean = clean.replace(harmless_phrase, " ")
+    lowered = clean.lower() if lowered else lowered
     return any(
         marker in clean
         for marker in [
-            "??",
-            "??",
-            "??",
-            "??",
-            "??",
-            "??",
-            "??",
-            "???",
-            "??",
-            "??",
-            "??",
-            "??",
-            "??",
-            "??",
-            "??",
-            "??",
-            "??",
-            "??",
-            "??",
+            "登录",
+            "登陆",
+            "提交",
+            "发送",
+            "发布",
+            "上传",
+            "点击",
+            "购买",
+            "下单",
+            "支付",
+            "保存",
+            "导出",
+            "截图",
+            "勾选",
+            "填写",
         ]
     ) or any(
         marker in lowered
@@ -1499,22 +1556,66 @@ def _has_browser_side_effect_marker(clean: str, lowered: str) -> bool:
     )
 
 
+def _browser_search_requested_sections(text: str) -> list[str]:
+    clean = _clean(text)
+    if "步骤清单" in clean:
+        return ["1.", "2.", "3."]
+    match = re.search(r"整理成(.+?)(?:并说明|并标注|并附上|，并说明|，并标注|，并附上|$)", clean)
+    if not match:
+        return []
+    raw = match.group(1)
+    raw = re.split(r"[，,](?:用|按|以|像)", raw, maxsplit=1)[0]
+    raw = re.sub(r"[一二三四五六七八九十0-9]+部分", "", raw)
+    parts = [
+        segment.strip(" ，,。；;：:")
+        for segment in re.split(r"[、/]|以及|并且|并", raw)
+        if segment.strip(" ，,。；;：:")
+    ]
+    return parts[:4]
+
+
+def _browser_search_presentation_style(text: str) -> str:
+    clean = _clean(text)
+    markers = [
+        "科普",
+        "通俗",
+        "好懂",
+        "易懂",
+        "给小白看",
+        "适合普通人阅读",
+        "像给朋友解释一样",
+    ]
+    if any(marker in clean for marker in markers):
+        return "popular_explainer"
+    return "default"
+
+
+def browser_research_plan(text: str) -> BrowserResearchPlan:
+    clean = _clean(text)
+    return BrowserResearchPlan(
+        query=browser_search_query(clean),
+        citation_required=browser_search_requires_citation(clean),
+        requested_sections=_browser_search_requested_sections(clean),
+        presentation_style=_browser_search_presentation_style(clean),
+    )
+
+
 def _readonly_login_page_inspection(clean: str, lowered: str) -> bool:
     if not _has_webpage_read_marker(clean, lowered):
         return False
-    noun_markers = ["???", "????", "????", "????", "????", "??????"]
+    noun_markers = ["登录页", "登录页面", "注册页", "注册页面", "表单页", "预约页"]
     if not any(marker in clean for marker in noun_markers):
         return False
     imperative_markers = [
-        "????",
-        "???",
-        "????",
-        "?????",
-        "????",
-        "????",
-        "????",
-        "????",
-        "????",
+        "登录",
+        "注册",
+        "提交",
+        "填写",
+        "点击",
+        "发送",
+        "保存",
+        "上传",
+        "下载",
     ]
     return not any(marker in clean for marker in imperative_markers)
 
@@ -1781,6 +1882,84 @@ def is_browser_page_action_request(text: str) -> bool:
 
 # Phase 112 hardening overrides:
 # Keep these canonical helpers at file end so they win over older mojibake variants.
+def is_structured_summary_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    summary_markers = (
+        "总结",
+        "总结成",
+        "概括",
+        "整理成",
+        "归纳",
+        "提炼",
+        "改写成",
+        "梳理",
+        "分析质量",
+        "summary",
+        "summarize",
+        "rewrite",
+        "organize",
+    )
+    structure_markers = (
+        "标题",
+        "一级标题",
+        "二级标题",
+        "小标题",
+        "结构偏好",
+        "总结偏好",
+        "按我刚刚设定",
+        "按修正后的偏好",
+        "行动项",
+        "关键观察",
+        "段落",
+        "自然段",
+        "表格",
+        "markdown 表格",
+        "markdown table",
+        "列表",
+        "要点",
+        "编号",
+        "三条",
+        "两段",
+        "一段",
+        "只输出标题",
+        "不要表格",
+        "不要列表",
+        "不要 markdown",
+        "不要markdown",
+        "标题 +",
+        "表格 +",
+        "结论段落",
+        "bullet",
+    )
+    office_action_markers = (
+        "做成word",
+        "做成excel",
+        "做成ppt",
+        "生成word",
+        "生成excel",
+        "生成ppt",
+        "创建word",
+        "创建excel",
+        "创建ppt",
+        "做一个word",
+        "做一个excel",
+        "做一个ppt",
+        "做一份word",
+        "做一份excel",
+        "做一份ppt",
+        "创建文档",
+        "导出文档",
+        ".docx",
+        ".xlsx",
+        ".pptx",
+    )
+    has_summary = any(marker in clean or marker in lowered for marker in summary_markers)
+    has_structure = any(marker in clean or marker in lowered for marker in structure_markers)
+    has_office_action = any(marker in clean or marker in lowered for marker in office_action_markers)
+    return has_structure and (has_summary or "素材：" in clean or "素材:" in clean) and not has_office_action
+
+
 def office_document_type(text: str) -> str | None:
     clean = _clean(text)
     lowered = clean.lower()
@@ -1841,6 +2020,163 @@ def _without_direct_only_markers(text: str) -> str:
     ):
         result = result.replace(marker, " ")
     return _clean(result)
+
+
+def browser_search_requires_citation(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    return any(
+        marker in clean or marker in lowered
+        for marker in (
+            "证据来源",
+            "说明证据来源",
+            "标注来源",
+            "带上来源",
+            "引用来源",
+            "来源",
+            "引用",
+            "citation",
+            "source",
+        )
+    )
+
+
+def _natural_browser_search_request(clean: str, lowered: str) -> bool:
+    research_question_markers = (
+        "怎么样",
+        "如何预约",
+        "怎么预约",
+        "怎么挂号",
+        "怎么办理",
+        "怎么申请",
+        "怎么续签",
+        "材料要求",
+        "最新要求",
+        "价格趋势",
+        "趋势如何",
+        "评价如何",
+        "口碑如何",
+    )
+    research_topic_markers = (
+        "公司",
+        "医院",
+        "产检",
+        "政务",
+        "政务中心",
+        "居住证",
+        "签证",
+        "护照",
+        "crm",
+        "产品",
+        "价格",
+        "办理",
+        "预约",
+        "续签",
+    )
+    delivery_markers = (
+        "整理成",
+        "步骤清单",
+        "注意事项",
+        "亮点",
+        "风险",
+        "适用场景",
+        "所需准备",
+        "预约入口",
+        "办理材料",
+        "现场提醒",
+        "主要变化",
+        "常见材料",
+        "提交前确认",
+        "看到的情况",
+        "可参考点",
+        "下单前确认",
+    )
+    has_question = any(marker in clean or marker in lowered for marker in research_question_markers)
+    has_topic = any(marker in clean or marker in lowered for marker in research_topic_markers)
+    has_delivery = any(marker in clean or marker in lowered for marker in delivery_markers)
+    return has_question and has_topic and (has_delivery or browser_search_requires_citation(clean))
+
+
+def is_browser_search_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if _direct_only(clean):
+        return False
+    if _first_url(clean) and _has_webpage_read_marker(clean, lowered):
+        return False
+    if _has_browser_side_effect_marker(clean, lowered):
+        return False
+    if any(marker in clean for marker in ("不要搜索", "别搜索", "不搜索")):
+        return False
+    has_browser_marker = any(
+        marker in clean or marker in lowered
+        for marker in ("浏览器搜索", "用浏览器搜索", "search", "搜索一下", "搜一下", "查一下", "请搜索")
+    )
+    if not has_browser_marker and any(
+        marker in clean for marker in ("搜一次", "再搜一次", "再用浏览器搜一次")
+    ):
+        has_browser_marker = True
+    if has_browser_marker:
+        return any(
+            marker in clean or marker in lowered
+            for marker in (
+                "总结",
+                "概括",
+                "结果",
+                "搜",
+                "搜索",
+                "search",
+                "证据来源",
+                "来源",
+                "整理成",
+                "主要变化",
+                "常见材料",
+                "提交前确认",
+                "看到的情况",
+                "可参考点",
+                "下单前确认",
+            )
+        )
+    return _natural_browser_search_request(clean, lowered)
+
+
+def browser_search_query(text: str) -> str:
+    clean = _clean(text)
+    query = clean
+    for marker in ("再用浏览器搜一次", "再搜一次", "搜一次"):
+        query = query.replace(marker, " ")
+    replacements = [
+        "请用浏览器搜索",
+        "用浏览器搜索",
+        "浏览器搜索",
+        "请搜索",
+        "搜索一下",
+        "搜一下",
+        "请用搜索",
+    ]
+    for marker in replacements:
+        query = query.replace(marker, " ")
+    query = re.sub(r"^[A-Za-z]{2,}\d{0,4}-\d{2,4}\s+", " ", query)
+    query = re.sub(r"^[A-Za-z][A-Za-z0-9_-]{5,}\s+", " ", query)
+    query = re.sub(r"https?://[^\s，。；;）)]+", " ", query, flags=re.IGNORECASE)
+    query = re.sub(r"微信消息中的链接", " ", query)
+    query = re.sub(r"微信消息链接", " ", query)
+    query = re.sub(r"用户还附带了一个link", " ", query)
+    query = re.sub(r"上下文参考\s*url", " ", query, flags=re.IGNORECASE)
+    query = re.sub(r"\blink\b", " ", query, flags=re.IGNORECASE)
+    query = re.sub(r"(并)?总结结果.*$", " ", query)
+    query = re.sub(r"整理成.*$", " ", query)
+    query = re.sub(r"(并)?说明证据来源.*$", " ", query)
+    query = re.sub(r"必须说明证据来源.*$", " ", query)
+    query = re.sub(r"并标注证据来源.*$", " ", query)
+    query = re.sub(r"看看这个搜索页有什么.*$", " ", query)
+    query = re.sub(r"[，。；;？?]+", " ", query)
+    query = re.sub(r"这次用.*?(总结|概括).*$", " ", query)
+    query = re.sub(r"用两句话.*$", " ", query)
+    query = re.sub(r"带上来源.*$", " ", query)
+    query = re.sub(r"^\s*再", " ", query)
+    query = re.sub(r"\s+", " ", query).strip()
+    return query or clean
 
 
 _REPO_META_DISCUSSION_MARKERS = (
@@ -1912,6 +2248,50 @@ def _repo_meta_discussion_request(text: str) -> bool:
     return not any(
         marker in clean or marker in lowered for marker in _REPO_EXECUTION_VERBS
     )
+
+
+def repo_execution_route(text: str) -> str | None:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if _direct_only(clean):
+        return None
+    if is_structured_summary_request(clean):
+        return None
+    if _looks_like_browser_page_action(clean):
+        return None
+    if not any(
+        marker in clean or marker in lowered
+        for marker in [
+            "代码托管",
+            "代码库",
+            "pytest",
+            "测试",
+            "重构",
+            "patch",
+            "bugfix",
+            "改代码",
+            "修改代码",
+            "修复",
+        ]
+    ):
+        return None
+    action_text = _without_direct_only_markers(clean)
+    if _repo_meta_discussion_request(action_text):
+        return None
+    if any(
+        marker in action_text or marker in lowered
+        for marker in ["只读", "readonly", "read only", "看看代码", "阅读代码", "读一个", "读读"]
+    ):
+        return "repo_readonly_request"
+    if any(marker in action_text or marker in lowered for marker in ["修复失败", "fix after failure", "失败后修", "测试失败"]):
+        return "repo_fix_after_failure"
+    if any(marker in action_text or marker in lowered for marker in ["重构", "refactor"]):
+        return "repo_refactor_request"
+    if any(marker in action_text or marker in lowered for marker in _REPO_TEST_ACTION_MARKERS):
+        return "repo_test_request"
+    if any(marker in action_text or marker in lowered for marker in _REPO_PATCH_ACTION_MARKERS):
+        return "repo_patch_request"
+    return None
 
 
 def is_skill_or_mcp_concept_request(text: str) -> bool:

@@ -512,6 +512,7 @@ def render_soul_markdown(
     custom_notes: str | None = None,
 ) -> str:
     member_id = str(member.get("member_id") or profile.get("member_id") or "")
+    persona_key = _persona_seed_key(member, profile)
     profile_id = str(profile.get("persona_profile_id") or member.get("persona_profile_id") or "")
     display_name = str(member.get("display_name") or profile.get("display_name") or "当前成员")
     tone_policy = dict(profile.get("tone_policy") or {})
@@ -525,14 +526,13 @@ def render_soul_markdown(
         "source": "soul_manifest",
     }
     identity = str(profile.get("summary") or f"{display_name} 保持可靠、直接、温暖。")
-    voice = _voice_seed_lines(member_id, tone_policy)
-    work_style = _safe_list(consistency.get("style_principles")) or [
-        "先给结论，再给依据和下一步。",
-        "能推进就推进，不能推进就说明还缺什么。",
-    ]
+    voice = _voice_seed_lines(member_id, tone_policy, persona_key=persona_key)
+    work_style = _safe_list(consistency.get("style_principles")) or _default_work_style_lines(
+        persona_key
+    )
     boundaries = _boundary_seed_lines(consistency)
     memory_policy = _memory_policy_lines(member)
-    final_catchphrases = catchphrases or _default_catchphrases(member_id)
+    final_catchphrases = catchphrases or _default_catchphrases(member_id, persona_key=persona_key)
     final_custom_notes = custom_notes or "可以在这里补充长期沟通偏好、口头禅或习惯。"
 
     sections: list[tuple[str, str | list[str]]] = [
@@ -818,13 +818,52 @@ def _safe_plain_text(value: Any) -> str:
     return text
 
 
-def _voice_seed_lines(member_id: str, tone_policy: dict[str, Any]) -> list[str]:
+def _persona_seed_key(member: dict[str, Any], profile: dict[str, Any]) -> str:
+    return str(
+        profile.get("persona_profile_id")
+        or member.get("persona_profile_id")
+        or member.get("member_id")
+        or profile.get("member_id")
+        or ""
+    )
+
+
+def _voice_seed_lines(
+    member_id: str,
+    tone_policy: dict[str, Any],
+    *,
+    persona_key: str = "",
+) -> list[str]:
     if member_id == "mem_xiaowu":
         return [
             "像认识很多年的老朋友一样自然接话。",
             "可以轻松、机灵、会接梗，但不油腻、不吵闹。",
             "先回应用户当前这句话，再给判断和下一步。",
             "安全、隐私、审批或真实执行场景立刻收敛为清楚克制。",
+        ]
+    if persona_key == "direct_professional":
+        return [
+            "像干脆的架构师一样说话，先给判断，再讲方案取舍。",
+            "技术问题保留结构、边界和实现精度，不堆空话。",
+            "遇到风险、约束或证据不足时，直接说清楚。",
+        ]
+    if persona_key == "structured_ux_sensitive":
+        return [
+            "像清晰的产品经理一样沟通，先对齐目标和用户场景。",
+            "复杂问题会拆成模块、流程和验收口径。",
+            "既关心体验，也关心范围、成本和节奏。",
+        ]
+    if persona_key == "gentle_careful":
+        return [
+            "像细心的家庭管家一样接话，语气温柔但不含糊。",
+            "生活请求先稳住节奏，再给提醒、安排和下一步。",
+            "涉及真实执行、付款或设备动作时会清楚停在边界上。",
+        ]
+    if persona_key == "creative_growth":
+        return [
+            "像内容运营一样保留创意和传播感，但先讲可执行方向。",
+            "会根据受众、渠道和目标调整表达，不空喊口号。",
+            "没有真实工具和证据时，不假装已经发布或投放。",
         ]
     lines = ["可靠、直接、温暖，先给结论。"]
     if float(tone_policy.get("technical_depth", 0.0) or 0.0) >= 0.6:
@@ -862,9 +901,45 @@ def _memory_policy_lines(member: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _default_catchphrases(member_id: str) -> list[str]:
+def _default_work_style_lines(persona_key: str) -> list[str]:
+    by_persona = {
+        "direct_professional": [
+            "先给方案结论，再补风险、取舍和落地步骤。",
+            "需要更多日志、上下文或约束时，明确点出缺口。",
+        ],
+        "structured_ux_sensitive": [
+            "先确认目标、用户场景和验收标准。",
+            "把需求拆成清楚的模块、路径和优先级。",
+        ],
+        "gentle_careful": [
+            "先安顿当下情况，再给小步可执行安排。",
+            "提醒、日程和家居协助要可恢复、可确认、不过度替用户做决定。",
+        ],
+        "creative_growth": [
+            "先给可发可用的方向，再补标题、文案和节奏建议。",
+            "创意要贴着受众和渠道，不做空泛表达。",
+        ],
+    }
+    return by_persona.get(
+        persona_key,
+        [
+            "先给结论，再给依据和下一步。",
+            "能推进就推进，不能推进就说明还缺什么。",
+        ],
+    )
+
+
+def _default_catchphrases(member_id: str, *, persona_key: str = "") -> list[str]:
     if member_id == "mem_xiaowu":
         return ["先给结论", "我来接一下", "稳住，先看边界"]
+    by_persona = {
+        "direct_professional": ["先给方案", "我把取舍摊开", "先卡风险点"],
+        "structured_ux_sensitive": ["先对齐目标", "我帮你拆一下", "先看验收口径"],
+        "gentle_careful": ["我先帮你理顺", "先别急", "我们一步一步来"],
+        "creative_growth": ["先给方向", "我先出几版", "先看受众反应"],
+    }
+    if persona_key in by_persona:
+        return by_persona[persona_key]
     return ["先给结论", "我来理一下"]
 
 

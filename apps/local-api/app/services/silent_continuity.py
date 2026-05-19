@@ -28,6 +28,11 @@ class SilentContinuityService:
         status: str,
     ) -> SilentContinuityRecord:
         profile_updates = _profile_updates_from_turn(user_text)
+        active_profile = await self._chat_repo.get_active_user_profile(turn["conversation_id"])
+        merged_profile = {
+            **dict((active_profile or {}).get("profile_data") or {}),
+            **profile_updates,
+        }
         topic_anchor = _topic_anchor(user_text, presence_payload)
         structured = dict(response_plan.get("structured_payload") or {})
         action_ledger = build_action_ledger_entry(
@@ -90,7 +95,7 @@ class SilentContinuityService:
                     "conversation_id": turn["conversation_id"],
                     "member_id": turn["member_id"],
                     "profile_type": "ephemeral_preference",
-                    "profile_data": profile_updates,
+                    "profile_data": merged_profile,
                     "source_turn_id": turn["turn_id"],
                     "trace_id": turn.get("trace_id"),
                     "status": "active",
@@ -131,8 +136,12 @@ def _profile_updates_from_turn(user_text: str) -> dict[str, Any]:
     updates: dict[str, Any] = {}
     text = str(user_text)
     explicit_preference = any(
-        marker in text for marker in ["记住", "以后都", "我的偏好", "回复偏好"]
+        marker in text for marker in ["记住", "以后都", "我的偏好", "回复偏好", "结构偏好", "总结偏好"]
     )
+    preference_correction = any(marker in text for marker in ["修正一下", "改成", "换成", "接下来的总结"])
+    structure_markers = ["标题", "一级标题", "二级标题", "表格", "两段", "一段", "段落", "不要表格"]
+    if not explicit_preference and preference_correction and any(marker in text for marker in structure_markers):
+        explicit_preference = True
     if not explicit_preference:
         return updates
     if "先给结论" in text and "风险" in text:
@@ -143,6 +152,9 @@ def _profile_updates_from_turn(user_text: str) -> dict[str, Any]:
         updates["explanation_density"] = "short"
     if any(marker in text for marker in ["详细", "展开", "深入"]):
         updates["explanation_density"] = "expanded"
+    structure_preference = _summary_structure_preference(text)
+    if structure_preference:
+        updates["summary_structure_preference"] = structure_preference
     avoidances: list[str] = []
     if "不要模板" in text or "模板腔" in text:
         avoidances.append("template_tone")
@@ -151,6 +163,17 @@ def _profile_updates_from_turn(user_text: str) -> dict[str, Any]:
     if avoidances:
         updates["style_avoidances"] = avoidances
     return updates
+
+
+def _summary_structure_preference(text: str) -> str | None:
+    raw = str(text)
+    if "不要表格" in raw and "标题" in raw and "两段" in raw:
+        return "标题 + 两段段落"
+    if "先标题" in raw and "表格" in raw and ("最后一段结论" in raw or "最后一段总结" in raw):
+        return "先标题，再表格，最后一段结论"
+    if "标题" in raw and "表格" in raw and "结论段落" in raw:
+        return "标题 + 表格 + 结论段落"
+    return None
 
 
 def _topic_anchor(user_text: str, presence_payload: dict[str, Any]) -> str | None:

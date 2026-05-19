@@ -5,6 +5,11 @@ from typing import Any
 from trace_service import redact
 
 from app.services.chat_intent_router import is_office_document_request
+from app.services.chat_turn_input_facts import (
+    explicit_preference_recall_query,
+    preference_application_request,
+    structured_summary_chat_request,
+)
 
 
 def clarify(reason: str, questions: list[str], *, clarification_type: str) -> dict[str, Any]:
@@ -115,6 +120,10 @@ def unknown_input(text: str) -> bool:
 
 
 def memory_query(text: str) -> bool:
+    if structured_summary_chat_request(text) or preference_application_request(text):
+        return False
+    if explicit_preference_recall_query(text):
+        return True
     return any(marker in text for marker in ["记得", "还记得", "偏好", "上次说过", "我刚才说"])
 
 
@@ -294,6 +303,8 @@ def approval_response(text: str) -> bool:
 
 
 def persona_boundary_question(text: str) -> bool:
+    if structured_summary_chat_request(text):
+        return False
     if any(
         marker in text
         for marker in [

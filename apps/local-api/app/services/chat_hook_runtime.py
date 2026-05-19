@@ -9,7 +9,7 @@ from trace_service import redact
 
 from app.core.errors import AppError
 from app.services.audit import AuditEventService
-from app.services.chat_visible_guard import visible_text_guard
+from app.services.chat_visible_guard import visible_text_guard_for_scenario
 
 ChatHookStage = Literal[
     "before_ingress",
@@ -403,8 +403,15 @@ class ChatHookRuntime:
 
     async def _builtin_before_finalize(self, hook_input: dict[str, Any]) -> dict[str, Any]:
         payload = dict(hook_input.get("payload") or {})
-        plain_text = visible_text_guard(str(payload.get("plain_text") or ""))
-        summary = visible_text_guard(str(payload.get("summary") or plain_text))
+        response_plan = dict(payload.get("response_plan") or {})
+        scenario = str(
+            response_plan.get("structured_payload", {}).get("scenario")
+            or response_plan.get("style")
+            or payload.get("scenario")
+            or ""
+        )
+        plain_text = visible_text_guard_for_scenario(str(payload.get("plain_text") or ""), scenario=scenario)
+        summary = visible_text_guard_for_scenario(str(payload.get("summary") or plain_text), scenario=scenario)
         if plain_text != payload.get("plain_text") or summary != payload.get("summary"):
             rewritten_plan = dict(payload.get("response_plan") or {})
             rewritten_plan["plain_text"] = plain_text

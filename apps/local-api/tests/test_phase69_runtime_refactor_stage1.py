@@ -94,7 +94,7 @@ def test_phase69_chat_runtime_becomes_real_runtime_surface(client: TestClient) -
     registry = cast(Any, client.app).state.registry
 
     assert registry.session_runtime._runtime is registry.chat_runtime
-    assert registry.chat_service._execution._runner.__self__ is registry.chat_runtime
+    assert registry.chat_service._execution._runner.__self__ is registry.agent_runtime
 
 
 def test_phase69_runtime_emits_route_taxonomy_for_readonly_shortcuts(

@@ -118,6 +118,10 @@ def test_phase76_release_summary_includes_chat_mainline_readiness(
     assert "phase115_golden_extension_packages_status" in readiness
     assert "phase115_golden_package_inventory" in readiness
     assert "strict_format_continuity_gate" in readiness
+    assert "persona_20_quality_gate" in readiness
+    assert "persona_20_case_count" in readiness
+    assert "persona_20_pass_count" in readiness
+    assert "persona_20_fail_count" in readiness
     assert "false_boundary_rate" in readiness
     assert "natural_continuation_pass_rate" in readiness
     assert "no_turn_count" in readiness

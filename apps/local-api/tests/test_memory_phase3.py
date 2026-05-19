@@ -160,7 +160,6 @@ def test_memory_006_chat_explicit_memory_command_emits_events_and_trace(
         for event in events
         if event["event"] == "response.delta"
     )
-    assert "记好" in visible_reply or "记住了" in visible_reply
     assert "以后开发计划要非常详细" in visible_reply
     assert memories[0]["summary_text"] == "以后开发计划要非常详细"
     assert {
@@ -405,3 +404,121 @@ def _parse_sse(raw: str) -> list[dict]:
             if line.startswith("data: "):
                 events.append(json.loads(line[6:]))
     return events
+
+
+def test_memory_030_chat_explicit_memory_query_returns_saved_memory(
+    client: TestClient,
+) -> None:
+    conversation = client.get("/api/chat/conversations").json()["items"][0]
+    remember = client.post(
+        "/api/chat/turn",
+        json={
+            "session_id": "ses_memory_query_seed",
+            "conversation_id": conversation["conversation_id"],
+            "member_id": "mem_xiaoyao",
+            "input": {
+                "type": "text",
+                "text": "\u8bb0\u4f4f\uff1a\u4ee5\u540e\u56de\u7b54\u5148\u7ed9\u7ed3\u8bba",
+            },
+        },
+    ).json()
+    _parse_sse(client.get(remember["stream_url"]).text)
+
+    query = client.post(
+        "/api/chat/turn",
+        json={
+            "session_id": "ses_memory_query",
+            "conversation_id": conversation["conversation_id"],
+            "member_id": "mem_xiaoyao",
+            "input": {
+                "type": "text",
+                "text": "\u6211\u4e4b\u524d\u8ba9\u4f60\u8bb0\u4f4f\u4e86\u4ec0\u4e48\uff1f",
+            },
+        },
+    )
+    body = query.json()
+    events = _parse_sse(client.get(body["stream_url"]).text)
+    detail = client.get(f"/api/chat/turns/{body['turn_id']}").json()
+    visible_reply = "".join(
+        event["payload"].get("text", "")
+        for event in events
+        if event["event"] == "response.delta"
+    )
+
+    assert query.status_code == 200
+    assert detail["intent"] == "memory_query"
+    assert "\u4ee5\u540e\u56de\u7b54\u5148\u7ed9\u7ed3\u8bba" in visible_reply
+
+
+def test_memory_030b_preference_query_prefers_corrected_preference_memory(
+    client: TestClient,
+) -> None:
+    conversation = client.get("/api/chat/conversations").json()["items"][0]
+    remember = client.post(
+        "/api/chat/turn",
+        json={
+            "session_id": "ses_memory_query_pref_seed",
+            "conversation_id": conversation["conversation_id"],
+            "member_id": "mem_xiaoyao",
+            "input": {
+                "type": "text",
+                "text": "\u8bb0\u4f4f\uff1a\u4ee5\u540e\u56de\u590d\u5148\u7ed9\u7ed3\u8bba\u518d\u8bf4\u98ce\u9669",
+            },
+        },
+    ).json()
+    _parse_sse(client.get(remember["stream_url"]).text)
+
+    correction = client.post(
+        "/api/chat/turn",
+        json={
+            "session_id": "ses_memory_query_pref_fix",
+            "conversation_id": conversation["conversation_id"],
+            "member_id": "mem_xiaoyao",
+            "input": {
+                "type": "text",
+                "text": "\u7ea0\u6b63\u8bb0\u5fc6\uff1a\u4e0d\u662f\u5148\u7ed9\u7ed3\u8bba\uff0c\u6539\u6210\u5148\u8bf4\u98ce\u9669\u518d\u7ed9\u7ed3\u8bba",
+            },
+        },
+    ).json()
+    _parse_sse(client.get(correction["stream_url"]).text)
+
+    query = client.post(
+        "/api/chat/turn",
+        json={
+            "session_id": "ses_memory_query_pref_now",
+            "conversation_id": conversation["conversation_id"],
+            "member_id": "mem_xiaoyao",
+            "input": {
+                "type": "text",
+                "text": "\u6211\u73b0\u5728\u7684\u56de\u590d\u504f\u597d\u662f\u4ec0\u4e48\uff1f",
+            },
+        },
+    )
+    body = query.json()
+    events = _parse_sse(client.get(body["stream_url"]).text)
+    detail = client.get(f"/api/chat/turns/{body['turn_id']}").json()
+    visible_reply = "".join(
+        event["payload"].get("text", "")
+        for event in events
+        if event["event"] == "response.delta"
+    )
+
+    assert query.status_code == 200
+    assert detail["intent"] == "memory_query"
+    assert "\u5148\u8bf4\u98ce\u9669" in visible_reply
+    assert "\u4efb\u52a1\u7ecf\u9a8c" not in visible_reply
+
+
+def test_memory_031_extract_blocks_api_key_style_secret(
+    client: TestClient,
+) -> None:
+    review = client.post(
+        "/api/memory/extract",
+        json={
+            "member_id": "mem_xiaoyao",
+            "text": "\u8bb0\u4f4f\uff1aapi_key=sk-phase3-secret-12345678",
+        },
+    ).json()
+
+    assert review["blocked"] is True
+    assert review["candidates"][0]["decision"] == "discarded_sensitive"

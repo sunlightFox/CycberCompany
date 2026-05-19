@@ -9,6 +9,40 @@ StageDisposition = Literal["continue", "complete", "fail"]
 
 
 @dataclass
+class TurnExecutionPlan:
+    turn_id: str
+    conversation_id: str | None = None
+    member_id: str | None = None
+    intent: str | None = None
+    mode: str | None = None
+    route: str | None = None
+    context_policy: dict[str, Any] = field(default_factory=dict)
+    persona_policy: dict[str, Any] = field(default_factory=dict)
+    capability_intent: dict[str, Any] = field(default_factory=dict)
+    approval_requirements: dict[str, Any] = field(default_factory=dict)
+    completion_semantics: dict[str, Any] = field(default_factory=dict)
+    response_contract: dict[str, Any] = field(default_factory=dict)
+    trace_metadata: dict[str, Any] = field(default_factory=dict)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "turn_id": self.turn_id,
+            "conversation_id": self.conversation_id,
+            "member_id": self.member_id,
+            "intent": self.intent,
+            "mode": self.mode,
+            "route": self.route,
+            "context_policy": dict(self.context_policy),
+            "persona_policy": dict(self.persona_policy),
+            "capability_intent": dict(self.capability_intent),
+            "approval_requirements": dict(self.approval_requirements),
+            "completion_semantics": dict(self.completion_semantics),
+            "response_contract": dict(self.response_contract),
+            "trace_metadata": dict(self.trace_metadata),
+        }
+
+
+@dataclass
 class ChatTurnTerminalOutcome:
     status: str
     code: str | None = None
@@ -67,6 +101,7 @@ class ChatTurnExecutionContext:
     turn: dict[str, Any]
     events: list[dict[str, Any]]
     root_span_id: str | None = None
+    execution_plan: TurnExecutionPlan | None = None
     user_text: str = ""
     session_id: str | None = None
     privacy: Any | None = None

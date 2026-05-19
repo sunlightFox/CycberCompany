@@ -92,6 +92,7 @@ class ChatRuntime:
                 continue
             setattr(self, name, value)
         bindings = (
+            "_agent_runtime",
             "_members",
             "_chat_repo",
             "_access_policy",
@@ -552,6 +553,12 @@ class ChatRuntime:
         )
 
     async def run_turn(self, turn_id: str) -> None:
+        if getattr(self, "_agent_runtime", None) is not None:
+            await self._agent_runtime.run_turn(turn_id)
+            return
+        await self._run_turn_as_owner(turn_id)
+
+    async def _run_turn_as_owner(self, turn_id: str) -> None:
         self._require_service("run_turn")
         turn = await self._chat_repo.get_turn(turn_id)
         if turn is None or turn["status"] in {"completed", "failed", "cancelled", "retried"}:
@@ -1136,6 +1143,11 @@ class ChatRuntime:
         return await self.create_turn(request, retry_of_turn_id=turn_id)
 
     async def recover_turns(self) -> int:
+        if getattr(self, "_agent_runtime", None) is not None:
+            return await self._agent_runtime.recover_turns()
+        return await self._recover_turns_as_owner()
+
+    async def _recover_turns_as_owner(self) -> int:
         self._require_service("recover_turns")
         running_turns = await self._chat_repo.list_running_turns()
         now = utc_now_iso()
@@ -1536,10 +1548,14 @@ class ChatRuntime:
             raise RuntimeError(f"ChatRuntime is not bound to a service for {operation}")
 
     def diagnostic(self) -> dict[str, Any]:
+        agent_runtime = getattr(self, "_agent_runtime", None)
         return {
             "runtime": "chat_runtime",
-            "maturity": "runtime_native",
-            "ownership_mode": "exclusive_runtime_host",
+            "plane": "runtime_plane",
+            "owner": "chat_runtime",
+            "contract_version": "phase117.chat_runtime_facade.v1",
+            "maturity": "compat_facade" if agent_runtime is not None else "runtime_native",
+            "ownership_mode": "compat_facade" if agent_runtime is not None else "exclusive_runtime_host",
             "public_entrypoints": [
                 "create_turn",
                 "run_turn",
@@ -1548,13 +1564,14 @@ class ChatRuntime:
                 "retry_turn",
                 "recover_turns",
             ],
-            "execution_owner": "chat_runtime",
-            "state_machine_owner": "chat_runtime",
-            "event_source": "chat_runtime",
-            "response_finalize_owner": "chat_runtime",
+            "execution_owner": "agent_runtime" if agent_runtime is not None else "chat_runtime",
+            "state_machine_owner": "agent_runtime" if agent_runtime is not None else "chat_runtime",
+            "event_source": "agent_runtime" if agent_runtime is not None else "chat_runtime",
+            "response_finalize_owner": "agent_runtime" if agent_runtime is not None else "chat_runtime",
             "session_entrypoint": "session_runtime",
             "compat_host_role": "compat_shell",
             "compat_host": "apps/local-api/app/services/chat.py",
+            "delegates_to": ["agent_runtime"] if agent_runtime is not None else [],
             "delegated_helpers": [
                 "chat_turn_execution_orchestrator",
                 "chat_turn_finalize_service",

@@ -28,6 +28,11 @@ from app.services.chat_intent_router import (
     is_office_document_request,
     is_webpage_read_request,
 )
+from app.services.chat_turn_input_facts import (
+    explicit_preference_recall_query,
+    preference_application_request,
+    structured_summary_chat_request,
+)
 from app.services.brain_context_decider import context_decision as _context_decision
 from app.services.brain_decision_support import summary as _summary
 from app.services.brain_mode_decider import mode_decision as _mode_decision
@@ -680,6 +685,10 @@ def _unknown_input(text: str) -> bool:
 
 
 def _memory_query(text: str) -> bool:
+    if structured_summary_chat_request(text) or preference_application_request(text):
+        return False
+    if explicit_preference_recall_query(text):
+        return True
     lowered = text.lower()
     explicit_markers = [
         "记得",
@@ -773,6 +782,8 @@ def _needs_live_skill_mcp_snapshot(text: str) -> bool:
 
 
 def _persona_boundary_question(text: str) -> bool:
+    if structured_summary_chat_request(text):
+        return False
     lowered = text.lower()
     identity_markers = [
         "你是真人",

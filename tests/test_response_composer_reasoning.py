@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 
 import response_composer.contracts as composer_contracts
 from response_composer import (
@@ -316,6 +317,108 @@ def test_response_quality_guard_tracks_current_message_priority_and_evidence_gat
 
     guard = result.response_plan.response_quality_guard
 
-    assert guard["checks"]["current_message_priority"] is False
+    assert result.response_plan.plain_text.startswith("## 风险")
+    assert guard["checks"]["current_message_priority"] is True
     assert guard["checks"]["evidence_required_before_done"] is False
-    assert any(item["check"] == "current_message_priority" for item in guard["violations"])
+    assert any(item["check"] == "no_false_done" for item in guard["violations"])
+
+
+def test_response_composer_applies_heading_and_paragraph_contract() -> None:
+    result = asyncio.run(
+        ResponseComposer().compose(
+            ComposeRequest(
+                user_text="把下面素材总结成一个一级标题加两段段落，不要表格。",
+                result_summary="订单查询在上线后 3 天内出现两次 500，当前已经通过超时保护和索引补充完成首轮止血。剩余风险在于夜间流量峰值还没复测，所以结论可以先下到阶段性稳定。",
+                scenario="direct",
+            )
+        )
+    )
+
+    text = result.response_plan.plain_text
+    guard = result.response_plan.response_quality_guard
+
+    assert text.startswith("# ")
+    assert "\n\n" in text
+    assert "| " not in text
+    assert guard["checks"]["strict_format_preserved"] is True
+
+
+def test_response_composer_applies_requested_section_headers_and_numbered_list() -> None:
+    result = asyncio.run(
+        ResponseComposer().compose(
+            ComposeRequest(
+                user_text="按已知、未知、下一步三个小标题整理，并给一个编号列表。",
+                result_summary="已确认的问题是订单接口在高峰期有两次超时。还不确定数据库连接池上限是否过低。接下来先补压测，再看是否要调索引和连接池。",
+                scenario="direct",
+            )
+        )
+    )
+
+    text = result.response_plan.plain_text
+    payload = result.response_plan.structured_payload
+
+    assert "已知" in text
+    assert "未知" in text
+    assert "下一步" in text
+    assert re.search(r"(^|\n)1\.\s+", text)
+    assert payload["requested_output_structure"]["require_numbered_list"] is True
+
+
+def test_response_composer_uses_remembered_structure_preference_from_session_context() -> None:
+    result = asyncio.run(
+        ResponseComposer().compose(
+            ComposeRequest(
+                user_text="按我刚刚设定的结构偏好，总结下面素材。",
+                result_summary="REST 适合通用 CRUD。GraphQL 适合按需取字段。gRPC 适合高吞吐内部服务调用。",
+                scenario="direct",
+                session_context={
+                    "stable_user_profile_block": "稳定偏好：先标题，再表格，最后一段结论",
+                },
+            )
+        )
+    )
+
+    text = result.response_plan.plain_text
+
+    assert text.startswith("# ")
+    assert "|" in text
+    assert "\n\n" in text
+
+
+def test_response_composer_uses_corrected_structure_preference_from_session_context() -> None:
+    result = asyncio.run(
+        ResponseComposer().compose(
+            ComposeRequest(
+                user_text="现在按修正后的偏好，总结下面素材。",
+                result_summary="方案一见效快但容易掩盖根因。方案二改 SQL 和索引更稳。方案三拆读写更适合中期扩展。",
+                scenario="direct",
+                session_context={
+                    "stable_user_profile_block": "总结结构偏好：标题 + 两段段落",
+                },
+            )
+        )
+    )
+
+    text = result.response_plan.plain_text
+
+    assert text.startswith("# ")
+    assert "|" not in text
+    assert text.count("\n\n") >= 2
+
+
+def test_response_composer_honors_no_heading_no_bullets_two_paragraphs() -> None:
+    result = asyncio.run(
+        ResponseComposer().compose(
+            ComposeRequest(
+                user_text="把下面内容改成严格两段，不要标题，不要列表，不要表格。",
+                result_summary="# 会议纪要\n- 前端补错误提示\n- 后端修分页查询\n- 测试补导出回归\n- 周五前完成",
+                scenario="direct",
+            )
+        )
+    )
+
+    text = result.response_plan.plain_text
+
+    assert not text.startswith("#")
+    assert not re.search(r"(?m)^[-*]\s+", text)
+    assert text.count("\n\n") >= 1

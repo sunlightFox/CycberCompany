@@ -15,6 +15,7 @@ from response_composer import (
 from trace_service import redact
 
 from app.core.errors import AppError
+from app.schemas.browser_research import BrowserResearchPlan
 from app.services.chat_intent_router import (
     ChatRouteDecision,
     OfficeChatRequest,
@@ -32,7 +33,7 @@ class ChatDirectRoutesRuntime:
         *,
         composer: ResponseComposer,
         tool_runtime: Any | None,
-        readonly_execution: Any,
+        browser_research: Any,
         task_engine: Any | None,
         capability_boundary: Any,
         task_coordinator: Any,
@@ -63,7 +64,7 @@ class ChatDirectRoutesRuntime:
     ) -> None:
         self._composer = composer
         self._tool_runtime = tool_runtime
-        self._readonly_execution = readonly_execution
+        self._browser_research = browser_research
         self._task_engine = task_engine
         self._capability_boundary = capability_boundary
         self._task_coordinator = task_coordinator
@@ -799,10 +800,13 @@ class ChatDirectRoutesRuntime:
         *,
         trace_id: str | None,
     ) -> AsyncIterator[ChatEvent]:
-        query = str(route_decision.metadata.get("query") or "").strip() or str(
-            route_decision.safe_user_summary or ""
+        plan = route_decision.browser_research_plan or BrowserResearchPlan(
+            query=str(route_decision.metadata.get("query") or "").strip()
+            or str(route_decision.safe_user_summary or ""),
+            citation_required=bool(route_decision.metadata.get("require_citation")),
+            requested_sections=list(route_decision.metadata.get("requested_sections") or []),
+            presentation_style=str(route_decision.metadata.get("presentation_style") or "default"),
         )
-        require_citation = bool(route_decision.metadata.get("require_citation"))
         yield await self._emit_and_record(
             turn["turn_id"],
             turn["trace_id"],
@@ -810,12 +814,11 @@ class ChatDirectRoutesRuntime:
             ChatEventType.MODE_SELECTED,
             {"mode": TaskMode.DIRECT.value, "needs_tool": True},
         )
-        result = await self._readonly_execution.browser_search(
+        result = await self._browser_research.execute(
             member_id=str(turn["member_id"]),
             turn_id=str(turn["turn_id"]),
             trace_id=trace_id,
-            query=query,
-            require_citation=require_citation,
+            plan=plan,
         )
         response_plan = self._response_plan_for_status(
             turn,
@@ -860,6 +863,11 @@ class ChatDirectRoutesRuntime:
                 evidence_refs=list(result.evidence_refs or []),
                 extra_payload={
                     "browser_workflow_result": result.model_dump(mode="json"),
+                    "browser_research_assessment": (
+                        result.assessment.model_dump(mode="json")
+                        if result.assessment is not None
+                        else None
+                    ),
                     "evidence_refs": result.evidence_refs,
                 },
                 task_created=False,
@@ -882,6 +890,11 @@ class ChatDirectRoutesRuntime:
                     "structured_payload": {
                         **dict(response_plan.structured_payload or {}),
                         "browser_workflow_result": result.model_dump(mode="json"),
+                        "browser_research_assessment": (
+                            result.assessment.model_dump(mode="json")
+                            if result.assessment is not None
+                            else None
+                        ),
                         "evidence_refs": result.evidence_refs,
                         "route_semantics": {
                             "route": route_decision.route_type,

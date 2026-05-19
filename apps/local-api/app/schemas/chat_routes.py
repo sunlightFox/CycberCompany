@@ -5,6 +5,8 @@ from typing import Any
 from core_types import ApiModel
 from pydantic import Field
 
+from app.schemas.browser_research import BrowserResearchPlan, EvidenceAssessment
+
 
 class ModelRouteResolution(ApiModel):
     route_status: str
@@ -32,6 +34,8 @@ class BrowserWorkflowResult(ApiModel):
     artifact_refs: list[dict[str, Any]] = Field(default_factory=list)
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     approval_state: dict[str, Any] = Field(default_factory=dict)
+    assessment: EvidenceAssessment | None = None
+    browser_research_plan: BrowserResearchPlan | None = None
     failure_code: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 

@@ -21,11 +21,106 @@ DEFAULT_MEMBER_VOICE_IDS = {
     "mobai": "zh-CN-YunjianNeural",
     "xiaoqi": "zh-CN-XiaohanNeural",
     "xiaowu": "zh-CN-YunyangNeural",
+    "chenxi": "zh-CN-XiaomengNeural",
+    "jihan": "zh-CN-YunfengNeural",
+    "suyin": "zh-CN-XiaochenNeural",
+    "qiaoqiao": "zh-CN-XiaoruiNeural",
+    "anan": "zh-CN-XiaoshuangNeural",
 }
 DEFAULT_MEMBER_ID = "mem_xiaoyao"
 XIAOWU_MEMBER_ID = "mem_xiaowu"
 DEFAULT_CONVERSATION_ID = "conv_default_xiaoyao"
 WELCOME_MESSAGE_ID = "msg_welcome_xiaoyao"
+DIRECT_MEMBER_SEEDS = [
+    {
+        "member_id": "mem_xiaowu",
+        "member_key": "xiaowu",
+        "display_name": "小吴",
+        "department_key": "ceo_office",
+        "role_key": "chief_of_staff",
+        "persona_profile_id": "persona_mem_xiaowu",
+        "heart_profile": {
+            "tone": "playful_witty",
+            "preferences": [
+                "先给结论",
+                "少空话",
+                "别太慢",
+                "语气自然",
+                "可以轻松一点",
+            ],
+        },
+        "default_skills": [
+            "task_planning",
+            "review_summary",
+            "coordination",
+        ],
+    },
+    {
+        "member_id": "mem_chenxi",
+        "member_key": "chenxi",
+        "display_name": "晨曦",
+        "department_key": "ceo_office",
+        "role_key": "chief_of_staff",
+        "persona_profile_id": "persona_mem_chenxi",
+        "heart_profile": {
+            "tone": "reliable_warm",
+            "preferences": ["先收束问题", "把优先级讲清楚", "给出清楚下一步"],
+        },
+        "default_skills": ["task_planning", "review_summary", "coordination"],
+    },
+    {
+        "member_id": "mem_jihan",
+        "member_key": "jihan",
+        "display_name": "季寒",
+        "department_key": "engineering",
+        "role_key": "architect",
+        "persona_profile_id": "persona_mem_jihan",
+        "heart_profile": {
+            "tone": "direct_professional",
+            "preferences": ["先讲架构判断", "把风险摊开", "少绕弯"],
+        },
+        "default_skills": ["architecture_design", "code_generation", "deployment_debug"],
+    },
+    {
+        "member_id": "mem_suyin",
+        "member_key": "suyin",
+        "display_name": "素音",
+        "department_key": "product",
+        "role_key": "product_manager",
+        "persona_profile_id": "persona_mem_suyin",
+        "heart_profile": {
+            "tone": "structured_ux_sensitive",
+            "preferences": ["先对齐目标", "拆清场景", "说明验收口径"],
+        },
+        "default_skills": ["requirement_analysis", "product_design", "roadmap_planning"],
+    },
+    {
+        "member_id": "mem_qiaoqiao",
+        "member_key": "qiaoqiao",
+        "display_name": "乔乔",
+        "department_key": "operations",
+        "role_key": "content_operator",
+        "persona_profile_id": "persona_mem_qiaoqiao",
+        "heart_profile": {
+            "tone": "creative_growth",
+            "preferences": ["先给传播角度", "文案要能发", "别空泛"],
+        },
+        "default_skills": ["short_video_script", "social_copywriting", "content_calendar"],
+    },
+    {
+        "member_id": "mem_anan",
+        "member_key": "anan",
+        "display_name": "安安",
+        "department_key": "life_service",
+        "role_key": "personal_butler",
+        "persona_profile_id": "persona_mem_anan",
+        "heart_profile": {
+            "tone": "gentle_careful",
+            "preferences": ["先稳住节奏", "一步一步来", "提醒要清楚"],
+        },
+        "default_skills": ["daily_planning", "emotional_support", "home_control"],
+    },
+]
 
 if TYPE_CHECKING:
     from app.services.design_alignment import PersonaHeartService
@@ -235,14 +330,15 @@ class BootstrapService:
                 source="shell_template",
                 now=now,
             )
-        await self._ensure_member_voice_binding(
-            member_id=XIAOWU_MEMBER_ID,
-            member_name="小吴",
-            member_key="xiaowu",
-            provider_voice_id=DEFAULT_MEMBER_VOICE_IDS["xiaowu"],
-            source="user_requested_member_seed",
-            now=now,
-        )
+        for seed in DIRECT_MEMBER_SEEDS:
+            await self._ensure_member_voice_binding(
+                member_id=str(seed["member_id"]),
+                member_name=str(seed["display_name"]),
+                member_key=str(seed["member_key"]),
+                provider_voice_id=DEFAULT_MEMBER_VOICE_IDS[str(seed["member_key"])],
+                source="user_requested_member_seed",
+                now=now,
+            )
 
     async def _ensure_member_voice_binding(
         self,
@@ -369,70 +465,59 @@ class BootstrapService:
         role_ids: dict[str, str],
     ) -> None:
         now = utc_now_iso()
-        await self._db.execute(
-            """
-            INSERT INTO members (
-              member_id, organization_id, department_id, role_id, display_name, avatar_uri,
-              status, default_brain_id, persona_profile_id, heart_profile_json,
-              memory_policy_json, created_from_shell_id, created_from_template_id,
-              metadata_json, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
-            ON CONFLICT(member_id) DO NOTHING
-            """,
-            (
-                XIAOWU_MEMBER_ID,
-                DEFAULT_ORGANIZATION_ID,
-                department_ids.get("ceo_office"),
-                role_ids.get("chief_of_staff"),
-                "小吴",
-                MemberStatus.NEEDS_CONFIGURATION.value,
-                DEFAULT_BRAIN_ID,
-                f"persona_{XIAOWU_MEMBER_ID}",
-                json.dumps(
-                    {
-                        "tone": "playful_witty",
-                        "preferences": [
-                            "先给结论",
-                            "少空话",
-                            "别太慢",
-                            "语气自然",
-                            "可以轻松一点",
-                        ],
-                    },
-                    ensure_ascii=False,
+        for seed in DIRECT_MEMBER_SEEDS:
+            member_id = str(seed["member_id"])
+            profile_id = str(seed["persona_profile_id"])
+            default_skills = list(seed.get("default_skills", []))
+            await self._db.execute(
+                """
+                INSERT INTO members (
+                  member_id, organization_id, department_id, role_id, display_name, avatar_uri,
+                  status, default_brain_id, persona_profile_id, heart_profile_json,
+                  memory_policy_json, created_from_shell_id, created_from_template_id,
+                  metadata_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+                ON CONFLICT(member_id) DO NOTHING
+                """,
+                (
+                    member_id,
+                    DEFAULT_ORGANIZATION_ID,
+                    department_ids.get(str(seed["department_key"])),
+                    role_ids.get(str(seed["role_key"])),
+                    str(seed["display_name"]),
+                    MemberStatus.NEEDS_CONFIGURATION.value,
+                    DEFAULT_BRAIN_ID,
+                    profile_id,
+                    json.dumps(seed["heart_profile"], ensure_ascii=False),
+                    json.dumps({"write_requires_source": True}, ensure_ascii=False),
+                    self._default_shell_id,
+                    json.dumps(
+                        {
+                            "source": "user_requested_member_seed",
+                            "seed_key": seed["member_key"],
+                            "default_skills": default_skills,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    now,
+                    now,
                 ),
-                json.dumps({"write_requires_source": True}, ensure_ascii=False),
-                self._default_shell_id,
-                json.dumps(
-                    {
-                        "source": "user_requested_member_seed",
-                        "default_skills": [
-                            "task_planning",
-                            "review_summary",
-                            "coordination",
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
-                now,
-                now,
-            ),
-        )
-        await self._db.execute(
-            """
-            INSERT INTO member_availability (
-              member_id, organization_id, status, capacity, current_load,
-              unavailable_reason, schedule_json, source, updated_at
-            ) VALUES (?, ?, 'available', 1, 0, NULL, '{}', 'user_requested_member_seed', ?)
-            ON CONFLICT(member_id) DO NOTHING
-            """,
-            (XIAOWU_MEMBER_ID, DEFAULT_ORGANIZATION_ID, now),
-        )
-        if self._persona_heart is not None:
-            await self._persona_heart.ensure_default_profile(
-                member_id=XIAOWU_MEMBER_ID,
-                profile_id=f"persona_{XIAOWU_MEMBER_ID}",
             )
+            await self._db.execute(
+                """
+                INSERT INTO member_availability (
+                  member_id, organization_id, status, capacity, current_load,
+                  unavailable_reason, schedule_json, source, updated_at
+                ) VALUES (?, ?, 'available', 1, 0, NULL, '{}', 'user_requested_member_seed', ?)
+                ON CONFLICT(member_id) DO NOTHING
+                """,
+                (member_id, DEFAULT_ORGANIZATION_ID, now),
+            )
+            if self._persona_heart is not None:
+                await self._persona_heart.ensure_default_profile(
+                    member_id=member_id,
+                    profile_id=profile_id,
+                )
 
     async def _ensure_default_skill_policies(self) -> None:
         now = utc_now_iso()
@@ -466,12 +551,13 @@ class BootstrapService:
                 now=now,
             )
 
-        await self._upsert_skill_policy(
-            subject_type="member",
-            subject_id=XIAOWU_MEMBER_ID,
-            allowed_skills=["task_planning", "review_summary", "coordination"],
-            now=now,
-        )
+        for seed in DIRECT_MEMBER_SEEDS:
+            await self._upsert_skill_policy(
+                subject_type="member",
+                subject_id=str(seed["member_id"]),
+                allowed_skills=list(seed.get("default_skills", [])),
+                now=now,
+            )
 
     async def _upsert_skill_policy(
         self,

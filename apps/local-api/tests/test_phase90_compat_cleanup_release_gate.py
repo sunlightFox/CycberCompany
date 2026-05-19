@@ -49,6 +49,7 @@ def test_phase90_readiness_and_release_summary_expose_removal_gate_truth(
     assert phase90_release["status"] == "ready"
     assert phase90_release["minimum_suite_passed"] is True
     assert phase90_release["strict_format_continuity_gate"] == "pass"
+    assert phase90_release["persona_20_quality_gate"] == "pass"
     assert phase90_release["visible_leakage_gate"] is True
     assert phase90_release["no_turn_gate"] is True
     assert phase90_release["duplicate_inbound_gate"] is True

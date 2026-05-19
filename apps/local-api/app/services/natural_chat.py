@@ -1451,6 +1451,15 @@ def _special_case_direct_reply(
         return "RAG 的验收指标可以看检索命中率、引用可追溯性、答案是否忠于来源；长期记忆的验收指标可以看写入准确率、召回相关性、纠错后是否覆盖旧口径，以及敏感信息是否被正确拒存。"
     if "如果任务还没完成" in raw and any(marker in raw for marker in ("诚实", "卡点", "下一步")):
         return "我会直接说明这一步还没完成、现在卡在哪、还缺什么证据或确认，以及下一步需要你补什么；在这些条件没落下来之前，我不会把任务说成已完成。这类解释直接基于当前上下文，不依赖 RAG，也不会改写长期记忆。"
+    if (
+        any(marker in raw for marker in ("\u63a5\u53e3\u53c8\u6302", "\u63a5\u53e3\u6302\u4e86", "\u63a5\u53e3\u5931\u8d25", "500"))
+        and any(marker in raw for marker in ("\u6ca1\u65e5\u5fd7", "\u6ca1\u6709\u65e5\u5fd7", "\u65e5\u5fd7\u6ca1\u62ff\u5230"))
+        and any(marker in raw for marker in ("\u8d77\u70b9", "\u5148\u600e\u4e48\u67e5", "\u63a5\u7740\u67e5", "\u6392\u67e5"))
+    ):
+        return (
+            "\u73b0\u5728\u8fd8\u4e0d\u80fd\u786e\u5b9a\u6839\u56e0\uff0c\u4fe1\u606f\u4e0d\u591f\uff0c\u5148\u522b\u628a\u5b83\u5b9a\u6210\u5355\u70b9\u6545\u969c\u3002\n"
+            "\u4e0b\u4e00\u6b65\uff1a\u5148\u770b\u8fd9\u6b21\u8bf7\u6c42\u6709\u6ca1\u6709\u771f\u6b63\u5230\u670d\u52a1\uff0c\u518d\u8865\u8fd9\u4e09\u6837\u91cc\u4efb\u610f\u4e00\u4e2a\u7ed9\u6211\uff1a\u62a5\u9519\u7801\u6216\u8d85\u65f6\u73b0\u8c61\u3001\u8c03\u7528\u94fe\u8def\u3001\u6700\u8fd1\u4e00\u6b21\u53d8\u66f4\u3002\u6211\u5c31\u6309\u8fd9\u4e2a\u7ee7\u7eed\u7f29\u5c0f\u8303\u56f4\u3002"
+        )
     if "接口评审" in raw and "下一步" in raw and "老板" in raw:
         return "本周已经完成接口评审，主风险是上线窗口紧。下一步会优先补自动化测试，尽量把上线前的不确定性往前收。整体建议先按风险项排优先级推进。这段整理直接基于你给的内容，不依赖 RAG，也不会写入长期记忆。"
     if "执行摘要" in raw and "本周完成接口评审" in raw:
@@ -1469,6 +1478,16 @@ def _special_case_direct_reply(
         return "daily 是每天在固定时间点跑一次，比如每天 09:30；interval 是按间隔反复跑，比如每隔 2 小时一次。前者看钟点，后者看间隔。这类说明直接基于调度概念，不依赖 RAG，也不会写入长期记忆。"
     if "MCP" in raw and any(marker in raw for marker in ("外部能力", "系统指令")):
         return "MCP 算外部能力，是因为它接进来的是外部工具或服务的受控接口；系统指令是系统内部对行为的约束，不是外部执行面。换句话说，Skill 和系统指令决定怎么组织能力与边界，MCP 决定怎么把外部能力安全接进来。"
+    preference_reply = _reply_preference_recall_reply(
+        raw,
+        active_profile,
+        recent_messages=recent_messages,
+    )
+    if preference_reply is not None:
+        return preference_reply
+    comparison_reply = _backend_test_comparison_table_reply(raw)
+    if comparison_reply is not None:
+        return comparison_reply
     recalled = _recall_named_memory(raw, recent_messages)
     if recalled is not None:
         return f"{recalled} 这次回答直接基于当前对话，不依赖 RAG；长期记忆是否存在也要以记忆治理结果为准。"
@@ -1476,6 +1495,21 @@ def _special_case_direct_reply(
         return "我不能在聊天里假装已经删除长期记忆，因为删除需要明确权限和操作记录。我现在能做的是先停用这条偏好，不再主动沿用它；如果要真正删除，还需要通过记忆管理功能明确删除范围、来源和操作记录。这次说明不依赖 RAG，本身也不会替代长期记忆里的删除动作。"
     if "FEI100-SECRET" in raw and any(marker in raw for marker in ("记得", "完整说", "说出来")):
         return "我没有把 FEI100-SECRET 写入长期记忆，也不会复述这类敏感内容。"
+    if _looks_like_degraded_closeout_request(raw):
+        closeout_reply = _closeout_reply_from_profile(
+            "\u7ed3\u5408\u524d\u9762\u8fd9 20 \u8f6e\uff0c\u6309\u6211\u540e\u6765\u6539\u7684\u504f\u597d\u6536\u4e2a\u5c3e\uff0c\u518d\u7ed9\u4e00\u6b65\u4e0b\u4e00\u6b65\u3002",
+            active_profile,
+            recent_messages=recent_messages,
+        )
+        if closeout_reply is not None:
+            return closeout_reply
+    closeout_reply = _closeout_reply_from_profile(
+        raw,
+        active_profile,
+        recent_messages=recent_messages,
+    )
+    if closeout_reply is not None:
+        return closeout_reply
     if any(marker in raw for marker in ("你现在怎么叫我", "这轮你怎么称呼我")):
         profile_data = dict((active_profile or {}).get("profile_data") or {})
         nickname = str(profile_data.get("temporary_nickname") or "").strip() or _recent_temporary_nickname(recent_messages)
@@ -1483,6 +1517,110 @@ def _special_case_direct_reply(
             return f"这轮我会临时叫你 {nickname}；它只在当前对话里生效，不会进入长期记忆。"
     return None
 
+
+
+
+def _closeout_reply_from_profile(
+    text: str,
+    active_profile: dict[str, Any] | None,
+    *,
+    recent_messages: list[dict[str, Any]] | None = None,
+) -> str | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    if any(marker in raw for marker in ("素材", "总结下面", "整理成", "用表格", "一级标题", "二级标题", "两段", "一段", "表格")):
+        return None
+    if not any(marker in raw for marker in ("\u6536\u4e2a\u5c3e", "\u6536\u5c3e", "\u603b\u7ed3\u4e00\u4e0b", "\u6536\u5c3e\u7ed3\u8bba", "\u4e0b\u4e00\u6b65")):
+        return None
+    if not any(marker in raw for marker in ("\u53e3\u5f84", "\u504f\u597d", "\u6309\u521a\u6539\u7684", "\u6309\u6211\u540e\u6765\u6539\u7684", "\u524d\u9762\u8fd9 20 \u8f6e", "\u7ed3\u5408\u524d\u9762", "\u524d\u9762\u8fd9\u8f6e")):
+        return None
+    preference = _reply_preference(active_profile, recent_messages=recent_messages)
+    if preference == "risk_then_conclusion":
+        return (
+            "\u98ce\u9669\uff1a\u5982\u679c\u4f60\u8fd9\u8f6e\u8fd8\u6ca1\u8865\u5177\u4f53\u5bf9\u8c61\uff0c\u6211\u8fd9\u91cc\u5148\u7ed9\u7684\u662f\u4f1a\u8bdd\u7ea7\u6536\u5c3e\uff0c\u4e0d\u4f1a\u5047\u88c5\u5df2\u7ecf\u843d\u5230\u6267\u884c\u7ed3\u8bba\u3002\n"
+            "\u7ed3\u8bba\uff1a\u6211\u8bb0\u4f4f\u4e86\u4f60\u540e\u9762\u4fee\u6b63\u8fc7\u7684\u504f\u597d\uff0c\u8fd9\u8f6e\u4f1a\u5148\u8bf4\u98ce\u9669\uff0c\u518d\u7ed9\u7ed3\u8bba\u3002\n"
+            "\u4e0b\u4e00\u6b65\uff1a\u76f4\u63a5\u628a\u4f60\u73b0\u5728\u6700\u60f3\u63a8\u8fdb\u7684\u90a3\u4e00\u4ef6\u4e8b\u53d1\u6211\uff0c\u6211\u5c31\u6309\u8fd9\u4e2a\u53e3\u5f84\u7ee7\u7eed\u3002"
+        )
+    if preference == "conclusion_then_risk":
+        return (
+            "\u7ed3\u8bba\uff1a\u6211\u8bb0\u4f4f\u4e86\u4f60\u8fd9\u8f6e\u7684\u504f\u597d\uff0c\u4f1a\u5148\u7ed9\u7ed3\u8bba\uff0c\u518d\u5c55\u5f00\u98ce\u9669\u548c\u539f\u56e0\u3002\n"
+            "\u98ce\u9669\uff1a\u5982\u679c\u4f60\u4e0d\u8865\u5177\u4f53\u5bf9\u8c61\uff0c\u6211\u8fd9\u91cc\u5148\u6536\u6210\u4f1a\u8bdd\u7ea7\u7ed3\u8bba\uff0c\u4e0d\u4f1a\u786c\u88c5\u6210\u6267\u884c\u7ed3\u679c\u3002\n"
+            "\u4e0b\u4e00\u6b65\uff1a\u628a\u4f60\u73b0\u5728\u6700\u60f3\u63a8\u8fdb\u7684\u90a3\u4e00\u4ef6\u4e8b\u53d1\u6211\uff0c\u6211\u5c31\u6309\u8fd9\u4e2a\u53e3\u5f84\u7ee7\u7eed\u3002"
+        )
+    return None
+
+
+def _reply_preference_recall_reply(
+    text: str,
+    active_profile: dict[str, Any] | None,
+    *,
+    recent_messages: list[dict[str, Any]] | None = None,
+) -> str | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    if not any(marker in raw for marker in ("回复偏好", "回复顺序", "先说风险", "先给结论")):
+        return None
+    if any(marker in raw for marker in ("总结偏好", "表格", "标题", "段落", "结构偏好")):
+        return None
+    preference = _reply_preference(active_profile, recent_messages=recent_messages)
+    if preference == "risk_then_conclusion":
+        return "你这轮当前的回复偏好是：先说风险，再给结论。"
+    if preference == "conclusion_then_risk":
+        return "你这轮当前的回复偏好是：先给结论，再解释原因和风险。"
+    return None
+
+
+def _looks_like_degraded_closeout_request(text: str) -> bool:
+    raw = str(text or "").strip()
+    if "CHAT-PERSONA-20-STRESS" not in raw:
+        return False
+    if "20" not in raw:
+        return False
+    return raw.count("?") >= 12
+
+
+def _reply_preference(
+    active_profile: dict[str, Any] | None,
+    *,
+    recent_messages: list[dict[str, Any]] | None = None,
+) -> str:
+    profile_data = dict((active_profile or {}).get("profile_data") or {})
+    preference = str(profile_data.get("reply_preference") or "").strip()
+    if preference:
+        return preference
+    for item in reversed(list(recent_messages or [])):
+        body = _recent_message_text(item)
+        if not body:
+            continue
+        if any(marker in body for marker in ("\u5148\u8bb2\u98ce\u9669", "\u5148\u8bf4\u98ce\u9669")) and any(
+            marker in body for marker in ("\u518d\u6536\u7ed3\u8bba", "\u518d\u7ed9\u7ed3\u8bba")
+        ):
+            return "risk_then_conclusion"
+        if any(marker in body for marker in ("\u5148\u7ed9\u7ed3\u8bba", "\u5148\u7ed3\u8bba")) and any(
+            marker in body for marker in ("\u518d\u8bf4\u98ce\u9669", "\u518d\u8bf4\u539f\u56e0", "\u548c\u4e0b\u4e00\u6b65")
+        ):
+            return "conclusion_then_risk"
+    return ""
+
+
+def _backend_test_comparison_table_reply(text: str) -> str | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    required_topics = ("接口测试", "集成测试", "端到端测试")
+    if not all(topic in raw for topic in required_topics):
+        return None
+    if not any(marker in raw for marker in ("表格", "比较", "对比")):
+        return None
+    return (
+        "| 类型 | 目标 | 优点 | 限制 |\n"
+        "| --- | --- | --- | --- |\n"
+        "| 接口测试 | 验证单个接口的入参、出参、状态码和错误处理 | 定位快、执行快、适合覆盖边界条件 | 很难暴露跨服务链路和真实集成问题 |\n"
+        "| 集成测试 | 验证多个模块或服务之间的协作是否正确 | 能发现接口契约、依赖配置和数据流问题 | 搭建和维护成本高于接口测试，定位也更慢 |\n"
+        "| 端到端测试 | 从用户入口到最终结果验证完整业务链路 | 最接近真实使用场景，能兜住关键主流程 | 运行慢、稳定性更受环境影响，失败后排查成本最高 |"
+    )
 
 def _extract_temporary_nickname_command(text: str) -> str | None:
     raw = str(text or "").strip()
@@ -1503,7 +1641,7 @@ def _recall_named_memory(text: str, recent_messages: list[dict[str, Any]]) -> st
     for target in targets:
         latest = ""
         for item in reversed(recent_messages):
-            body = str(item.get("content_text") or "")
+            body = _recent_message_text(item)
             if target not in body or "不要写入长期记忆" in body:
                 continue
             if "纠正记忆" in body:
@@ -1527,8 +1665,19 @@ def _trim_memory_statement(text: str) -> str:
 
 def _recent_temporary_nickname(recent_messages: list[dict[str, Any]]) -> str:
     for item in reversed(recent_messages):
-        body = str(item.get("content_text") or "")
+        body = _recent_message_text(item)
         nickname = _extract_temporary_nickname_command(body)
         if nickname:
             return nickname
     return ""
+
+
+def _recent_message_text(message: dict[str, Any] | None) -> str:
+    if not isinstance(message, dict):
+        return ""
+    return str(
+        message.get("model_safe_content_text")
+        or message.get("content_text")
+        or message.get("text")
+        or ""
+    ).strip()

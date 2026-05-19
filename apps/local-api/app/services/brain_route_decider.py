@@ -31,6 +31,7 @@ from app.services.brain_decision_support import (
 from app.services.chat_intent_router import (
     direct_only_requested,
     format_sensitive_direct_answer_requested,
+    is_structured_summary_request,
     is_browser_page_action_request,
     is_explicit_download_request,
     is_file_mutation_request,
@@ -79,6 +80,9 @@ def intent_decision(
         primary = "simple_question"
         secondary.append("make_plan")
         rule_hits.append("safe_plan_only")
+    elif is_structured_summary_request(clean):
+        primary = "summarization"
+        rule_hits.append("structured_summary_request")
     elif persona_boundary_question(clean):
         primary = "boundary_question"
         secondary.append("persona_capability_boundary")

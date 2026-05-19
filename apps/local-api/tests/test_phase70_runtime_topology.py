@@ -13,6 +13,7 @@ def test_phase70_system_runtime_topology_exposes_runtime_layers(client: TestClie
     by_name = {item["name"]: item for item in items}
 
     assert by_name["session"]["runtime"] == "session_runtime"
+    assert by_name["agent_runtime"]["runtime"] == "agent_runtime"
     assert by_name["chat_hook_runtime"]["runtime"] == "chat_hook_runtime"
     assert by_name["chat_execution_batches"]["runtime"] == "chat_execution_batches_control_plane"
     assert by_name["channel_ingress"]["runtime"] == "channel_ingress_runtime"
@@ -27,12 +28,13 @@ def test_phase70_system_runtime_topology_exposes_runtime_layers(client: TestClie
     assert by_name["skill_promotion"]["runtime"] == "skill_promotion_runtime"
 
     assert by_name["session"]["status"] == "runtime_native"
+    assert by_name["agent_runtime"]["status"] == "runtime_native"
     assert by_name["chat_hook_runtime"]["status"] == "runtime_native"
     assert by_name["channel_ingress"]["status"] == "runtime_native"
     assert by_name["wechat_gateway"]["status"] == "compat_shell"
     assert by_name["feishu_gateway"]["status"] == "compat_shell"
     assert "turn_execution_manager" in by_name["session"]["dependencies"]
-    assert "chat_runtime" in by_name["session"]["dependencies"]
+    assert "agent_runtime" in by_name["session"]["dependencies"]
     assert by_name["task"]["details"]["entry_mode"] == "runtime_single_track"
     assert "task_resume_runtime" in by_name["task"]["dependencies"]
     assert "tool_terminal_runtime" in by_name["tool"]["dependencies"]
@@ -75,7 +77,7 @@ def test_phase70_session_runtime_and_tool_runtime_diagnostics_are_honest(
     assert session_body["runtime"] == "session_runtime"
     assert session_body["executor"] == "turn_execution_manager"
     assert session_body["route_source"] == "session_runtime"
-    assert session_body["delegates_to"] == "chat_runtime"
+    assert session_body["delegates_to"] == "agent_runtime"
     assert session_body["maturity"] == "runtime_native"
     assert "create_turn" in session_body["public_entrypoints"]
     assert session_body["route_selectors"] == [
@@ -85,11 +87,12 @@ def test_phase70_session_runtime_and_tool_runtime_diagnostics_are_honest(
 
     registry = cast(Any, client.app).state.registry
     assert registry.session_runtime._runtime is registry.chat_runtime
+    assert registry.session_runtime._agent_runtime is registry.agent_runtime
     assert not hasattr(registry.channel_ingress_runtime, "_chat")
-    assert registry.chat_service._execution._runner.__self__ is registry.chat_runtime
+    assert registry.chat_service._execution._runner.__self__ is registry.agent_runtime
     assert (
         registry.chat_service._execution._runner.__func__
-        is registry.chat_runtime.run_turn.__func__
+        is registry.agent_runtime.run_turn.__func__
     )
 
     tool_runtime = client.get("/api/system/tool-runtime")

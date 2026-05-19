@@ -538,6 +538,7 @@ class ReleaseGateService:
     async def chat_mainline_signal_summary(self) -> dict[str, Any]:
         phase68 = await self._phase68_report_summary(None)
         phase89 = self._phase89_false_interception_summary()
+        persona20 = self._persona20_quality_summary()
         readiness = (
             await self._chat_mainline_readiness_service.diagnostic()
             if self._chat_mainline_readiness_service is not None
@@ -740,6 +741,13 @@ class ReleaseGateService:
             "strict_format_continuity_gate": str(
                 phase89.get("strict_format_continuity_gate") or "fail"
             ),
+            "persona_20_quality_gate": str(
+                persona20.get("persona_20_quality_gate") or "fail"
+            ),
+            "persona_20_case_count": int(persona20.get("case_count") or 0),
+            "persona_20_pass_count": int(persona20.get("pass_count") or 0),
+            "persona_20_fail_count": int(persona20.get("fail_count") or 0),
+            "persona_20_run_id": persona20.get("run_id"),
             "phase90_compat_cleanup_release_gate_status": phase90.get("status"),
             "phase90_contract_version": phase90_details.get("phase90_contract_version"),
             "phase90_minimum_suite": phase90_details.get("minimum_suite") or [],
@@ -990,6 +998,46 @@ class ReleaseGateService:
             ),
             "wechat_20_scenarios_passed": int(payload.get("fail_count") or 0) == 0,
             "items": items,
+        }
+
+    def _resolve_persona20_report_path(self) -> Path | None:
+        root = Path(__file__).resolve().parents[4]
+        candidates = sorted(
+            root.rglob("2026-05-19-persona-20-scenarios/02-20*.md")
+        )
+        return candidates[0] if candidates else None
+
+    def _persona20_quality_summary(self) -> dict[str, Any]:
+        report_path = self._resolve_persona20_report_path()
+        if report_path is None or not report_path.exists():
+            return {
+                "report_present": False,
+                "case_count": 0,
+                "pass_count": 0,
+                "fail_count": 0,
+                "persona_20_quality_gate": "fail",
+                "run_id": None,
+            }
+        try:
+            text = report_path.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        table_lines = [
+            line for line in text.splitlines() if line.lstrip().startswith("| `PER-")
+        ]
+        case_count = len(table_lines)
+        pass_count = sum("| `PASS` |" in line for line in table_lines)
+        fail_count = sum("| `FAIL` |" in line for line in table_lines)
+        run_id_match = re.search(r"\b20\d{12}Z\b", text)
+        return {
+            "report_present": True,
+            "case_count": case_count,
+            "pass_count": pass_count,
+            "fail_count": fail_count,
+            "persona_20_quality_gate": (
+                "pass" if case_count >= 20 and fail_count == 0 and pass_count == case_count else "fail"
+            ),
+            "run_id": run_id_match.group(0) if run_id_match else None,
         }
 
     def ensure_runtime_dirs(self) -> None:
@@ -2630,6 +2678,9 @@ class ReleaseGateService:
             ),
             "strict_format_continuity_gate": str(
                 chat_mainline_readiness.get("strict_format_continuity_gate") or "fail"
+            ),
+            "persona_20_quality_gate": str(
+                chat_mainline_readiness.get("persona_20_quality_gate") or "fail"
             ),
         }
         phase91_host_decomposition_governance = {

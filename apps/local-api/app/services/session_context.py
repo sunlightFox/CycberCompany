@@ -81,6 +81,8 @@ def _user_profile_block(
         parts.append(f"解释密度：{user_profile['explanation_density']}")
     if user_profile.get("interaction_preference"):
         parts.append(f"互动偏好：{user_profile['interaction_preference']}")
+    if user_profile.get("summary_structure_preference"):
+        parts.append(f"总结结构偏好：{user_profile['summary_structure_preference']}")
     if user_profile.get("style_avoidances"):
         parts.append(f"避免风格：{'、'.join(user_profile['style_avoidances'])}")
     return "；".join(parts) if parts else "当前没有稳定用户画像，优先服从这轮显式要求。"

@@ -177,6 +177,9 @@ class MaturityDashboardResponse(ApiModel):
 
 class SessionRuntimeResponse(ApiModel):
     runtime: str
+    plane: str | None = None
+    owner: str | None = None
+    contract_version: str | None = None
     executor: str
     ingress: str
     route_source: str | None = None
@@ -186,6 +189,7 @@ class SessionRuntimeResponse(ApiModel):
     state_machine_owner: str | None = None
     event_source: str | None = None
     business_logic_owner: str | None = None
+    growth_gate: str | None = None
     public_entrypoints: list[str] = Field(default_factory=list)
     route_selectors: list[str] = Field(default_factory=list)
     running_turn_count: int = 0

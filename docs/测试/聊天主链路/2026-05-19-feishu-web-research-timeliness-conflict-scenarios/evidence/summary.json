@@ -1,0 +1,86 @@
+{
+  "items": [
+    {
+      "case_id": "FRT-001",
+      "title": "最新门诊安排",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 最新门诊安排，整理成主要变化、需要注意、出发前确认三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“最新门诊安排”。当前拿到的证据来自搜索结果页《最新门诊安排 搜索结果》（HTTP 200）。\n可信度：中等，主要受时效影响，落地前建议复核。\n时效提醒：这类信息可能更新较快，真正使用前最好再看一次最新的官方页面或公告。\n主要变化：本周门诊安排有调整，部分专家出诊时间顺延\n需要注意：部分科室周末停诊，节假日前后变化更明显\n出发前确认：建议出发前再次确认公告和挂号页\n这类信息有明显时效性，真正采用前建议再核对一次最新页面。这次总结的证据来源是：https://example.test/search?q=latest+clinic+schedule",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_c4fc649f521844ba8327b11288d29701",
+      "trace_id": "trc_c44532ac01e34c829c147f3d3b198fd7"
+    },
+    {
+      "case_id": "FRT-002",
+      "title": "近期签证要求",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 近期日本签证材料要求，整理成主要变化、常见材料、提交前确认三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“近期日本签证材料要求”。当前拿到的证据来自搜索结果页《近期日本签证材料要求 搜索结果》（HTTP 200）。\n可信度：中等，主要受时效影响，落地前建议复核。\n时效提醒：这类信息可能更新较快，真正使用前最好再看一次最新的官方页面或公告。\n主要变化：近期材料口径有更新，不同领区提示略有差异\n常见材料：常见材料仍包括在职证明和资产材料\n提交前确认：送签前再核对代办机构和领区最新说明\n这类信息有明显时效性，真正采用前建议再核对一次最新页面。这次总结的证据来源是：https://example.test/search?q=recent+japan+visa+docs",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_99f12446e3b642a3beb60081ecdcbb3f",
+      "trace_id": "trc_f0bee4da41784e0cb0512c92cda5a945"
+    },
+    {
+      "case_id": "FRT-003",
+      "title": "预约要求口径冲突",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 某地居住证续签预约要求，整理成现有说法、可能差异、怎么处理三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“某地居住证续签预约要求”。当前拿到的证据来自搜索结果页《居住证续签预约 搜索结果》（HTTP 200）。\n可信度：中等偏谨慎，适合先当线索再交叉核对。\n补一句：当前搜到的不同线索里，个别说法不完全一致，更适合把它当成初步交叉参考。\n现有说法：有的资料写现场取号即可\n可能差异：也有资料写必须先线上预约\n怎么处理：不同来源提醒以当地窗口最新通知为准\n不同线索之间存在一些口径差异，最终判断更适合以权威来源为准。这次总结的证据来源是：https://example.test/search?q=residence+permit+renewal",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_a2e96a314c3f4aab92d3c5741962863c",
+      "trace_id": "trc_e637eab6dda34727a3c06e27536666e9"
+    },
+    {
+      "case_id": "FRT-004",
+      "title": "招生简章版本差异",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 某校研究生招生简章报名要求，整理成当前看到的要求、可能差异、建议做法三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“某校研究生招生简章报名要求”。当前拿到的证据来自搜索结果页《研究生招生简章 搜索结果》（HTTP 200）。\n可信度：中等偏谨慎，适合先当线索再交叉核对。\n来源判断：当前拿到的是偏官方口径的结果页，可以优先参考。\n补一句：当前搜到的不同线索里，个别说法不完全一致，更适合把它当成初步交叉参考。\n当前看到的要求：不同来源给出的专业目录版本不同\n可能差异：也有资料提示要同时看学院补充通知\n建议做法：最终报名口径通常以学校最新公告为准\n不同线索之间存在一些口径差异，最终判断更适合以权威来源为准。这次总结的证据来源是：https://yz.example.edu.cn/notice",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_ab1c856729b644d39d0a789fe7c0721a",
+      "trace_id": "trc_49bc25fab56d4b15aa3c0084bcef37e3"
+    },
+    {
+      "case_id": "FRT-005",
+      "title": "最新演出入场规则",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 今天演唱会入场规则，整理成当前规则、可能变化、出发前确认三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“今天演唱会入场规则”。当前拿到的证据来自搜索结果页《今天演唱会入场规则 搜索结果》（HTTP 200）。\n可信度：中等，主要受时效影响，落地前建议复核。\n时效提醒：这类信息可能更新较快，真正使用前最好再看一次最新的官方页面或公告。\n当前规则：今天场次的入场时间可能调整，最好提前查看通知\n可能变化：入场通常需要证件和票务信息同时匹配\n出发前确认：部分场馆会临时调整安检节奏\n这类信息有明显时效性，真正采用前建议再核对一次最新页面。这次总结的证据来源是：https://example.test/search?q=today+concert+entry",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_508d6369b008457db38152c2081e7b59",
+      "trace_id": "trc_8c850b31178a4f6da8e1f3100ccf5b12"
+    },
+    {
+      "case_id": "FRT-006",
+      "title": "最新政策且来源冲突",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 最新落户政策办理条件，整理成当前公开说法、可能分歧、办理前确认三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“最新落户政策办理条件”。当前拿到的证据来自搜索结果页《最新落户政策 搜索结果》（HTTP 200）。\n可信度：中等偏谨慎，适合先当线索再交叉核对。\n补一句：当前搜到的不同线索里，个别说法不完全一致，更适合把它当成初步交叉参考。\n时效提醒：这类信息可能更新较快，真正使用前最好再看一次最新的官方页面或公告。\n当前公开说法：有的资料按旧门槛说明，需要一定社保年限\n可能分歧：也有资料引用新通知，条件有所放宽\n办理前确认：不同来源提醒最终以当地政务最新公告为准\n不同线索之间存在一些口径差异，最终判断更适合以权威来源为准；这类信息有明显时效性，真正采用前建议再核对一次最新页面。这次总结的证据来源是：https://example.test/search?q=latest+settlement+policy",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_a0e084d0d44e4a7a8c0f50edc4349140",
+      "trace_id": "trc_aad5bd5b944b4028bf5395ceeb9394b7"
+    }
+  ],
+  "case_count": 6,
+  "pass_count": 6,
+  "warn_count": 0,
+  "fail_count": 0
+}

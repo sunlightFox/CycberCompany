@@ -49,15 +49,17 @@ def test_phase86_session_runtime_is_proxy_only_and_chat_runtime_is_exclusive_own
     items = {item["name"]: item for item in topology["items"]}
 
     assert session_runtime["ownership_mode"] == "proxy_only"
-    assert session_runtime["state_machine_owner"] == "chat_runtime"
-    assert session_runtime["event_source"] == "chat_runtime"
-    assert session_runtime["business_logic_owner"] == "chat_runtime"
+    assert session_runtime["state_machine_owner"] == "agent_runtime"
+    assert session_runtime["event_source"] == "agent_runtime"
+    assert session_runtime["business_logic_owner"] == "agent_runtime"
 
-    assert items["chat_runtime"]["details"]["ownership_mode"] == "exclusive_runtime_host"
-    assert items["chat_runtime"]["details"]["execution_owner"] == "chat_runtime"
-    assert items["chat_runtime"]["details"]["state_machine_owner"] == "chat_runtime"
-    assert items["chat_runtime"]["details"]["event_source"] == "chat_runtime"
-    assert items["chat_runtime"]["details"]["response_finalize_owner"] == "chat_runtime"
+    assert items["agent_runtime"]["details"]["ownership_mode"] == "exclusive_execution_owner"
+    assert items["agent_runtime"]["details"]["turn_execution_owner"] == "agent_runtime"
+    assert items["chat_runtime"]["details"]["ownership_mode"] == "compat_facade"
+    assert items["chat_runtime"]["details"]["execution_owner"] == "agent_runtime"
+    assert items["chat_runtime"]["details"]["state_machine_owner"] == "agent_runtime"
+    assert items["chat_runtime"]["details"]["event_source"] == "agent_runtime"
+    assert items["chat_runtime"]["details"]["response_finalize_owner"] == "agent_runtime"
 
 
 def test_phase86_chat_service_keeps_only_public_compat_surface(

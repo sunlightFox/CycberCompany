@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "case_id": "wx-natural-001",
+      "gate_reasons": [
+        "missing_reply",
+        "no_turn",
+        "prompt_version_missing",
+        "quality_block"
+      ],
+      "gate_status": "fail",
+      "latency_reasons": [],
+      "owner_area": "routing",
+      "quality_verdict": "差",
+      "severity": "P1",
+      "suggestions": [
+        "先修入站、配对或 worker 链路。",
+        "补充 manual-times 中的微信可见回复文本。"
+      ],
+      "tags": [
+        "missing_observed_reply",
+        "no_turn"
+      ],
+      "trace_id": null,
+      "turn_id": null
+    }
+  ]
+}

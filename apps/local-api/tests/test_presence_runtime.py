@@ -302,17 +302,80 @@ async def test_silent_continuity_only_persists_explicit_preferences() -> None:
     assert not repo.commitments
 
 
+@pytest.mark.asyncio
+async def test_silent_continuity_persists_and_merges_summary_structure_preference() -> None:
+    repo = _FakeChatRepo()
+    repo.active_profile = {"profile_data": {"reply_preference": "risk_then_conclusion"}}
+    service = SilentContinuityService(chat_repo=repo)
+
+    record = await service.capture_turn(
+        turn={
+            "turn_id": "turn_6",
+            "conversation_id": "conv_1",
+            "member_id": "mem_xiaowu",
+            "trace_id": "trace_2",
+        },
+        user_text="记住这轮对话里的总结偏好：先标题，再表格，最后一段结论。",
+        assistant_text="好，我记住了。",
+        presence_payload={
+            "presence_state": {
+                "conversation_state": {"active_topic": "知识总结"},
+                "relationship_state": {"user_pressure": "steady"},
+            }
+        },
+        response_plan={"follow_up_options": []},
+        status="completed",
+    )
+
+    assert record.profile_updates["summary_structure_preference"] == "先标题，再表格，最后一段结论"
+    assert repo.profiles[-1]["profile_data"]["reply_preference"] == "risk_then_conclusion"
+    assert repo.profiles[-1]["profile_data"]["summary_structure_preference"] == "先标题，再表格，最后一段结论"
+
+
+@pytest.mark.asyncio
+async def test_silent_continuity_treats_summary_structure_correction_as_preference_update() -> None:
+    repo = _FakeChatRepo()
+    service = SilentContinuityService(chat_repo=repo)
+
+    record = await service.capture_turn(
+        turn={
+            "turn_id": "turn_7",
+            "conversation_id": "conv_1",
+            "member_id": "mem_xiaowu",
+            "trace_id": "trace_3",
+        },
+        user_text="修正一下，这轮接下来的总结不要表格了，改成标题 + 两段段落。",
+        assistant_text="收到，后面按标题加两段段落来。",
+        presence_payload={
+            "presence_state": {
+                "conversation_state": {"active_topic": "知识总结"},
+                "relationship_state": {"user_pressure": "steady"},
+            }
+        },
+        response_plan={"follow_up_options": []},
+        status="completed",
+    )
+
+    assert record.profile_updates["summary_structure_preference"] == "标题 + 两段段落"
+
+
 class _FakeChatRepo:
     def __init__(self) -> None:
         self.snapshots: list[dict[str, Any]] = []
         self.profiles: list[dict[str, Any]] = []
         self.commitments: list[dict[str, Any]] = []
+        self.active_profile: dict[str, Any] | None = None
 
     async def insert_continuity_snapshot(self, data: dict[str, Any]) -> None:
         self.snapshots.append(data)
 
     async def upsert_user_profile(self, data: dict[str, Any]) -> None:
         self.profiles.append(data)
+        self.active_profile = data
+
+    async def get_active_user_profile(self, conversation_id: str) -> dict[str, Any] | None:
+        del conversation_id
+        return self.active_profile
 
     async def insert_assistant_commitment(self, data: dict[str, Any]) -> None:
         self.commitments.append(data)

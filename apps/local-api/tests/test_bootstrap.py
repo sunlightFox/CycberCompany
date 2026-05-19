@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import cast
 
 import anyio
-from app.services.bootstrap import DEFAULT_MEMBER_VOICE_IDS, DEFAULT_ORGANIZATION_ID
+from app.services.bootstrap import (
+    DEFAULT_MEMBER_VOICE_IDS,
+    DEFAULT_ORGANIZATION_ID,
+    DIRECT_MEMBER_SEEDS,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -21,7 +25,7 @@ def test_boot_001_first_start_creates_default_foundation(client: TestClient) -> 
     assert organization.json()["display_name"] == "我的一人公司"
     assert members.status_code == 200
     member_items = members.json()["items"]
-    assert len(member_items) == 6
+    assert len(member_items) == 11
     member_by_id = {item["member_id"]: item for item in member_items}
     assert member_by_id["mem_xiaoyao"]["display_name"] == "小曜"
     assert member_by_id["mem_xiaoyao"]["default_brain_id"] == "brain_not_configured"
@@ -31,6 +35,9 @@ def test_boot_001_first_start_creates_default_foundation(client: TestClient) -> 
     assert {"mem_aheng", "mem_ningning", "mem_mobai", "mem_xiaoqi"}.issubset(
         set(member_by_id)
     )
+    for seed in DIRECT_MEMBER_SEEDS:
+        assert member_by_id[str(seed["member_id"])]["display_name"] == seed["display_name"]
+        assert member_by_id[str(seed["member_id"])]["created_from_template_id"] is None
     assert conversations.status_code == 200
     assert conversations.json()["items"][0]["primary_member_id"] == "mem_xiaoyao"
     member_voice_ids: dict[str, str] = {}
@@ -46,6 +53,11 @@ def test_boot_001_first_start_creates_default_foundation(client: TestClient) -> 
     assert len(set(member_voice_ids.values())) == len(member_voice_ids)
     assert member_voice_ids["mem_xiaoyao"] == DEFAULT_MEMBER_VOICE_IDS["xiaoyao"]
     assert member_voice_ids["mem_xiaowu"] == DEFAULT_MEMBER_VOICE_IDS["xiaowu"]
+    assert member_voice_ids["mem_chenxi"] == DEFAULT_MEMBER_VOICE_IDS["chenxi"]
+    assert member_voice_ids["mem_jihan"] == DEFAULT_MEMBER_VOICE_IDS["jihan"]
+    assert member_voice_ids["mem_suyin"] == DEFAULT_MEMBER_VOICE_IDS["suyin"]
+    assert member_voice_ids["mem_qiaoqiao"] == DEFAULT_MEMBER_VOICE_IDS["qiaoqiao"]
+    assert member_voice_ids["mem_anan"] == DEFAULT_MEMBER_VOICE_IDS["anan"]
     status = client.get("/api/system/bootstrap-status").json()
     assert all(status.values())
 
@@ -64,7 +76,7 @@ def test_boot_002_repeated_start_does_not_duplicate_defaults(
         members = second_client.get("/api/members").json()["items"]
         conversations = second_client.get("/api/chat/conversations").json()["items"]
 
-    assert len(members) == 6
+    assert len(members) == 11
     assert [item["member_id"] for item in members].count("mem_xiaowu") == 1
     assert len(conversations) == 1
 

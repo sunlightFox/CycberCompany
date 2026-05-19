@@ -13,12 +13,12 @@ def test_phase77_session_runtime_still_delegates_to_chat_runtime(
 
     session_diag = _run_async(registry.session_runtime.diagnostic)
 
-    assert session_diag["delegates_to"] == "chat_runtime"
+    assert session_diag["delegates_to"] == "agent_runtime"
     assert registry.session_runtime._runtime is registry.chat_runtime
-    assert registry.chat_service._execution._runner.__self__ is registry.chat_runtime
+    assert registry.chat_service._execution._runner.__self__ is registry.agent_runtime
     assert (
         registry.chat_service._execution._runner.__func__
-        is registry.chat_runtime.run_turn.__func__
+        is registry.agent_runtime.run_turn.__func__
     )
 
 
@@ -29,9 +29,9 @@ def test_phase77_runtime_topology_exposes_chat_runtime_and_chat_service_roles(
     items = {item["name"]: item for item in body["items"]}
 
     assert items["chat_runtime"]["runtime"] == "chat_runtime"
-    assert items["chat_runtime"]["status"] == "runtime_native"
-    assert items["chat_runtime"]["details"]["cleanup"]["role"] == "runtime_native"
-    assert items["chat_runtime"]["details"]["cleanup"]["allowed_to_grow"] is True
+    assert items["chat_runtime"]["status"] == "compat_shell"
+    assert items["chat_runtime"]["details"]["cleanup"]["role"] == "compat_shell"
+    assert items["chat_runtime"]["details"]["cleanup"]["allowed_to_grow"] is False
 
     assert items["chat_service"]["runtime"] == "chat_service"
     assert items["chat_service"]["status"] == "compat_shell"

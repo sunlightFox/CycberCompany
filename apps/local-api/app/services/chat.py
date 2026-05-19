@@ -103,6 +103,10 @@ from app.services.chat_privacy import ChatPrivacyCoordinator
 from app.services.chat_quality import ChatQualityPolicy
 from app.services.chat_quality_shadow import ChatQualityShadowService
 from app.services.chat_readonly_execution import ChatReadonlyExecutionService
+from app.services.browser_research_assessor import BrowserResearchAssessor
+from app.services.browser_research_renderer import BrowserResearchRenderer
+from app.services.browser_research_runtime import BrowserResearchRuntime
+from app.services.browser_search_capability import BrowserSearchCapabilityAdapter
 from app.services.chat_response import ChatResponseCoordinator
 from app.services.chat_route_resolution import ChatRouteResolutionService
 from app.services.chat_safety import ChatTurnAccessPolicy
@@ -258,6 +262,12 @@ class ChatService(ChatFacadeShellMixin):
         self._intent_router = ChatIntentRouter()
         self._capability_boundary = ChatCapabilityBoundaryService()
         self._route_resolution = ChatRouteResolutionService()
+        self._browser_search_capability = BrowserSearchCapabilityAdapter(tool_runtime=tool_runtime)
+        self._browser_research_runtime = BrowserResearchRuntime(
+            search_capability=self._browser_search_capability,
+            assessor=BrowserResearchAssessor(),
+            renderer=BrowserResearchRenderer(),
+        )
         self._readonly_execution = ChatReadonlyExecutionService(tool_runtime=tool_runtime)
         self._events = TurnEventStore()
         self._ingress = ChatIngressService(
@@ -296,7 +306,7 @@ class ChatService(ChatFacadeShellMixin):
         self._direct_routes_runtime = ChatDirectRoutesRuntime(
             composer=self._composer,
             tool_runtime=self._tool_runtime,
-            readonly_execution=self._readonly_execution,
+            browser_research=self._browser_research_runtime,
             task_engine=self._task_engine,
             capability_boundary=self._capability_boundary,
             task_coordinator=self._task_coordinator,
@@ -979,6 +989,15 @@ class ChatService(ChatFacadeShellMixin):
                     },
                 }
             )
+        response_plan = response_plan.model_copy(
+            update={
+                "structured_payload": {
+                    **response_plan.structured_payload,
+                    "current_user_text": str(turn.get("current_user_text") or ""),
+                    "session_context": dict((turn.get("presence_runtime") or {}).get("session_context") or {}),
+                }
+            }
+        )
         text = self._response_coordinator.final_text(response_plan, text)
         if intent == "boundary_question":
             boundary_notice = (
@@ -1038,6 +1057,16 @@ class ChatService(ChatFacadeShellMixin):
             response_plan=response_plan,
             assistant_text=text,
             turn_status="completed",
+        )
+        user_text = str(turn.get("current_user_text") or "")
+        response_plan = response_plan.model_copy(
+            update={
+                "structured_payload": {
+                    **response_plan.structured_payload,
+                    "current_user_text": user_text,
+                    "session_context": dict((turn.get("presence_runtime") or {}).get("session_context") or {}),
+                }
+            }
         )
         response_plan = self._response_coordinator.finalize_plan(
             response_plan,
@@ -1610,6 +1639,7 @@ class ChatService(ChatFacadeShellMixin):
         )
         return self._composer.response_plan_for_status(
             summary=summary,
+            user_text=str(turn.get("current_user_text") or ""),
             task_status=task_status,
             approval_prompt=approval_prompt,
             artifact_refs=artifact_refs,
@@ -1633,6 +1663,7 @@ class ChatService(ChatFacadeShellMixin):
         response_policy, session_context, _ = self._presence_runtime_inputs(turn)
         return self._composer.response_plan_for_action_status(
             facts=facts,
+            user_text=str(turn.get("current_user_text") or ""),
             task_status=(
                 {
                     **dict(task_status or {}),

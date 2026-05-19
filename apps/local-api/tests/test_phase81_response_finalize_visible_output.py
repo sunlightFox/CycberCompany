@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.services.channel_stream_bridge import ChannelStreamBridge
 from app.services.chat_response import ChatResponseCoordinator
-from app.services.chat_visible_guard import visible_text_guard
+from app.services.chat_visible_guard import visible_text_guard, visible_text_guard_for_scenario
 
 
 def test_phase81_response_coordinator_finalizes_authoritative_visible_text() -> None:
@@ -223,6 +223,163 @@ def test_phase81_response_coordinator_merges_standardized_response_filter() -> N
     assert "approval_id" not in finalized.plain_text.lower()
 
 
+def test_phase81_response_coordinator_repairs_heading_table_conclusion_summary() -> None:
+    from core_types import ResponsePlan
+
+    coordinator = ChatResponseCoordinator()
+    finalized = coordinator.finalize_plan(
+        ResponsePlan(
+            summary="REST：适合通用 CRUD。GraphQL：适合按需取字段。gRPC：适合高吞吐内部调用。长期看 SQL 和索引更稳。",
+            plain_text="REST：适合通用 CRUD。GraphQL：适合按需取字段。gRPC：适合高吞吐内部调用。长期看 SQL 和索引更稳。",
+            structured_payload={
+                "current_user_text": "按我刚刚设定的结构偏好，总结下面素材。",
+                "session_context": {
+                    "stable_user_profile_block": "总结结构偏好：先标题，再表格，最后一段结论"
+                },
+            },
+        ),
+        "fallback",
+    )
+
+    assert finalized.plain_text.startswith("# ")
+    assert "| 项目 | 说明 |" in finalized.plain_text
+    assert "| REST |" in finalized.plain_text
+    assert "长期看 SQL 和索引更稳" in finalized.plain_text
+
+
+def test_phase81_response_coordinator_repairs_heading_two_paragraph_summary() -> None:
+    from core_types import ResponsePlan
+
+    coordinator = ChatResponseCoordinator()
+    finalized = coordinator.finalize_plan(
+        ResponsePlan(
+            summary="当前有三种方案。继续加缓存见效最快，但会掩盖查询设计问题。重写 SQL 并补索引更稳，但改动更大。拆分读写流量更适合中期扩展，不过本周实施成本最高。",
+            plain_text="当前有三种方案。继续加缓存见效最快，但会掩盖查询设计问题。重写 SQL 并补索引更稳，但改动更大。拆分读写流量更适合中期扩展，不过本周实施成本最高。",
+            structured_payload={
+                "current_user_text": "现在按修正后的偏好，总结下面素材，不要表格，改成标题 + 两段段落。",
+            },
+        ),
+        "fallback",
+    )
+
+    assert finalized.plain_text.startswith("# ")
+    assert "| 项目 |" not in finalized.plain_text
+    assert finalized.plain_text.count("\n\n") >= 2
+
+
+def test_phase81_response_coordinator_prefers_latest_no_table_instruction_over_profile() -> None:
+    from core_types import ResponsePlan
+
+    coordinator = ChatResponseCoordinator()
+    finalized = coordinator.finalize_plan(
+        ResponsePlan(
+            summary="方案一是继续加缓存。方案二是重写 SQL 并补索引。方案三是拆分读写流量。",
+            plain_text="方案一是继续加缓存。方案二是重写 SQL 并补索引。方案三是拆分读写流量。",
+            structured_payload={
+                "current_user_text": "按修正后的偏好总结下面素材，不要表格，改成标题加两段段落。素材：方案一是继续加缓存，方案二是重写 SQL 并补索引，方案三是拆分读写流量。",
+                "session_context": {
+                    "stable_user_profile_block": "总结结构偏好：先标题，再表格，最后一段结论"
+                },
+            },
+        ),
+        "fallback",
+    )
+
+    assert finalized.plain_text.startswith("# ")
+    assert "| 项目 |" not in finalized.plain_text
+    assert finalized.plain_text.count("\n\n") >= 2
+
+
+def test_phase81_response_coordinator_prefers_recent_conversation_fix_over_stable_profile() -> None:
+    from core_types import ResponsePlan
+
+    coordinator = ChatResponseCoordinator()
+    finalized = coordinator.finalize_plan(
+        ResponsePlan(
+            summary="方案一是继续加缓存。方案二是重写 SQL 并补索引。方案三是拆分读写流量。",
+            plain_text="方案一是继续加缓存。方案二是重写 SQL 并补索引。方案三是拆分读写流量。",
+            structured_payload={
+                "current_user_text": "现在按修正后的偏好，总结下面素材。素材：方案一是继续加缓存，方案二是重写 SQL 并补索引，方案三是拆分读写流量。",
+                "session_context": {
+                    "stable_user_profile_block": "总结结构偏好：先标题，再表格，最后一段结论",
+                    "relevant_recent_messages": [
+                        {
+                            "author_type": "user",
+                            "content_text": "修正一下，这轮接下来的总结不要表格了，改成标题加两段段落。"
+                        }
+                    ],
+                },
+            },
+        ),
+        "fallback",
+    )
+
+    assert finalized.plain_text.startswith("# ")
+    assert "| 项目 |" not in finalized.plain_text
+    assert finalized.plain_text.count("\n\n") >= 2
+
+
+def test_phase81_response_coordinator_repairs_heading_numbered_list_summary() -> None:
+    from core_types import ResponsePlan
+
+    coordinator = ChatResponseCoordinator()
+    finalized = coordinator.finalize_plan(
+        ResponsePlan(
+            summary="REST：适合通用 CRUD。GraphQL：适合按需取字段。gRPC：适合高吞吐内部调用。",
+            plain_text="REST：适合通用 CRUD。GraphQL：适合按需取字段。gRPC：适合高吞吐内部调用。",
+            structured_payload={
+                "current_user_text": "总结下面素材，按这个格式输出：标题加编号列表。素材：REST 适合通用 CRUD，GraphQL 适合按需取字段，gRPC 适合高吞吐内部调用。"
+            },
+        ),
+        "fallback",
+    )
+
+    assert finalized.plain_text.startswith("# ")
+    assert "\n1. " in finalized.plain_text
+    assert "| 项目 |" not in finalized.plain_text
+
+
+def test_phase81_response_coordinator_repairs_section_headers_paragraphs() -> None:
+    from core_types import ResponsePlan
+
+    coordinator = ChatResponseCoordinator()
+    finalized = coordinator.finalize_plan(
+        ResponsePlan(
+            summary="背景：本次会议围绕当前项目协同推进。现状：前端、后端、测试都有明确任务。风险：如果任一环节延期，周五目标会受影响。",
+            plain_text="背景：本次会议围绕当前项目协同推进。现状：前端、后端、测试都有明确任务。风险：如果任一环节延期，周五目标会受影响。",
+            structured_payload={
+                "current_user_text": "把下面素材整理成“背景 / 现状 / 风险”三个小标题，每个小标题下一段话，不要列表。"
+            },
+        ),
+        "fallback",
+    )
+
+    assert "## 背景" in finalized.plain_text
+    assert "## 现状" in finalized.plain_text
+    assert "## 风险" in finalized.plain_text
+    assert "| 项目 |" not in finalized.plain_text
+
+
+def test_phase81_response_coordinator_repairs_heading_bullets_conclusion() -> None:
+    from core_types import ResponsePlan
+
+    coordinator = ChatResponseCoordinator()
+    finalized = coordinator.finalize_plan(
+        ResponsePlan(
+            summary="标题服从度最高。表格服从度波动最大。段落整体较稳。结论是复合结构还需要更强骨架。",
+            plain_text="标题服从度最高。表格服从度波动最大。段落整体较稳。结论是复合结构还需要更强骨架。",
+            structured_payload={
+                "current_user_text": "请总结这轮结果，给我一个标题 + 三条观察 + 一段结论的质量分析。"
+            },
+        ),
+        "fallback",
+    )
+
+    assert finalized.plain_text.startswith("# ")
+    assert finalized.plain_text.count("\n- ") >= 3
+    assert finalized.plain_text.count("\n\n") >= 2
+
+
 def test_phase81_visible_text_guard_collapses_repeated_json_and_boundary_reply() -> None:
     json_reply = (
         '{"risk":"low","conclusion":"已收到。当前要求明确：只输出包含 risk 和 conclusion 两个字段的 JSON。"}'
@@ -251,6 +408,25 @@ def test_phase81_visible_text_guard_collapses_repeated_json_and_boundary_reply()
     )
     assert visible_text_guard(duplicated_boundary_reply) == boundary_reply
     assert visible_text_guard(duplicated_sectioned_reply) == sectioned_reply
+
+
+def test_phase81_visible_text_guard_stabilizes_failure_recovery_and_persona_boundary() -> None:
+    recovery = "先把这次失败固定成一次可复现请求，记录请求参数、响应码和返回体。"
+    persona_boundary = (
+        "不行，我不能装成现实真人同事，也没有“隐藏账号”可帮你登录。"
+        "如果你的目标是尽快登录，我可以给你两个安全方案。"
+    )
+
+    recovery_visible = visible_text_guard_for_scenario(recovery, scenario="failure_recovery")
+    boundary_visible = visible_text_guard_for_scenario(
+        persona_boundary,
+        scenario="tool_boundary",
+    )
+
+    assert "还不能确定唯一根因" in recovery_visible
+    assert "下一步" in recovery_visible
+    assert "隐藏账号" not in boundary_visible
+    assert "管理员 / IT" in boundary_visible
 
 
 def _create_turn(

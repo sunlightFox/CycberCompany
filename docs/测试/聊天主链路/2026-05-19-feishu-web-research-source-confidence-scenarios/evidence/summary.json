@@ -1,0 +1,60 @@
+{
+  "items": [
+    {
+      "case_id": "FSC-001",
+      "title": "政务入口优先",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 某市人才补贴申请入口，整理成入口、材料、办理提醒三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“某市人才补贴申请入口”。当前拿到的证据来自搜索结果页《某市政务服务网 公告》（HTTP 200）。\n可信度：较高，可优先参考当前结果。\n来源判断：当前拿到的是偏官方口径的结果页，可以优先参考。\n入口：申请入口已经统一迁移到政务服务网\n材料：现场办理时需携带身份证原件\n办理提醒：工作时间以窗口公告为准。这次总结的证据来源是：https://service.example.gov.cn/notice",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_45552ae094034af3af138705067e640a",
+      "trace_id": "trc_d8561af305744d50b0de7f4caa360cd2"
+    },
+    {
+      "case_id": "FSC-002",
+      "title": "学校公告优先",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 某校研究生报名要求，整理成要求、补充说明、注意事项三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“某校研究生报名要求”。当前拿到的证据来自搜索结果页《某校研究生院 官网通知》（HTTP 200）。\n可信度：较高，可优先参考当前结果。\n来源判断：当前拿到的是偏官方口径的结果页，可以优先参考。\n要求：报名系统以学校公告为准\n补充说明：也要同步查看学院补充通知\n注意事项：报名时间节点以最新通知页为准。这次总结的证据来源是：https://yz.example.edu.cn/notice",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_68a7e30468d04c12bce461fab963e3aa",
+      "trace_id": "trc_ac4ff452b72647c191ac3230f3e39876"
+    },
+    {
+      "case_id": "FSC-003",
+      "title": "论坛经验降级",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 某医院挂号经验，整理成现有说法、风险点、怎么核对三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“某医院挂号经验”。当前拿到的证据来自搜索结果页《论坛经验帖》（HTTP 200）。\n可信度：中等偏谨慎，适合先当线索再交叉核对。\n来源判断：当前更像是整理页或社区口径，适合先当线索，再回到官方页核对。\n现有说法：楼主说可以现场加号\n风险点：也有人说被要求先预约\n怎么核对：更多像个人经验整理。这次总结的证据来源是：https://forum.example.com/thread/123",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_4581c30c0df74ce5a25ee99724c4c052",
+      "trace_id": "trc_87de60cbdac84569ae3a2d6dc2264d10"
+    },
+    {
+      "case_id": "FSC-004",
+      "title": "普通资讯站中等",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 某产品价格趋势，整理成看到的情况、可参考点、下单前确认三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“某产品价格趋势”。当前拿到的证据来自搜索结果页《资讯站行情总结》（HTTP 200）。\n可信度：中等，可作为初步整理参考。\n看到的情况：近期价格波动不大\n可参考点：促销节点会短时下探\n下单前确认：下单前还是建议再看一次当天价格。这次总结的证据来源是：https://news.example.com/price-summary",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_73fdca14e69241aa9371c13cee4540aa",
+      "trace_id": "trc_2a4f60ac3d094ef78a55389cd66cbcc0"
+    }
+  ],
+  "case_count": 4,
+  "pass_count": 4,
+  "warn_count": 0,
+  "fail_count": 0
+}

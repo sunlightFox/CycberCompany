@@ -205,6 +205,10 @@ class ResponseComposer:
         raw_summary = strip_reasoning_tags(request.result_summary).strip()
         result_summary, redaction_summary = redact_visible_text(raw_summary)
         scenario = _canonical_visible_scenario(request.scenario)
+        requested_structure = _requested_output_structure(
+            request.user_text,
+            session_context=dict(request.session_context or {}),
+        )
         copy_seed = "|".join(
             [
                 scenario,
@@ -257,6 +261,11 @@ class ResponseComposer:
             scenario=scenario,
             user_text=request.user_text,
         )
+        result_summary = _apply_requested_output_structure(
+            result_summary,
+            contract=requested_structure,
+            user_text=request.user_text,
+        )
         response_quality_guard = _response_quality_guard(
             text=result_summary,
             original_text=raw_summary,
@@ -296,6 +305,7 @@ class ResponseComposer:
                 "response_policy": _redact_payload(dict(request.response_policy or {})),
                 "session_context": _redact_payload(dict(request.session_context or {})),
                 "action_dialogue": _redact_payload(dict(request.action_dialogue or {})),
+                "requested_output_structure": requested_structure,
                 **_voice_metadata_payload(
                     scenario=scenario,
                     channel_profile=request.channel_profile or request.notices.get("channel_profile"),
@@ -418,6 +428,7 @@ class ResponseComposer:
         self,
         *,
         summary: str,
+        user_text: str = "",
         task_status: dict[str, Any] | None = None,
         approval_prompt: dict[str, Any] | None = None,
         artifact_refs: list[dict[str, Any]] | None = None,
@@ -430,6 +441,10 @@ class ResponseComposer:
         action_dialogue: dict[str, Any] | None = None,
     ) -> ResponsePlan:
         visible_summary, redaction_summary = redact_visible_text(summary)
+        requested_structure = _requested_output_structure(
+            user_text,
+            session_context=dict(session_context or {}),
+        )
         safety_notice, safety_redactions = _redact_optional_string(safety_notice)
         memory_notice, memory_redactions = _redact_optional_string(memory_notice)
         tool_notice, tool_redactions = _redact_optional_string(tool_notice)
@@ -476,7 +491,12 @@ class ResponseComposer:
             session_context=dict(session_context or {}),
             action_dialogue=dict(action_dialogue or {}),
             scenario=scenario,
-            user_text="",
+            user_text=user_text,
+        )
+        visible_summary = _apply_requested_output_structure(
+            visible_summary,
+            contract=requested_structure,
+            user_text=user_text,
         )
         tone_metadata = _default_tone_metadata(
             scenario=scenario,
@@ -486,7 +506,7 @@ class ResponseComposer:
             text=visible_summary,
             original_text=summary,
             scenario=scenario,
-            user_text="",
+            user_text=user_text,
             redaction_summary=redaction_summary,
             high_risk=bool(safety_notice or approval_prompt),
             channel_profile=None,
@@ -538,6 +558,7 @@ class ResponseComposer:
                     if action_dialogue
                     else {}
                 ),
+                "requested_output_structure": requested_structure,
                 **_voice_metadata_payload(scenario=scenario),
                 "response_quality_guard": response_quality_guard,
             },
@@ -555,6 +576,7 @@ class ResponseComposer:
         self,
         *,
         facts: dict[str, Any],
+        user_text: str = "",
         task_status: dict[str, Any] | None = None,
         trace_refs: list[dict[str, Any]] | None = None,
         response_policy: dict[str, Any] | None = None,
@@ -562,6 +584,10 @@ class ResponseComposer:
     ) -> ResponsePlan:
         text = _compose_action_status_text(facts)
         visible_summary, redaction_summary = redact_visible_text(text)
+        requested_structure = _requested_output_structure(
+            user_text,
+            session_context=dict(session_context or {}),
+        )
         reply_options = [
             str(item)
             for item in facts.get("reply_options") or []
@@ -600,7 +626,12 @@ class ResponseComposer:
             session_context=dict(session_context or {}),
             action_dialogue=action_dialogue,
             scenario="action_status",
-            user_text="",
+            user_text=user_text,
+        )
+        visible_summary = _apply_requested_output_structure(
+            visible_summary,
+            contract=requested_structure,
+            user_text=user_text,
         )
         tone_metadata = _default_tone_metadata(
             scenario="action_status",
@@ -610,7 +641,7 @@ class ResponseComposer:
             text=visible_summary,
             original_text=text,
             scenario="action_status",
-            user_text="",
+            user_text=user_text,
             redaction_summary=redaction_summary,
             high_risk=high_risk,
             channel_profile=None,
@@ -659,6 +690,7 @@ class ResponseComposer:
                     if action_dialogue
                     else {}
                 ),
+                "requested_output_structure": requested_structure,
                 "response_quality_guard": response_quality_guard,
             },
             tone_mode=_tone_mode_from_metadata(tone_metadata),
@@ -839,7 +871,7 @@ class ResponseComposer:
     def compose_cancelled(self, partial_text: str) -> str:
         if partial_text:
             return partial_text
-        return "已停止生成。"
+        return "\u5148\u505c\u5728\u8fd9\u3002"
 
     def compose_failure(self, code: ErrorCode | str, message: str) -> str:
         code_value = code.value if isinstance(code, ErrorCode) else code
@@ -1020,7 +1052,7 @@ def _response_quality_guard(
     false_done_terms = _visible_false_done_terms(visible)
     if _has_completion_evidence(completion_evidence):
         false_done_terms = []
-    strict_format_preserved = _strict_format_preserved(original_text, visible)
+    strict_format_preserved = _strict_format_preserved(original_text, visible, user_text=user_text)
     boundary_required = high_risk or scenario in {
         "approval_required",
         "safety_deny",
@@ -1136,10 +1168,17 @@ def _visible_false_done_terms(text: str) -> list[str]:
             if index < 0:
                 break
             context = visible[max(0, index - 8) : min(len(visible), index + len(term) + 8)]
-            if not any(marker in context for marker in ["不该", "不要", "不能", "别", "别把", "假装", "说成"]):
+            if not any(marker in context for marker in ["\u4e0d\u8be5", "\u4e0d\u8981", "\u4e0d\u80fd", "\u522b", "\u522b\u628a", "\u5047\u88c5", "\u8bf4\u6210"]):
                 terms.append(term)
                 break
             start = index + len(term)
+    for pattern in (
+        r"(?:\u4efb\u52a1|\u6587\u6863|\u5185\u5bb9).{0,6}(?:\u5df2\u5b8c\u6210|\u5df2\u751f\u6210)",
+        r"(?:\u5df2\u505c\u6b62\u751f\u6210)",
+    ):
+        match = re.search(pattern, visible)
+        if match and match.group(0) not in terms:
+            terms.append(match.group(0))
     return terms
 
 
@@ -1175,16 +1214,127 @@ def _multimodal_grounded(user_text: str, visible: str, *, scenario: str) -> bool
     return True
 
 
-def _strict_format_preserved(original_text: str, visible: str) -> bool:
+def _strict_format_preserved(original_text: str, visible: str, *, user_text: str = "") -> bool:
+    requested_structure = _requested_output_structure(user_text)
     if not _strict_format_text_contract(original_text):
-        return True
+        return _requested_output_structure_satisfied(visible, requested_structure)
     if any(marker in visible for marker in _READING_MARKERS):
         return False
     if _looks_like_json_only(original_text):
         return _looks_like_json_only(visible)
     if _looks_like_markdown_table(original_text):
         return _looks_like_markdown_table(visible)
-    return _strict_format_text_contract(visible)
+    return _strict_format_text_contract(visible) and _requested_output_structure_satisfied(
+        visible,
+        requested_structure,
+    )
+
+
+def _requested_output_structure(
+    user_text: str,
+    *,
+    session_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    raw = str(user_text or "").strip()
+    lowered = raw.lower()
+    section_headers = _extract_requested_section_headers(raw)
+    if not section_headers:
+        remembered = _remembered_structure_contract(raw, dict(session_context or {}))
+        section_headers = list(remembered.get("section_headers") or [])
+    else:
+        remembered = _remembered_structure_contract(raw, dict(session_context or {}))
+    require_table = any(
+        marker in raw or marker in lowered
+        for marker in ("表格", "markdown table", "markdown 表格", "用表格", "表格比较")
+    )
+    if remembered.get("require_table"):
+        require_table = True
+    forbid_table = any(marker in raw or marker in lowered for marker in ("不要表格", "不用表格", "no table"))
+    if remembered.get("forbid_table"):
+        forbid_table = True
+    for label in ("已知", "未知", "下一步", "结论", "风险", "行动项"):
+        if label in raw and label not in section_headers:
+            section_headers.append(label)
+    return {
+        "json_only": any(
+            marker in raw or marker in lowered
+            for marker in ("\u53ea\u8f93\u51fa json", "\u53ea\u8fd4\u56de json", "json-only", "json only")
+        ),
+        "title_only": any(marker in raw or marker in lowered for marker in ("只输出标题", "title only")),
+        "require_heading": any(
+            marker in raw or marker in lowered
+            for marker in ("标题", "一级标题", "二级标题", "小标题", "heading", "headings")
+        ) or bool(remembered.get("require_heading")),
+        "require_bullets": any(
+            marker in raw or marker in lowered
+            for marker in ("要点", "列表", "行动项", "bullet", "bullets")
+        ) or bool(remembered.get("require_bullets")),
+        "require_numbered_list": any(
+            marker in raw or marker in lowered
+            for marker in ("编号", "numbered list", "1.", "1、")
+        ) or bool(remembered.get("require_numbered_list")),
+        "require_table": require_table and not forbid_table,
+        "paragraph_count": (
+            2
+            if any(marker in raw or marker in lowered for marker in ("两段", "2段", "two paragraphs"))
+            else (
+                1
+                if any(marker in raw or marker in lowered for marker in ("一段", "1段", "one paragraph"))
+                else (
+                    3
+                    if any(marker in raw or marker in lowered for marker in ("每个标题下用一小段",))
+                    and len(section_headers) >= 3
+                    else int(remembered.get("paragraph_count") or 0)
+                )
+                
+            )
+        ),
+        "forbid_table": forbid_table,
+        "forbid_heading": any(
+            marker in raw or marker in lowered for marker in ("不要标题", "不要小标题", "不要标 题", "forbid heading", "no heading")
+        ),
+        "forbid_bullets": any(
+            marker in raw or marker in lowered for marker in ("不要列表", "不要列点", "不要分点", "不要项目符号", "no bullets", "no list")
+        ),
+        "max_lines": _requested_max_lines(raw),
+        "section_headers": section_headers,
+    }
+
+
+def _requested_output_structure_satisfied(text: str, contract: dict[str, Any]) -> bool:
+    visible = str(text or "").strip()
+    if not visible:
+        return False
+    if contract.get("json_only") and not _looks_like_json_only(visible):
+        return False
+    if contract.get("title_only"):
+        return "\n" not in visible and len(visible) <= 60
+    if contract.get("forbid_heading") and _has_heading(visible):
+        return False
+    if contract.get("forbid_bullets") and (_has_bullet_list(visible) or _has_numbered_list(visible)):
+        return False
+    if contract.get("require_heading") and not _has_heading(visible):
+        return False
+    if contract.get("require_table") and not _looks_like_markdown_table(visible):
+        return False
+    if contract.get("require_numbered_list") and not _has_numbered_list(visible):
+        return False
+    if contract.get("require_bullets") and not (_has_bullet_list(visible) or _has_numbered_list(visible)):
+        return False
+    paragraph_count = int(contract.get("paragraph_count") or 0)
+    if paragraph_count and _paragraph_blocks(visible) < paragraph_count:
+        return False
+    max_lines = int(contract.get("max_lines") or 0)
+    if max_lines > 0:
+        non_empty_lines = [line for line in visible.splitlines() if line.strip()]
+        if len(non_empty_lines) > max_lines:
+            return False
+    if contract.get("forbid_table") and _looks_like_markdown_table(visible):
+        return False
+    section_headers = [str(item) for item in contract.get("section_headers") or []]
+    if section_headers and not all(header in visible for header in section_headers):
+        return False
+    return True
 
 
 def _strict_format_text_contract(text: str) -> bool:
@@ -1370,6 +1520,64 @@ def _looks_like_markdown_table(text: str) -> bool:
         re.fullmatch(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?", line)
         for line in lines[:4]
     )
+
+def _extract_json_object_or_array(text: str) -> str:
+    stripped = str(text or "").strip()
+    if _looks_like_json_only(stripped):
+        return stripped
+    match = re.search(r"(\{[\s\S]*\}|\[[\s\S]*\])", stripped)
+    if not match:
+        return ""
+    candidate = match.group(1).strip()
+    return candidate if _looks_like_json_only(candidate) else ""
+
+
+def _requested_max_lines(user_text: str) -> int:
+    raw = str(user_text or "")
+    match = re.search(r"([0-9]+)\s*\u884c(?:\u5185|\u4ee5\u5185|\u5c31\u884c|\u5373\u53ef)?", raw)
+    if match:
+        try:
+            return max(0, int(match.group(1)))
+        except ValueError:
+            return 0
+    chinese_map = {
+        "\u4e00": 1,
+        "\u4e8c": 2,
+        "\u4e24": 2,
+        "\u4e09": 3,
+        "\u56db": 4,
+        "\u4e94": 5,
+        "\u516d": 6,
+        "\u4e03": 7,
+        "\u516b": 8,
+        "\u4e5d": 9,
+        "\u5341": 10,
+    }
+    match = re.search(r"([\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341])\u884c(?:\u5185|\u4ee5\u5185|\u5c31\u884c|\u5373\u53ef)?", raw)
+    if not match:
+        return 0
+    return chinese_map.get(match.group(1), 0)
+
+
+def _shrink_to_line_budget(text: str, *, max_lines: int) -> str:
+    if max_lines <= 0:
+        return str(text or "").strip()
+    stripped = str(text or "").strip()
+    if not stripped:
+        return stripped
+    lines = [line.strip() for line in stripped.splitlines() if line.strip()]
+    if len(lines) <= max_lines:
+        return "\n".join(lines)
+    if len(lines) == 1:
+        sentences = [item.strip() for item in re.split(r"(?<=[\u3002\uff01\uff1f!?])\s*", stripped) if item.strip()]
+        if len(sentences) <= max_lines:
+            return "\n".join(sentences)
+        head = sentences[: max_lines - 1]
+        tail = "".join(sentences[max_lines - 1 :]).strip()
+        return "\n".join([*head, tail]).strip()
+    head = lines[: max_lines - 1]
+    tail = " ".join(lines[max_lines - 1 :]).strip()
+    return "\n".join([*head, tail]).strip()
 
 
 def _action_buttons(
@@ -1588,6 +1796,11 @@ def _apply_runtime_response_policy(
     open_loops = [str(item) for item in session_context.get("current_open_loops") or []]
     action_status = canonical_action_status(action_dialogue.get("action_status"), default="")
     stripped_user_text = str(user_text or "").strip()
+    styled = _strip_untrusted_status_preface(
+        styled,
+        user_text=stripped_user_text,
+        action_status=action_status,
+    )
 
     if _latest_instruction_override(open_loops, continuity_summary):
         styled = _drop_stale_followthrough_openers(styled)
@@ -1632,6 +1845,65 @@ def _apply_runtime_response_policy(
     return styled.strip()
 
 
+def _apply_requested_output_structure(
+    text: str,
+    *,
+    contract: dict[str, Any],
+    user_text: str,
+) -> str:
+    styled = str(text or "").strip()
+    if not styled:
+        return styled
+    if not any(
+        contract.get(key)
+        for key in (
+            "title_only",
+            "require_heading",
+            "require_bullets",
+            "require_numbered_list",
+            "paragraph_count",
+            "forbid_table",
+            "section_headers",
+            "json_only",
+            "max_lines",
+        )
+    ):
+        return styled
+    if contract.get("json_only") and not _looks_like_json_only(styled):
+        extracted_json = _extract_json_object_or_array(styled)
+        if extracted_json:
+            styled = extracted_json
+    if contract.get("title_only"):
+        return _derive_heading(styled, user_text=user_text, fallback="总结").replace("# ", "").strip()
+    if contract.get("forbid_table") and _looks_like_markdown_table(styled):
+        styled = _table_to_paragraphs(styled)
+    styled = _normalize_heading_markup(styled)
+    if contract.get("forbid_heading") and _has_heading(styled):
+        styled = _strip_heading(styled)
+    section_headers = [str(item) for item in contract.get("section_headers") or []]
+    if section_headers and not all(header in styled for header in section_headers):
+        styled = _apply_section_headers(styled, headers=section_headers)
+    if contract.get("require_heading") and not _has_heading(styled):
+        heading = _derive_heading(styled, user_text=user_text)
+        if heading:
+            styled = f"{heading}\n\n{styled}"
+    if contract.get("require_table") and not _looks_like_markdown_table(styled):
+        styled = _apply_required_table(styled)
+    if contract.get("require_numbered_list") and not _has_numbered_list(styled):
+        styled = _to_numbered_list(styled)
+    elif contract.get("require_bullets") and not (_has_bullet_list(styled) or _has_numbered_list(styled)):
+        styled = _to_bullet_list(styled)
+    if contract.get("forbid_bullets") and (_has_bullet_list(styled) or _has_numbered_list(styled)):
+        styled = _list_to_paragraphs(styled)
+    paragraph_count = int(contract.get("paragraph_count") or 0)
+    if paragraph_count and _paragraph_blocks(styled) < paragraph_count:
+        styled = _expand_to_paragraphs(styled, paragraph_count=paragraph_count)
+    max_lines = int(contract.get("max_lines") or 0)
+    if max_lines > 0:
+        styled = _shrink_to_line_budget(styled, max_lines=max_lines)
+    return _normalize_heading_markup(styled).strip()
+
+
 def _latest_instruction_override(open_loops: list[str], continuity_summary: str) -> bool:
     if "latest_instruction_overrides_previous_goal" in open_loops:
         return True
@@ -1650,6 +1922,42 @@ def _drop_stale_followthrough_openers(text: str) -> str:
     for pattern in patterns:
         result = re.sub(pattern, "", result)
     return result.lstrip()
+
+
+def _strip_untrusted_status_preface(
+    text: str,
+    *,
+    user_text: str,
+    action_status: str,
+) -> str:
+    stripped = str(text or "").strip()
+    if not stripped:
+        return stripped
+    if action_status in {"completed_with_evidence", "waiting_for_approval", "executing"}:
+        return stripped
+    if any(
+        marker in user_text.lower() or marker in user_text
+        for marker in (
+            "execute",
+            "run it",
+            "do it",
+            "\u6267\u884c",
+            "\u64cd\u4f5c",
+            "\u70b9\u51fb",
+            "\u4e0b\u8f7d",
+            "\u5b89\u88c5",
+        )
+    ):
+        return stripped
+    patterns = (
+        r"^(?:\u5df2\u505c\u6b62\u751f\u6210|generation cancelled)[\u3002.!\uff01\s]*",
+        r"^(?:\u4efb\u52a1\u5df2\u5b8c\u6210|\u5185\u5bb9\u5df2\u751f\u6210|\u6587\u6863\u5df2\u751f\u6210|\u6587\u6863\u5df2\u7ecf\u751f\u6210\u5b8c\u6210)[\u3002:?!\uff01\s]*",
+        r"^(?:\u5f53\u524d\u7ed3\u679c\u662f|\u5904\u7406\u7ed3\u679c\u662f)[:?\s]*",
+    )
+    cleaned = stripped
+    for pattern in patterns:
+        cleaned = re.sub(pattern, "", cleaned, count=1, flags=re.IGNORECASE)
+    return cleaned.strip() or stripped
 
 
 def _starts_with_override_anchor(text: str) -> bool:
@@ -1729,6 +2037,249 @@ def _split_sentences(text: str, *, max_sentences: int, multiline: bool) -> str:
     selected = parts[:max_sentences]
     separator = "\n" if multiline else ""
     return separator.join(selected)
+
+
+def _has_heading(text: str) -> bool:
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    if not lines:
+        return False
+    first = lines[0]
+    if re.match(r"^#{1,3}\s*\S+", first):
+        return True
+    if len(lines) > 1 and len(first) <= 24 and not re.search(r"[。！？!?：:]", first):
+        return True
+    return False
+
+
+def _strip_heading(text: str) -> str:
+    lines = str(text or "").splitlines()
+    cleaned: list[str] = []
+    removed = False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped and not cleaned:
+            continue
+        if not removed and (re.match(r"^#{1,3}\s*\S+", stripped) or (len(stripped) <= 24 and not re.search(r"[。！？!?：:]", stripped))):
+            removed = True
+            continue
+        cleaned.append(line)
+    return "\n".join(cleaned).strip()
+
+
+def _normalize_heading_markup(text: str) -> str:
+    lines = str(text or "").splitlines()
+    if not lines:
+        return str(text or "").strip()
+    first_nonempty = next((index for index, line in enumerate(lines) if line.strip()), None)
+    if first_nonempty is None:
+        return str(text or "").strip()
+    first = lines[first_nonempty].strip()
+    match = re.match(r"^(#{1,3})(\S.*)$", first)
+    if not match:
+        return "\n".join(lines).strip()
+    marker, remainder = match.groups()
+    title = re.split(r"[。！？!?]", remainder, maxsplit=1)[0].strip()
+    body = remainder[len(title):].strip()
+    lines[first_nonempty] = f"{marker} {title}"
+    if body:
+        lines.insert(first_nonempty + 1, "")
+        lines.insert(first_nonempty + 2, body)
+    return "\n".join(lines).strip()
+
+
+def _has_bullet_list(text: str) -> bool:
+    return bool(re.search(r"(^|\n)\s*[-*]\s+\S+", str(text or "")))
+
+
+def _has_numbered_list(text: str) -> bool:
+    return bool(re.search(r"(^|\n)\s*(\d+[\.、]|[一二三四五六七八九十]+[、.])\s*\S+", str(text or "")))
+
+
+def _paragraph_blocks(text: str) -> int:
+    blocks = [
+        block.strip()
+        for block in re.split(r"\n\s*\n", str(text or "").strip())
+        if block.strip() and not re.fullmatch(r"#{1,3}\s*\S.*", block.strip())
+    ]
+    return len(blocks)
+
+
+def _derive_heading(text: str, *, user_text: str, fallback: str = "总结") -> str:
+    for pattern in (
+        r"(?:标题|一级标题|二级标题|小标题)[：: ]*([^\n，。；]{2,24})",
+        r"(?:summary|summarize into|heading)[ :]*([^\n,.;]{2,24})",
+    ):
+        match = re.search(pattern, str(user_text or ""), flags=re.IGNORECASE)
+        if match:
+            return f"# {match.group(1).strip()}"
+    first_line = next((line.strip() for line in str(text or "").splitlines() if line.strip()), "")
+    first_line = re.sub(r"^#{1,3}\s*", "", first_line)
+    first_line = re.sub(r"^[-*]\s*", "", first_line)
+    first_line = re.sub(r"^\d+[\.、]\s*", "", first_line)
+    first_line = re.split(r"[。！？!?：:\-]", first_line, maxsplit=1)[0].strip()
+    first_line = first_line[:24].strip()
+    return f"# {first_line or fallback}"
+
+
+def _sentence_chunks(text: str, preferred_count: int = 3) -> list[str]:
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    if any(re.match(r"^[-*]\s+\S+", line) or re.match(r"^(\d+[\.、]|[一二三四五六七八九十]+[、.])\s*\S+", line) for line in lines):
+        normalized = [re.sub(r"^([-*]|\d+[\.、]|[一二三四五六七八九十]+[、.])\s*", "", line).strip() for line in lines]
+        return [line for line in normalized if line]
+    parts = [
+        item.strip()
+        for item in re.split(r"(?<=[。！？!?；;])\s*", str(text or "").replace("\n", " "))
+        if item.strip()
+    ]
+    if len(parts) >= preferred_count:
+        return parts
+    compact = [item.strip() for item in re.split(r"[，,]\s*", str(text or "").replace("\n", " ")) if item.strip()]
+    return compact or parts or [str(text or "").strip()]
+
+
+def _to_bullet_list(text: str) -> str:
+    chunks = _sentence_chunks(text)
+    return "\n".join(f"- {chunk}" for chunk in chunks[: max(2, min(4, len(chunks)))]) or str(text or "").strip()
+
+
+def _to_numbered_list(text: str) -> str:
+    chunks = _sentence_chunks(text)
+    return "\n".join(f"{index}. {chunk}" for index, chunk in enumerate(chunks[: max(2, min(4, len(chunks)))], start=1)) or str(text or "").strip()
+
+
+def _expand_to_paragraphs(text: str, *, paragraph_count: int) -> str:
+    stripped = str(text or "").strip()
+    heading = ""
+    body_source = stripped
+    if _has_heading(stripped):
+        heading = next((line.strip() for line in stripped.splitlines() if line.strip()), "")
+        body_source = _strip_heading(stripped)
+    chunks = _sentence_chunks(body_source, preferred_count=paragraph_count)
+    if len(chunks) <= 1 and paragraph_count > 1:
+        fallback_chunks = [
+            item.strip()
+            for item in re.split(r"[。；;!?！？]\s*", body_source.replace("\n", " "))
+            if item.strip()
+        ]
+        if len(fallback_chunks) > 1:
+            chunks = [f"{item}。" for item in fallback_chunks[:-1]] + [fallback_chunks[-1]]
+    if len(chunks) <= 1:
+        return stripped
+    if paragraph_count <= 1:
+        body = " ".join(chunks)
+        return f"{heading}\n\n{body}".strip() if heading else body
+    groups: list[list[str]] = [[] for _ in range(paragraph_count)]
+    for index, chunk in enumerate(chunks):
+        target = min(index * paragraph_count // max(len(chunks), 1), paragraph_count - 1)
+        groups[target].append(chunk)
+    paragraphs = [" ".join(group).strip() for group in groups if group]
+    body = "\n\n".join(paragraphs) or stripped
+    return f"{heading}\n\n{body}".strip() if heading else body
+
+
+def _apply_section_headers(text: str, *, headers: list[str]) -> str:
+    chunks = _sentence_chunks(text, preferred_count=len(headers))
+    if not chunks:
+        return str(text or "").strip()
+    groups: list[list[str]] = [[] for _ in headers]
+    for index, chunk in enumerate(chunks):
+        target = min(index * len(headers) // max(len(chunks), 1), len(headers) - 1)
+        groups[target].append(chunk)
+    sections = []
+    for index, header in enumerate(headers):
+        body = " ".join(groups[index]).strip() or "待补充。"
+        sections.append(f"## {header}\n{body}")
+    return "\n\n".join(sections)
+
+
+def _apply_required_table(text: str) -> str:
+    stripped = str(text or "").strip()
+    heading = ""
+    body_source = stripped
+    if _has_heading(stripped):
+        heading = next((line.strip() for line in stripped.splitlines() if line.strip()), "")
+        body_source = _strip_heading(stripped)
+    chunks = _sentence_chunks(body_source, preferred_count=3)
+    if not chunks:
+        return stripped
+    rows = ["| 项 | 状态 | 备注 |", "| --- | --- | --- |"]
+    for index, chunk in enumerate(chunks[:3], start=1):
+        summary = re.split(r"[，,；;。！？!?]", chunk, maxsplit=1)[0].strip() or f"要点{index}"
+        remark = chunk.replace("|", "/").strip()
+        rows.append(f"| 要点{index} | {summary[:18]} | {remark[:48]} |")
+    table = "\n".join(rows)
+    remainder = ""
+    if body_source and not _looks_like_markdown_table(body_source):
+        remainder = body_source
+    pieces = [piece for piece in (heading, table, remainder) if piece]
+    return "\n\n".join(pieces).strip()
+
+
+def _list_to_paragraphs(text: str) -> str:
+    chunks = _sentence_chunks(text)
+    if not chunks:
+        return str(text or "").strip()
+    midpoint = max(1, len(chunks) // 2)
+    first = " ".join(chunks[:midpoint]).strip()
+    second = " ".join(chunks[midpoint:]).strip()
+    if second:
+        return f"{first}\n\n{second}".strip()
+    return first
+
+
+def _table_to_paragraphs(text: str) -> str:
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    rows = [line for line in lines if "|" in line and not re.fullmatch(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?", line)]
+    if len(rows) < 2:
+        return str(text or "").strip()
+    headers = [cell.strip() for cell in rows[0].strip("|").split("|")]
+    paragraphs: list[str] = []
+    for row in rows[1:]:
+        cells = [cell.strip() for cell in row.strip("|").split("|")]
+        pairs = [f"{head}：{cell}" for head, cell in zip(headers, cells) if head and cell]
+        if pairs:
+            paragraphs.append("；".join(pairs) + "。")
+    return "\n\n".join(paragraphs) or str(text or "").strip()
+
+
+def _extract_requested_section_headers(user_text: str) -> list[str]:
+    raw = str(user_text or "")
+    headers: list[str] = []
+    for match in re.findall(r"[`“\"']([^`“\"'\n]{1,16})[`”\"']", raw):
+        candidate = match.strip()
+        if candidate and candidate not in headers and not re.search(r"(markdown|table|json|标题)", candidate, flags=re.I):
+            headers.append(candidate)
+    return headers[:6]
+
+
+def _remembered_structure_contract(user_text: str, session_context: dict[str, Any]) -> dict[str, Any]:
+    raw = str(user_text or "")
+    if not any(marker in raw for marker in ("按我刚刚设定", "按刚才", "按修正后", "按记住", "结构偏好", "修正后的偏好")):
+        return {}
+    memory_text = "\n".join(
+        [
+            str(session_context.get("stable_user_profile_block") or ""),
+            str(session_context.get("current_conversation_summary") or ""),
+            "\n".join(
+                str(item.get("summary_text") or "")
+                for item in session_context.get("relevant_memory_items") or []
+                if isinstance(item, dict)
+            ),
+        ]
+    )
+    lowered = memory_text.lower()
+    contract: dict[str, Any] = {
+        "require_heading": any(marker in memory_text or marker in lowered for marker in ("标题", "heading")),
+        "require_table": any(marker in memory_text or marker in lowered for marker in ("表格", "markdown table")),
+        "forbid_table": any(marker in memory_text or marker in lowered for marker in ("不要表格", "不用表格", "no table")),
+        "require_bullets": any(marker in memory_text or marker in lowered for marker in ("列表", "要点", "行动项", "bullet")),
+        "require_numbered_list": any(marker in memory_text or marker in lowered for marker in ("编号", "numbered")),
+        "paragraph_count": (
+            2 if "两段" in memory_text else 1 if "一段" in memory_text else 0
+        ),
+        "section_headers": _extract_requested_section_headers(memory_text),
+    }
+    return {key: value for key, value in contract.items() if value}
 
 
 def _ensure_result_first(text: str, *, user_text: str) -> str:

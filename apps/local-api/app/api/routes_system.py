@@ -129,6 +129,7 @@ async def runtime_topology(
     tool_runtime = await registry.tool_runtime.diagnostic()
     memory_runtime = registry.memory_service.runtime_diagnostic()
     chat_runtime = registry.chat_runtime.diagnostic()
+    agent_runtime = registry.agent_runtime.diagnostic()
     channel_runtime = await registry.channel_ingress_runtime.diagnostic()
     channel_session_semantics = registry.channel_session_semantics_runtime.runtime_diagnostic()
     mcp_runtime = await registry.mcp_service.runtime_diagnostic()
@@ -157,7 +158,7 @@ async def runtime_topology(
             RuntimeTopologyComponent(
                 name="session",
                 runtime="session_runtime",
-                dependencies=["chat_runtime", "turn_execution_manager"],
+                dependencies=["agent_runtime", "chat_runtime", "turn_execution_manager"],
                 status="runtime_native",
                 details={
                     **session_runtime,
@@ -165,7 +166,30 @@ async def runtime_topology(
                         role="runtime_native",
                         allowed_to_grow=True,
                         host_files=["session_runtime.py"],
-                        delegates_to=["chat_runtime"],
+                        delegates_to=["agent_runtime"],
+                    ),
+                },
+            ),
+            RuntimeTopologyComponent(
+                name="agent_runtime",
+                runtime="agent_runtime",
+                dependencies=[
+                    "chat_turn_execution_orchestrator",
+                    "chat_turn_finalize_service",
+                    "chat_model_execution_service",
+                ],
+                status="runtime_native",
+                details={
+                    **agent_runtime,
+                    "cleanup": _cleanup_details(
+                        role="runtime_native",
+                        allowed_to_grow=True,
+                        host_files=["agent_runtime.py"],
+                        delegates_to=[
+                            "chat_turn_execution_orchestrator",
+                            "chat_turn_finalize_service",
+                            "chat_model_execution_service",
+                        ],
                     ),
                 },
             ),
@@ -173,25 +197,21 @@ async def runtime_topology(
                 name="chat_runtime",
                 runtime="chat_runtime",
                 dependencies=[
+                    "agent_runtime",
                     "chat_turn_execution_orchestrator",
                     "chat_turn_finalize_service",
                     "chat_model_execution_service",
                     "chat_direct_routes_runtime",
                     "turn_execution_manager",
                 ],
-                status="runtime_native",
+                status="compat_shell",
                 details={
                     **chat_runtime,
                     "cleanup": _cleanup_details(
-                        role="runtime_native",
-                        allowed_to_grow=True,
+                        role="compat_shell",
+                        allowed_to_grow=False,
                         host_files=["runtime.py"],
-                        delegates_to=[
-                            "chat_turn_execution_orchestrator",
-                            "chat_turn_finalize_service",
-                            "chat_model_execution_service",
-                            "chat_direct_routes_runtime",
-                        ],
+                        delegates_to=["agent_runtime"],
                     ),
                 },
             ),

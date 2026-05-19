@@ -1,0 +1,76 @@
+{
+  "case_count": 5,
+  "pass_count": 5,
+  "warn_count": 0,
+  "fail_count": 0,
+  "route_ok_count": 5,
+  "citation_ok_count": 5,
+  "structure_ok_count": 5,
+  "items": [
+    {
+      "case_id": "FRS-001",
+      "title": "公司评价整理",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 星海智研 这家公司怎么样，整理成整体印象、可能优势、需要留意的风险三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“星海智研 这家公司怎么样”。当前拿到的证据来自搜索结果页《星海智研 搜索结果》（HTTP 200）。\n整体印象：融资进展较快，近两年扩张明显\n可能优势：中小团队适用，实施周期相对短\n需要留意的风险：交付节奏偏慢，售后响应两极分化。这次总结的证据来源是：https://example.test/search?q=%E6%98%9F%E6%B5%B7%E6%99%BA%E7%A0%94",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_e3cdbc2ac6c343b9aa996b3583c792ad",
+      "trace_id": "trc_0f708025b42b41c7b7d9f705baed8d8e"
+    },
+    {
+      "case_id": "FRS-002",
+      "title": "产检预约整理",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 安和妇产医院 产检怎么预约，整理成预约方式、所需准备、注意事项三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“安和妇产医院 产检怎么预约”。当前拿到的证据来自搜索结果页《安和妇产医院 产检预约搜索结果》（HTTP 200）。\n预约方式：公众号预约为主，也可电话咨询号源\n所需准备：首次建档通常需身份证和医保卡\n注意事项：工作日早上号源更充足，建议提前到院。这次总结的证据来源是：https://example.test/search?q=%E5%AE%89%E5%92%8C%E5%A6%87%E4%BA%A7%E5%8C%BB%E9%99%A2+%E4%BA%A7%E6%A3%80",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_389a0165c8804a4ebddc069b1273ec5d",
+      "trace_id": "trc_0534028b45e44417a4ca89445f2ef176"
+    },
+    {
+      "case_id": "FRS-003",
+      "title": "政务预约步骤",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 深圳居住证续签怎么预约，整理成步骤清单，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“深圳居住证续签怎么预约”。当前拿到的证据来自搜索结果页《深圳居住证续签预约搜索结果》（HTTP 200）。\n1. 线上预约入口在本地政务服务平台\n2. 常见材料包括身份证和居住证明\n3. 办理前先核对有效期与受理范围。这次总结的证据来源是：https://example.test/search?q=%E6%B7%B1%E5%9C%B3%E5%B1%85%E4%BD%8F%E8%AF%81%E7%BB%AD%E7%AD%BE",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_e0f6dff05450459c8c3dcbbb104a9969",
+      "trace_id": "trc_3350ffed27244406824bccb3d9cba224"
+    },
+    {
+      "case_id": "FRS-004",
+      "title": "产品口碑反馈",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 云杉 CRM 怎么样，整理成亮点、常见吐槽、适用场景三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“云杉 CRM 怎么样”。当前拿到的证据来自搜索结果页《云杉 CRM 搜索结果》（HTTP 200）。\n亮点：自动化规则多，销售漏斗可视化清楚\n常见吐槽：移动端体验一般，复杂审批不够顺手\n适用场景：销售流程较标准的团队更容易落地。这次总结的证据来源是：https://example.test/search?q=%E4%BA%91%E6%9D%89+CRM",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_b22ccaa3f6ae4960a6a45fdb45df86d5",
+      "trace_id": "trc_cd33d06c3a6543ab94b8d1ee6a3d5253"
+    },
+    {
+      "case_id": "FRS-005",
+      "title": "证件办理预约",
+      "peer_ref": "oc_feishu_research_browser",
+      "prompt": "请用浏览器搜索 城西政务中心 护照办理怎么预约，整理成预约入口、办理材料、现场提醒三部分，并说明证据来源。",
+      "reply_text": "我已经用浏览器搜索了“城西政务中心 护照办理怎么预约”。当前拿到的证据来自搜索结果页《城西政务中心 护照办理预约搜索结果》（HTTP 200）。\n预约入口：小程序预约是主要入口，也支持窗口咨询\n办理材料：办理时通常需身份证原件和照片回执\n现场提醒：建议提前十五分钟到场并核对取号时间。这次总结的证据来源是：https://example.test/search?q=%E5%9F%8E%E8%A5%BF%E6%94%BF%E5%8A%A1%E4%B8%AD%E5%BF%83+%E6%8A%A4%E7%85%A7",
+      "verdict": "pass",
+      "notes": [],
+      "route": "browser_search_with_citation",
+      "task_status": "not_created",
+      "turn_id": "turn_c96af64f20644122bf42795a2929664e",
+      "trace_id": "trc_7e870cac4c664a1ab8e787173090e46c"
+    }
+  ]
+}

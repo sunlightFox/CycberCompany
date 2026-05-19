@@ -19,6 +19,7 @@ from trace_service import redact
 
 from app.core.time import utc_now_iso
 from app.schemas.chat_turn_execution import ChatTurnExecutionContext
+from app.schemas.chat_turn_execution import TurnExecutionPlan
 from app.services.chat_runtime_host_helpers import (
     deterministic_no_model_reply as _deterministic_no_model_reply,
 )
@@ -77,6 +78,15 @@ class ChatTurnExecutionOrchestrator:
         turn_id = turn["turn_id"]
         trace_id = turn["trace_id"]
         ctx.root_span_id = await facade._root_span_id(trace_id)
+        ctx.execution_plan = TurnExecutionPlan(
+            turn_id=turn_id,
+            conversation_id=turn.get("conversation_id"),
+            member_id=turn.get("member_id"),
+            trace_metadata={"trace_id": trace_id},
+            completion_semantics={"status": "running"},
+            response_contract={"event_stream": "chat_events"},
+        )
+        _sync_turn_execution_plan(turn, ctx.execution_plan)
 
         async def emit(event_type: ChatEventType, payload: dict[str, Any] | None = None) -> ChatEvent:
             return await facade._emit_and_record(turn_id, trace_id, events, event_type, payload)
@@ -95,6 +105,9 @@ class ChatTurnExecutionOrchestrator:
         ctx.session_id = facade._session_id_from_message(user_message)
         turn["session_id"] = ctx.session_id
         turn["current_user_text"] = ctx.user_text
+        if ctx.execution_plan is not None:
+            ctx.execution_plan.trace_metadata["session_id"] = ctx.session_id
+            _sync_turn_execution_plan(turn, ctx.execution_plan)
 
     async def _run_analysis(self, facade: Any, ctx: ChatTurnExecutionContext) -> AsyncIterator[ChatEvent]:
         turn = ctx.turn
@@ -117,8 +130,34 @@ class ChatTurnExecutionOrchestrator:
             turn["brain_decision_id"] = ctx.brain_decision.brain_decision_id
             turn["intent"] = ctx.brain_decision.intent.primary_intent
             turn["mode"] = ctx.brain_decision.mode.mode
+            if ctx.execution_plan is not None:
+                ctx.execution_plan.intent = ctx.brain_decision.intent.primary_intent
+                ctx.execution_plan.mode = ctx.brain_decision.mode.mode
+                ctx.execution_plan.context_policy = (
+                    ctx.brain_decision.context.model_dump(mode="json")
+                    if getattr(ctx.brain_decision, "context", None) is not None
+                    else {}
+                )
+        pre_route_decision = facade._intent_router.decide(user_text)
+        ctx.route_decision = pre_route_decision
+        if ctx.execution_plan is not None:
+            ctx.execution_plan.route = pre_route_decision.route_type
+            ctx.execution_plan.capability_intent = {
+                "route_type": pre_route_decision.route_type,
+                "reason_code": getattr(pre_route_decision, "reason_code", None),
+            }
+        direct_readonly_routes = {
+            "host_filesystem_list",
+            "browser_read_page",
+            "browser_search_readonly",
+            "browser_search_with_citation",
+            "terminal_readonly_command",
+        }
         deterministic_text = _deterministic_no_model_reply(user_text)
-        if deterministic_text is not None:
+        if (
+            deterministic_text is not None
+            and pre_route_decision.route_type not in direct_readonly_routes
+        ):
             ctx.direct_response_override = {
                 "intent": "simple_question",
                 "mode": TaskMode.DIRECT.value,
@@ -207,6 +246,12 @@ class ChatTurnExecutionOrchestrator:
         if presence_runtime_payload:
             turn["presence_runtime"] = presence_runtime_payload
             ctx.presence_runtime = presence_runtime_payload
+        if ctx.execution_plan is not None:
+            ctx.execution_plan.persona_policy = {
+                "presence_runtime": dict(ctx.presence_runtime or {}),
+                "privacy_level": getattr(privacy, "privacy_level", None),
+            }
+            _sync_turn_execution_plan(turn, ctx.execution_plan)
         if facade._chat_quality_shadow is not None:
             try:
                 shadow = facade._chat_quality_shadow.analyze_turn(
@@ -338,6 +383,35 @@ class ChatTurnExecutionOrchestrator:
             async for event in facade._complete_without_model(turn, events, memory_summary, root_span_id, intent=memory_intent, mode=TaskMode.DIRECT_WITH_MEMORY.value, response_plan=facade._response_plan_for_status(turn, summary=memory_summary, memory_notice=facade._memory_coordinator.command_notice(memory_command))):
                 yield event
             return
+        if facade._memory_coordinator.explicit_memory_query(user_text):
+            memory_reply = await facade._memory.handle_memory_query(
+                text=user_text,
+                member_id=turn["member_id"],
+                conversation_id=turn["conversation_id"],
+                trace_id=trace_id,
+                turn_id=turn_id,
+            )
+            if memory_reply:
+                await facade._chat_repo.update_turn(
+                    turn_id,
+                    intent="memory_query",
+                    mode=TaskMode.DIRECT_WITH_MEMORY.value,
+                    privacy_level=privacy.privacy_level,
+                    updated_at=utc_now_iso(),
+                )
+                yield await emit(ChatEventType.INTENT_DETECTED, {"intent": "memory_query", "reason_codes": ["explicit_memory_query"]})
+                yield await emit(ChatEventType.MODE_SELECTED, {"mode": TaskMode.DIRECT_WITH_MEMORY.value, "needs_tool": False})
+                async for event in facade._complete_without_model(
+                    turn,
+                    events,
+                    memory_reply,
+                    root_span_id,
+                    intent="memory_query",
+                    mode=TaskMode.DIRECT_WITH_MEMORY.value,
+                    response_plan=facade._response_plan_for_status(turn, summary=memory_reply),
+                ):
+                    yield event
+                return
         scheduled_request = facade._task_coordinator.scheduled_intents.parse(user_text)
         if scheduled_request is not None and facade._scheduled_tasks is not None:
             from app.schemas.scheduled_tasks import ScheduledTaskCreateRequest
@@ -381,12 +455,34 @@ class ChatTurnExecutionOrchestrator:
                     "before_route_select": hook_result,
                 },
             }
+        route_decision = ctx.route_decision or facade._intent_router.decide(user_text)
+        ctx.route_decision = route_decision
+        route_taxonomy = canonical_route_name(route_decision.route_type)
+        if ctx.execution_plan is not None:
+            ctx.execution_plan.route = route_decision.route_type
+            ctx.execution_plan.capability_intent = {
+                "route_type": route_decision.route_type,
+                "route_taxonomy": route_taxonomy,
+                "reason_code": route_decision.reason_code,
+            }
+            _sync_turn_execution_plan(turn, ctx.execution_plan)
+        direct_readonly_routes = {
+            "host_filesystem_list",
+            "browser_read_page",
+            "browser_search_readonly",
+            "browser_search_with_citation",
+            "terminal_readonly_command",
+        }
         clarification = (
             facade._clarification_from_brain(turn, ctx.brain_decision)
             if ctx.brain_decision is not None
             else None
         )
-        if clarification is not None and clarification.needs_clarification:
+        if (
+            clarification is not None
+            and clarification.needs_clarification
+            and route_decision.route_type not in direct_readonly_routes
+        ):
             async for event in self._complete_clarification_boundary(
                 facade,
                 ctx,
@@ -401,9 +497,6 @@ class ChatTurnExecutionOrchestrator:
             async for event in self._complete_capability_boundary(facade, ctx):
                 yield event
             return
-        route_decision = facade._intent_router.decide(user_text)
-        ctx.route_decision = route_decision
-        route_taxonomy = canonical_route_name(route_decision.route_type)
         turn["experience"] = {
             **dict(turn.get("experience") or {}),
             "chat_route_decision": {
@@ -600,7 +693,6 @@ class ChatTurnExecutionOrchestrator:
             clarification_decision=clarification,
         ):
             yield event
-
     async def _complete_capability_boundary(
         self,
         facade: Any,
@@ -1363,3 +1455,12 @@ def _human_schedule_text(schedule: dict[str, Any]) -> str:
     if kind == "once":
         return f"一次性任务，执行时间 {schedule.get('run_at') or schedule.get('at') or '待定'}"
     return kind or "未知调度"
+
+
+def _sync_turn_execution_plan(turn: dict[str, Any], plan: TurnExecutionPlan) -> None:
+    payload = plan.as_dict()
+    turn["turn_execution_plan"] = payload
+    turn["experience"] = {
+        **dict(turn.get("experience") or {}),
+        "turn_execution_plan": payload,
+    }

@@ -114,6 +114,19 @@ def test_phase13_continuation_uses_working_state_without_memory_query(
     assert "working_state_continuation" in decision["context"]["selection_reason"]
 
 
+def test_phase13_preference_application_request_stays_out_of_memory_query(
+    client: TestClient,
+) -> None:
+    decision = _preview(
+        client,
+        "结合我们前面 20 轮的测试，按先风险后结论的偏好，给我一个收尾结论和一个下一步。",
+    )
+
+    assert decision["intent"]["primary_intent"] != "memory_query"
+    assert decision["mode"]["mode"] == "direct"
+    assert decision["context"]["include_memory"] is False
+
+
 def test_phase13_chat_events_and_turn_decision_are_persisted(client: TestClient) -> None:
     conversation = client.get("/api/chat/conversations").json()["items"][0]
     turn = client.post(
