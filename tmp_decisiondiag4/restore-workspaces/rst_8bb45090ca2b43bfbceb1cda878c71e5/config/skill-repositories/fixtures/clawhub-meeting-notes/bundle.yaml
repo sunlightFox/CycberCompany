@@ -1,0 +1,28 @@
+id: clawhub-meeting-notes
+bundle_revision: 0.1.0
+display_name: ClawHub Meeting Notes
+description: 整理会议纪要、决策、行动项和跟进清单。
+author: clawhub
+triggers:
+  intents: [meeting_notes, action_items]
+  keywords: [会议, 纪要, 行动项, 待办, meeting, notes]
+required_tools: [file.write]
+permissions:
+  tools:
+    - name: file.write
+      actions: [write_task_artifact]
+      risk: R2
+  assets: []
+filesystem:
+  allowed_roots: [workspace://artifacts/**]
+safety:
+  unattended_allowed: false
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/clawhub-meeting-notes.md
+      content: "# Meeting Notes\n\n## 原始记录\n{content}\n\n## 输出结构\n- 会议主题\n- 关键结论\n- 决策记录\n- 行动项 Owner / 截止时间\n- 待确认问题\n"
+evals:
+  - id: writes_meeting_artifact
+    input: {content: demo}
+    expected: {artifact: outputs/clawhub-meeting-notes.md}

@@ -1,0 +1,43 @@
+{
+  "capabilities": ["publish_browser", "comment_browser"],
+  "real_browser_workflow": true,
+  "provider_mode": "playwright",
+  "publish_flow": {
+    "start_url": "https://creator.xiaohongshu.com/publish/publish",
+    "wait_until": "domcontentloaded",
+    "publish_success_text": "",
+    "upload_success_text": "upload complete",
+    "verify": {
+      "expected_url": ""
+    },
+    "selectors": {
+      "title": "input[placeholder*='标题']",
+      "body": "div[contenteditable='true']",
+      "submit": "button:has-text('发布')",
+      "form": "",
+      "upload": ""
+    }
+  },
+  "post_publish_identity": {
+    "capture_post_identity": true
+  },
+  "comment_flow": {
+    "start_url": "",
+    "target_post_url": "",
+    "comment_success_text": "",
+    "recheck_wait_text": "",
+    "verify": {
+      "expected_url": ""
+    },
+    "selectors": {
+      "comment_box": "button:has-text('评论')",
+      "comment_input": "textarea",
+      "comment_submit": "button:has-text('发送')",
+      "comment_form": ""
+    }
+  },
+  "verification": {
+    "require_post_identity": true,
+    "proof_source": "page_text"
+  }
+}

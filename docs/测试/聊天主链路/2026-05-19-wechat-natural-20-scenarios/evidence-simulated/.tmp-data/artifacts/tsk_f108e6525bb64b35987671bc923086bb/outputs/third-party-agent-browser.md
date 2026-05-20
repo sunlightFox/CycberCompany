@@ -1,0 +1,1 @@
+Agent Browser skill installed from project repository.

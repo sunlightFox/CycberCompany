@@ -1,0 +1,81 @@
+{
+  "check_contract_version": "phase105.gate_signal_plane.v1",
+  "profiles": {
+    "smoke": {
+      "suite_id": "phase105_smoke_backbone",
+      "suite_name": "Phase105 Smoke Backbone",
+      "signal_suites": [
+        {
+          "suite_key": "response_composer_reasoning",
+          "path": "tests/test_response_composer_reasoning.py",
+          "kind": "foundation"
+        },
+        {
+          "suite_key": "phase2_routing_safety",
+          "path": "tests/test_phase2_routing_safety.py",
+          "kind": "foundation"
+        },
+        {
+          "suite_key": "phase32_cli_client",
+          "path": "tests/test_phase32_cli_client.py",
+          "kind": "foundation"
+        },
+        {
+          "suite_key": "phase32_cli_commands",
+          "path": "tests/test_phase32_cli_commands.py",
+          "kind": "foundation"
+        },
+        {
+          "suite_key": "phase32_cli_redaction",
+          "path": "tests/test_phase32_cli_redaction.py",
+          "kind": "foundation"
+        },
+        {
+          "suite_key": "config",
+          "path": "apps/local-api/tests/test_config.py",
+          "kind": "foundation"
+        },
+        {
+          "suite_key": "db_migrations",
+          "path": "apps/local-api/tests/test_db_migrations.py",
+          "kind": "foundation"
+        },
+        {
+          "suite_key": "chat_trace_error",
+          "path": "apps/local-api/tests/test_chat_trace_error.py",
+          "kind": "foundation"
+        },
+        {
+          "suite_key": "phase90_compat_cleanup_release_gate",
+          "path": "apps/local-api/tests/test_phase90_compat_cleanup_release_gate.py",
+          "kind": "phase",
+          "phase_key": "phase90_compat_cleanup_release_gate"
+        },
+        {
+          "suite_key": "phase101_extension_capability_runtime",
+          "path": "apps/local-api/tests/test_phase101_extension_capability_runtime.py",
+          "kind": "phase",
+          "phase_key": "phase101_extension_capability_runtime"
+        },
+        {
+          "suite_key": "phase103_task_closure_gate",
+          "path": "apps/local-api/tests/test_phase103_task_closure_gate_smoke.py",
+          "kind": "phase",
+          "phase_key": "phase103_task_closure_gate"
+        },
+        {
+          "suite_key": "phase104_check_script_recovery",
+          "path": "apps/local-api/tests/test_phase104_check_script_recovery.py",
+          "kind": "phase",
+          "phase_key": "phase104_check_script_recovery"
+        },
+        {
+          "suite_key": "phase104_check_report_contract",
+          "path": "apps/local-api/tests/test_phase104_check_report_contract.py",
+          "kind": "phase",
+          "phase_key": "phase104_check_report_contract"
+        }
+      ]
+    }
+  }
+}

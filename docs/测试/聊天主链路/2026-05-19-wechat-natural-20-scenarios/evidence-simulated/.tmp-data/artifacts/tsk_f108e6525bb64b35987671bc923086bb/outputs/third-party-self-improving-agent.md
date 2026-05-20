@@ -1,0 +1,1 @@
+Self Improving Agent skill installed from project repository.

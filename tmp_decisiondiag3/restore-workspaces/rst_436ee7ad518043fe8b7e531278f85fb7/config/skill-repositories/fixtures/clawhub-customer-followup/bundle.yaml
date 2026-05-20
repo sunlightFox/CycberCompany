@@ -1,0 +1,28 @@
+id: clawhub-customer-followup
+bundle_revision: 0.1.0
+display_name: ClawHub Customer Follow-up
+description: 生成客户沟通摘要、下一步动作、CRM 备注和跟进消息草稿。
+author: clawhub
+triggers:
+  intents: [customer_followup, sales_note]
+  keywords: [客户, 销售, CRM, 跟进, customer, sales]
+required_tools: [file.write]
+permissions:
+  tools:
+    - name: file.write
+      actions: [write_task_artifact]
+      risk: R2
+  assets: []
+filesystem:
+  allowed_roots: [workspace://artifacts/**]
+safety:
+  unattended_allowed: false
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/clawhub-customer-followup.md
+      content: "# Customer Follow-up\n\n## 客户上下文\n{content}\n\n## 输出结构\n- 客户需求\n- 异议/风险\n- 下一步动作\n- CRM 备注\n- 跟进消息草稿\n"
+evals:
+  - id: writes_customer_artifact
+    input: {content: demo}
+    expected: {artifact: outputs/clawhub-customer-followup.md}

@@ -24,3 +24,10 @@ data_tmp*/
 *.heapsnapshot
 
 docs/**/evidence/.tmp-data/secrets/
+docs/**/evidence/**/secrets/
+docs/**/evidence-simulated/**/secrets/
+docs/**/evidence/**/api_token.txt
+docs/**/evidence-simulated/**/api_token.txt
+**/local_secrets.json
+**/master.key
+**/api_token.txt

@@ -1,0 +1,28 @@
+id: clawhub-hiring-screen
+bundle_revision: 0.1.0
+display_name: ClawHub Hiring Screen
+description: 整理候选人初筛表、面试问题、优劣势和后续沟通草稿。
+author: clawhub
+triggers:
+  intents: [hiring_screen, resume_review]
+  keywords: [招聘, 简历, 面试, 候选人, hiring, resume]
+required_tools: [file.write]
+permissions:
+  tools:
+    - name: file.write
+      actions: [write_task_artifact]
+      risk: R2
+  assets: []
+filesystem:
+  allowed_roots: [workspace://artifacts/**]
+safety:
+  unattended_allowed: false
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/clawhub-hiring-screen.md
+      content: "# Hiring Screen\n\n## 候选信息\n{content}\n\n## 输出结构\n- 匹配点\n- 风险点\n- 面试问题\n- 初筛结论\n- 沟通草稿\n"
+evals:
+  - id: writes_hiring_artifact
+    input: {content: demo}
+    expected: {artifact: outputs/clawhub-hiring-screen.md}

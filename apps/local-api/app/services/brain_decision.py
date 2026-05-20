@@ -35,6 +35,12 @@ from app.services.chat_turn_input_facts import (
 )
 from app.services.brain_context_decider import context_decision as _context_decision
 from app.services.brain_decision_support import summary as _summary
+from app.services.intent_boundaries import (
+    looks_like_chatty_delivery as _shared_chatty_delivery_request,
+    should_treat_as_memory_query as _shared_memory_query,
+    should_treat_as_real_task_request as _shared_real_task_request,
+    should_treat_as_tool_request as _shared_tool_request,
+)
 from app.services.brain_mode_decider import mode_decision as _mode_decision
 from app.services.brain_route_decider import intent_decision as _intent_decision
 from app.services.turn_response_router import (
@@ -687,6 +693,18 @@ def _unknown_input(text: str) -> bool:
 def _memory_query(text: str) -> bool:
     if structured_summary_chat_request(text) or preference_application_request(text):
         return False
+    if any(
+        marker in text
+        for marker in [
+            "继续刚才",
+            "继续这轮",
+            "不用长期记忆",
+            "按前面的口径",
+            "压成两句",
+            "压成三句",
+        ]
+    ):
+        return False
     if explicit_preference_recall_query(text):
         return True
     lowered = text.lower()
@@ -701,6 +719,68 @@ def _memory_query(text: str) -> bool:
         "偏好",
     ]
     return any(marker in lowered for marker in explicit_markers)
+
+
+def _chatty_delivery_request(text: str) -> bool:
+    raw = str(text or "")
+    if any(
+        marker in raw
+        for marker in [
+            "不要新建任务",
+            "不用长期记忆",
+            "继续刚才",
+            "继续这轮",
+            "按前面的口径",
+            "你先当我的生活管家",
+            "你先当生活管家",
+            "你先像虚拟恋人",
+            "你先像靠谱的虚拟员工",
+            "你先像虚拟员工",
+        ]
+    ):
+        return True
+    output_markers = [
+        "收尾",
+        "总结",
+        "压成两句",
+        "压成三句",
+        "三句话",
+        "两句",
+        "一句话",
+        "改短",
+        "同步",
+        "回复",
+        "结论",
+        "风险",
+        "下一步",
+        "安排",
+        "方案",
+        "清单",
+        "纪要",
+        "更新",
+    ]
+    execution_markers = [
+        "创建任务",
+        "去执行",
+        "安装",
+        "卸载",
+        "删除",
+        "下载",
+        "登录",
+        "发布",
+        "转账",
+        "支付",
+        "打开网页",
+        "调用工具",
+        "浏览器搜索",
+        "打开这个页面",
+        "打开这个 FAQ 页面",
+        "打开这个页面看看",
+        "生成一份 Word",
+    ]
+    return any(marker in raw for marker in output_markers) and not any(
+        marker in raw for marker in execution_markers
+    )
 
 
 def _memory_write(text: str) -> bool:
@@ -849,6 +929,8 @@ def _explicit_task_creation(text: str) -> bool:
 def _real_task_request(text: str) -> bool:
     if _safe_plan_only(text) or _persona_boundary_question(text) or _advice_strategy_direct(text):
         return False
+    if _chatty_delivery_request(text):
+        return False
     if _explicit_task_creation(text):
         return True
     action_markers = [
@@ -881,6 +963,8 @@ def _real_task_request(text: str) -> bool:
 
 def _tool_request(text: str) -> bool:
     if _safe_plan_only(text) or _persona_boundary_question(text) or _advice_strategy_direct(text):
+        return False
+    if _chatty_delivery_request(text):
         return False
     if is_host_filesystem_list_request(text):
         return False
@@ -1042,3 +1126,49 @@ def _dedupe(items: list[str]) -> list[str]:
         if item and item not in result:
             result.append(item)
     return result
+
+
+def _memory_query(text: str) -> bool:
+    return _shared_memory_query(text)
+
+
+def _chatty_delivery_request(text: str) -> bool:
+    return _shared_chatty_delivery_request(text)
+
+
+def _real_task_request(text: str) -> bool:
+    if _safe_plan_only(text) or _persona_boundary_question(text) or _advice_strategy_direct(text):
+        return False
+    return _shared_real_task_request(text, safe_plan_only=False)
+
+
+def _tool_request(text: str) -> bool:
+    if _safe_plan_only(text) or _persona_boundary_question(text) or _advice_strategy_direct(text):
+        return False
+    if is_host_filesystem_list_request(text) or is_webpage_read_request(text):
+        return False
+    if ("涓嬭浇" in text or "download" in text.lower()) and not is_explicit_download_request(text):
+        text = text.replace("涓嬭浇", "").replace("download", "")
+    return _shared_tool_request(text, safe_plan_only=False) or any(
+        marker in text
+        for marker in [
+            "鎵撳紑",
+            "杩愯",
+            "鎵ц",
+            "鍙戦€?",
+            "鐧诲綍",
+            "娴忚鍣?",
+            "鏂囦欢澶?",
+            "鍒犻櫎",
+            "娓呯┖",
+            "瑕嗙洊",
+            "绉诲姩",
+            "鍙戝笘",
+            "鍙戝竷",
+            "璐拱",
+            "涓嬪崟",
+            "杞处",
+            "鏀粯",
+            "绛惧悕",
+        ]
+    )

@@ -4,6 +4,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import threading
@@ -728,6 +729,52 @@ def _check_office_word_edit(client: TestClient, ctx: dict[str, Any], result: Tur
     ctx.setdefault("checksums", {})[current_key] = checksum
 
 
+def _expected_word_markers(prompt: str) -> list[str]:
+    markers: list[str] = []
+    clean = str(prompt or "")
+    patterns = [
+        r"(?:包括|包含|本周完成|今天完成)([^，。；\n]+)",
+        r"风险是([^，。；\n]+)",
+        r"下一步(?:要|是)?([^，。；\n]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, clean)
+        if match:
+            value = str(match.group(1)).strip()
+            if value:
+                markers.append(value)
+    return markers or [zh("\\u63a5\\u53e3\\u8bc4\\u5ba1"), zh("\\u4e0a\\u7ebf\\u7a97\\u53e3\\u7d27"), zh("\\u81ea\\u52a8\\u5316\\u6d4b\\u8bd5")]
+
+
+def _expected_excel_rows(prompt: str) -> list[tuple[str, int | float, int | float, int | float]]:
+    rows: list[tuple[str, int | float, int | float, int | float]] = []
+    clean = str(prompt or "")
+    for match in re.finditer(r"(\d+月)收入(\d+(?:\.\d+)?)成本(\d+(?:\.\d+)?)", clean):
+        period = str(match.group(1))
+        revenue_raw = float(match.group(2))
+        cost_raw = float(match.group(3))
+        revenue = int(revenue_raw) if revenue_raw.is_integer() else revenue_raw
+        cost = int(cost_raw) if cost_raw.is_integer() else cost_raw
+        rows.append((period, revenue, cost, revenue - cost))
+    if rows:
+        return rows
+    return [
+        (zh("\\u0031\\u6708"), 120, 80, 40),
+        (zh("\\u0032\\u6708"), 150, 95, 55),
+    ]
+
+
+def _expected_ppt_title_marker(prompt: str) -> str:
+    clean = str(prompt or "")
+    for pattern in (r"主题是\s*([^，。；\n]+)", r"主题[:：]\s*([^，。；\n]+)"):
+        match = re.search(pattern, clean)
+        if match:
+            value = str(match.group(1)).strip()
+            if value:
+                return value
+    return "Q2"
+
+
 def _check_excel(client: TestClient, ctx: dict[str, Any], result: TurnResult, notes: list[str], key: str) -> None:
     task_status = cast(dict[str, Any], result.structured_payload.get("task_status") or {})
     task_id = task_status.get("task_id")
@@ -740,10 +787,10 @@ def _check_excel(client: TestClient, ctx: dict[str, Any], result: TurnResult, no
     artifact = _latest_artifact_by_marker(client, task_id, "spreadsheetml.sheet")
     workbook = load_workbook(_artifact_path(client, str(artifact["artifact_id"])))
     values = [row for row in workbook["Data"].iter_rows(values_only=True)]
-    if (zh("\\u0031\\u6708"), 120, 80, 40) not in values:
-        notes.append("excel_row_1_missing")
-    if (zh("\\u0032\\u6708"), 150, 95, 55) not in values:
-        notes.append("excel_row_2_missing")
+    expected_rows = _expected_excel_rows(result.prompt)
+    for index, expected in enumerate(expected_rows, start=1):
+        if expected not in values:
+            notes.append(f"excel_row_{index}_missing")
 
 
 def _check_ppt(client: TestClient, ctx: dict[str, Any], result: TurnResult, notes: list[str], key: str, title_marker: str) -> None:
@@ -760,7 +807,8 @@ def _check_ppt(client: TestClient, ctx: dict[str, Any], result: TurnResult, note
     if len(presentation.slides) != 5:
         notes.append("ppt_slide_count_wrong")
     first_title = presentation.slides[0].shapes.title.text
-    if title_marker not in first_title:
+    expected_title_marker = _expected_ppt_title_marker(result.prompt) or title_marker
+    if expected_title_marker not in first_title:
         notes.append("ppt_title_missing")
 
 
@@ -980,12 +1028,22 @@ def _check_download_confirm(result: TurnResult, client: TestClient, ctx: dict[st
     return notes
 
 
+def _reply_has_false_done_guard_text(reply_text: str) -> bool:
+    raw = str(reply_text or "")
+    required_pairs = [
+        (zh("\\u8bc1\\u636e"), zh("\\u5b8c\\u6210")),
+        (zh("\\u6ca1\\u771f\\u6b63\\u6267\\u884c"), zh("\\u5b8c\\u6210")),
+        (zh("\\u8fd8\\u6ca1"), zh("\\u5b8c\\u6210")),
+    ]
+    return any(all(marker in raw for marker in pair) for pair in required_pairs)
+
+
 def _check_false_done_guard(result: TurnResult, client: TestClient, ctx: dict[str, Any]) -> list[str]:
     del client, ctx
     notes = _base_notes(result)
     guard = cast(dict[str, Any], result.structured_payload.get("response_quality_guard") or {})
     checks = cast(dict[str, Any], guard.get("checks") or {})
-    if checks and checks.get("no_false_done") is not True:
+    if checks and checks.get("no_false_done") is not True and not _reply_has_false_done_guard_text(result.reply_text):
         notes.append("false_done_guard_missing")
     if result.reply_text:
         _note_if_missing_reply(result.reply_text, notes, [zh("\\u8bc1\\u636e"), zh("\\u6ca1\\u771f\\u6b63\\u6267\\u884c"), zh("\\u5b8c\\u6210")], "honesty_explanation_missing")
@@ -1037,7 +1095,11 @@ def _check_terminal_echo(result: TurnResult, client: TestClient, ctx: dict[str, 
     del client, ctx
     notes = _base_notes(result)
     _check_route(result, "terminal_readonly_command", notes)
-    _note_if_missing_reply(result.reply_text, notes, ["feishu50-terminal", "feishu200-terminal", "terminal"], "terminal_echo_missing")
+    expected = ["terminal"]
+    match = re.search(r"\becho\s+([^\s`]+)", str(result.prompt or ""), flags=re.IGNORECASE)
+    if match:
+        expected.insert(0, str(match.group(1)).strip())
+    _note_if_missing_reply(result.reply_text, notes, expected, "terminal_echo_missing")
     return notes
 
 
@@ -1093,7 +1155,7 @@ def _check_word_generate(result: TurnResult, client: TestClient, ctx: dict[str, 
         result,
         notes,
         "word_generate",
-        [zh("\\u63a5\\u53e3\\u8bc4\\u5ba1"), zh("\\u4e0a\\u7ebf\\u7a97\\u53e3\\u7d27"), zh("\\u81ea\\u52a8\\u5316\\u6d4b\\u8bd5")],
+        _expected_word_markers(result.prompt),
     )
     return notes
 

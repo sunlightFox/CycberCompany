@@ -16,16 +16,12 @@ from app.services.brain_decision_support import (
     log_data_extraction,
     mcp_request,
     memory_correction,
-    memory_query,
     memory_write,
     persona_boundary_question,
-    real_task_request,
-    safe_plan_only,
     skill_request,
     skill_unavailable_reason,
     mcp_unavailable_reason,
     system_settings,
-    tool_request,
     unknown_input,
 )
 from app.services.chat_intent_router import (
@@ -43,6 +39,7 @@ from app.services.chat_intent_router import (
     is_webpage_read_request,
 )
 from app.services.chat_turn_input_facts import looks_like_execution_state_explanation_request
+from app.services.intent_boundaries import assess_intent_boundaries
 
 
 def intent_decision(
@@ -56,6 +53,7 @@ def intent_decision(
 ) -> IntentDecision:
     clean = text.strip()
     lowered = clean.lower()
+    boundary = assess_intent_boundaries(clean)
     secondary: list[str] = []
     risks: list[str] = []
     rule_hits: list[str] = []
@@ -76,7 +74,7 @@ def intent_decision(
         primary = "simple_question"
         secondary.append("data_extraction")
         rule_hits.append("data_extraction_question")
-    elif safe_plan_only(clean):
+    elif boundary.safe_plan_only:
         primary = "simple_question"
         secondary.append("make_plan")
         rule_hits.append("safe_plan_only")
@@ -91,7 +89,7 @@ def intent_decision(
         primary = "memory_update"
         needs_memory = True
         rule_hits.append("explicit_memory_write")
-    elif memory_query(clean):
+    elif boundary.memory_query:
         primary = "memory_query"
         needs_memory = True
         rule_hits.append("memory_reference")
@@ -165,7 +163,7 @@ def intent_decision(
         needs_mcp = capability_available(capability_snapshot, "mcp")
         needs_task = needs_mcp
         rule_hits.append("mcp_keyword")
-    elif real_task_request(clean):
+    elif boundary.real_task_request:
         primary = "task_request"
         needs_task = True
         rule_hits.append("real_task_request")
@@ -174,7 +172,7 @@ def intent_decision(
         needs_tool = True
         needs_task = True
         rule_hits.append("browser_page_action")
-    elif tool_request(clean):
+    elif boundary.tool_request:
         primary = "task_request"
         needs_tool = True
         needs_task = True
@@ -233,7 +231,7 @@ def intent_decision(
             and not direct_only
             and not readonly_route
             and not (has_pending_confirmation and looks_like_execution_state_explanation_request(clean))
-            and not safe_plan_only(clean)
+            and not boundary.safe_plan_only
             and not persona_boundary_question(clean)
             and not advice_strategy_direct(clean)
             and not concept_explanation_request(clean)

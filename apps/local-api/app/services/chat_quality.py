@@ -417,10 +417,8 @@ def _system_prompt_or_trace_request(text: str) -> bool:
     )
     request_markers = ("\u53d1\u7ed9\u6211", "\u539f\u6837", "\u8f93\u51fa", "show", "dump")
     corrupted_trace_request = "trace" in lowered and text.count("\ufffd") >= 4
-    return (any(marker in lowered or marker in text for marker in internal_markers) or corrupted_trace_request) and (
-        marker in lowered or marker in text for marker in request_markers
-        for marker in request_markers
-    )
+    wants_raw_internal_output = any(marker in lowered or marker in text for marker in request_markers)
+    return (any(marker in lowered or marker in text for marker in internal_markers) or corrupted_trace_request) and wants_raw_internal_output
 
 def _supportive_safety_refusal_request(text: str) -> bool:
     lowered = text.lower()

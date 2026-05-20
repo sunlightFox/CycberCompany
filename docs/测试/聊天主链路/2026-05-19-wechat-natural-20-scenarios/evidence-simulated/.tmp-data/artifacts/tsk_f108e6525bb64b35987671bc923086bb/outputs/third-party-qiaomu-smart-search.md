@@ -1,0 +1,1 @@
+OpenCLI Smart Search skill installed from project repository.

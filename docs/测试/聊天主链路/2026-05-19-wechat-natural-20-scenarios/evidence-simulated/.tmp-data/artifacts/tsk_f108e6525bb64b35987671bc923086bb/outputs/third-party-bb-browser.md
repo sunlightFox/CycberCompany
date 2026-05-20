@@ -1,0 +1,1 @@
+bb-browser skill installed from project repository.

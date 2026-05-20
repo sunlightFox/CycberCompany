@@ -6,10 +6,8 @@ from app.services.brain_decision_support import (
     concept_explanation_request,
     no_clarification,
     persona_boundary_question,
-    real_task_request,
-    safe_plan_only,
-    tool_request,
 )
+from app.services.intent_boundaries import assess_intent_boundaries
 
 TURN_RESPONSE_KINDS: tuple[str, ...] = (
     "knowledge_explanation",
@@ -57,6 +55,7 @@ def route_turn_response(
 ) -> dict[str, Any]:
     raw = str(text or "").strip()
     lowered = raw.lower()
+    boundary = assess_intent_boundaries(raw)
     reason_codes: list[str] = []
     if not raw:
         return {"turn_response_kind": "clarification_required", "reason_codes": ["empty_input"]}
@@ -75,7 +74,7 @@ def route_turn_response(
     if _looks_like_knowledge_explanation(raw):
         reason_codes.append("turn_response_knowledge_explanation")
         return {"turn_response_kind": "knowledge_explanation", "reason_codes": reason_codes}
-    if _looks_like_action_request(raw, lowered):
+    if _looks_like_action_request(raw, lowered, boundary=boundary):
         reason_codes.append("turn_response_action_request")
         return {"turn_response_kind": "action_request", "reason_codes": reason_codes}
 
@@ -133,7 +132,7 @@ def clarification_policy_for_turn(
                 "assumptions_if_continue": [],
                 "safe_partial_answer_allowed": False,
             }
-        if safe_plan_only(text):
+        if assess_intent_boundaries(text).safe_plan_only:
             return no_clarification()
     if getattr(intent, "confidence", 1.0) < 0.45:
         return {
@@ -176,10 +175,10 @@ def _looks_like_boundary_question(text: str, lowered: str) -> bool:
     )
 
 
-def _looks_like_action_request(text: str, lowered: str) -> bool:
-    if safe_plan_only(text):
+def _looks_like_action_request(text: str, lowered: str, *, boundary: Any) -> bool:
+    if boundary.safe_plan_only:
         return False
-    if real_task_request(text) or tool_request(text):
+    if boundary.real_task_request or boundary.tool_request:
         return True
     return any(marker in text for marker in _ACTION_MARKERS) or any(
         marker in lowered for marker in ("download", "delete", "login", "publish", "install")

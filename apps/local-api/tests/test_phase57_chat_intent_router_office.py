@@ -149,6 +149,9 @@ def test_phase57_router_treats_host_uninstall_as_host_software_action() -> None:
     [
         ("我桌面有哪些文件", "desktop"),
         ("桌面有什么文件", "desktop"),
+        ("帮我看一下桌面现在都有什么文件。", "desktop"),
+        ("我桌面上现在有哪些文件？", "desktop"),
+        ("只列出桌面文件名，不要读取内容。", "desktop"),
         ("下载目录里有哪些文件", "downloads"),
         ("看看文档目录里有什么", "documents"),
     ],

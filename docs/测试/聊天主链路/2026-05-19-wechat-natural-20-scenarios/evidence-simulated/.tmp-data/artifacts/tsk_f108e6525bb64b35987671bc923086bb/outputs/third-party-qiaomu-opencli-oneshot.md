@@ -1,0 +1,1 @@
+OpenCLI Oneshot skill installed from project repository.

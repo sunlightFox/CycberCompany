@@ -1,0 +1,28 @@
+id: clawhub-spreadsheet-analysis
+bundle_revision: 0.1.0
+display_name: ClawHub Spreadsheet Analysis
+description: 生成表格分析提纲、指标解释、异常项和汇报摘要。
+author: clawhub
+triggers:
+  intents: [spreadsheet_analysis, data_report]
+  keywords: [表格, 数据, 指标, Excel, spreadsheet, analysis]
+required_tools: [file.write]
+permissions:
+  tools:
+    - name: file.write
+      actions: [write_task_artifact]
+      risk: R2
+  assets: []
+filesystem:
+  allowed_roots: [workspace://artifacts/**]
+safety:
+  unattended_allowed: false
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/clawhub-spreadsheet-analysis.md
+      content: "# Spreadsheet Analysis\n\n## 数据说明\n{content}\n\n## 输出结构\n- 指标定义\n- 变化趋势\n- 异常项\n- 可能原因\n- 汇报摘要\n"
+evals:
+  - id: writes_sheet_artifact
+    input: {content: demo}
+    expected: {artifact: outputs/clawhub-spreadsheet-analysis.md}

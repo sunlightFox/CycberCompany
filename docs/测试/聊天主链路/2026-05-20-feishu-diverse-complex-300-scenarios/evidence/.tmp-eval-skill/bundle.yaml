@@ -1,0 +1,18 @@
+id: eval-draft
+version: 0.1.0
+display_name: 评测草稿技能包
+entry_skills:
+  - eval_draft
+triggers:
+  intents:
+    - eval_draft
+  keywords:
+    - 评测
+    - 草稿
+required_tools:
+  - file.write
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/eval-skill.md
+      content: "# Eval"

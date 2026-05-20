@@ -8,6 +8,7 @@ from app.services.chat_turn_input_facts import (
     preference_application_request,
     structured_summary_chat_request,
 )
+from app.services.intent_boundaries import should_treat_as_memory_query
 
 FORGET_MARKERS = ("\u5fd8\u8bb0",)
 FORGET_SCOPES = (
@@ -113,6 +114,21 @@ class ChatMemoryCoordinator:
             return False
         if structured_summary_chat_request(text) or preference_application_request(text):
             return False
+        if any(
+            marker in text
+            for marker in (
+                "继续刚才",
+                "继续这轮",
+                "不用长期记忆",
+                "按前面的口径",
+                "压成两句",
+                "压成三句",
+                "收尾结论",
+                "主要风险",
+                "下一步",
+            )
+        ):
+            return False
         if explicit_preference_recall_query(text):
             return True
         return any(marker in text for marker in QUERY_MARKERS) and any(
@@ -134,3 +150,19 @@ class ChatMemoryCoordinator:
                 return "\u663e\u5f0f\u8bb0\u5fc6\u7ea0\u9519\u5df2\u5904\u7406\uff0c\u65e7\u8bb0\u5fc6\u5df2\u88ab\u65b0\u8bb0\u5fc6\u53d6\u4ee3\u3002"
             return "\u663e\u5f0f\u8bb0\u5fc6\u7ea0\u9519\u5df2\u8bb0\u5f55\uff1b\u6ca1\u6709\u627e\u5230\u53ef\u7cbe\u786e\u53d6\u4ee3\u7684\u65e7\u8bb0\u5fc6\u3002"
         return "\u663e\u5f0f\u8bb0\u5fc6\u547d\u4ee4\u5df2\u5904\u7406\u3002"
+
+
+def _shared_explicit_memory_query(self: ChatMemoryCoordinator, user_text: str) -> bool:
+    text = user_text.strip()
+    if not text:
+        return False
+    if not should_treat_as_memory_query(text):
+        return False
+    if explicit_preference_recall_query(text):
+        return True
+    return any(marker in text for marker in QUERY_MARKERS) and any(
+        marker in text for marker in QUERY_REFERENCES
+    )
+
+
+ChatMemoryCoordinator.explicit_memory_query = _shared_explicit_memory_query

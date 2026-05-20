@@ -1637,7 +1637,7 @@ def _recall_named_memory(text: str, recent_messages: list[dict[str, Any]]) -> st
         return None
     if text.startswith(("记住", "纠正记忆", "请忘记")):
         return None
-    targets = set(re.findall(r"(FEI\d{2,3}-[^\s，。！？:：]+)", text))
+    targets = set(re.findall(r"([A-Z]{2,12}(?:\d{0,4})-[^\s，。！？:：]+)", text))
     for target in targets:
         latest = ""
         for item in reversed(recent_messages):

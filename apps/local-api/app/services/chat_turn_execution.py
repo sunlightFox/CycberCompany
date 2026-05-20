@@ -335,7 +335,17 @@ class ChatTurnExecutionOrchestrator:
             async for event in facade._complete_without_model(turn, events, quality_outcome.text, root_span_id, intent=quality_outcome.intent, mode=quality_outcome.mode, response_plan=quality_outcome.response_plan):
                 yield event
             return
-        if facade._natural_chat is not None:
+        allow_direct_memory_command = facade._memory_coordinator.allow_direct_command(user_text, brain_decision)
+        explicit_memory_query = facade._memory_coordinator.explicit_memory_query(user_text)
+        office_route_pending = (
+            ctx.route_decision is not None and ctx.route_decision.office_request is not None
+        )
+        if (
+            facade._natural_chat is not None
+            and not allow_direct_memory_command
+            and not explicit_memory_query
+            and not office_route_pending
+        ):
             natural_outcome = await facade._natural_chat.handle(turn=turn, user_text=user_text, session_id=session_id, trace_id=trace_id, presence_runtime=dict(turn.get("presence_runtime") or {}))
             if natural_outcome is not None:
                 yield await emit(ChatEventType.INTENT_DETECTED, {"intent": natural_outcome.intent, "reason_codes": ["natural_chat_action_gateway"]})
@@ -370,7 +380,6 @@ class ChatTurnExecutionOrchestrator:
             async for event in facade._complete_without_model(turn, events, boundary_text, root_span_id, intent="boundary_question", mode=TaskMode.DIRECT.value, response_plan=response_plan):
                 yield event
             return
-        allow_direct_memory_command = facade._memory_coordinator.allow_direct_command(user_text, brain_decision)
         memory_command = await facade._memory.handle_explicit_chat_command(text=user_text, member_id=turn["member_id"], conversation_id=turn["conversation_id"], turn_id=turn_id, message_id=turn["user_message_id"], trace_id=trace_id, root_span_id=root_span_id) if allow_direct_memory_command else None
         if memory_command is not None and memory_command.handled:
             memory_intent = facade._memory_coordinator.command_intent(memory_command)
@@ -383,7 +392,7 @@ class ChatTurnExecutionOrchestrator:
             async for event in facade._complete_without_model(turn, events, memory_summary, root_span_id, intent=memory_intent, mode=TaskMode.DIRECT_WITH_MEMORY.value, response_plan=facade._response_plan_for_status(turn, summary=memory_summary, memory_notice=facade._memory_coordinator.command_notice(memory_command))):
                 yield event
             return
-        if facade._memory_coordinator.explicit_memory_query(user_text):
+        if explicit_memory_query:
             memory_reply = await facade._memory.handle_memory_query(
                 text=user_text,
                 member_id=turn["member_id"],

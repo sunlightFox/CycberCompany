@@ -1,0 +1,35 @@
+id: skillhub-local-summary
+bundle_revision: 0.1.0
+display_name: SkillHub Local Summary
+description: 本地资料摘要 Skill 示例。
+author: skillhub
+triggers:
+  intents:
+    - research_summary
+  keywords:
+    - 摘要
+    - summary
+required_tools:
+  - file.write
+permissions:
+  tools:
+    - name: file.write
+      actions: [write_task_artifact]
+      risk: R2
+  assets: []
+filesystem:
+  allowed_roots:
+    - workspace://artifacts/**
+safety:
+  unattended_allowed: false
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/skillhub-local-summary.md
+      content: "# SkillHub Local Summary\n\n内容：{content}"
+evals:
+  - id: writes_artifact
+    input:
+      content: demo
+    expected:
+      artifact: outputs/skillhub-local-summary.md

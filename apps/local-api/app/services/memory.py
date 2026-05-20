@@ -1418,16 +1418,6 @@ class MemoryService:
             return MemoryCommandResult(
                 handled=True,
                 response_text=(
-                    "\u6211\u4e0d\u80fd\u5728\u804a\u5929\u91cc\u5ba3\u79f0\u5df2\u7ecf\u5fd8\u8bb0\u6216\u5220\u9664\u4e86\u957f\u671f\u8bb0\u5fc6\uff0c"
-                    "\u56e0\u4e3a\u771f\u6b63\u5220\u9664\u9700\u8981\u660e\u786e\u7684\u8bb0\u5fc6\u7ba1\u7406\u64cd\u4f5c\u548c\u5ba1\u8ba1\u8bb0\u5f55\u3002"
-                    "\u5728\u90a3\u4e4b\u524d\uff0c\u6211\u53ea\u4f1a\u5982\u5b9e\u8bf4\u660e\u8fd9\u4e2a\u8fb9\u754c\uff0c\u4e0d\u4f1a\u628a\u201c\u5df2\u7ecf\u5fd8\u4e86\u201d\u8bf4\u6210\u65e2\u6210\u4e8b\u5b9e\u3002"
-                ),
-                reason="forget_requires_memory_management_boundary",
-            )
-        if _is_explicit_forget_command(text):
-            return MemoryCommandResult(
-                handled=True,
-                response_text=(
                     "我不能在聊天里假装已经删除长期记忆，因为删除需要明确权限和操作记录。"
                     "我现在能做的是：先把这批临时测试偏好停用，后续不再主动沿用它；"
                     "如果要真正删除，还需要通过记忆管理功能明确删除范围、来源和操作记录。"
@@ -1470,9 +1460,8 @@ class MemoryService:
                 )
         elif result.memories:
             response = (
-                f"????????????{_memory_summary_for_reply(result.memories)}\n"
+                f"我已经记住这条长期记忆：{_memory_summary_for_reply(result.memories)}\n"
                 "后面同一批聊天里，我会优先按这条偏好、规则或事实组织回复；如果你临时改口，我会以新的要求为准。"
-                ""
             )
         elif result.candidates and result.candidates[0].decision == "discarded_duplicate":
             response = (
@@ -3545,14 +3534,14 @@ def _parse_correction(text: str) -> dict[str, str] | None:
     normalized = stripped
     for prefix in (*EXTRA_CORRECTION_PREFIXES, "memory correction:", "Memory correction:"):
         if normalized.startswith(prefix):
-            remainder = normalized.removeprefix(prefix).lstrip(" :??,")
+            remainder = normalized.removeprefix(prefix).lstrip(" :：，,")
             if not remainder:
                 return None
             summary = _clean_summary(remainder)
-            subject = remainder.split(":", 1)[0].split("?", 1)[0].strip()
+            subject = remainder.split(":", 1)[0].split("：", 1)[0].strip()
             return {
                 "old": subject or summary,
-                "summary": str(redact(f"?????{summary}")),
+                "summary": str(redact(f"纠正为：{summary}")),
             }
     if normalized.startswith("不是"):
         remainder = normalized.removeprefix("不是").strip()
@@ -3564,7 +3553,7 @@ def _parse_correction(text: str) -> dict[str, str] | None:
                 if new:
                     return {
                         "old": old or _clean_summary(normalized),
-                        "summary": str(redact(f"??????????{new}")),
+                        "summary": str(redact(f"纠正为：{new}")),
                     }
     for marker in ("改成", "换成", "纠正", "修正", "更正"):
         if normalized.startswith(marker):
@@ -3572,12 +3561,8 @@ def _parse_correction(text: str) -> dict[str, str] | None:
             if after:
                 return {
                     "old": _clean_summary(normalized),
-                    "summary": str(redact(f"??????????{after}")),
+                    "summary": str(redact(f"纠正为：{after}")),
                 }
-    if "???" in normalized and any(marker in normalized for marker in EXTRA_CORRECTION_PREFIXES):
-        summary = _clean_summary(normalized)
-        return {"old": summary, "summary": f"???????{summary}"}
-    return None
     return None
 
 
@@ -3595,9 +3580,10 @@ def _is_explicit_memory_command(text: str) -> bool:
 
 
 def _is_explicit_forget_command(text: str) -> bool:
-    return "忘记" in text or ("????" in text and any(
-        marker in text for marker in ["????", "???????", "???", "??????"]
-    ))
+    stripped = str(text or "").strip()
+    if not stripped:
+        return False
+    return any(marker in stripped for marker in ("忘记", "请忘记", "别再记", "不要再记", "清除这条记忆"))
 
 
 def _is_explicit_remember_command(text: str) -> bool:

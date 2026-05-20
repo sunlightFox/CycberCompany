@@ -15,6 +15,7 @@ from app.core.time import new_id, utc_now_iso
 from app.services.action_result_summary import artifact_names_from_refs
 from app.services.action_result_summary import summarize_completed_action_result
 from app.services.brain_decision_support import safe_plan_only
+from app.services.chat_intent_router import is_host_filesystem_list_request
 from app.services.chat_turn_input_facts import (
     looks_like_execution_state_explanation_request,
     looks_like_latest_instruction_override,
@@ -112,6 +113,12 @@ def resolve_turn_continuation(
             turn_kind="fresh_request",
             continuation_confidence=1.0,
             reason_codes=["latest_instruction_override"],
+        )
+    if is_host_filesystem_list_request(text) or _looks_like_abstract_quality_question(text):
+        return TurnContinuationDecision(
+            turn_kind="fresh_request",
+            continuation_confidence=0.98,
+            reason_codes=["fresh_request_explicit_user_intent"],
         )
 
     if pending and (looks_like_resolution(text) or is_confirm(text) or is_deny(text) or is_edit(text) or is_ambiguous_continue(text)):
@@ -398,6 +405,8 @@ def compose_completion_status_reply(
     if not action:
         return None
     raw = str(text or "")
+    if is_host_filesystem_list_request(raw):
+        return None
     execution_state = str(action.get("execution_state") or "")
     if execution_state == "completed" and any(
         marker in raw for marker in ("证据", "完成", "还在等", "已经", "状态")
@@ -474,6 +483,32 @@ def _looks_like_followup_question(text: str) -> bool:
     if len(_compact_text(raw)) > 24:
         return False
     return any(marker in raw for marker in ("好的", "继续", "然后", "下一步", "怎么回", "怎么说", "现在呢"))
+
+
+def _looks_like_abstract_quality_question(text: str) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+    if any(
+        marker in raw
+        for marker in (
+            "刚才",
+            "前面",
+            "上一步",
+            "这次操作",
+            "那个文件",
+            "那个页面",
+            "安装现在",
+            "下载现在",
+        )
+    ):
+        return False
+    quality_pairs = (
+        ("有回复", "有证据"),
+        ("未完成", "已完成"),
+        ("多个子任务", "已完成结论"),
+    )
+    return any(all(marker in raw for marker in pair) for pair in quality_pairs)
 
 
 def _pending_action_ref(action: dict[str, Any]) -> str | None:

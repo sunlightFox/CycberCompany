@@ -10,6 +10,14 @@ from app.services.chat_turn_input_facts import (
     preference_application_request,
     structured_summary_chat_request,
 )
+from app.services.intent_boundaries import (
+    assess_intent_boundaries as _assess_intent_boundaries,
+    looks_like_chatty_delivery as _shared_chatty_delivery_request,
+    looks_like_safe_plan_only as _shared_safe_plan_only,
+    should_treat_as_memory_query as _shared_memory_query,
+    should_treat_as_real_task_request as _shared_real_task_request,
+    should_treat_as_tool_request as _shared_tool_request,
+)
 
 
 def clarify(reason: str, questions: list[str], *, clarification_type: str) -> dict[str, Any]:
@@ -67,43 +75,7 @@ def confidence(primary: str, rule_hits: list[str], risks: list[str], text: str) 
 
 
 def safe_plan_only(text: str) -> bool:
-    if any(
-        marker in text
-        for marker in [
-            "只做分析",
-            "只给方案",
-            "不要执行",
-            "先别执行",
-            "不要创建任务",
-            "不创建任务",
-            "不要使用工具",
-            "不要调用工具",
-            "不使用工具",
-            "只解释",
-            "只输出",
-            "只要结果",
-            "先给方案",
-        ]
-    ):
-        return True
-    return any(
-        marker in text
-        for marker in [
-            "只做分析",
-            "只给方案",
-            "不要执行",
-            "先别执行",
-            "不要创建任务",
-            "不创建任务",
-            "不要使用工具",
-            "不要调用工具",
-            "不使用工具",
-            "只解释",
-            "只输出",
-            "只要结果",
-            "先给方案",
-        ]
-    )
+    return _shared_safe_plan_only(text)
 
 
 def multimodal_attachment_context(text: str) -> bool:
@@ -120,11 +92,7 @@ def unknown_input(text: str) -> bool:
 
 
 def memory_query(text: str) -> bool:
-    if structured_summary_chat_request(text) or preference_application_request(text):
-        return False
-    if explicit_preference_recall_query(text):
-        return True
-    return any(marker in text for marker in ["记得", "还记得", "偏好", "上次说过", "我刚才说"])
+    return _assess_intent_boundaries(text).memory_query
 
 
 def memory_write(text: str) -> bool:
@@ -188,17 +156,11 @@ def explicit_task_creation(text: str) -> bool:
 
 
 def real_task_request(text: str) -> bool:
-    if safe_plan_only(text):
-        return False
-    return explicit_task_creation(text) or any(
-        marker in text for marker in ["帮我做", "去执行", "帮我处理", "跑一下", "装一下"]
-    )
+    return _assess_intent_boundaries(text).real_task_request
 
 
 def tool_request(text: str) -> bool:
-    if safe_plan_only(text):
-        return False
-    return any(marker in text for marker in ["调用工具", "打开网页", "下载", "截图", "安装"])
+    return _assess_intent_boundaries(text).tool_request
 
 
 def advice_strategy_direct(text: str) -> bool:
@@ -340,21 +302,11 @@ def persona_boundary_question(text: str) -> bool:
 
 
 def real_task_request(text: str) -> bool:
-    if safe_plan_only(text):
-        return False
-    if explicit_task_creation(text) or any(marker in text for marker in ["帮我做", "去执行", "帮我处理", "跑一个", "装一个"]):
-        return True
-    return explicit_task_creation(text) or any(
-        marker in text for marker in ["帮我做", "去执行", "帮我处理", "跑一个", "装一个"]
-    )
+    return _assess_intent_boundaries(text).real_task_request
 
 
 def tool_request(text: str) -> bool:
-    if safe_plan_only(text):
-        return False
-    if any(marker in text for marker in ["调用工具", "打开网页", "下载", "截图", "安装"]):
-        return True
-    return any(marker in text for marker in ["调用工具", "打开网页", "下载", "截图", "安装"])
+    return _assess_intent_boundaries(text).tool_request
 
 
 def concept_explanation_request(text: str) -> bool:
@@ -381,3 +333,11 @@ def concept_explanation_request(text: str) -> bool:
             "结果",
         ]
     )
+
+
+def _chatty_delivery_request(text: str) -> bool:
+    return _shared_chatty_delivery_request(text)
+
+
+def tool_request(text: str) -> bool:
+    return _assess_intent_boundaries(text).tool_request

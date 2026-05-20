@@ -761,9 +761,35 @@ def is_host_filesystem_list_request(text: str) -> bool:
         return False
     if host_filesystem_location(clean) is None:
         return False
+    if any(
+        marker in clean
+        for marker in [
+            "\u684c\u9762\u6709\u4ec0\u4e48",
+            "\u684c\u9762\u73b0\u5728\u90fd\u6709\u4ec0\u4e48",
+            "\u684c\u9762\u73b0\u5728\u6709\u54ea\u4e9b\u6587\u4ef6",
+            "\u53ea\u8981\u6587\u4ef6\u540d",
+            "\u53ea\u5217\u51fa\u6587\u4ef6\u540d",
+            "\u5e2e\u6211\u770b\u4e00\u4e0b\u684c\u9762",
+            "\u5217\u4e00\u4e0b\u684c\u9762\u6587\u4ef6",
+            "\u4e0b\u8f7d\u76ee\u5f55\u6709\u4ec0\u4e48",
+            "\u4e0b\u8f7d\u6587\u4ef6\u5939\u6709\u4ec0\u4e48",
+        ]
+    ):
+        return True
     if _readonly_file_list_marker(clean, lowered):
         return True
-    if any(marker in clean for marker in ["桌面有什么", "下载目录有什么", "下载文件夹有什么"]):
+    if any(
+        marker in clean
+        for marker in [
+            "桌面有什么",
+            "桌面现在都有什么",
+            "桌面现在有哪些文件",
+            "只要文件名",
+            "只列出文件名",
+            "下载目录有什么",
+            "下载文件夹有什么",
+        ]
+    ):
         return True
     if any(marker in lowered for marker in ["what files", "list files", "show files"]):
         return True
@@ -796,6 +822,23 @@ def is_terminal_command_request(text: str) -> bool:
 def host_filesystem_location(text: str) -> str | None:
     clean = _clean(text)
     lowered = clean.lower()
+    if any(marker in clean for marker in ["\u684c\u9762", "\u684c\u9762\u4e0a", "\u684c\u9762\u91cc"]):
+        return "desktop"
+    if any(
+        marker in clean
+        for marker in [
+            "\u4e0b\u8f7d\u76ee\u5f55",
+            "\u4e0b\u8f7d\u6587\u4ef6\u5939",
+            "\u4e0b\u8f7d\u6587\u4ef6",
+            "\u4e0b\u8f7d\u91cc",
+            "\u4e0b\u8f7d\u91cc\u9762",
+        ]
+    ):
+        return "downloads"
+    if any(marker in clean for marker in ["\u6587\u6863\u76ee\u5f55", "\u6587\u6863\u6587\u4ef6\u5939", "\u6211\u7684\u6587\u6863"]):
+        return "documents"
+    if any(marker in clean for marker in ["\u4e3b\u76ee\u5f55", "\u7528\u6237\u76ee\u5f55", "\u5bb6\u76ee\u5f55"]):
+        return "home"
     if "desktop" in lowered or any(marker in clean for marker in ["桌面"]):
         return "desktop"
     if any(

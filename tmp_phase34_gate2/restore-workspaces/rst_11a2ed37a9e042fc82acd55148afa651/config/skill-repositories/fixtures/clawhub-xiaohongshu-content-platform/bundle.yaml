@@ -1,0 +1,72 @@
+id: clawhub-xiaohongshu-content-platform
+bundle_revision: 0.1.0
+display_name: ClawHub Xiaohongshu Content Platform
+description: Generates controlled Xiaohongshu publish drafts and review artifacts.
+author: clawhub
+triggers:
+  intents:
+    - content_platform
+  keywords:
+    - xiaohongshu
+    - xhs
+    - rednote
+    - publish
+required_tools:
+  - file.write
+permissions:
+  tools:
+    - name: file.write
+      actions: [write_task_artifact]
+      risk: R2
+  assets: []
+filesystem:
+  allowed_roots:
+    - workspace://artifacts/**
+safety:
+  unattended_allowed: false
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/clawhub-xiaohongshu-content-platform.md
+      content: |
+        # Xiaohongshu Publish Draft
+
+        - platform: {platform_display_name}
+        - request_type: {request_type}
+        - action_type: {action_type}
+        - account: {account_display_name}
+        - publish_surface: {publish_surface}
+        - selected_asset_id: {selected_asset_id}
+        - selected_handle_id: {selected_handle_id}
+
+        ## Title
+        {title}
+
+        ## Body
+        {body}
+
+        ## Tags
+        {tags}
+
+        ## Comment Plan
+        {comment_text}
+
+        ## Media Artifact IDs
+        {media_artifact_ids}
+evals:
+  - id: writes_publish_draft
+    input:
+      platform_display_name: Xiaohongshu
+      request_type: content_platform_publish_request
+      action_type: publish_content
+      account_display_name: Brand Account
+      publish_surface: text_note
+      selected_asset_id: asset_demo
+      selected_handle_id: handle_demo
+      title: Demo Title
+      body: Demo Body
+      tags: [demo, release]
+      comment_text: first comment
+      media_artifact_ids: [art_demo_1]
+    expected:
+      artifact: outputs/clawhub-xiaohongshu-content-platform.md

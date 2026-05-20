@@ -1,0 +1,28 @@
+id: clawhub-calendar-plan
+bundle_revision: 0.1.0
+display_name: ClawHub Calendar Plan
+description: 生成日程安排、会议议程、时间块计划和邀请文案。
+author: clawhub
+triggers:
+  intents: [calendar_plan, schedule_plan]
+  keywords: [日程, 日历, 会议安排, 议程, calendar, schedule]
+required_tools: [file.write]
+permissions:
+  tools:
+    - name: file.write
+      actions: [write_task_artifact]
+      risk: R2
+  assets: []
+filesystem:
+  allowed_roots: [workspace://artifacts/**]
+safety:
+  unattended_allowed: false
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/clawhub-calendar-plan.md
+      content: "# Calendar Plan\n\n## 需求\n{content}\n\n## 输出结构\n- 建议时间块\n- 会议目标\n- 议程\n- 参会人准备事项\n- 邀请文案草稿\n\n注意：不直接创建日历事件。\n"
+evals:
+  - id: writes_calendar_artifact
+    input: {content: demo}
+    expected: {artifact: outputs/clawhub-calendar-plan.md}

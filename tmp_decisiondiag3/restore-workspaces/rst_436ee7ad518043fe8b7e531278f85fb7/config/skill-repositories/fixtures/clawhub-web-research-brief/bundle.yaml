@@ -1,0 +1,28 @@
+id: clawhub-web-research-brief
+bundle_revision: 0.1.0
+display_name: ClawHub Web Research Brief
+description: 生成网页调研摘要、竞品观察、资料来源清单和结论草稿。
+author: clawhub
+triggers:
+  intents: [web_research, competitor_research]
+  keywords: [调研, 竞品, 资料, 搜索, research, web-search]
+required_tools: [file.write]
+permissions:
+  tools:
+    - name: file.write
+      actions: [write_task_artifact]
+      risk: R2
+  assets: []
+filesystem:
+  allowed_roots: [workspace://artifacts/**]
+safety:
+  unattended_allowed: false
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/clawhub-web-research-brief.md
+      content: "# Web Research Brief\n\n## 主题\n{content}\n\n## 输出结构\n- 背景\n- 关键发现\n- 竞品/来源\n- 不确定性\n- 下一步验证清单\n"
+evals:
+  - id: writes_research_artifact
+    input: {content: demo}
+    expected: {artifact: outputs/clawhub-web-research-brief.md}

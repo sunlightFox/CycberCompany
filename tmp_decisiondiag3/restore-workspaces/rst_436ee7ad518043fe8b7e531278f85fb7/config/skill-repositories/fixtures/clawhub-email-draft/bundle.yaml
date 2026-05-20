@@ -1,0 +1,28 @@
+id: clawhub-email-draft
+bundle_revision: 0.1.0
+display_name: ClawHub Email Draft
+description: 生成商务邮件、跟进邮件、拒绝/催办/确认类邮件草稿。
+author: clawhub
+triggers:
+  intents: [email_draft, followup_message]
+  keywords: [邮件, 跟进, 催办, 确认, email, follow-up]
+required_tools: [file.write]
+permissions:
+  tools:
+    - name: file.write
+      actions: [write_task_artifact]
+      risk: R2
+  assets: []
+filesystem:
+  allowed_roots: [workspace://artifacts/**]
+safety:
+  unattended_allowed: false
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/clawhub-email-draft.md
+      content: "# Email Draft\n\n## 场景\n{content}\n\n## 草稿结构\n- Subject\n- Greeting\n- Context\n- Ask / Decision\n- Next step\n- Closing\n\n注意：此 Skill 只生成草稿，不自动发送。\n"
+evals:
+  - id: writes_email_artifact
+    input: {content: demo}
+    expected: {artifact: outputs/clawhub-email-draft.md}

@@ -1,0 +1,16 @@
+app:
+  mode: local_first
+  default_shell: company
+  trace_level: standard
+  locale: zh-CN
+  version: 0.1.0
+
+desktop:
+  auto_start_api: true
+  api_port: 8765
+
+features:
+  cloud_models: optional
+  mcp: optional
+  plugins: optional
+

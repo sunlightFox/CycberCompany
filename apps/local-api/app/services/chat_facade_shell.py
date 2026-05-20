@@ -309,7 +309,8 @@ class ChatFacadeShellMixin:
         summary = _office_content_summary(office_request)
         next_hint = _office_next_edit_hint(office_request.document_type)
         return (
-            f"{doc_name}已经{action}完成，文件：{office_artifact.display_name}。\n"
+            f"文件已产出：{office_artifact.display_name}。\n"
+            f"这次{doc_name}已经{action}完成。\n"
             f"{detail}"
             f"{summary}"
             f"{next_hint}"

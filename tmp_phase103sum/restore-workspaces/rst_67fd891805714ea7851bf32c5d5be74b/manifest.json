@@ -1,0 +1,21 @@
+{
+  "backup_job_id": "bak_a65eec55e4aa48a6ba935b4801359280",
+  "created_at": "2026-05-18T08:48:13.434495+00:00",
+  "scope": {
+    "source": "release_gate",
+    "release_gate_id": "rg_3e76202c50464f8c82ae875cdf30e537"
+  },
+  "includes": [
+    "sqlite",
+    "config",
+    "shells",
+    "artifacts"
+  ],
+  "excludes": [
+    "data/secrets",
+    "data/backups",
+    "data/restore-workspaces"
+  ],
+  "sqlite_path": "sqlite/app.db",
+  "secret_policy": "[REDACTED]"
+}

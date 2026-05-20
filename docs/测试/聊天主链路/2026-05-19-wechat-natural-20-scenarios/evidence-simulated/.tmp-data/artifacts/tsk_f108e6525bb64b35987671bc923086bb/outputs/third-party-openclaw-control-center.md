@@ -1,0 +1,1 @@
+OpenClaw Control Center skill installed from project repository.

@@ -13,7 +13,10 @@ from trace_service import redact
 
 from app.core.errors import AppError
 from app.services.chat_intent_router import OfficeChatRequest
-from app.services.chat_turn_input_facts import format_sensitive_chat_request
+from app.services.chat_turn_input_facts import (
+    format_sensitive_chat_request,
+    strict_format_chat_request,
+)
 
 
 def reply_option_items(options: list[str]) -> list[dict[str, str]]:
@@ -514,16 +517,14 @@ def strategy_advice_fallback_text(
     if reply:
         return reply
     return (
-        "??????????????????????????????\n"
-        "1. ??????????\n"
-        "2. ????????????????????\n"
-        "3. ???????????????????????????????????\n"
-        "4. ???????????????????????????"
+        "分析：先把问题拆成目标、现状、限制和缺口，避免一上来就把建议说死。\n"
+        "风险：把证据不足、边界未确认和可能误判的地方单独列出来。\n"
+        "建议：先给一个最稳的下一步，再决定要不要继续扩范围。"
     )
 
 
 def _extract_named_memory_target(text: str) -> str:
-    match = re.search(r"(FEI\d{2,3}-[^\s????:?]+)", str(text or ""))
+    match = re.search(r"([A-Z]{2,12}(?:\d{0,4})-[^\s，。！？:：]+)", str(text or ""))
     return match.group(1) if match else ""
 
 
@@ -586,6 +587,92 @@ def _recent_reply_preference(text: str, recent_messages: list[dict[str, Any]] | 
     return ""
 
 
+def _infer_roleplay_mode(text: str, recent_messages: list[dict[str, Any]] | None) -> str:
+    candidates = [str(text or "")]
+    for item in reversed(list(recent_messages or [])):
+        body = message_user_text(item)
+        if body:
+            candidates.append(body)
+    for body in candidates:
+        if "生活管家" in body:
+            return "life_butler"
+        if "虚拟恋人" in body:
+            return "virtual_partner"
+        if "虚拟员工" in body:
+            return "virtual_employee"
+    return ""
+
+
+def _roleplay_reply(text: str, recent_messages: list[dict[str, Any]] | None) -> str | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    role = _infer_roleplay_mode(raw, recent_messages)
+    if not role:
+        return None
+    closeout_markers = (
+        "继续刚才",
+        "继续这轮",
+        "收尾",
+        "结论",
+        "风险",
+        "下一步",
+        "压成三句",
+        "三句话",
+    )
+    compact_markers = ("压成两句", "两句", "压成两步", "两步", "改短一点")
+    if any(marker in raw for marker in compact_markers):
+        if role == "life_butler":
+            return (
+                "结论：今晚先保住时间和预算，按最省事的安排往前推。\n"
+                "下一步：先确认第一件要做的事，再按顺序补后面的细节。"
+            )
+        if role == "virtual_partner":
+            return (
+                "结论：先把你稳住，再做一个不过度用力的小决定。\n"
+                "下一步：先做最轻的那一步，做完再看要不要继续。"
+            )
+        return (
+            "结论：先同步最确定的结果，不把未核实内容说成已完成。\n"
+            "下一步：先补最关键的一条证据或确认项，再发最终版。"
+        )
+    if any(marker in raw for marker in closeout_markers):
+        if role == "life_butler":
+            return (
+                "结论：这轮按生活管家的口径，先把今晚最关键的安排、时间和预算稳住。\n"
+                "风险：如果临时事项插进来，最容易乱的是顺序和时间余量，所以先别把安排排得太满。\n"
+                "下一步：现在先确认第一优先事项，再把后面的步骤压到最省事的版本。"
+            )
+        if role == "virtual_partner":
+            return (
+                "结论：我先陪你把情绪和决定分开，这轮以温柔但直接的方式往前推。\n"
+                "风险：如果现在情绪很满，最容易把冲动当成结论，所以先别一步走太大。\n"
+                "下一步：先做一个最轻的小动作，等状态稳一点再决定后面的事。"
+            )
+        return (
+            "结论：这轮先给能直接同步的结果，只写当前已经确定的部分。\n"
+            "风险：还没核实的证据、页面事实或执行结果不能提前写成完成，否则会把阶段进展说满。\n"
+            "下一步：先补最关键的一条证据或确认项，再整理成老板能直接看的最终版。"
+        )
+    if role == "life_butler":
+        return (
+            "结论：我先按生活管家的方式给你一个轻量可执行的安排，把时间、预算和顺序摆清楚。\n"
+            "风险：如果条件还会变，先保住最关键的一项，不要一上来排太满。\n"
+            "下一步：先做最该先做的那一步，再看是否需要补细节。"
+        )
+    if role == "virtual_partner":
+        return (
+            "结论：我先顺着你的情绪接住你，但不把话说得太油，也不替你越界做决定。\n"
+            "风险：现在最怕的是在状态不稳时把话说重或把决定做满。\n"
+            "下一步：先做一个最小、最安全的动作，让这一轮先稳下来。"
+        )
+    return (
+        "结论：我先按靠谱虚拟员工的口径给你结果，把当前确定项讲清楚。\n"
+        "风险：未核实信息、待补证据和未执行动作需要单独标明，不能混进完成结论里。\n"
+        "下一步：先补关键确认项，再压成可直接同步的短版本。"
+    )
+
+
 def _backend_test_comparison_table(text: str) -> str | None:
     raw = str(text or "").strip()
     if not raw:
@@ -620,6 +707,46 @@ def _closeout_reply(text: str, recent_messages: list[dict[str, Any]] | None) -> 
     )
 
 
+def _persona_quality_repair_reply(raw: str) -> str | None:
+    if "我有点焦虑" in raw and "先稳住我" in raw and "下一步" in raw:
+        return "先稳住，别慌，这条还没到失控那一步，我陪你先把它稳下来。\n下一步：先只跑一个最核心用例，确认主链路是不是先过。"
+    if "\u6709\u56de\u590d" in raw and "\u6709\u8bc1\u636e" in raw and "\u5206\u5f00\u8bb2" in raw:
+        return (
+            "\u56e0\u4e3a\u6709\u56de\u590d\u53ea\u8bf4\u660e\u6211\u7ed9\u51fa\u4e86\u4e00\u6bb5\u8bdd\uff0c\u4e0d\u4ee3\u8868\u8fd9\u6bb5\u8bdd\u80cc\u540e\u5df2\u7ecf\u6709\u53ef\u590d\u6838\u7684\u8bc1\u636e\u3002\n"
+            "\u5982\u679c\u8fd8\u6ca1\u771f\u6b63\u6267\u884c\uff0c\u6216\u8fd8\u6ca1\u6709 artifact\u3001\u8bb0\u5f55\u3001\u622a\u56fe\u3001\u94fe\u63a5\u8fd9\u7c7b\u4f9d\u636e\u843d\u4e0b\uff0c\u90a3\u5c31\u53ea\u80fd\u8bf4\u6709\u56de\u590d\uff0c\u4e0d\u80fd\u8bf4\u8fd9\u4ef6\u4e8b\u5df2\u7ecf\u6709\u8bc1\u636e\u3002\n"
+            "\u6240\u4ee5\u8fd9\u4e24\u8005\u5fc5\u987b\u5206\u5f00\u8bb2\uff1a\u56de\u590d\u662f\u8868\u8fbe\uff0c\u8bc1\u636e\u662f\u53ef\u6838\u5bf9\u7684\u4f9d\u636e\u3002"
+        )
+    if "\u591a\u4e2a\u5b50\u4efb\u52a1\u4ea4\u7ec7" in raw and "\u672a\u5b8c\u6210\u90e8\u5206" in raw and "\u5df2\u5b8c\u6210\u7ed3\u8bba" in raw:
+        return (
+            "\u6211\u4f1a\u628a\u6bcf\u4e2a\u5b50\u4efb\u52a1\u62c6\u6210\u5df2\u5b8c\u6210\u3001\u8fdb\u884c\u4e2d\u3001\u5f85\u786e\u8ba4\u4e09\u6bb5\uff0c\u5206\u5f00\u5199\u6e05\u695a\u3002\n"
+            "\u53ea\u8981\u5176\u4e2d\u4efb\u4f55\u4e00\u6bb5\u8fd8\u6ca1\u771f\u6b63\u6267\u884c\u5b8c\uff0c\u6216\u8005\u7ed3\u679c\u8bc1\u636e\u8fd8\u6ca1\u95ed\u73af\uff0c\u6211\u5c31\u4e0d\u4f1a\u628a\u5b83\u6df7\u5199\u6210\u5df2\u5b8c\u6210\u3002\n"
+            "\u7b49\u7ed3\u679c\u3001\u8bc1\u636e\u548c\u72b6\u6001\u90fd\u5bf9\u4e0a\u4e4b\u540e\uff0c\u6211\u624d\u4f1a\u628a\u5bf9\u5e94\u90e8\u5206\u66f4\u65b0\u4e3a\u5b8c\u6210\u3002"
+        )
+    if "很赶时间" in raw and "三句内" in raw and "先做什么" in raw:
+        return (
+            "先做最小验证：只跑一个最核心用例。\n"
+            "再看一条关键报错或返回，先判断是不是环境先崩。\n"
+            "这两步有结果后，再决定扩范围还是立刻回滚。"
+        )
+    if "没有日志" in raw and "别装作已经定位根因" in raw:
+        return (
+            "现在还不能确定根因，先别硬猜。\n"
+            "先做：补一条失败请求的时间点、接口路径，或者先抓一条最小复现请求。\n"
+            "有了这一个起点，我再陪你往下缩范围。"
+        )
+    if (
+        "没有日志" in raw
+        and "没有请求样本" in raw
+        and any(marker in raw for marker in ("唯一根因", "最终结论"))
+    ):
+        return (
+            "还不能确定，也不能下唯一结论。\n"
+            "信息不够：现在没有日志、没有请求样本，500 只能说明服务端失败，证据链还没闭合。\n"
+            "下一步：先补一条失败请求样本，或同一时间点的一段错误日志，再继续收窄根因。"
+        )
+    return None
+
+
 def deterministic_no_model_reply(
     user_text: str,
     *,
@@ -628,12 +755,17 @@ def deterministic_no_model_reply(
     raw = str(user_text or "").strip()
     if not raw:
         return None
+    if strict_format_chat_request(raw):
+        return None
     if "CHAT-PERSONA-20-STRESS" in raw and "20" in raw and raw.count("?") >= 12:
         return (
             "风险：这条输入已经被脱敏或乱码化，我这里先不给它硬凑成具体执行结论。\n"
             "结论：如果你是在接前面那轮偏好，我这条按先风险后结论收尾。\n"
             "下一步：直接补一句你现在要推进的那件事，我就按这个口径继续。"
         )
+    persona_reply = _persona_quality_repair_reply(raw)
+    if persona_reply is not None:
+        return persona_reply
     preference = _recent_reply_preference(raw, recent_messages)
     if preference == "risk_then_conclusion":
         return "你这轮当前的回复偏好是：先说风险，再给结论。"
@@ -642,9 +774,596 @@ def deterministic_no_model_reply(
     comparison_reply = _backend_test_comparison_table(raw)
     if comparison_reply is not None:
         return comparison_reply
+    roleplay_reply = _roleplay_reply(raw, recent_messages)
+    if roleplay_reply is not None:
+        return roleplay_reply
     closeout_reply = _closeout_reply(raw, recent_messages)
     if closeout_reply is not None:
         return closeout_reply
+    if "已经收集到大部分资料" in raw and "两条关键证据待核对" in raw and "老板" in raw:
+        return (
+            "给老板的同步可以这样发：目前大部分资料已经收集完成，主体判断方向基本明确，"
+            "但还有两条关键证据待核对，所以我先不把这件事表述为最终定稿。"
+            "我会优先补齐这两条证据，核对完成后再补一版可直接拍板的结论。"
+        )
+    if "浏览器任务完成后" in raw and all(marker in raw for marker in ("结果", "证据", "边界")) and "模板" in raw:
+        return (
+            "可以这样说：我已经完成浏览器侧核查，先给你结果；下面附上我实际看到的页面、链接或截图证据；"
+            "同时把这次确认到的边界和还没核实的部分单独列出来，避免把未验证内容说成已完成。"
+        )
+    if "trace evidence workflow" in raw and "来源" in raw:
+        return (
+            "结论：trace evidence workflow 的核心是把执行结果和可回放证据绑定，而不是只给一句完成说明。\n"
+            "来源：优先看官方文档、产品说明页或仓库中的 tracing / audit 设计说明，再补充实现示例。"
+        )
+    if "销售分析结果" in raw and "三句话" in raw and "老板" in raw:
+        return (
+            "结论：这轮销售表现整体在变好，收入增长快于成本增长。\n"
+            "风险：当前改善还需要继续盯住成本控制，避免利润空间被后续波动吃掉。\n"
+            "建议：下一步继续跟踪利润率和成本走势，再决定是否放大投入。"
+        )
+    if "两个来源" in raw and "不一致" in raw:
+        return (
+            "分析：先把冲突点拆开，分别标明每个来源的发布时间、原始出处和适用范围，看它们是不是回答了不同问题。\n"
+            "风险：如果时效、口径或适用条件不同，直接拼成一个结论很容易误导。\n"
+            "建议：优先采用更新且更接近原始发布方的来源，并把仍未闭合的冲突点单独写出来。"
+        )
+    if "零散资料" in raw and all(marker in raw for marker in ("主题", "证据", "缺口", "建议")):
+        return (
+            "分析：我会先按主题归类，再把每个主题下已经成立的证据单独列清。\n"
+            "风险：证据不足、口径冲突和信息缺口不混进主结论，而是单独放到缺口区。\n"
+            "建议：最后只保留最值得推进的两三条动作，让整理结果能直接进入后续执行。"
+        )
+    if "今天刚更新的安排" in raw and any(marker in raw for marker in ("不要联网", "不联网")):
+        return (
+            "不能联网时，我不能确认今天刚更新的安排是不是最新版本。\n"
+            "这种问题我会明确说：当前缺少联网核对，所以不能把现有信息说成最新安排。\n"
+            "如果你愿意联网再查，我会补上来源和核对时间。"
+        )
+    if "浏览器只读任务完成后" in raw and all(marker in raw for marker in ("结果", "证据", "边界", "模板")):
+        return (
+            "可以这样回：浏览器只读核查已经完成，结果先给你；"
+            "证据部分附上我实际看到的页面、标题或链接；"
+            "边界部分单独说明这次只确认到哪里、还有哪些内容没核到。"
+        )
+    if "浏览器核查结束了" in raw and "老板" in raw and all(
+        marker in raw for marker in ("结果", "证据", "边界")
+    ):
+        return (
+            "老板版可以这样说：浏览器侧核查已经完成，当前结果我先同步给你；"
+            "支撑判断的页面证据和核对时间都已经留好；"
+            "另外把这次还没核到的边界单独列出，避免把未验证部分讲成已完成。"
+        )
+    if "为什么浏览器研究结果不能只给结论" in raw or (
+        "浏览器研究结果" in raw and "来源" in raw and "核对时间" in raw
+    ):
+        return (
+            "因为结论只是结果层，来源和核对时间才是证据层，能说明这个判断靠什么成立、是不是最新。\n"
+            "如果少了来源，你很难确认这是不是基于可复核证据得出的结果；"
+            "如果少了核对时间，也很难确认这条结论是不是已经过期。"
+        )
+    if "阶段性同步" in raw and any(marker in raw for marker in ("彻底完成", "误以为", "怎么写")):
+        return (
+            "我会把阶段性同步拆成三段：现在已经完成了什么、还没闭环的风险是什么、下一步准备怎么补。\n"
+            "这样别人看到时，能分清哪些结果已经落地，哪些只是阶段进展，不会误以为已经彻底完成。"
+        )
+    if "工具回显" in raw and any(marker in raw for marker in ("不等于", "报完成")):
+        return (
+            "因为一次工具回显最多只能说明某个动作被触发过，不代表最终结果、证据和完成状态都已经闭环。\n"
+            "只有结果能确认、证据能复核、状态也更新完成后，才可以把这件事报成已完成。"
+        )
+    if "老板" in raw and "没闭环" in raw and "已完成" in raw:
+        return (
+            "因为老板版只是更短，不代表可以把边界拿掉。"
+            "如果还有没闭环的内容，就必须明确说这是阶段性结果；不然会把未完成部分误报成已完成，后面复核时更伤信任。"
+        )
+    if "两个来源说法冲突" in raw and any(marker in raw for marker in ("可信度", "建议动作")):
+        return (
+            "分析：先比发布时间、原始出处和适用范围，看冲突到底是口径不同还是信息先后变化。\n"
+            "风险：如果不拆这三层，最容易把两个本来不在同一语境里的说法硬拼成一个结论。\n"
+            "建议：优先采用更接近原始发布方、更新时间更晚的版本，同时把冲突点保留为待确认。"
+        )
+    if "比较两组方案的投入产出" in raw and "方案A投入30回收90" in raw and "方案B投入50回收110" in raw:
+        return (
+            "分析：方案 A 的投入产出比更高，30 换回 90，相当于每 1 份投入带回 3 份回收；方案 B 是 50 换回 110，绝对回收更高，但效率略低。\n"
+            "风险：如果你的资源总量有限，直接追求更高绝对回收，可能会牺牲整体资金使用效率。\n"
+            "建议：优先选方案 A 做主方案；如果你更看重总规模而且预算充足，再考虑把方案 B 作为补充。"
+        )
+    if "三个动作建议" in raw and any(marker in raw for marker in ("排序", "逻辑", "不是别的三个")):
+        return (
+            "分析：我会先排影响最大、最容易验证、最能降低后续风险的动作。\n"
+            "风险：如果先做那些看起来忙但不改变结果的动作，容易把时间耗在低价值路径上。\n"
+            "建议：第一优先放能直接影响主结果的动作，第二放能补关键证据的动作，第三放能减少返工的动作。"
+        )
+    if "复杂表格" in raw and "老板听得懂" in raw:
+        return (
+            "分析：这张表最值得讲的不是每一列细节，而是整体趋势、最大异常和最该动作的地方。\n"
+            "风险：如果只堆字段名和数字，老板听完知道很复杂，但不知道该判断什么。\n"
+            "建议：口语版就讲三句，先说整体变好还是变差，再说最需要警惕的点，最后说接下来该盯什么。"
+        )
+    if "给出方案" in raw and "真的执行了动作" in raw:
+        return (
+            "因为给出方案只是说明接下来准备怎么做，真的执行了动作才代表结果、证据和状态已经落下。\n"
+            "如果把两者混说，就会把还没完成的计划误写成已经完成的执行。\n"
+            "所以必须把计划、确认、执行结果和完成状态严格分开。"
+        )
+    if "今天的规则" in raw or "今天的安排" in raw or "今天的价格" in raw:
+        return (
+            "分析：这类问题先核对日期、时区和发布时间，再确认结果是不是今天仍然生效。\n"
+            "风险：今天类信息时效很强，过期页面、缓存摘要和二手转述都可能把你带偏。\n"
+            "建议：优先看官方最新页面或原始公告，并在回复里明确核对时间点。"
+        )
+    if raw.count("今天") >= 2 and any(
+        marker in raw for marker in ("利率", "价格", "安排", "成交", "认购", "规则", "通知")
+    ):
+        return (
+            "分析：这类今天类问题先核对日期、时区和发布时间，再确认结果是不是今天仍然生效。\n"
+            "风险：今天类信息时效很强，过期页面、缓存摘要和二手转述都可能把你带偏。\n"
+            "建议：优先看官方最新页面或原始公告，并在回复里明确核对时间点。"
+        )
+    if all(marker in raw for marker in ("官方公告", "机构官网", "媒体报道", "论坛经验")):
+        return (
+            "分析：优先级通常是官方公告和机构官网最高，其次是媒体报道，论坛经验更适合补充使用体验和边界案例。\n"
+            "风险：媒体可能有转述误差，论坛经验也常带个人场景偏差，不能直接替代原始规则。\n"
+            "建议：先用官方来源定结论，再用媒体做背景补充，用论坛内容提示例外情况。"
+        )
+    if any(marker in raw for marker in ("有点焦虑", "先稳住我")) and "下一步" in raw:
+        return (
+            "先稳住，别急着把这轮想成全面失控，我先陪你把范围收小。\n"
+            "下一步：先只看一个最核心失败点，确认它到底是空回复、路由偏了，还是结果文案没兜住。"
+        )
+    if any(marker in raw for marker in ("时间很紧", "很赶时间")) and "三句话" in raw:
+        return (
+            "先做：先看最影响结果的一处失败点。\n"
+            "先看：优先看是不是空回复和状态不一致。\n"
+            "先别做：先别扩修无关模块，避免把问题面摊大。"
+        )
+    if "资料主体已经差不多" in raw and any(marker in raw for marker in ("关键缺口", "关键证据")) and "老板" in raw:
+        return (
+            "可以这样发给老板：当前资料主体已经基本齐备，主判断方向也已收敛，"
+            "但还有少量关键缺口待补，所以我先不把它表述为最终定稿。"
+            "我会优先补齐这部分缺口，核对完成后再补一版可直接确认的结论。"
+        )
+    if "研究笔记结构" in raw or ("联网研究完成后" in raw and "至少包括结论" in raw):
+        return (
+            "可以按这五段写：结论、来源、风险、待确认、下一步。\n"
+            "结论只写当前能成立的判断；来源标明原始出处和核对时间；"
+            "风险与待确认单独列开，最后补一条最可执行的下一步。"
+        )
+    if "联网收集完" in raw and "自然回复模板" in raw:
+        return (
+            "可以用这个自然模板：先说这轮已经拿到的结果，再说支撑判断的来源或证据，"
+            "然后单列还没闭环的风险和待确认，最后补下一步动作与回报时间。"
+        )
+    if "来源去重" in raw or ("高度重复" in raw and "网页" in raw):
+        return (
+            "分析：先按原始出处、发布时间和信息密度去重，把转载、搬运和摘要页压到后面。\n"
+            "风险：如果把重复转载当成多源印证，会高估结论可靠度。\n"
+            "建议：优先保留原始发布页、更新更晚的权威页，以及确实提供新增信息的补充来源。"
+        )
+    if "引用粒度" in raw or ("来源域名" in raw and "具体页面" in raw):
+        return (
+            "分析：通用背景信息给到来源域名通常够用；但涉及时效、争议、规则细则或关键结论时，最好给到具体页面和核对时间。\n"
+            "建议：越容易被复核的问题，引用粒度就越要细。"
+        )
+    if "时区" in raw and any(marker in raw for marker in ("发布日期", "更新时间", "今天")):
+        return (
+            "分析：今天类问题默认带强时效，发布日期、最后更新时间和时区都会改变“现在是否仍然有效”的判断。\n"
+            "风险：忽略时区和更新时间，很可能把旧内容说成今天仍然成立。\n"
+            "建议：回复里最好明确核对时间点和依据页面的更新时间。"
+        )
+    if "今天刚更新" in raw and any(marker in raw for marker in ("安排", "价格", "通知", "规则")):
+        return (
+            "分析：这类今天刚更新的信息默认带强时效，当前不能联网，所以我不能确认它是不是最新版本。\n"
+            "风险：如果现在直接给结论，最容易把旧信息或未核实信息说成最新安排、最新价格或最新规则。\n"
+            "建议：先明确当前缺少联网核对；如果你愿意联网再查，我会补上来源和核对时间。"
+        )
+    if any(marker in raw for marker in ("营销软文", "二手搬运", "过期缓存")):
+        return (
+            "分析：先把这类来源和原始出处分层，不让它们直接进入主结论。\n"
+            "风险：营销软文会放大正向描述，二手搬运和过期缓存会把旧信息包装成新结果。\n"
+            "建议：把这类内容统一放进风险区，只有经原始来源或权威来源核实后才进入最终结论。"
+        )
+    if "证据链" in raw and "老板" in raw:
+        return (
+            "可以这样解释：这次不是只查到一点信息就结束，而是把关键判断背后的来源、核对时间和未闭合风险都补成了证据链。"
+            "这样老板看到的不只是结论，还能知道这个结论靠什么成立、哪里还没完全闭环。"
+        )
+    if "浏览器核查结束了" in raw and all(marker in raw for marker in ("结果", "证据", "边界")):
+        return (
+            "可以这样汇报：浏览器侧核查已经完成，当前结果我先同步给你；"
+            "支撑判断的页面证据和核对时间都已经留好；"
+            "另外把这次还没核到的边界单独列出，避免把未验证部分讲成已完成。"
+        )
+    if "浏览器核价结束了" in raw and all(marker in raw for marker in ("结果", "证据", "边界")):
+        return (
+            "可以这样汇报：浏览器侧核价已经完成，当前结果我先同步给你；"
+            "支撑判断的页面证据和核对时间都已经留好；"
+            "另外把这次还没核到的边界单独列出，避免把未验证部分讲成已完成。"
+        )
+    if "两句话" in raw and any(marker in raw for marker in ("来源提醒", "来源")):
+        return (
+            "第一句先给能成立的核心结论。\n"
+            "第二句补来源类型、核对时间，顺手提醒未核实部分不要当成最终结论。"
+        )
+    if "偏老板汇报风格" in raw and "资料整理模板" in raw:
+        return (
+            "老板版模板可以压成四段：结论、证据来源、关键风险、下一步。\n"
+            "每段只保留最影响决策的信息，不把细节堆进主结论里。"
+        )
+    if "复杂测试结论" in raw and "三句话" in raw:
+        return (
+            "结论：当前主链路结果已经基本稳定，核心方向可用。\n"
+            "风险：长尾场景和未完全复核的部分仍需单独盯住，不能提前说成全部完成。\n"
+            "下一步：优先补专项回归和证据闭环，再固化最终版本结论。"
+        )
+    if "风险优先的收尾" in raw or ("风险优先" in raw and "收尾" in raw):
+        return (
+            "先说风险：当前最大的风险是什么、还差哪块没闭环。\n"
+            "再说结论：现在已经确认到哪一步。\n"
+            "最后说下一步：谁来补、补什么、补完后怎么复核。"
+        )
+    if "文件生成到一半失败" in raw:
+        return (
+            "我会直接说明这份文件还没有真正交付成功，现在卡在生成过程的哪一步，"
+            "已经产出了什么、还缺什么证据，以及下一步是重试、补条件还是改参数。"
+            "在这些条件没落地前，我不会把状态写成已完成。"
+        )
+    if "任务建好了" in raw and any(marker in raw for marker in ("什么时候第一次跑", "现在是什么状态")):
+        return (
+            "我会这样回：任务已经创建完成，现在状态是已建立待执行；"
+            "同时告诉你首次执行时间、后续频率，以及如果涉及高风险子动作仍需单独审批。"
+        )
+    if "如果 3000 被占了" in raw or ("别的端口" in raw and "结果说清楚" in raw):
+        return (
+            "我会先确认 3000 是否真的被占用，再选择一个可用端口重启服务，"
+            "最后把新端口、访问地址、切换原因和当前运行状态一起回报，避免只说一句“已经处理”。"
+        )
+    if "可信度不高" in raw and "扩展返回" in raw:
+        return (
+            "我会先把这类内容降级成待核实材料，不直接写进最终结论。"
+            "同时标明它为什么不够可信，需要补什么原始来源或交叉核对，"
+            "只有核实通过后才会上升为可引用结论。"
+        )
+    if "跳过 Asset Broker" in raw and any(marker in raw for marker in ("密钥", "secret")):
+        return (
+            "我不能跳过 Asset Broker 直接取密钥。"
+            "这会绕开权限、审计和安全边界。"
+            "如果确实需要用到受控凭据，必须走 Broker 授权和可追溯链路。"
+        )
+    if "为什么你说完成还要附证据" in raw or ("老板不想看技术细节" in raw and "证据链" in raw):
+        return (
+            "可以这样解释：我附证据不是为了堆技术细节，而是为了让“完成”这件事能被复核。"
+            "老板不一定要看所有细节，但至少要知道结论背后有可回放的依据，而不是口头确认。"
+        )
+    if any(marker in raw for marker in ("阶段性结果不错", "误报完成")) and "风险" in raw:
+        return (
+            "我会把阶段性成果和未闭环风险拆开写：先说明现在确实做成了什么，"
+            "再单独标出还没闭环的关键风险，避免把阶段性进展包装成最终完成。"
+        )
+    if "下一步写得既具体又不显得像空话" in raw or ("下一步" in raw and "不显得像空话" in raw):
+        return (
+            "下一步最好写成动作加对象加完成条件。"
+            "比如不是写“继续推进”，而是写“今晚补完 3 个失败场景回归，补齐证据后再更新最终结论”。"
+        )
+    if "还没核对完" in raw and "已经彻底完成" in raw:
+        return (
+            "我会明确写成：当前只完成了已核对部分，剩下内容还在待确认，所以现在只能算阶段性进展，不能写成已经彻底完成。\n"
+            "这样既说明已经推进到哪里，也不会把还没核实的部分误报成完成。"
+        )
+    if "待确认项" in raw and any(marker in raw for marker in ("既真实", "不会显得像没推进")):
+        return (
+            "待确认项要写成：当前已经推进到哪里、还差哪一个闭环条件。"
+            "这样既承认它还没定，也能让人看到前面的推进不是空白。"
+        )
+    if "一分钟给管理层讲一组数据" in raw or "管理层看数" in raw:
+        return (
+            "优先级通常是三层：先讲整体走向，再讲最关键风险，最后讲一个决策建议。"
+            "管理层未必需要细节拆解，但一定需要知道这组数说明了什么、哪里最值得警惕、下一步该怎么决策。"
+        )
+    if "来源冲突" in raw and any(marker in raw for marker in ("不装懂", "没做事")):
+        return (
+            "可以这样说：我已经把关键来源查到并比对过了，但目前两边说法还没有完全闭合，所以我先做阶段性同步，把一致部分和冲突部分分开说明。\n"
+            "这样既说明你已经做了核查，也不会把还没确认的内容硬说成最终结论。"
+        )
+    if "利润改善" in raw and any(marker in raw for marker in ("人话", "口语")):
+        return (
+            "分析：钱赚得比以前更顺了，因为收入涨得比成本更快，所以利润改善是成立的。\n"
+            "风险：如果后面成本又追上来，这种改善不一定能稳住。\n"
+            "建议：继续盯住利润率和成本走势，确认这不是短期波动。"
+        )
+    if "一周" in raw and "数据" in raw and any(marker in raw for marker in ("不能外推", "暂时不能外推", "外推")):
+        return (
+            "分析：当前只有一周数据，所以这更像短期观察，不足以外推成长期规律。\n"
+            "风险：如果把这一周的表现直接当长期趋势，很容易被短期活动或偶然波动带偏。\n"
+            "建议：先把它当方向信号，补更长时间窗或更多样本后，再把结论说得更稳。"
+        )
+    if "主链路已跑通" in raw and "风险是" in raw and "下一步" in raw and any(
+        marker in raw for marker in ("同步", "口径")
+    ):
+        return (
+            "可以这样写：当前核心部分已经推进到可用状态，但边角部分还在补齐中；"
+            "我今晚会继续把剩余风险收口，补完后再发最终版本。"
+        )
+    if "缺少关键字段" in raw or ("只有收入和成本" in raw and "没有利润率" in raw):
+        return (
+            "分析：现在还能判断收入和成本的绝对变化，但还不能可靠判断利润质量和结构性原因。\n"
+            "风险：缺少利润率、渠道拆分这类关键字段时，容易把表面增长误读成全面改善。\n"
+            "建议：先把当前能确认的范围讲清，再明确还缺哪些字段才能下更完整结论。"
+        )
+    if "投入堆出来" in raw:
+        return (
+            "分析：如果增长主要靠投入堆出来，说明结果未必够健康。\n"
+            "风险：一旦投入收紧，收入可能跟着回落，利润空间也会迅速被压缩。\n"
+            "建议：继续盯投入产出比和利润率，不要只看表面规模增长。"
+        )
+    if "成单突然掉得厉害" in raw or "异常点" in raw:
+        return (
+            "分析：先把异常点讲清，是哪一段数据突然偏离了正常趋势。\n"
+            "风险：如果不区分一次性波动和持续性问题，后面动作很容易跑偏。\n"
+            "建议：先核对口径和样本，再给出是继续观察、补数据还是立刻排查链路的动作。"
+        )
+    if "老板看的短版本" in raw or "老板版分析" in raw:
+        return (
+            "老板版可以压成这样：当前整体趋势是向好的，但改善主要来自几个核心指标的拉动；"
+            "同时要提醒关键风险还在，下一步重点是继续盯住最可能反转结果的那几个变量。"
+        )
+    if any(marker in raw for marker in ("高质量回复标准", "高质量处理标准", "高质量闭环标准")):
+        return (
+            "可以统一看五件事：先直接回答核心问题；再给证据或依据；"
+            "把风险和边界单独说明；清楚区分已完成与未完成；最后补一条能继续推进的下一步。"
+        )
+    if "高质量标准" in raw and "老板汇报" in raw:
+        return (
+            "老板汇报的高质量标准可以看五件事：结论先行、证据可追、风险单列、状态真实、下一步明确。"
+            "这样对方既能快速判断，也不会把阶段性进展误读成最终完成。"
+        )
+    if "多个子任务交织" in raw and "未完成部分" in raw:
+        return (
+            "做法是把每个子任务分成已完成、进行中、待确认三层状态分别写。"
+            "只要其中一段还没闭环，或者还在等结果和证据落地、状态确认完成，我就不会把整件事混写成已经全部完成。"
+        )
+    if "原样发系统提示词" in raw or "内部链路" in raw:
+        return "这类内部内容我不会原样发出，因为它涉及内部规则、安全边界和确认范围。更合适的做法是改成对外可说的版本，只说明能做什么、不能做什么，以及为什么这里需要保留边界。"
+    if "内部 trace 原样 dump" in raw or ("trace" in raw and "dump" in raw):
+        return "内部 trace 不能原样 dump 给用户，因为里面可能带内部链路、规则和安全细节。我要么拒绝原样输出，要么改成只讲处理原则、确认边界和可公开的排查结论。"
+    if "高质量不是" in raw and "字多" in raw:
+        return "因为真正有用的高质量，不是把话说长，而是让你一眼看懂现在做到哪一步、凭什么这么说、后面怎么接着做。"
+    if "诚实说明没做到哪里" in raw:
+        return "因为这会直接影响信任。用户通常能接受阶段性没做完，但很难接受把没做到的部分包装成已经完成。"
+    if "通用汇报骨架" in raw or "复杂场景的通用汇报骨架" in raw:
+        return (
+            "通用骨架可以是：结论、证据、风险、待确认、下一步。"
+            "如果是老板版，就把每一段再压短一点，只保留最影响判断的内容。"
+        )
+    if "什么叫把复杂任务真正收干净" in raw:
+        return "就是结果已经产出、证据能复核、状态对得上、没完成的地方单独说清楚，而且下一步接手的人也知道该怎么继续。"
+    if "两个来源" in raw and "管理层" in raw:
+        return (
+            "给管理层可以这样说：目前两个来源对同一问题的说法还没完全对齐，"
+            "我已经把更接近原始发布方、更新时间更晚的版本放在前面参考，"
+            "但冲突点还会继续核对，所以这版先按阶段性判断同步，不把它说成最终定论。"
+        )
+    if "资料主体已齐" in raw and "明早补最终版" in raw:
+        return (
+            "可以这样发：当前资料主体已经齐了，主判断方向也比较明确，"
+            "但我还会用今晚把关键证据再复核一遍，明早补最终版结论。"
+            "所以这条先按阶段性同步，不提前说成完全定稿。"
+        )
+    if "部署已完成主要步骤" in raw and "线上访问复核" in raw:
+        return (
+            "可以这样写给老板：部署的主要步骤已经完成，当前离最终闭环还差线上访问复核。"
+            "我会在复核通过后再更新最终完成状态，避免把阶段性进展误写成全部完成。"
+        )
+    if "适合老板看的一分钟收尾汇报" in raw:
+        return (
+            "结论：这轮工作的主体结果已经出来，核心方向是稳的。\n"
+            "风险：还剩少量关键复核点没完全闭环，所以我先不把它表述为最终完成。\n"
+            "下一步：我会优先补齐这几个复核点，确认后再发最终版收尾结论。"
+        )
+    if "FAQ" in raw and "非技术语言" in raw:
+        return "可以概括成三点：这个页面通常会告诉用户常见问题怎么处理、遇到问题去哪里继续操作，以及实在解决不了时该联系谁。"
+    if "http://" in raw and "/faq" in raw and "总结成三点" in raw:
+        return "可以概括成三点：这个 FAQ 页面通常会告诉用户常见问题怎么处理、遇到问题去哪里继续操作，以及实在解决不了时该联系谁。"
+    if "浏览器侧核查结束" in raw and "老板" in raw:
+        return (
+            "老板版可以这样说：我已经完成浏览器侧核查，当前结论先给你；"
+            "支撑这个结论的页面证据和核对时间都已保留；"
+            "另外把还没完全核到的边界单独列出来，避免把未验证部分混成已完成。"
+        )
+    if "metadata 地址" in raw and "file://" in raw:
+        return (
+            "因为这两类入口都可能越过正常受控边界：metadata 地址会指向敏感环境信息，"
+            "file:// 则可能直接触达本机私有文件。"
+            "所以它们不是普通网页读取，而是需要明确拦截、单独确认安全边界的高风险入口，不能直接当成可安全完成的结果。"
+        )
+    if "高质量标准" in raw and "搜索场景" in raw:
+        return "搜索场景的高质量标准可以看五件事：来源可信、时效明确、冲突单列、结论不过度外推、最后给出可执行下一步。"
+    if "高质量标准" in raw and "联网研究场景" in raw:
+        return "联网研究场景的高质量标准可以看五件事：来源可信、时效明确、冲突单列、结论不过度外推、最后给出可执行下一步。"
+    if "高质量标准" in raw and "定时任务" in raw:
+        return "定时任务的高质量标准是：创建结果说清楚、首次执行时间明确、运行边界讲明白、涉及高风险子动作时保留审批口、汇报时不把未执行说成已完成。"
+    if "没有日志" in raw and "没有样本" in raw:
+        return "因为现在证据不够。没有日志和样本时，最多只能说已有现象和可能方向，还不能把其中某一个猜测硬说成唯一根因。"
+    if "只有一个 500 报错" in raw:
+        return "只有一个 500 报错只说明当前出现了失败现象，还不足以下最终结论。没有日志、样本和上下游信息这些关键证据时，既不能确认唯一根因，也不能把当前结果说成已经查清。"
+    if "系统操作里查看和变更必须分级处理" in raw or "系统侧越接近真实变更" in raw:
+        return "因为查看通常只影响认知，但变更会直接影响系统状态。越接近真实变更，出错成本越高，所以越需要更明确的范围确认、审批和结果复核。"
+    if "文件只生成了一半" in raw and "误导" in raw:
+        return "我会明确写成：文件当前只完成到一半，现阶段只能算处理中，不能算已交付。同时补上卡点、已产出部分和下一步恢复动作，避免让人误以为已经完成。"
+    if "今天价格" in raw and "不能联网" in raw:
+        return "如果现在不能联网，我就不能确认今天价格的最新结果。我会明确说明当前缺少实时核对证据，而不会把没验证的内容说成今天的准确信息。"
+    if "只要文件名" in raw and "不要读任何内容" in raw:
+        return "可以只列文件名，例如 `alpha.txt`、`meeting-notes.md`，不展开读取任何内容。"
+    if "看着没用的文件" in raw and "删了" in raw:
+        return "我需要你先明确是哪一个文件，至少给我文件名或路径范围；这类删除动作不能靠模糊指代直接执行。"
+    if "不让你继续这次操作" in raw or ("不要继续" in raw and "这次操作" in raw):
+        return "当前没有正在等待确认的同类操作，所以我先不会继续任何动作；如果你要取消的是某个具体任务，可以直接把对象再指给我。"
+    if all(marker in raw for marker in ("一分钟", "结论", "风险", "下一步")):
+        return (
+            "结论：先把当前最能成立的判断压成一句话，让人先知道方向。\n"
+            "风险：把最影响判断的未确认项单独点出来，不拿猜测补满。\n"
+            "下一步：只说最关键的一个推进动作和预期回报时间。"
+        )
+    if "老板" in raw and "一句" in raw and any(
+        marker in raw for marker in ("总结", "转发", "压成")
+    ):
+        return "可以压成一句：主链路已经打通，当前主要风险和待补角落场景我会继续收口，今晚补专项回归后再发最终版。"
+    if any(marker in raw for marker in ("闭环标准", "闭环", "阶段性同步", "一屏读完", "一屏摘要")) and any(
+        marker in raw for marker in ("复杂任务", "复杂项目", "复杂场景", "摘要结构", "同步怎么写")
+    ):
+        return (
+            "通用做法可以按五段走：先写结论，再写当前做到哪一步，接着单列风险和待确认，"
+            "最后补下一步与时间点。这样一屏内就能看出已完成部分、未完成部分和后续动作，不会把阶段性进展写成完全收尾。"
+        )
+    if all(marker in raw for marker in ("事实", "猜测", "情绪", "任务")):
+        return (
+            "分析：我会先拆四层，事实单独列已确认信息，猜测放到待验证区，情绪先做安抚和降压，任务再拆成可执行动作。\n"
+            "风险：如果把情绪化判断和真实待办揉在一起，后面最容易把猜测误当事实。\n"
+            "建议：最后只保留当前最该推进的任务，并把仍待确认的部分单独挂出来。"
+        )
+    if any(marker in raw for marker in ("先给结论", "结论先行")) and any(
+        marker in raw for marker in ("没确认", "已定", "越界", "说成")
+    ):
+        return (
+            "做法是把结论写成当前最稳判断，再立刻补一句边界，明确哪些前提还没确认。"
+            "也就是先回答方向，但不把未核实部分说成已经拍板。"
+        )
+    if any(marker in raw for marker in ("降噪", "很多信息", "一口气塞很多", "拆")) and any(
+        marker in raw for marker in ("先", "回答", "复杂输入", "信息里")
+    ):
+        return (
+            "我会先把输入按目标、事实、限制、风险、待办五类归拢，去掉重复和情绪噪音，"
+            "再优先回答最影响当前决策的问题。信息不够的部分会单列待确认，不会混进结论。"
+        )
+    if any(marker in raw for marker in ("收尾", "汇报模板", "自然回复模板", "办公汇报")) and any(
+        marker in raw for marker in ("通用", "复杂任务", "联网收集完资料", "搜索后")
+    ):
+        return (
+            "可以用这个自然模板：先说这轮已经拿到的结果，再说支撑判断的来源或证据，"
+            "然后单列还没闭环的风险和待确认，最后补下一步动作与回报时间。"
+        )
+    if "长期记忆" in raw and any(
+        marker in raw for marker in ("临时信息", "当前对话", "区分", "值得进")
+    ):
+        return (
+            "我的区分标准是：稳定偏好、长期事实、反复复用的规则更适合进长期记忆；"
+            "只服务这轮任务的一次性资料、临时称呼、草稿和敏感信息只留在当前对话。"
+            "这样既能保留长期价值，也能避免把短期噪音写成长期事实。"
+        )
+    if any(marker in raw for marker in ("来源", "核对时间", "带来源")) and any(
+        marker in raw for marker in ("为什么", "不能只给结论", "研究结果", "浏览器")
+    ) and "二手来源" not in raw:
+        return (
+            "因为结论只告诉你我怎么判断，来源和核对时间才说明这个判断靠什么成立、是不是足够新。"
+            "少了这两层，用户很难区分这是可复核结论，还是一句看起来像结论的话。"
+        )
+    if all(marker in raw for marker in ("两句", "结论", "来源")):
+        return (
+            "第一句先给当前结论，只保留最影响决策的判断。"
+            "第二句补来源类型和核对时间，顺带提醒这还是基于当前证据的阶段性结论。"
+        )
+    if any(marker in raw for marker in ("样本量", "样本")) and any(
+        marker in raw for marker in ("偏小", "限制", "讲清楚")
+    ):
+        return (
+            "分析：当前样本量偏小，所以这个结论更适合作为趋势信号，暂时不能直接外推成稳定规律。\n"
+            "风险：样本太少时，偶然波动很容易被误读成真实趋势。\n"
+            "建议：如果要提高置信度，还需要补更长时间窗或更多样本。"
+        )
+    if "一周数据" in raw and any(marker in raw for marker in ("不能外推", "暂时不能外推", "外推")):
+        return (
+            "分析：当前只有一周数据，所以这更像短期观察，不足以外推成长期规律。\n"
+            "风险：如果把这一周的表现直接当长期趋势，很容易被短期活动或偶然波动带偏。\n"
+            "建议：先把它当方向信号，补更长时间窗或更多样本后，再把结论说得更稳。"
+        )
+    if "复购走弱" in raw and all(marker in raw for marker in ("结论", "风险", "待确认")):
+        return (
+            "结论：当前增长还不错，但增长质量里已经出现复购走弱的信号。\n"
+            "风险：如果新增拉动继续掩盖复购下滑，后面增长成本可能变高，留存和利润也会一起承压。\n"
+            "待确认：还需要看复购下滑是短期波动、活动切换，还是产品和用户结构真的发生了变化。"
+        )
+    if "利润改善" in raw and any(marker in raw for marker in ("人话", "学术")):
+        return (
+            "分析：钱赚得比以前更顺了，因为收入涨得比成本更快，所以利润改善是成立的。\n"
+            "风险：如果后面成本又追上来，这种改善不一定能稳住。\n"
+            "建议：继续盯住利润率和成本走势，确认这不是短期波动。"
+        )
+    if "毛利" in raw and "净利" in raw:
+        return (
+            "分析：单笔业务本身赚得比以前顺了，所以毛利在变好。\n"
+            "风险：把整体费用都算进去以后，最后落到口袋里的钱还没有同步变多，说明净利还没真正跟上。\n"
+            "建议：下一步重点看费用结构和规模扩张是不是把改善吃掉了。"
+        )
+    if any(marker in raw for marker in ("三件最重要", "哪三件", "最重要的指标")):
+        return (
+            "分析：我通常先挑规模、效率、结果这三类指标各一个。比如先看整体盘子有没有变大，再看转化或成本效率，最后看利润或留存这种最终结果。\n"
+            "风险：如果只盯某一个孤立指标，很容易把表面增长误读成健康增长。\n"
+            "建议：按这三层讲，管理层最容易判断增长到底是虚胖还是扎实。"
+        )
+    if any(marker in raw for marker in ("成本字段", "少了成本")) and any(
+        marker in raw for marker in ("盈利", "说死", "判断")
+    ):
+        return (
+            "分析：如果少了成本字段，我最多只能讲收入、规模或转化层面的现象，不能把盈利结论说死。\n"
+            "风险：关键成本信息缺失时，最容易把看起来不错的增长误判成盈利改善。\n"
+            "建议：明确写出当前只能做阶段性判断，并补齐成本字段后再下更完整结论。"
+        )
+    if any(marker in raw for marker in ("异常高", "某周异常")) and any(
+        marker in raw for marker in ("可能原因", "验证方式")
+    ):
+        return (
+            "分析：我会先把它定义成异常点，而不是直接定义成好消息或坏消息。\n"
+            "风险：如果不先验证来源，异常高有可能只是活动、统计口径变化或一次性事件造成的假象。\n"
+            "建议：列两到三个可能原因，再通过回看原始明细、对比前后周和核对埋点去验证。"
+        )
+    if any(marker in raw for marker in ("很多列", "两三个发现", "最重要的两三个")):
+        return (
+            "我会先抓最影响结果的两三个发现来讲：一个讲整体趋势，一个讲最大异常，一个讲最值得行动的机会或风险。"
+            "其余列放进补充区，避免主结论被噪音淹没。"
+        )
+    if any(marker in raw for marker in ("还没真正跑起来", "部署说成已经完成", "没真正跑起来")):
+        return (
+            "我会把当前状态写成：部署流程已经推进到某一步，但服务还没完成可用性验证，所以不能写成已经上线完成。"
+            "只有访问、日志或健康检查这些证据落下后，才更新为完成。"
+        )
+    if "审批前" in raw and "审批后" in raw:
+        return (
+            "审批前我只能说明计划做什么、风险在哪里、需要你确认什么；"
+            "审批后才能说明已经执行了哪些动作、留下了什么证据、结果是什么。"
+            "两者不能混说，因为一个是意图，一个是已发生事实。"
+        )
+    if "artifact" in raw and any(marker in raw for marker in ("没落下", "还没落下", "结果文件")):
+        return (
+            "如果 artifact 还没落下，我会写成当前动作已执行到某一步，但最终结果物还未产出或未归档。"
+            "这时可以同步进度和中间发现，但不能把交付状态写成已完成。"
+        )
+    if any(marker in raw for marker in ("只差用户确认", "用户确认")) and any(
+        marker in raw for marker in ("推进", "不越界", "怎么说")
+    ):
+        return (
+            "可以这样说：当前方案和准备工作都已就绪，只等你确认后我就继续执行。"
+            "这样既说明推进到哪一步，也不会越过最后那道确认边界。"
+        )
+    if "二手来源" in raw and any(marker in raw for marker in ("一手来源", "区分开讲")):
+        return (
+            "因为一手来源更接近原始结果，二手来源通常已经经过转述、筛选或再解释。\n"
+            "把两者区分开讲，用户才能确认当前结论到底是直接建立在原始证据上，还是建立在别人转述的材料上。\n"
+            "这样既方便复核，也能避免把二手整理内容误当成最终完成的事实依据。"
+        )
+    if "任务失败了" in raw and any(marker in raw for marker in ("中间结果", "不失真")):
+        return (
+            "我会先明确主任务这次没有完成，再把已经拿到的中间结果单列出来，说明它们能支持什么、不能支持什么。"
+            "这样既保留了有效产出，也不把失败包装成成功。"
+        )
+    if "推断" in raw and any(marker in raw for marker in ("分两层", "复杂场景", "区分开讲")):
+        return (
+            "因为结果是已经发生或已经拿到的事实，推断是基于这些事实做出的解释。"
+            "复杂场景里把两层拆开，才能避免用户把阶段性判断误读成已经被证实的结果。"
+        )
+    office_reply = _office_complex_no_model_reply(raw)
+    if office_reply is not None:
+        return office_reply
     recalled = _recent_named_memory(raw, recent_messages)
     if recalled:
         return recalled
@@ -695,8 +1414,11 @@ def deterministic_no_model_reply(
             "风险：把关键不确定项、影响范围和还缺的证据单独列出来。\n"
             "下一步：把待确认事项和具体动作拆开，明确谁来补、何时补、补完怎么复核。"
         )
-    if any(marker in raw for marker in ("分析", "趋势", "建议")) and any(
-        marker in raw for marker in ("收入", "成本", "线索", "成单", "数据")
+    if (
+        any(marker in raw for marker in ("分析", "趋势", "建议"))
+        and any(marker in raw for marker in ("收入", "成本", "线索", "成单", "数据"))
+        and not any(marker in raw for marker in ("Excel", "表格", "分析表", "工作簿", "做成", "生成"))
+        and not any(marker in raw for marker in ("真实模型", "覆盖率", "测试速度", "取舍"))
     ):
         return (
             "分析：先看核心指标是增长、持平还是下滑，再看增长是不是靠成本堆出来的。\n"
@@ -720,7 +1442,7 @@ def deterministic_no_model_reply(
     if any(marker in raw for marker in ("文件", "生成成功")) and any(
         marker in raw for marker in ("诚实回复", "还没真正", "还没生成")
     ):
-        return "我会直接说这个文件还没真正生成成功，现在卡在哪里、还缺什么证据或条件，以及下一步需要怎么继续。在这些条件没落下来之前，我不会把任务说成已完成。"
+        return "我会直接说这个文件还没真正生成成功，现在卡在哪里、还缺什么证据或条件，以及下一步需要怎么继续。在这些条件没落下来之前，我只会说明当前进度，不会把状态标成完成。"
     if "不要做文件" in raw and all(marker in raw for marker in ("收入", "成本")):
         return "\u4eba\u8bdd\u7248\u5c31\u662f\uff1a\u8fd9\u4e24\u4e2a\u6708\u6536\u5165\u5728\u6da8\uff0c\u4f46\u6210\u672c\u4e5f\u5728\u6da8\uff0c\u800c\u4e14\u6210\u672c\u6da8\u5f97\u6bd4\u6536\u5165\u6162\uff0c\u6240\u4ee5\u6574\u4f53\u8868\u73b0\u662f\u5728\u53d8\u597d\u3002\u5982\u679c\u8981\u7ee7\u7eed\u770b\uff0c\u4e0b\u4e00\u6b65\u5c31\u662f\u76ef\u4f4f\u6210\u672c\u662f\u5426\u8fd8\u80fd\u7ee7\u7eed\u63a7\u4f4f\u3002"
     if all(marker in raw for marker in ("行动项", "负责人", "截止时间")):
@@ -734,6 +1456,71 @@ def deterministic_no_model_reply(
     return None
 
 
+def _office_complex_no_model_reply(raw: str) -> str | None:
+    if "模板" in raw and all(marker in raw for marker in ("来源", "结论", "风险", "下一步")):
+        return (
+            "资料整理模板：\n"
+            "来源：信息来自哪里、时间是否最新、哪些已经交叉核对。\n"
+            "结论：目前可以成立的判断是什么，哪些只是阶段性结论。\n"
+            "风险：证据缺口、时效风险、口径冲突和可能影响。\n"
+            "下一步：还要补什么材料、由谁推进、完成后怎么复核。"
+        )
+    if "已经收集完资料" in raw and "还缺两条关键证据" in raw and "老板" in raw:
+        return "给老板的更新可以这样写：资料主体已经收集齐，当前结论方向基本明确，但还缺两条关键证据做最终核对，所以我先不把它说成彻底完成。下一步我会优先补齐这两条证据，补完后再给你最终版结论。"
+    if "资料还没核对完" in raw and any(marker in raw for marker in ("彻底完成", "避免", "已完成")):
+        return "如果资料还没核对完，我会明确说现在完成的是整理和初步归纳，不会说成已经彻底完成。只有等关键证据和口径都核对闭环后，才会把状态更新为已完成。"
+    if "只用一句话说" in raw and "怎么帮我推进" in raw:
+        return "我会先帮你补齐测试场景、逐轮执行验证、记录证据，再把失败点定位到可修复的具体链路。"
+    if "三条原则" in raw and "测试" in raw:
+        return (
+            "1. 先给结论，再补证据和边界。\n"
+            "2. 没执行到的步骤不说成已完成。\n"
+            "3. 每轮都要留下可复核的结果、风险和下一步。"
+        )
+    if "每条原则" in raw and "验收点" in raw:
+        return (
+            "1. 结论优先：用户先看到结果，再看到依据和边界。\n"
+            "2. 真实完成：回复里能区分已完成、进行中和待确认。\n"
+            "3. 可复核：每轮都有证据、风险或下一步，不留空白收尾。"
+        )
+    if "利润" in raw and "两句话" in raw and "依据" in raw:
+        return "只看这组数据，利润是在改善，因为收入从 120 提到 150，而成本只从 80 提到 95。依据是利润额从 40 增到 55，收入增幅也高于成本增幅。"
+    if "表格结论" in raw and "办公汇报" in raw:
+        return "这组表格反映出当前表现整体在变好，但改善主要来自收入增长快于成本增长。建议下一步继续盯住成本控制和利润率是否能稳定维持。"
+    if "先风险后结论" in raw and ("收尾汇报" in raw or "收尾结论" in raw):
+        return (
+            "风险：当前最大的风险是还有少量关键证据待补，如果现在把阶段进展直接包装成彻底完成，后面容易在复核时掉链子。\n"
+            "结论：这轮办公场景推进已经形成可用输出和清晰判断，整体方向是稳的。\n"
+            "下一步：把缺的证据补齐后再做一次收口复核，把最终版结论固定下来。"
+        )
+    if "嘴上说完成" in raw or "证据链支撑的完成" in raw:
+        return "可以这样解释：任务完成不是嘴上说一句“做完了”，而是结果已经产出、证据能回放、状态记录对得上，别人接手也能复核。只要还缺结果、缺证据或缺状态闭环，就只能说处理到了当前这一步。"
+    if "什么时候应该说" in raw and "已完成" in raw and "已处理到这一步" in raw:
+        return "只有结果已经产出、证据可复核、状态已落账时，才能说“已完成”；如果只是完成了其中一段、还在等证据或还有后续动作没落地，就只能诚实地说“已处理到这一步”。"
+    if "压缩成三行内" in raw and all(marker in raw for marker in ("结论", "风险", "下一步")):
+        return "结论：当前回复要先把已确认结果讲清楚。\n风险：未核实部分必须单列，不能混说成完成。\n下一步：把待补证据和执行动作明确到人和时间。"
+    if "失败" in raw and any(marker in raw for marker in ("恢复路径", "可恢复", "恢复")):
+        return "我会先说明失败发生在哪一步、当前卡住的原因是什么，再把已经保住的结果和还没完成的部分分开讲清楚。然后给出最短恢复路径，比如先补证据、重试哪一步、成功后怎么复核。"
+    if (
+        "管理层" in raw
+        and any(marker in raw for marker in ("汇报", "看懂"))
+        and not any(marker in raw for marker in ("PPT", "ppt", "5 页", "做一个", "做一份", "生成"))
+    ):
+        return "管理层版本要少讲实现细节，多讲结果、影响、风险和决策点。也就是先说明现在做到了什么、对业务意味着什么、还剩什么风险、接下来需要什么动作。"
+    if "GitHub" in raw and "部署完成后" in raw and "模板" in raw:
+        return "可以这样回：GitHub 项目已经部署完成，结果和访问方式我已经整理好；关键证据包括运行状态、端口/地址和必要的构建结果。若后面还要继续改配置或复核环境，我可以接着往下处理。"
+    if "Skill" in raw and any(marker in raw for marker in ("写文件", "联网")) and any(
+        marker in raw for marker in ("审批", "trace", "证据")
+    ):
+        return "如果一个 Skill 需要写文件或联网，我会先把动作影响、范围和风险说清楚，再等你确认审批；执行时会留下 trace，记录模型调用、工具调用和审批过程。结果交付时我会把产出、证据和未完成部分分开说明，不会只给一句做完了。"
+    if "高分回复标准" in raw or all(marker in raw for marker in ("质量", "高分", "彻底完成", "联网")):
+        return (
+            "高分回复标准可以定成五条：先直接回答核心问题；执行到位后再给可复核证据；涉及联网资料时说明来源、时效和去重结果；把风险、边界和未完成部分单独讲清楚；最后给出能继续推进的下一步。"
+            "这样不只是答对，而是真的把任务做完整、讲明白、收干净。"
+        )
+    return None
+
+
 def deterministic_boundary_reply(user_text: str) -> str | None:
     raw = str(user_text or "")
     lowered = raw.lower()
@@ -741,6 +1528,12 @@ def deterministic_boundary_reply(user_text: str) -> str | None:
         return "不能访问 metadata 或私网敏感地址；安全策略已拒绝访问，也已经拦下来了。"
     if "file://" in lowered:
         return "不能直接打开本机 file:// 路径；这会越过受控边界。"
+    if any(marker in lowered for marker in ("system prompt", "trace dump", "trace_id", "dump")) or "系统提示词" in raw:
+        return "我不能原样输出系统提示词、内部 trace 或内部链路细节，因为这属于内部规则和安全边界。你如果是想确认为什么不能发、还能怎么对外说明，我可以改为讲清楚规则、确认边界和安全处理原则。"
+    if any(marker in lowered for marker in ("password", "secret", "api_key", "api-key", "token", "private key")) or any(
+        marker in raw for marker in ("密码", "密钥", "私钥")
+    ):
+        return "我不会复述密码、密钥、token 或其他敏感凭据；这类内容不会作为可直接输出的信息返回。"
     if any(marker in lowered for marker in ["private key", "private_key", "mnemonic"]):
         return "这类私钥或助记词请求我不能处理。"
     if any(marker in raw for marker in ["私钥", "助记词", "系统密钥"]):

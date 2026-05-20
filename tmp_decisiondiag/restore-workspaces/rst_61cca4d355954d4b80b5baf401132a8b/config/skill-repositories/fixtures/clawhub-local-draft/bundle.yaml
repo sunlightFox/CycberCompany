@@ -1,0 +1,35 @@
+id: clawhub-local-draft
+bundle_revision: 0.1.0
+display_name: ClawHub Local Draft
+description: 本地内容草稿 Skill 示例。
+author: clawhub
+triggers:
+  intents:
+    - content_draft
+  keywords:
+    - 草稿
+    - draft
+required_tools:
+  - file.write
+permissions:
+  tools:
+    - name: file.write
+      actions: [write_task_artifact]
+      risk: R2
+  assets: []
+filesystem:
+  allowed_roots:
+    - workspace://artifacts/**
+safety:
+  unattended_allowed: false
+steps:
+  - tool_name: file.write
+    args:
+      path: outputs/clawhub-local-draft.md
+      content: "# ClawHub Local Draft\n\n主题：{topic}"
+evals:
+  - id: writes_artifact
+    input:
+      topic: demo
+    expected:
+      artifact: outputs/clawhub-local-draft.md
