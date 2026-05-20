@@ -154,9 +154,30 @@ class ChatTurnExecutionOrchestrator:
             "terminal_readonly_command",
         }
         deterministic_text = _deterministic_no_model_reply(user_text)
+        deterministic_route_blockers = {
+            "browser_download",
+            "browser_page_action",
+            "browser_read_page",
+            "browser_search_readonly",
+            "browser_search_with_citation",
+            "code_hosting_oauth",
+            "code_hosting_repo_read",
+            "file_mutation_task",
+            "host_filesystem_list",
+            "host_software_install",
+            "office_document",
+            "project_deploy_request",
+            "repo_fix_after_failure",
+            "repo_patch_request",
+            "repo_readonly_request",
+            "repo_refactor_request",
+            "repo_test_request",
+            "terminal_readonly_command",
+        }
         if (
             deterministic_text is not None
             and pre_route_decision.route_type not in direct_readonly_routes
+            and pre_route_decision.route_type not in deterministic_route_blockers
         ):
             ctx.direct_response_override = {
                 "intent": "simple_question",
@@ -337,14 +358,17 @@ class ChatTurnExecutionOrchestrator:
             return
         allow_direct_memory_command = facade._memory_coordinator.allow_direct_command(user_text, brain_decision)
         explicit_memory_query = facade._memory_coordinator.explicit_memory_query(user_text)
-        office_route_pending = (
-            ctx.route_decision is not None and ctx.route_decision.office_request is not None
-        )
+        route_pending = ctx.route_decision is not None and ctx.route_decision.route_type not in {
+            "default",
+            "empty",
+            "download_topic",
+            "skill_mcp_concept",
+        }
         if (
             facade._natural_chat is not None
             and not allow_direct_memory_command
             and not explicit_memory_query
-            and not office_route_pending
+            and not route_pending
         ):
             natural_outcome = await facade._natural_chat.handle(turn=turn, user_text=user_text, session_id=session_id, trace_id=trace_id, presence_runtime=dict(turn.get("presence_runtime") or {}))
             if natural_outcome is not None:

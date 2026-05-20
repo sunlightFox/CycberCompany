@@ -79,6 +79,7 @@ class ChatIntentRouter:
                 and not format_sensitive_request
                 and not _direct_only(clean)
                 and not _negative_office_generation_constraint(clean)
+                and not _office_completion_reporting_question(clean)
                 and not is_skill_or_mcp_concept_request(clean)
                 and not is_host_filesystem_list_request(clean)
             ):
@@ -181,6 +182,15 @@ class ChatIntentRouter:
                 safe_user_summary=_safe_summary(clean),
                 metadata={"forge_provider_type": "github"},
             )
+        if is_host_software_install_request(clean):
+            return ChatRouteDecision(
+                route_type="host_software_install",
+                confidence=0.9,
+                reason_code="explicit_host_software_install",
+                requires_confirmation=True,
+                task_goal=clean,
+                safe_user_summary=_safe_summary(clean),
+            )
         repo_route = repo_execution_route(clean)
         if repo_route is not None:
             return ChatRouteDecision(
@@ -224,15 +234,6 @@ class ChatIntentRouter:
                 task_goal=clean,
                 safe_user_summary=_safe_summary(clean),
                 metadata={"command": command},
-            )
-        if is_host_software_install_request(clean):
-            return ChatRouteDecision(
-                route_type="host_software_install",
-                confidence=0.9,
-                reason_code="explicit_host_software_install",
-                requires_confirmation=True,
-                task_goal=clean,
-                safe_user_summary=_safe_summary(clean),
             )
         if is_file_mutation_request(clean):
             return ChatRouteDecision(
@@ -280,6 +281,8 @@ def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
         return None
     document_type = office_document_type(clean)
     if document_type is None:
+        return None
+    if _office_completion_reporting_question(clean):
         return None
     if is_skill_or_mcp_concept_request(clean) and not _has_office_action(clean):
         return None
@@ -744,9 +747,39 @@ def is_file_mutation_request(text: str) -> bool:
         return False
     if is_host_filesystem_list_request(clean):
         return False
+    if _ambiguous_file_mutation_scope(clean):
+        return False
     return any(marker in clean for marker in ["删除", "删掉", "清空", "覆盖"]) and any(
         marker in clean for marker in ["文件", "CSV", "csv", "下载", "结果", "outputs", "artifact"]
     )
+
+
+def _ambiguous_file_mutation_scope(text: str) -> bool:
+    clean = _clean(text)
+    if not any(marker in clean for marker in ["删除", "删掉", "清空", "覆盖"]):
+        return False
+    if not any(marker in clean for marker in ["文件", "目录", "材料", "资料"]):
+        return False
+    if not any(marker in clean for marker in ["那个", "这个", "某个", "看着没用", "没用的"]):
+        return False
+    concrete_markers = [
+        "/",
+        "\\",
+        ".txt",
+        ".md",
+        ".json",
+        ".csv",
+        ".docx",
+        ".xlsx",
+        ".pptx",
+        "桌面",
+        "下载目录",
+        "当前目录",
+        "当前项目",
+        "outputs",
+        "artifact",
+    ]
+    return not any(marker in clean for marker in concrete_markers)
 
 
 def is_host_filesystem_list_request(text: str) -> bool:
@@ -866,6 +899,8 @@ def _terminal_request_marker(text: str) -> bool:
         for marker in [
             "执行命令",
             "运行命令",
+            "执行只读命令",
+            "运行只读命令",
             "跑一下命令",
             "系统命令",
             "终端命令",
@@ -884,12 +919,19 @@ def _quoted_terminal_command(text: str) -> str | None:
 def _after_terminal_marker(text: str) -> str | None:
     patterns = [
         r"(?:执行命令|运行命令|跑一下命令|系统命令|终端命令)\s*[:：]?\s*(.+)$",
+        r"(?:执行只读命令|运行只读命令)\s*[:：]?\s*(.+)$",
         r"(?:terminal\.run|run command|shell command)\s*[:：]?\s*(.+)$",
     ]
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.IGNORECASE)
         if match:
-            return match.group(1).strip()
+            command = match.group(1).strip()
+            safe_prefix = re.match(
+                r"((?:echo|date|time|whoami|hostname|pwd|ls|dir|ver|get-date|get-location)(?:\s+[^\s，。；;,]+)?)",
+                command,
+                flags=re.IGNORECASE,
+            )
+            return (safe_prefix.group(1) if safe_prefix else command).strip()
     return None
 
 
@@ -1096,7 +1138,23 @@ def _has_office_action(text: str) -> bool:
 
 
 def _is_office_edit(text: str) -> bool:
-    return any(marker in text for marker in ["编辑", "修改", "追加", "增加", "替换", "完善", "改"])
+    return any(
+        marker in text
+        for marker in [
+            "编辑",
+            "修改",
+            "追加",
+            "增加",
+            "替换",
+            "完善",
+            "改成",
+            "改为",
+            "改一下",
+            "改写",
+            "调整",
+            "修订",
+        ]
+    )
 
 
 def _has_office_action(text: str) -> bool:
@@ -1147,14 +1205,18 @@ def _is_office_edit(text: str) -> bool:
             "\u589e\u52a0",
             "\u66ff\u6362",
             "\u5b8c\u5584",
-            "\u6539",
+            "\u6539\u6210",
+            "\u6539\u4e3a",
+            "\u6539\u4e00\u4e0b",
+            "\u6539\u5199",
+            "\u8c03\u6574",
+            "\u4fee\u8ba2",
             "缂栬緫",
             "淇敼",
             "杩藉姞",
             "澧炲姞",
             "鏇挎崲",
             "瀹屽杽",
-            "鏀?",
         ]
     )
 
@@ -1507,6 +1569,30 @@ def _negative_office_generation_constraint(text: str) -> bool:
     )
 
 
+def _office_completion_reporting_question(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if not any(marker in lowered for marker in ["ppt", "powerpoint", "docx", "xlsx", "excel", "word"]):
+        return False
+    if not any(marker in clean for marker in ["完成后", "生成后", "产出后", "做好后", "做完后"]):
+        return False
+    return any(
+        marker in clean
+        for marker in [
+            "怎么给老板说明",
+            "怎么给老板汇报",
+            "怎么给老板说清",
+            "如何给老板说明",
+            "如何给老板汇报",
+            "怎么说明",
+            "怎么汇报",
+            "说清结果",
+            "汇报口径",
+            "说明结果",
+        ]
+    )
+
+
 def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
     cn_markers = [
         "看一下这网站有什么内容",
@@ -1515,6 +1601,7 @@ def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
         "这个链接主要说什么",
         "这个链接讲什么",
         "这个网站讲什么",
+        "总结",
         "总结这个链接",
         "总结这个网页",
         "看看这个网页",
@@ -1530,6 +1617,12 @@ def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
         "标题是什么",
         "title 是什么",
         "title是什么",
+        "看看登录页",
+        "看登录页",
+        "登录页有哪些字段",
+        "有哪些字段",
+        "有什么字段",
+        "表单字段",
     ]
     en_markers = [
         "summarize this link",
@@ -1649,6 +1742,9 @@ def _readonly_login_page_inspection(clean: str, lowered: str) -> bool:
     noun_markers = ["登录页", "登录页面", "注册页", "注册页面", "表单页", "预约页"]
     if not any(marker in clean for marker in noun_markers):
         return False
+    action_text = clean
+    for noun_marker in noun_markers:
+        action_text = action_text.replace(noun_marker, " ")
     imperative_markers = [
         "登录",
         "注册",
@@ -1660,7 +1756,7 @@ def _readonly_login_page_inspection(clean: str, lowered: str) -> bool:
         "上传",
         "下载",
     ]
-    return not any(marker in clean for marker in imperative_markers)
+    return not any(marker in action_text for marker in imperative_markers)
 
 
 def _first_url(text: str) -> str | None:

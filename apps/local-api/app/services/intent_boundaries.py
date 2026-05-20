@@ -161,6 +161,8 @@ class IntentBoundaryService:
         raw = str(text or "")
         if structured_summary_chat_request(raw) or preference_application_request(raw):
             return False
+        if "今天刚更新" in raw and any(marker in raw for marker in ("不要联网", "不联网", "不能联网", "时效边界", "最新边界")):
+            return False
         if any(marker in raw for marker in (*_CHAT_CONTINUATION_MARKERS, *_CHAT_COMPRESSION_MARKERS)):
             return False
         if explicit_preference_recall_query(raw):

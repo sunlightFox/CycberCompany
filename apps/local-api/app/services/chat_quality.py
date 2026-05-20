@@ -458,7 +458,16 @@ def _cross_session_memory_exfiltration_request(text: str) -> bool:
 
 def _high_risk_professional_advice(text: str) -> bool:
     lowered = text.lower()
-    medical_markers = ("\u5e03\u6d1b\u82ac", "\u7528\u836f", "\u5403\u591a\u5c11", "\u5242\u91cf", "\u6beb\u514b", "\u9000\u70e7\u836f", "\u6b62\u75db\u836f", "\u5904\u65b9\u836f", "\u836f\u91cf", "\u513f\u7ae5\u7528\u836f")
+    medical_markers = ("\u5e03\u6d1b\u82ac", "\u5403\u591a\u5c11", "\u5242\u91cf", "\u6beb\u514b", "\u9000\u70e7\u836f", "\u6b62\u75db\u836f", "\u5904\u65b9\u836f", "\u836f\u91cf", "\u513f\u7ae5\u7528\u836f")
+    medical_advice_context = (
+        "\u7528\u836f\u5efa\u8bae",
+        "\u600e\u4e48\u7528\u836f",
+        "\u600e\u4e48\u5403",
+        "\u5403\u4e0d\u5403",
+        "\u80fd\u4e0d\u80fd\u5403",
+        "\u8981\u4e0d\u8981\u5403",
+        "\u5f00\u836f",
+    )
     finance_markers = (
         "\u4fdd\u8bc1\u6536\u76ca", "\u7a33\u8d5a", "\u5168\u90e8\u79ef\u84c4", "\u6ee1\u4ed3", "\u786e\u5b9a\u4e70\u5165",
         "\u8d37\u6b3e\u4e70", "\u4e0d\u8981\u63d0\u9192\u98ce\u9669", "\u91d1\u878d\u5efa\u8bae", "\u6295\u8d44\u5efa\u8bae",
@@ -469,6 +478,7 @@ def _high_risk_professional_advice(text: str) -> bool:
     forced_buy_markers = ("\u4e70\u4e0d\u4e70", "\u786e\u5b9a\u4e70\u5165", "\u76f4\u63a5\u7ed9\u4e70\u5165\u7ed3\u8bba", "buy or not")
     return (
         any(marker in lowered or marker in text for marker in medical_markers)
+        or ("\u7528\u836f" in text and any(marker in text for marker in medical_advice_context))
         or any(marker in lowered or marker in text for marker in finance_markers)
         or (
             any(marker in lowered or marker in text for marker in finance_asset_markers)

@@ -4533,7 +4533,25 @@ def _repo_request_type(request: TaskCreateRequest) -> str | None:
     }:
         return explicit
     planner_context = dict(request.planner_context or {})
-    route_intent = str(planner_context.get("route_intent") or planner_context.get("intent") or "")
+    raw_route_intent = planner_context.get("route_intent") or planner_context.get("intent") or ""
+    if isinstance(raw_route_intent, dict):
+        route_intent = str(
+            raw_route_intent.get("primary_intent")
+            or raw_route_intent.get("intent")
+            or raw_route_intent.get("route_type")
+            or ""
+        )
+    else:
+        route_intent = str(raw_route_intent)
+    if route_intent == "office_document_request" or (
+        request.domain == "productivity"
+        and (
+            request.office_request is not None
+            or request.constraints.get("office_request")
+            or request.constraints.get("office_chat_request")
+        )
+    ):
+        return None
     browser_like_goal = _looks_like_browser_page_action(
         f"{request.goal} {' '.join(str(item) for item in request.success_criteria)}"
     )

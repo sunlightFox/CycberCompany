@@ -2921,6 +2921,12 @@ class MemoryService:
         if force or explicit_remember:
             summary = _clean_summary(stripped)
             memory_kind = _kind_for_summary(summary)
+            if (
+                explicit_remember
+                and memory_kind == "semantic_note"
+                and any(separator in summary for separator in ("=", "：", ":"))
+            ):
+                memory_kind = "preference"
             if force and not explicit_remember:
                 score = 0.5
             elif any(

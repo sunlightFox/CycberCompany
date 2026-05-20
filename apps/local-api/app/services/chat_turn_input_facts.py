@@ -297,7 +297,10 @@ def explicit_preference_recall_query(text: str) -> bool:
             "顺序",
             "口径",
             "风格",
-            "规则",
+            "项目规则",
+            "回复规则",
+            "输出规则",
+            "我的规则",
             "reply preference",
             "preference",
         )

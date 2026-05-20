@@ -410,8 +410,16 @@ class ChatHookRuntime:
             or payload.get("scenario")
             or ""
         )
-        plain_text = visible_text_guard_for_scenario(str(payload.get("plain_text") or ""), scenario=scenario)
-        summary = visible_text_guard_for_scenario(str(payload.get("summary") or plain_text), scenario=scenario)
+        plan_plain_text = str(response_plan.get("plain_text") or "")
+        plan_summary = str(response_plan.get("summary") or "")
+        plain_text = visible_text_guard_for_scenario(
+            plan_plain_text or str(payload.get("plain_text") or ""),
+            scenario=scenario,
+        )
+        summary = visible_text_guard_for_scenario(
+            plan_summary or str(payload.get("summary") or plain_text),
+            scenario=scenario,
+        )
         if plain_text != payload.get("plain_text") or summary != payload.get("summary"):
             rewritten_plan = dict(payload.get("response_plan") or {})
             rewritten_plan["plain_text"] = plain_text

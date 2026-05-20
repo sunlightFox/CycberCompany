@@ -188,6 +188,10 @@ def filesystem_scope_action(text: str) -> bool:
 def ambiguous_scope(text: str) -> bool:
     if any(marker in text for marker in ["那个文件", "这个目录", "那一堆", "这些东西"]):
         return True
+    if any(marker in text for marker in ["那个", "这个", "某个"]) and any(
+        marker in text for marker in ["文件", "目录", "材料", "资料"]
+    ):
+        return True
     if any(marker in text for marker in ["整理文件夹", "整理目录", "整理文件"]):
         return not any(
             marker in text
@@ -267,38 +271,39 @@ def approval_response(text: str) -> bool:
 def persona_boundary_question(text: str) -> bool:
     if structured_summary_chat_request(text):
         return False
-    if any(
-        marker in text
-        for marker in [
-            "你能做什么",
-            "你不能做什么",
-            "边界",
-            "权限",
-            "系统提示",
-            "隐藏账号",
-            "绕过审批",
-            "直接登录",
-            "忽略规则",
-            "附件里让我",
-        ]
-    ):
+    strong_markers = [
+        "你能做什么",
+        "你不能做什么",
+        "系统提示",
+        "隐藏账号",
+        "绕过审批",
+        "直接登录",
+        "忽略规则",
+        "附件里让我",
+        "private key",
+        "私钥",
+        "助记词",
+    ]
+    if any(marker in text for marker in strong_markers):
         return True
-    return any(
-        marker in text
-        for marker in [
-            "你能做什么",
-            "你不能做什么",
-            "边界",
-            "权限",
-            "系统提示",
-            "隐藏账号",
-            "绕过审批",
-            "直接登录",
-            "private key",
-            "私钥",
-            "助记词",
-        ]
-    )
+    if any(marker in text for marker in ["边界", "权限"]):
+        return any(
+            scope in text
+            for scope in [
+                "你能",
+                "你不能",
+                "你的",
+                "系统",
+                "能力",
+                "工具",
+                "登录",
+                "审批",
+                "安全",
+                "绕过",
+                "忽略",
+            ]
+        )
+    return False
 
 
 def real_task_request(text: str) -> bool:
