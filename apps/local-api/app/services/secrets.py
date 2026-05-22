@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from cryptography.fernet import Fernet
@@ -35,6 +36,12 @@ class SecretStore:
     def get_secret(self, secret_ref: str | None) -> str | None:
         if not secret_ref:
             return None
+        if secret_ref.startswith("env://"):
+            env_name = secret_ref.removeprefix("env://").strip()
+            return os.environ.get(env_name) if env_name else None
+        if secret_ref.startswith("codex-auth://"):
+            auth_name = secret_ref.removeprefix("codex-auth://").strip()
+            return _read_codex_auth_value(auth_name) if auth_name else None
         try:
             data = self._read_store()
             encrypted = data.get(secret_ref)
@@ -93,3 +100,17 @@ def _best_effort_private(path: Path) -> None:
         path.chmod(0o600)
     except OSError:
         pass
+
+
+def _read_codex_auth_value(name: str) -> str | None:
+    auth_path = Path.home() / ".codex" / "auth.json"
+    if not auth_path.exists():
+        return None
+    try:
+        data = json.loads(auth_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    value = data.get(name)
+    return value if isinstance(value, str) and value else None

@@ -14,11 +14,7 @@ from core_types import (
     ChannelPairingRequest,
     ChatContentPart,
     ChatContextRef,
-    ChatIngressMetadata,
-    ChatInput,
-    ChatTurnRequest,
     ChatTurnResponse,
-    ClientContext,
     ErrorCode,
     RiskLevel,
     TraceSpanStatus,
@@ -724,7 +720,7 @@ class WechatChannelGatewayService:
                 )
             )
             return
-        peer = await self._repo.upsert_peer(
+        await self._repo.upsert_peer(
             {
                 "channel_peer_id": new_id("chpeer"),
                 "organization_id": account["organization_id"],
@@ -756,16 +752,14 @@ class WechatChannelGatewayService:
             status = "rejected_or_ignored"
             stats.rejected_events += 1
         elif not session or not session.get("allow_inbound"):
-            status = "pairing_required"
-            await self._create_pairing_request(
+            session = await self._ensure_direct_peer_session(
                 account,
-                peer=peer,
                 normalized=normalized,
-                peer_hash=peer_hash,
-                stats=stats,
                 trace_id=trace_id,
             )
-            stats.rejected_events += 1
+            if session is None:
+                status = "rejected_or_ignored"
+                stats.rejected_events += 1
         channel_event_id = new_id("chevt")
         trusted_private_peer = (
             status == "received"
@@ -1970,8 +1964,7 @@ class WechatChannelGatewayService:
         )
         if not allow_inbound:
             return None
-        if requested_pairing == "unpaired":
-            return None
+        member_id = await self._auto_pairing_member_id(account)
         peer_hash = _hash_value(normalized["peer_ref"])
         semantics = self._session_semantics_runtime.resolve_inbound(
             provider=account["provider"],
@@ -2007,7 +2000,17 @@ class WechatChannelGatewayService:
                         "updated_at": utc_now_iso(),
                     },
                 )
-                return existing
+                updated = await self._repo.get_peer_session(
+                    existing["channel_peer_session_id"]
+                )
+                session = updated or existing
+                await self._auto_approve_pending_pairing_request(
+                    account,
+                    peer_ref_redacted=session_peer_ref_redacted,
+                    member_id=str(session.get("member_id") or member_id),
+                    trace_id=trace_id,
+                )
+                return session
         peer = await self._repo.upsert_peer(
             {
                 "channel_peer_id": new_id("chpeer"),
@@ -2049,7 +2052,7 @@ class WechatChannelGatewayService:
                 "peer_type": normalized["chat_type"],
                 "conversation_id": None,
                 "session_id": new_id("chsess"),
-                "member_id": "mem_xiaoyao",
+                "member_id": member_id,
                 "peer_state_ref": peer_state_ref,
                 "pairing_status": "paired",
                 "allow_inbound": allow_inbound,
@@ -2078,7 +2081,60 @@ class WechatChannelGatewayService:
             },
             trace_id=trace_id,
         )
+        await self._auto_approve_pending_pairing_request(
+            account,
+            peer_ref_redacted=session_peer_ref_redacted,
+            member_id=str(session.get("member_id") or member_id),
+            trace_id=trace_id,
+        )
         return session
+
+    async def _auto_pairing_member_id(self, account: dict[str, Any]) -> str:
+        bind_session_id = account.get("bind_session_id")
+        if bind_session_id:
+            bind_session = await self._repo.get_bind_session(str(bind_session_id))
+            if bind_session and bind_session.get("requested_by_member_id"):
+                return str(bind_session["requested_by_member_id"])
+        return "mem_xiaoyao"
+
+    async def _auto_approve_pending_pairing_request(
+        self,
+        account: dict[str, Any],
+        *,
+        peer_ref_redacted: str,
+        member_id: str,
+        trace_id: str | None,
+    ) -> None:
+        pending = await self._repo.pending_pairing_request(
+            channel_account_id=account["channel_account_id"],
+            peer_ref_redacted=peer_ref_redacted,
+        )
+        if pending is None:
+            return
+        now = utc_now_iso()
+        await self._repo.update_pairing_request(
+            pending["pairing_request_id"],
+            {
+                "status": "approved",
+                "decision_by_member_id": member_id,
+                "decision_reason": "auto_approved_after_wechat_scan",
+                "updated_at": now,
+                "decided_at": now,
+            },
+        )
+        await self._audit.write_event(
+            actor_type="system",
+            action="channel.peer_pairing.auto_approved",
+            object_type="channel_pairing_request",
+            object_id=str(pending["pairing_request_id"]),
+            summary="微信扫码后自动确认 peer 配对",
+            risk_level=RiskLevel.R2,
+            payload={
+                "provider": account["provider"],
+                "peer_ref_redacted": peer_ref_redacted,
+            },
+            trace_id=trace_id,
+        )
 
 
 def _normalize_wechat_event(event: dict[str, Any]) -> dict[str, Any]:

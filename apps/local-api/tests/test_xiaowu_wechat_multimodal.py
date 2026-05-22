@@ -10,6 +10,7 @@ from typing import Any, ClassVar, cast
 
 import pytest
 from app.services import chat as chat_module
+from app.services.wechat_gateway import _normalize_wechat_event
 from brain.adapters import CancelToken, ModelChatRequest, ModelStreamEvent
 from docx import Document
 from fastapi.testclient import TestClient
@@ -22,27 +23,10 @@ def test_xiaowu_wechat_multimodal_flow_with_fake_connector_and_mocked_model(
     _disable_chat_background_execution(client)
     brain_id = _create_local_brain(client)
     _bind_member_default_brain(client, "mem_xiaowu", brain_id)
-    _bind_wechat_account(client, "Phase Xiaowu 微信")
+    _bind_wechat_account(client, "Phase Xiaowu 微信", requested_by_member_id="mem_xiaowu")
 
     pairing_peer = "wxid-xiaowu-unpaired-secret"
-    XiaowuWechatClient.events = [_text_event("evt-pair", pairing_peer, "申请配对")]
-    pair_result = client.post("/api/channels/providers/wechat/poll-once")
-    assert pair_result.status_code == 200, pair_result.text
-    assert pair_result.json()["created_pairing_requests"] == 1
-
-    pairing = client.get(
-        "/api/channels/pairing-requests",
-        params={"provider": "wechat", "status": "pending"},
-    ).json()["items"][0]
-    serialized_pairing = json.dumps(pairing, ensure_ascii=False)
-    assert pairing["peer_ref_redacted"].startswith("sha256:")
-    assert pairing_peer not in serialized_pairing
-
-    approved = client.post(
-        f"/api/channels/pairing-requests/{pairing['pairing_request_id']}/approve",
-        json={"member_id": "mem_xiaowu"},
-    )
-    assert approved.status_code == 200, approved.text
+    _trust_wechat_peer(client, pairing_peer, expected_member_id="mem_xiaowu")
 
     text_turn = _run_wechat_turn(
         client,
@@ -210,7 +194,7 @@ def test_xiaowu_wechat_audio_transcript_feeds_model_as_natural_text(
     _disable_chat_background_execution(client)
     brain_id = _create_local_brain(client)
     _bind_member_default_brain(client, "mem_xiaowu", brain_id)
-    _bind_wechat_account(client, "Phase Xiaowu 微信")
+    _bind_wechat_account(client, "Phase Xiaowu 微信", requested_by_member_id="mem_xiaowu")
 
     captured_messages: list[list[dict[str, str]]] = []
 
@@ -239,16 +223,7 @@ def test_xiaowu_wechat_audio_transcript_feeds_model_as_natural_text(
     monkeypatch.setattr(chat_module.OpenAICompatibleClient, "stream_chat", fake_stream_chat)
 
     pairing_peer = "wxid-xiaowu-transcript-secret"
-    XiaowuWechatClient.events = [_text_event("evt-audio-pair", pairing_peer, "申请配对")]
-    client.post("/api/channels/providers/wechat/poll-once")
-    pairing = client.get(
-        "/api/channels/pairing-requests",
-        params={"provider": "wechat", "status": "pending"},
-    ).json()["items"][0]
-    client.post(
-        f"/api/channels/pairing-requests/{pairing['pairing_request_id']}/approve",
-        json={"member_id": "mem_xiaowu"},
-    )
+    _trust_wechat_peer(client, pairing_peer, expected_member_id="mem_xiaowu")
 
     XiaowuWechatClient.events = [
         {
@@ -323,7 +298,7 @@ def test_xiaowu_wechat_audio_reply_is_naturalized_through_continuation(
     _disable_chat_background_execution(client)
     brain_id = _create_local_brain(client)
     _bind_member_default_brain(client, "mem_xiaowu", brain_id)
-    _bind_wechat_account(client, "Phase Xiaowu 微信")
+    _bind_wechat_account(client, "Phase Xiaowu 微信", requested_by_member_id="mem_xiaowu")
 
     captured_messages: list[list[dict[str, str]]] = []
 
@@ -350,16 +325,7 @@ def test_xiaowu_wechat_audio_reply_is_naturalized_through_continuation(
     monkeypatch.setattr(chat_module.OpenAICompatibleClient, "stream_chat", fake_stream_chat)
 
     pairing_peer = "wxid-xiaowu-audio-natural-secret"
-    XiaowuWechatClient.events = [_text_event("evt-audio-pair-n2", pairing_peer, "申请配对")]
-    client.post("/api/channels/providers/wechat/poll-once")
-    pairing = client.get(
-        "/api/channels/pairing-requests",
-        params={"provider": "wechat", "status": "pending"},
-    ).json()["items"][0]
-    client.post(
-        f"/api/channels/pairing-requests/{pairing['pairing_request_id']}/approve",
-        json={"member_id": "mem_xiaowu"},
-    )
+    _trust_wechat_peer(client, pairing_peer, expected_member_id="mem_xiaowu")
 
     XiaowuWechatClient.events = [
         {
@@ -425,7 +391,9 @@ def test_xiaowu_wechat_audio_reply_is_naturalized_through_continuation(
     assert "语音转成文字：今天先把图片识别和文件识别串起来，回复口吻自然一点" in (
         captured_messages[0][-1]["content"]
     )
-    assert sent_text == "我听到你这段语音在说，先把图片识别和文件识别串起来，回复口吻也要更自然一点。"
+    assert sent_text.startswith(
+        "我听到你这段语音在说，先把图片识别和文件识别串起来，回复口吻也要更自然一点。"
+    )
     assert "continuation" not in json.dumps(envelope, ensure_ascii=False)
 
 
@@ -436,20 +404,11 @@ def test_xiaowu_wechat_collect_and_fail_closed_paths(
     _disable_chat_background_execution(client)
     brain_id = _create_local_brain(client)
     _bind_member_default_brain(client, "mem_xiaowu", brain_id)
-    _bind_wechat_account(client, "Phase Xiaowu 微信")
+    _bind_wechat_account(client, "Phase Xiaowu 微信", requested_by_member_id="mem_xiaowu")
 
     revoked_peer = "wxid-xiaowu-revoked-secret"
-    XiaowuWechatClient.events = [_text_event("evt-revoke-pair", revoked_peer, "申请配对")]
-    client.post("/api/channels/providers/wechat/poll-once")
-    pairing = client.get(
-        "/api/channels/pairing-requests",
-        params={"provider": "wechat", "status": "pending"},
-    ).json()["items"][0]
-    approved = client.post(
-        f"/api/channels/pairing-requests/{pairing['pairing_request_id']}/approve",
-        json={"member_id": "mem_xiaowu"},
-    ).json()
-    peer_session_id = approved["peer_session"]["channel_peer_session_id"]
+    session = _trust_wechat_peer(client, revoked_peer, expected_member_id="mem_xiaowu")
+    peer_session_id = session["channel_peer_session_id"]
     revoked = client.post(
         f"/api/channels/peers/{peer_session_id}/revoke",
         json={"member_id": "mem_xiaowu"},
@@ -660,16 +619,60 @@ def _disable_chat_background_execution(client: TestClient) -> None:
     registry.chat_service._execution.schedule = lambda *args, **kwargs: None
 
 
-def _bind_wechat_account(client: TestClient, display_name_hint: str) -> None:
+def _bind_wechat_account(
+    client: TestClient,
+    display_name_hint: str,
+    *,
+    requested_by_member_id: str = "mem_xiaoyao",
+) -> None:
     started = client.post(
         "/api/channels/bind-sessions",
-        json={"provider": "wechat", "display_name_hint": display_name_hint},
+        json={
+            "provider": "wechat",
+            "display_name_hint": display_name_hint,
+            "requested_by_member_id": requested_by_member_id,
+        },
     )
     assert started.status_code == 200, started.text
     finalized = client.post(
         f"/api/channels/bind-sessions/{started.json()['bind_session_id']}/finalize"
     )
     assert finalized.status_code == 200, finalized.text
+
+
+def _trust_wechat_peer(
+    client: TestClient,
+    peer_ref: str,
+    *,
+    expected_member_id: str = "mem_xiaoyao",
+) -> dict[str, Any]:
+    registry = cast(Any, client.app).state.registry
+    accounts = client.get(
+        "/api/channels/accounts",
+        params={"provider": "wechat", "status": "active"},
+    )
+    assert accounts.status_code == 200, accounts.text
+    account = accounts.json()["items"][0]
+
+    async def bind_peer() -> dict[str, Any]:
+        return await registry.wechat_gateway_service._ensure_direct_peer_session(
+            account,
+            normalized=_normalize_wechat_event(
+                _text_event(f"evt-trust-{peer_ref}", peer_ref, "扫码确认")
+            ),
+            trace_id=None,
+        )
+
+    session = client.portal.call(bind_peer)
+    assert session["pairing_status"] == "paired"
+    assert session["member_id"] == expected_member_id
+    pending = client.get(
+        "/api/channels/pairing-requests",
+        params={"provider": "wechat", "status": "pending"},
+    )
+    assert pending.status_code == 200, pending.text
+    assert pending.json()["items"] == []
+    return session
 
 
 def _bind_member_default_brain(client: TestClient, member_id: str, brain_id: str) -> None:

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import tomllib
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from core_types import MemberStatus
@@ -13,6 +16,12 @@ from app.db.session import Database
 DEFAULT_ORGANIZATION_ID = "org_default"
 DEFAULT_USER_ID = "user_local_owner"
 DEFAULT_BRAIN_ID = "brain_not_configured"
+DEFAULT_CODEX_API_KEY_ENV = "OPENAI_API_KEY"
+DEFAULT_CODEX_API_KEY_REF = "codex-auth://OPENAI_API_KEY"
+DEFAULT_CODEX_DISPLAY_NAME = "Codex Default Brain"
+DEFAULT_CODEX_MODEL = "gpt-5.4-mini"
+DEFAULT_CODEX_REASONING_EFFORT = "medium"
+DEFAULT_CODEX_TEXT_VERBOSITY = "medium"
 DEFAULT_VOICE_PROFILE_ID = "vpr_default_edge"
 DEFAULT_MEMBER_VOICE_IDS = {
     "xiaoyao": "zh-CN-XiaoxiaoNeural",
@@ -257,11 +266,13 @@ class BootstrapService:
         return ids
 
     async def _ensure_default_brain(self) -> None:
-        exists = await self._db.fetch_one(
-            "SELECT brain_id FROM brains WHERE brain_id = ?",
+        existing = await self._db.fetch_one(
+            "SELECT * FROM brains WHERE brain_id = ?",
             (DEFAULT_BRAIN_ID,),
         )
-        if exists:
+        seed = self._default_codex_brain_seed()
+        if existing:
+            await self._repair_default_brain_if_managed(dict(existing), seed)
             return
         now = utc_now_iso()
         await self._db.execute(
@@ -269,21 +280,163 @@ class BootstrapService:
             INSERT INTO brains (
               brain_id, display_name, provider, endpoint, model_name, api_key_ref, is_local,
               context_window, supports_tools, supports_vision, supports_audio, cost_policy_json,
-              privacy_policy_json, status, created_at, updated_at
-            ) VALUES (?, ?, ?, NULL, ?, NULL, 1, NULL, 0, 0, 0, ?, ?, ?, ?, ?)
+              privacy_policy_json, status, default_temperature, default_top_p,
+              default_max_output_tokens, timeout_seconds, retry_count, allow_fallback,
+              allow_cloud, streaming_supported, protocol_family, request_format,
+              response_format, supports_stream, verify_capabilities_json, created_at, updated_at
+            ) VALUES (
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
             """,
             (
                 DEFAULT_BRAIN_ID,
-                "未配置大脑",
-                "local_placeholder",
-                "not_configured",
-                json.dumps({"mode": "placeholder"}, ensure_ascii=False),
-                json.dumps({"allow_cloud": False}, ensure_ascii=False),
-                "not_configured",
+                seed["display_name"],
+                seed["provider"],
+                seed["endpoint"],
+                seed["model_name"],
+                seed["api_key_ref"],
+                1 if seed["is_local"] else 0,
+                seed["context_window"],
+                1 if seed["supports_tools"] else 0,
+                1 if seed["supports_vision"] else 0,
+                1 if seed["supports_audio"] else 0,
+                json.dumps(seed["cost_policy"], ensure_ascii=False),
+                json.dumps(seed["privacy_policy"], ensure_ascii=False),
+                seed["status"],
+                seed["default_temperature"],
+                seed["default_top_p"],
+                seed["default_max_output_tokens"],
+                seed["timeout_seconds"],
+                seed["retry_count"],
+                1 if seed["allow_fallback"] else 0,
+                1 if seed["allow_cloud"] else 0,
+                1 if seed["streaming_supported"] else 0,
+                seed["protocol_family"],
+                seed["request_format"],
+                seed["response_format"],
+                1 if seed["supports_stream"] else 0,
+                json.dumps(seed["verify_capabilities"], ensure_ascii=False),
                 now,
                 now,
             ),
         )
+
+    async def _repair_default_brain_if_managed(
+        self,
+        existing: dict[str, Any],
+        seed: dict[str, Any],
+    ) -> None:
+        is_legacy_placeholder = (
+            existing.get("provider") == "local_placeholder"
+            and existing.get("model_name") == "not_configured"
+            and existing.get("status") == "not_configured"
+        )
+        is_managed_codex_default = (
+            existing.get("provider") == seed["provider"]
+            and existing.get("display_name")
+            in {seed["display_name"], "Codex Default Brain", "Codex 默认大脑"}
+        )
+        if not (is_legacy_placeholder or is_managed_codex_default):
+            return
+
+        fields = {
+            "display_name": seed["display_name"],
+            "provider": seed["provider"],
+            "endpoint": seed["endpoint"],
+            "model_name": seed["model_name"],
+            "is_local": 1 if seed["is_local"] else 0,
+            "context_window": seed["context_window"],
+            "supports_tools": 1 if seed["supports_tools"] else 0,
+            "supports_vision": 1 if seed["supports_vision"] else 0,
+            "supports_audio": 1 if seed["supports_audio"] else 0,
+            "cost_policy_json": json.dumps(seed["cost_policy"], ensure_ascii=False),
+            "privacy_policy_json": json.dumps(seed["privacy_policy"], ensure_ascii=False),
+            "status": seed["status"],
+            "default_temperature": seed["default_temperature"],
+            "default_top_p": seed["default_top_p"],
+            "default_max_output_tokens": seed["default_max_output_tokens"],
+            "timeout_seconds": seed["timeout_seconds"],
+            "retry_count": seed["retry_count"],
+            "allow_fallback": 1 if seed["allow_fallback"] else 0,
+            "allow_cloud": 1 if seed["allow_cloud"] else 0,
+            "streaming_supported": 1 if seed["streaming_supported"] else 0,
+            "protocol_family": seed["protocol_family"],
+            "request_format": seed["request_format"],
+            "response_format": seed["response_format"],
+            "supports_stream": 1 if seed["supports_stream"] else 0,
+            "verify_capabilities_json": json.dumps(seed["verify_capabilities"], ensure_ascii=False),
+            "last_error_code": None,
+            "last_error_message": None,
+            "latency_ms": None,
+            "updated_at": utc_now_iso(),
+        }
+        existing_ref = existing.get("api_key_ref")
+        if is_legacy_placeholder or existing_ref in {
+            None,
+            "",
+            f"env://{DEFAULT_CODEX_API_KEY_ENV}",
+        }:
+            fields["api_key_ref"] = seed["api_key_ref"]
+        else:
+            fields["status"] = (
+                "configured"
+                if existing.get("status") == "needs_configuration"
+                else str(existing.get("status") or "configured")
+            )
+
+        assignments = ", ".join(f"{column} = ?" for column in fields)
+        await self._db.execute(
+            f"UPDATE brains SET {assignments} WHERE brain_id = ?",
+            (*fields.values(), DEFAULT_BRAIN_ID),
+        )
+
+    def _default_codex_brain_seed(self) -> dict[str, Any]:
+        runtime = _read_codex_runtime_config()
+        api_key_ref = runtime["api_key_ref"]
+        return {
+            "display_name": DEFAULT_CODEX_DISPLAY_NAME,
+            "provider": runtime["provider"],
+            "endpoint": runtime["endpoint"],
+            "model_name": runtime["model"],
+            "api_key_ref": api_key_ref,
+            "is_local": False,
+            "context_window": runtime["context_window"],
+            "supports_tools": True,
+            "supports_vision": True,
+            "supports_audio": False,
+            "cost_policy": {
+                "mode": "cloud",
+                "profile": "codex_current_default",
+            },
+            "privacy_policy": {
+                "allow_cloud": True,
+                "provider_display_name": "OpenAI",
+                "adapter_family": "openai_compatible",
+                "codex_profile": "current_codex",
+                "codex_wire_api": runtime["wire_api"],
+                "codex_provider": runtime["codex_provider"],
+                "requires_openai_auth": runtime["requires_openai_auth"],
+                "reasoning_effort": runtime["reasoning_effort"],
+                "text_verbosity": DEFAULT_CODEX_TEXT_VERBOSITY,
+                "api_key_ref_scheme": str(api_key_ref or "").split("://", 1)[0] or None,
+            },
+            "status": "configured" if api_key_ref else "needs_configuration",
+            "default_temperature": 0.2,
+            "default_top_p": 1.0,
+            "default_max_output_tokens": 4096,
+            "timeout_seconds": 300,
+            "retry_count": 1,
+            "allow_fallback": True,
+            "allow_cloud": True,
+            "streaming_supported": True,
+            "protocol_family": runtime["wire_api"],
+            "request_format": runtime["wire_api"],
+            "response_format": (
+                "openai_responses" if runtime["wire_api"] == "responses" else "auto"
+            ),
+            "supports_stream": True,
+            "verify_capabilities": {},
+        }
 
     async def _ensure_default_voice_profile(self) -> None:
         exists = await self._db.fetch_one(
@@ -309,7 +462,10 @@ class BootstrapService:
                 "zh-CN-XiaoxiaoNeural",
                 "wav",
                 "你好，我是本地智能体成员。",
-                json.dumps({"default": True, "reply_mode": "explicit_request_only"}, ensure_ascii=False),
+                json.dumps(
+                    {"default": True, "reply_mode": "explicit_request_only"},
+                    ensure_ascii=False,
+                ),
                 now,
                 now,
             ),
@@ -671,3 +827,82 @@ class BootstrapService:
         data = self._shell_runtime.read_shell_file(self._default_shell_id, "member_templates.yaml")
         members = data.get("members", [])
         return [dict(member) for member in members]
+
+
+def _read_codex_runtime_config() -> dict[str, Any]:
+    fallback = {
+        "codex_provider": "openai",
+        "provider": "openai",
+        "endpoint": "https://api.openai.com/v1",
+        "model": DEFAULT_CODEX_MODEL,
+        "wire_api": "responses",
+        "reasoning_effort": DEFAULT_CODEX_REASONING_EFFORT,
+        "requires_openai_auth": False,
+        "api_key_ref": (
+            f"env://{DEFAULT_CODEX_API_KEY_ENV}"
+            if os.environ.get(DEFAULT_CODEX_API_KEY_ENV)
+            else None
+        ),
+        "context_window": 400000,
+    }
+    config_path = Path.home() / ".codex" / "config.toml"
+    if not config_path.exists():
+        return fallback
+    try:
+        data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return fallback
+
+    provider_id = str(data.get("model_provider") or fallback["codex_provider"])
+    provider_config = {}
+    providers = data.get("model_providers")
+    if isinstance(providers, dict):
+        raw_provider = providers.get(provider_id)
+        if isinstance(raw_provider, dict):
+            provider_config = raw_provider
+
+    endpoint = str(provider_config.get("base_url") or fallback["endpoint"])
+    wire_api = _codex_wire_api(provider_config.get("wire_api") or fallback["wire_api"])
+    requires_openai_auth = bool(provider_config.get("requires_openai_auth", False))
+    api_key_ref = None
+    if requires_openai_auth and _codex_auth_has_openai_key():
+        api_key_ref = DEFAULT_CODEX_API_KEY_REF
+    elif os.environ.get(DEFAULT_CODEX_API_KEY_ENV):
+        api_key_ref = f"env://{DEFAULT_CODEX_API_KEY_ENV}"
+
+    return {
+        **fallback,
+        "codex_provider": provider_id,
+        "provider": "openai_compatible",
+        "endpoint": endpoint,
+        "model": DEFAULT_CODEX_MODEL,
+        "wire_api": wire_api,
+        "reasoning_effort": DEFAULT_CODEX_REASONING_EFFORT,
+        "requires_openai_auth": requires_openai_auth,
+        "api_key_ref": api_key_ref,
+    }
+
+
+def _codex_auth_has_openai_key() -> bool:
+    auth_path = Path.home() / ".codex" / "auth.json"
+    if not auth_path.exists():
+        return False
+    try:
+        data = json.loads(auth_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    return isinstance(data, dict) and bool(data.get(DEFAULT_CODEX_API_KEY_ENV))
+
+
+def _codex_wire_api(value: Any) -> str:
+    candidate = str(value or "").strip().lower()
+    return candidate if candidate in {"responses", "chat_completions"} else "responses"
+
+
+def _codex_reasoning_effort(value: Any) -> str:
+    candidate = str(value or "").strip().lower()
+    return (
+        candidate
+        if candidate in {"minimal", "low", "medium", "high"}
+        else DEFAULT_CODEX_REASONING_EFFORT
+    )

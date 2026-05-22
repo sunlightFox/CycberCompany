@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 
 def looks_like_explicit_continuation(text: str) -> bool:
     raw = str(text or "")
@@ -100,7 +102,23 @@ def needs_recent_history_lookup(text: str) -> bool:
         return False
     return any(
         marker in raw
-        for marker in ("刚才", "前面", "上一条", "上个", "偏好", "顺序", "优先级", "记住", "继续", "接着")
+        for marker in (
+            "刚才",
+            "前面",
+            "上一条",
+            "上个",
+            "一开始",
+            "最开始",
+            "开头",
+            "这段对话",
+            "对话的变化",
+            "偏好",
+            "顺序",
+            "优先级",
+            "记住",
+            "继续",
+            "接着",
+        )
     )
 
 
@@ -216,7 +234,8 @@ def structured_summary_chat_request(text: str) -> bool:
 def preference_application_request(text: str) -> bool:
     raw = str(text or "").strip()
     lowered = raw.lower()
-    if not raw or "偏好" not in raw:
+    named_memory = _named_memory_key_present(raw)
+    if not raw or ("偏好" not in raw and not named_memory):
         return False
     if structured_summary_chat_request(raw):
         return True
@@ -232,7 +251,7 @@ def preference_application_request(text: str) -> bool:
             "按后",
             "follow my preference",
         )
-    )
+    ) or (named_memory and re.search(r"按\s*[A-Z]{2,12}(?:\d{0,4})-[A-Z0-9][A-Z0-9_-]{1,}", raw) is not None)
     has_generation_target = any(
         marker in raw or marker in lowered
         for marker in (
@@ -248,6 +267,7 @@ def preference_application_request(text: str) -> bool:
             "输出",
             "写",
             "说",
+            "回我",
             "answer",
             "closeout",
             "next step",
@@ -275,6 +295,46 @@ def explicit_preference_recall_query(text: str) -> bool:
     lowered = raw.lower()
     if not raw or structured_summary_chat_request(raw) or preference_application_request(raw):
         return False
+    upper = raw.upper()
+    named_memory = _named_memory_key_present(raw)
+    if named_memory and any(
+        marker in raw or marker in lowered
+        for marker in (
+            "什么",
+            "是什么",
+            "现在",
+            "当前",
+            "最新",
+            "记得",
+            "还记得",
+            "刚才",
+            "之前",
+            "吗",
+            "?",
+            "？",
+            "what",
+            "recall",
+            "remember",
+        )
+    ):
+        return True
+    if "PREF" in upper and any(
+        marker in raw or marker in lowered
+        for marker in (
+            "什么",
+            "是什么",
+            "最新",
+            "最新版本",
+            "当前版本",
+            "现在",
+            "记得",
+            "还记得",
+            "what",
+            "recall",
+            "remember",
+        )
+    ):
+        return True
     has_query_marker = any(
         marker in raw or marker in lowered
         for marker in (
@@ -317,6 +377,10 @@ def explicit_preference_recall_query(text: str) -> bool:
         )
     )
     return has_preference_reference and (has_query_marker or has_question_shape)
+
+
+def _named_memory_key_present(text: str) -> bool:
+    return re.search(r"\b[A-Z]{2,12}(?:\d{0,4})-[A-Z0-9][A-Z0-9_-]{1,}\b", str(text or "")) is not None
 
 
 def format_sensitive_chat_request(text: str) -> bool:

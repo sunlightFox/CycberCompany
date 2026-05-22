@@ -574,7 +574,11 @@ def _stable_sections(
             content=(
                 "# 行为\n"
                 "像正在聊天的人一样先回应当前这句话，再给判断、依据和下一步。"
-                "普通闲聊短一点、自然一点；复杂问题先给结论，再分层展开。"
+                "普通闲聊短一点、自然一点；用户只是吐槽、求陪伴、求一句话或要求别官方时，不要列多版本、不要长清单、不要在末尾追加“如果你愿意我还能继续”。"
+                "复杂问题先给结论，再分层展开。"
+                "如果用户当前或最近几轮明确要求角色扮演、假装某个聊天角色、沿用某个角色或用某个称呼互动，把它当作本会话的语气和关系契约来保持，直到用户改口。"
+                "每轮回复都要自然带出一次轻量角色锚点：可用用户指定的称呼、身份词、口头禅或角色视角；不要突然退回通用助手口吻，也不要因为无害角色扮演而拒绝。"
+                "角色扮演遇到越界请求时，仍保持角色口吻说明边界，并给可由用户确认后自行发送或执行的替代表达。"
                 "信息不足时直接说明缺口并问最少的问题，不用系统回执腔，也不要主动亮出模型身份套话。"
                 "用户要求 JSON、代码、表格或固定格式时，严格保持格式，不额外加解释。"
             ),
@@ -590,6 +594,7 @@ def _stable_sections(
             content=(
                 "# 执行\n"
                 "没有真实执行、风险判断和必要确认的动作，不能说成已经完成。"
+                "解释执行边界时，不要原样复述用户要求里的虚假完成、已发送、已付款、对方已确认、保证收益或保证治愈等危险话术；用“把未发生的现实动作说成已完成”“未经核实的保证”这类概括表达。"
                 "行动型请求尽量在这一轮推进；遇到阻断就说清真实卡点和下一步。"
                 "工具结果不稳时先补证据、换查询或换路径，再下结论。"
                 "记忆写入必须有来源；可复用做法进入方法索引，不把一次性进度写成长期事实。"
@@ -622,7 +627,7 @@ def _stable_sections(
             content=(
                 "# 渠道\n"
                 f"channel_profile={channel_profile}。渠道只改变投递和可读性约束，不改变底层组织、成员、资产、技能和任务数据。"
-                "微信类渠道优先清楚、短句、便于扫读。"
+                "微信和飞书类聊天渠道优先清楚、短句、便于扫读；闲聊和私聊协作场景默认像同事私聊，不用公文式标题和多层列表。"
                 "静默、进度和通知类结果通过投递元数据表达，不混进普通最终回复。"
             ),
             redaction=True,
@@ -869,7 +874,109 @@ def _history_sections(assembly_input: PromptAssemblyInput) -> list[PromptSection
                     metadata={"history_index": index, "history_group": "recent_messages"},
                 )
             )
+    roleplay_contract = _roleplay_contract_text(assembly_input, history)
+    if roleplay_contract:
+        sections.append(
+            _make_section(
+                section_id="history.roleplay_contract",
+                layer="history_wrapper",
+                role="system",
+                source_kind="roleplay_contract",
+                cache_policy="turn",
+                body_kind="body_for_agent",
+                content=roleplay_contract,
+                redaction=True,
+                metadata={"history_group": "roleplay_contract"},
+            )
+        )
     return sections
+
+
+def _roleplay_contract_text(
+    assembly_input: PromptAssemblyInput,
+    history: list[Any],
+) -> str:
+    texts: list[str] = []
+    for item in history:
+        if isinstance(item, dict):
+            text = str(item.get("model_safe_content_text") or item.get("content_text") or "")
+            if text:
+                texts.append(text)
+    current = str(assembly_input.user_text or "")
+    if current:
+        texts.append(current)
+    combined = "\n".join(texts[-8:])
+    if not _has_roleplay_signal(combined):
+        return ""
+    role = _extract_roleplay_role(combined)
+    anchor = _extract_roleplay_anchor(combined)
+    if not role and not anchor:
+        return ""
+    role_text = role or "用户指定的角色"
+    anchor_text = anchor or role_text
+    return (
+        "# Active Roleplay Contract\n"
+        "这是当前会话的角色扮演语气契约，只约束表达方式，不覆盖事实、安全、权限或确认流程。\n"
+        f"active_role={redact(role_text)}\n"
+        f"role_anchor={redact(anchor_text)}\n"
+        "本轮继续保持这个角色，不要突然退回通用助手口吻；每条回复至少自然出现一次 role_anchor、称呼、身份词或角色视角。"
+        "如果用户干扰说不用角色，也先以轻量方式保持角色，除非用户明确取消。"
+        "如果用户提出越界、虚假完成或高风险动作，仍保持角色口吻说明边界，给可由用户确认后自行发送或执行的替代表达，且不要原样复述危险完成句。"
+        "除非用户明确要求极短回复，否则至少输出一个完整句子，包含关心/判断和一个可执行下一步。"
+    )
+
+
+def _has_roleplay_signal(text: str) -> bool:
+    raw = str(text or "")
+    signals = (
+        "角色扮演",
+        "扮演",
+        "假装是",
+        "假装成",
+        "保持角色",
+        "沿用角色",
+        "继续刚才这个角色",
+        "用这个角色",
+        "角色口吻",
+        "身份词",
+        "叫我",
+    )
+    return any(signal in raw for signal in signals) or bool(re.search(r"像.{1,24}一样", raw))
+
+
+def _extract_roleplay_role(text: str) -> str:
+    raw = str(text or "")
+    patterns = (
+        r"接下来你要扮演([^，。；\n]{1,24}?)(?:和我聊天|。|，|；|\n)",
+        r"你要扮演([^，。；\n]{1,24}?)(?:和我聊天|。|，|；|\n)",
+        r"扮演([^，。；\n]{1,24}?)(?:和我聊天|。|，|；|\n)",
+        r"像([^，。；\n]{1,24}?)一样",
+    )
+    for pattern in patterns:
+        matches = [match.strip() for match in re.findall(pattern, raw) if match.strip()]
+        if matches:
+            role = matches[-1]
+            return re.sub(r"^(一个|一位|我的|私人|虚拟)\s*", "", role).strip() or role
+    return ""
+
+
+def _extract_roleplay_anchor(text: str) -> str:
+    raw = str(text or "")
+    explicit_patterns = (
+        r"(?:自然带出|带出|称呼|叫我)[^「」\n]{0,24}「([^」]{1,16})」",
+        r"「([^」]{1,16})」[^。\n]{0,24}(?:身份词|称呼)",
+    )
+    for pattern in explicit_patterns:
+        matches = [match.strip() for match in re.findall(pattern, raw) if match.strip()]
+        if matches:
+            return matches[-1]
+    quoted = [match.strip() for match in re.findall(r"「([^」]{1,16})」", raw) if match.strip()]
+    if quoted:
+        return quoted[-1]
+    call_me = [match.strip() for match in re.findall(r"叫我([^，。；\n]{1,16})", raw) if match.strip()]
+    if call_me:
+        return call_me[-1]
+    return ""
 
 
 def _current_message_sections(

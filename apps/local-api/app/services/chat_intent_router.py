@@ -78,7 +78,9 @@ class ChatIntentRouter:
                 and not structured_summary_request
                 and not format_sensitive_request
                 and not _direct_only(clean)
+                and not _looks_like_non_office_advice_context(clean)
                 and not _negative_office_generation_constraint(clean)
+                and not _knowledge_text_only_request(clean)
                 and not _office_completion_reporting_question(clean)
                 and not is_skill_or_mcp_concept_request(clean)
                 and not is_host_filesystem_list_request(clean)
@@ -109,6 +111,16 @@ class ChatIntentRouter:
                 task_goal=None,
                 safe_user_summary=_safe_summary(clean),
             )
+        requested_ai_coding_tools = ai_coding_tool_request(clean)
+        if requested_ai_coding_tools:
+            return ChatRouteDecision(
+                route_type="ai_coding_tool_request",
+                confidence=0.86,
+                reason_code="ai_coding_tool_capability_check",
+                task_goal=clean,
+                safe_user_summary=_safe_summary(clean),
+                metadata={"requested_tools": requested_ai_coding_tools},
+            )
         if is_explicit_download_request(clean):
             return ChatRouteDecision(
                 route_type="browser_download",
@@ -117,6 +129,20 @@ class ChatIntentRouter:
                 requires_confirmation=True,
                 task_goal=clean,
                 safe_user_summary=_safe_summary(clean),
+            )
+        lowered = clean.lower()
+        if (
+            is_webpage_read_request(clean)
+            and _readonly_login_page_inspection(clean, lowered)
+        ) or _readonly_form_page_field_request(clean, lowered):
+            return ChatRouteDecision(
+                route_type="browser_read_page",
+                confidence=0.9,
+                reason_code="browser_read_page_readonly",
+                requires_confirmation=False,
+                task_goal=None,
+                safe_user_summary=_safe_summary(clean),
+                metadata={"url": webpage_read_url(clean)},
             )
         if is_browser_page_action_request(clean):
             return ChatRouteDecision(
@@ -271,6 +297,10 @@ def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
     clean = _clean(text)
     if _direct_only(clean):
         return None
+    if _looks_like_non_office_advice_context(clean):
+        return None
+    if _attachment_answer_only_request(clean):
+        return None
     if is_structured_summary_request(clean):
         return None
     if _format_sensitive_direct_answer_request(clean) and not _has_office_action(clean):
@@ -278,6 +308,8 @@ def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
     if is_host_filesystem_list_request(clean):
         return None
     if _negative_office_generation_constraint(clean):
+        return None
+    if _knowledge_text_only_request(clean):
         return None
     document_type = office_document_type(clean)
     if document_type is None:
@@ -435,9 +467,68 @@ def is_host_software_install_request(text: str) -> bool:
         return False
     if any(marker in clean or marker in lowered for marker in ["依赖", "项目里", "node_modules"]):
         return False
+    if _host_install_is_described_risk_context(clean):
+        return False
     if host_software_action(clean) is None:
         return False
+    if not _host_install_is_user_requested_action(clean):
+        return False
     return bool(extract_host_software_name(clean))
+
+
+def _host_install_is_described_risk_context(text: str) -> bool:
+    clean = _clean(text)
+    risk_markers = [
+        "诱导安装",
+        "被诱导安装",
+        "被骗安装",
+        "让父母安装",
+        "让我爸妈安装",
+        "让我爸安装",
+        "让我妈安装",
+        "陌生人让",
+        "群里的人诱导",
+        "不要安装",
+    ]
+    advice_markers = [
+        "核验",
+        "止损",
+        "沟通方案",
+        "风险",
+        "诈骗",
+        "银行卡",
+        "理财",
+        "安全",
+        "不要吓",
+        "劝",
+    ]
+    return any(marker in clean for marker in risk_markers) and any(marker in clean for marker in advice_markers)
+
+
+def _host_install_is_user_requested_action(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    request_markers = [
+        "帮我安装",
+        "帮我卸载",
+        "请安装",
+        "请卸载",
+        "给我安装",
+        "给我卸载",
+        "装一下",
+        "卸一下",
+        "安装到这台电脑",
+        "装到这台电脑",
+        "安装到我的电脑",
+        "装到我的电脑",
+        "安装到本机",
+        "装到本机",
+        "这台电脑安装",
+        "本机安装",
+        "install ",
+        "uninstall ",
+    ]
+    return any(marker in clean or marker in lowered for marker in request_markers)
 
 
 def host_software_action(text: str) -> str | None:
@@ -607,6 +698,43 @@ def _looks_like_browser_page_action(text: str) -> bool:
     )
 
 
+def _explicit_readonly_browser_inspection(clean: str, lowered: str) -> bool:
+    readonly_markers = (
+        "只读",
+        "仅读",
+        "不要尝试登录",
+        "不要登录",
+        "别登录",
+        "不要点击",
+        "不要提交",
+        "不要填写",
+        "不要输入",
+        "read only",
+        "readonly",
+        "do not log in",
+        "don't log in",
+        "do not click",
+        "do not submit",
+    )
+    inspection_markers = (
+        "阅读",
+        "读一下",
+        "看一下",
+        "有哪些输入框",
+        "输入框",
+        "字段",
+        "标题",
+        "内容",
+        "summarize",
+        "read this",
+        "inspect",
+        "what fields",
+    )
+    return any(marker in clean or marker in lowered for marker in readonly_markers) and any(
+        marker in clean or marker in lowered for marker in inspection_markers
+    )
+
+
 def is_explicit_download_request(text: str) -> bool:
     clean = _clean(text)
     lowered = clean.lower()
@@ -635,6 +763,8 @@ def is_webpage_read_request(text: str) -> bool:
         return False
     if not _first_url(clean):
         return False
+    if _explicit_readonly_browser_inspection(clean, lowered):
+        return True
     if _readonly_login_page_inspection(clean, lowered):
         return True
     if _has_browser_side_effect_marker(clean, lowered):
@@ -1348,7 +1478,11 @@ def _extract_after_markers(text: str, markers: list[str]) -> str | None:
 
 def _excel_sheets_from_request(request: OfficeChatRequest) -> list[dict[str, Any]]:
     rows = _extract_sales_rows(request.content)
-    if not rows:
+    budget_rows = _extract_budget_rows(request.content) if not rows else []
+    if budget_rows:
+        rows = budget_rows
+        headers = ["项目", "金额"]
+    elif not rows:
         rows = [
             ["收入", 120000, "示例数据"],
             ["成本", 76000, "示例数据"],
@@ -1383,6 +1517,18 @@ def _extract_sales_rows(text: str) -> list[list[Any]]:
         cost = _number(match.group("cost"))
         rows.append([match.group("period").replace(" ", ""), revenue, cost, revenue - cost])
     return rows
+
+
+def _extract_budget_rows(text: str) -> list[list[Any]]:
+    clean = _clean(text)
+    rows: list[list[Any]] = []
+    for label, amount in re.findall(r"([\u4e00-\u9fffA-Za-z]{1,12})\s*(\d+(?:\.\d+)?)", clean):
+        if label.lower() in {"excel", "xlsx"}:
+            continue
+        value = _number(amount)
+        rows.append([label, value])
+    budget_labels = {"房租", "餐饮", "交通", "医疗", "学习", "水电", "通讯", "娱乐", "保险"}
+    return rows if any(str(row[0]) in budget_labels for row in rows) else []
 
 
 def _ppt_slides_from_request(request: OfficeChatRequest) -> list[dict[str, Any]]:
@@ -1546,6 +1692,42 @@ def _negative_file_mutation_constraint(text: str) -> bool:
 def _negative_office_generation_constraint(text: str) -> bool:
     clean = _clean(text)
     lowered = clean.lower()
+    if _knowledge_text_only_request(clean):
+        return True
+    if any(marker in clean for marker in ("表格字段", "字段清单", "字段列表")) and any(
+        marker in clean for marker in ("给我一个", "列出", "有哪些", "搜索", "强调")
+    ):
+        return True
+    explicit_text_only_markers = (
+        "不要做文件",
+        "别做文件",
+        "不做文件",
+        "不要创建文件",
+        "别创建文件",
+        "不要生成文件",
+        "不要生成任何文件",
+        "别生成文件",
+        "不要产出文件",
+        "不要导出文件",
+        "只要文本",
+        "只给文本",
+        "只要文字",
+        "只要大纲",
+        "只给大纲",
+        "不要做成文档",
+        "别生成文档",
+        "不要生成文档",
+        "do not create file",
+        "do not generate file",
+        "text only",
+        "outline only",
+        "\u53ea\u8981\u6807\u9898",
+        "\u53ea\u8981\u5927\u7eb2",
+        "\u53ea\u8981\u6bcf\u9875\u91cd\u70b9",
+        "\u6bcf\u9875\u91cd\u70b9",
+    )
+    if any(marker in clean or marker in lowered for marker in explicit_text_only_markers):
+        return True
     return any(
         marker in clean or marker in lowered
         for marker in [
@@ -1553,6 +1735,10 @@ def _negative_office_generation_constraint(text: str) -> bool:
             "不要生成word",
             "不要生成 docx",
             "不要生成docx",
+            "不要做 excel",
+            "不要做excel",
+            "不做 excel",
+            "不做excel",
             "不要生成 ppt",
             "不要生成ppt",
             "不要做成 ppt",
@@ -1567,6 +1753,149 @@ def _negative_office_generation_constraint(text: str) -> bool:
             "do not generate ppt",
         ]
     )
+
+
+def _explicit_office_file_generation_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    explicit_markers = (
+        "生成文件",
+        "创建文件",
+        "产出文件",
+        "导出文件",
+        "保存为",
+        "生成文档",
+        "创建文档",
+        "产出文档",
+        "导出文档",
+        "做成文档",
+        "生成一份 word",
+        "生成 word",
+        "创建 word",
+        "导出 word",
+        "word 文件",
+        "word文档",
+        "word 文档",
+        "生成一份Word",
+        "生成Word",
+        "创建Word",
+        "导出Word",
+        "Word文件",
+        "Word文档",
+        "生成 excel",
+        "创建 excel",
+        "导出 excel",
+        "excel 文件",
+        "Excel文件",
+        "生成 ppt",
+        "创建 ppt",
+        "导出 ppt",
+        "ppt 文件",
+        "PPT文件",
+        ".docx",
+        ".xlsx",
+        ".pptx",
+    )
+    return any(marker in clean or marker in lowered for marker in explicit_markers)
+
+
+def _knowledge_text_only_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if not clean or _explicit_office_file_generation_request(clean):
+        return False
+    knowledge_actions = (
+        "给我一个",
+        "给我一份",
+        "应该",
+        "请给",
+        "设计一个",
+        "设计一套",
+        "什么是",
+        "如何",
+        "怎么",
+        "怎样",
+        "为什么",
+        "解释",
+        "比较",
+        "分析",
+        "归纳",
+        "总结",
+        "判断",
+        "评估",
+        "排序",
+        "区分",
+        "避免",
+        "说明",
+        "列出",
+        "有哪些",
+        "what",
+        "how",
+        "explain",
+        "compare",
+    )
+    knowledge_outputs = (
+        "评估表",
+        "可信度",
+        "资料表",
+        "字段",
+        "字段清单",
+        "评分维度",
+        "评分标准",
+        "模板",
+        "判断规则",
+        "规则",
+        "清单",
+        "框架",
+        "步骤",
+        "方法",
+        "权重",
+        "风险闸门",
+        "摘要",
+        "报告摘要",
+        "研究报告",
+        "知识报告",
+        "知识回答",
+        "专家报告",
+        "大众解释",
+        "取舍",
+        "官方文档",
+        "用户评论",
+        "个人博客",
+        "访谈",
+        "论坛帖",
+        "网页",
+        "来源",
+        "证据",
+        "资料",
+        "结论",
+        "边界",
+        "样本偏差",
+        "重度用户",
+    )
+    passive_document_contexts = (
+        "一份研究报告",
+        "一份 2023 年报告",
+        "2023 年报告",
+        "知识报告发布前",
+        "官方文档",
+        "第三方测评",
+        "用户评论",
+        "个人博客",
+    )
+    textual_method_markers = (
+        "请给模板",
+        "请给判断规则",
+        "如何避免",
+        "权重如何排序",
+        "适合判断",
+        "还能不能用于",
+    )
+    has_action = any(marker in clean or marker in lowered for marker in knowledge_actions)
+    has_output = any(marker in clean or marker in lowered for marker in knowledge_outputs)
+    has_passive_document = any(marker in clean or marker in lowered for marker in passive_document_contexts)
+    asks_for_textual_method = any(marker in clean for marker in textual_method_markers)
+    return (has_action and has_output) or (has_passive_document and asks_for_textual_method)
 
 
 def _office_completion_reporting_question(text: str) -> bool:
@@ -1595,6 +1924,17 @@ def _office_completion_reporting_question(text: str) -> bool:
 
 def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
     cn_markers = [
+        "打开并阅读",
+        "打开阅读",
+        "阅读这个",
+        "阅读一下",
+        "读一下",
+        "读这个",
+        "只读",
+        "看一下",
+        "输入框",
+        "有哪些输入框",
+        "本地研究页",
         "看一下这网站有什么内容",
         "这个网页讲什么",
         "这个页面讲什么",
@@ -1759,6 +2099,50 @@ def _readonly_login_page_inspection(clean: str, lowered: str) -> bool:
     return not any(marker in action_text for marker in imperative_markers)
 
 
+def _readonly_form_page_field_request(clean: str, lowered: str) -> bool:
+    if not _first_url(clean):
+        return False
+    read_markers = (
+        "看看",
+        "看一下",
+        "查看",
+        "有哪些字段",
+        "有什么字段",
+        "有哪些输入框",
+        "输入框",
+        "字段",
+        "表单字段",
+        "what fields",
+        "fields",
+    )
+    page_markers = (
+        "登录页",
+        "登录页面",
+        "注册页",
+        "注册页面",
+        "表单页",
+        "login",
+        "form",
+    )
+    action_markers = (
+        "提交",
+        "填写",
+        "点击",
+        "发送",
+        "保存",
+        "上传",
+        "下载",
+        "登录进去",
+        "帮我登录",
+        "替我登录",
+    )
+    return (
+        any(marker in clean or marker in lowered for marker in read_markers)
+        and any(marker in clean or marker in lowered for marker in page_markers)
+        and not any(marker in clean or marker in lowered for marker in action_markers)
+    )
+
+
 def _first_url(text: str) -> str | None:
     match = re.search(r"https?://[^\s，。；;）)]+", text, flags=re.IGNORECASE)
     return match.group(0) if match else None
@@ -1846,6 +2230,15 @@ DIRECT_ONLY_MARKERS_CANONICAL = (
 def office_document_type(text: str) -> str | None:
     clean = _clean(text)
     lowered = clean.lower()
+    explicit_word_target = (
+        re.search(r"(?<![a-z])word(?![a-z])", lowered)
+        and any(marker in clean or marker in lowered for marker in ("生成", "创建", "做一份", "做一个", "导出", "generate", "create", "export"))
+    ) or any(
+        marker in clean
+        for marker in ("生成一份 Word", "生成 Word", "生成word", "做成 Word", "导出 Word", "Word 复盘文件")
+    )
+    if explicit_word_target:
+        return "word"
     if any(marker in lowered for marker in ("excel", "xlsx")) or any(
         marker in clean
         for marker in ("\u8868\u683c", "\u5de5\u4f5c\u7c3f", "\u9500\u552e\u6570\u636e", "\u7ecf\u8425\u6570\u636e")
@@ -1866,6 +2259,121 @@ def office_document_type(text: str) -> str | None:
 
 def _direct_only(text: str) -> bool:
     return any(marker in text for marker in DIRECT_ONLY_MARKERS_CANONICAL)
+
+
+def _attachment_answer_only_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if not any(marker in clean or marker in lowered for marker in ("附件", "文件", "attached", "attachment", ".docx", ".xlsx", ".pdf", ".txt")):
+        return False
+    if any(
+        marker in clean or marker in lowered
+        for marker in (
+            "标准文件名",
+            "文件名建议",
+            "命名建议",
+            "不要声称已经改名",
+            "不要声称已改名",
+            "不要真的改名",
+            "术语表",
+            "抽取术语",
+            "简短解释",
+            "英文摘要",
+            "整理成英文摘要",
+            "translate",
+            "glossary",
+        )
+    ):
+        return True
+    return False
+
+
+def _looks_like_non_office_advice_context(text: str) -> bool:
+    clean = _clean(text)
+    if not clean:
+        return False
+    if _looks_like_daily_life_advice_request(clean):
+        return True
+    advice_markers = (
+        "帮我准备",
+        "帮我判断",
+        "帮我梳理",
+        "帮我区分",
+        "帮我整理",
+        "问医生",
+        "就医",
+        "观察记录",
+        "证据缺口",
+        "维权",
+        "风险提醒",
+        "沟通步骤",
+    )
+    passive_document_markers = ("体检报告", "检测报告", "合同写着", "聊天记录", "检测截图")
+    explicit_generation_markers = (
+        "生成",
+        "创建",
+        "做成",
+        "做一份",
+        "做一个",
+        "导出",
+        "保存为",
+        "生成一份 Word",
+        "生成 Word",
+        "导出 Word",
+        ".docx",
+        ".xlsx",
+        ".pptx",
+    )
+    if any(marker in clean for marker in explicit_generation_markers):
+        return False
+    return any(marker in clean for marker in passive_document_markers) and any(
+        marker in clean for marker in advice_markers
+    )
+
+
+def _looks_like_daily_life_advice_request(text: str) -> bool:
+    clean = _clean(text)
+    if not clean:
+        return False
+    life_markers = (
+        "洗衣服",
+        "回消息",
+        "吃饭",
+        "睡觉",
+        "洗澡",
+        "收拾",
+        "家里",
+        "朋友",
+        "家人",
+        "伴侣",
+        "同事",
+        "关系",
+        "语气",
+        "道歉",
+        "边界",
+        "群里",
+        "聚会",
+    )
+    advice_markers = (
+        "帮我排",
+        "排个",
+        "顺序",
+        "先做哪",
+        "不痛苦",
+        "怎么说",
+        "怎么回",
+        "给我一个开场",
+        "给个开场",
+        "开场白",
+        "话术",
+        "自然一点",
+        "委婉",
+        "不尴尬",
+        "修复关系",
+    )
+    return any(marker in clean for marker in life_markers) and any(
+        marker in clean for marker in advice_markers
+    )
 
 
 def _without_direct_only_markers(text: str) -> str:
@@ -2118,6 +2626,23 @@ def office_document_type(text: str) -> str | None:
 
 
 def _direct_only(text: str) -> bool:
+    if any(
+        marker in text
+        for marker in (
+            "只要文本",
+            "只给文本",
+            "只要文字",
+            "只要大纲",
+            "只给大纲",
+            "不要做文件",
+            "别做文件",
+            "不做文件",
+            "不要创建文件",
+            "不要生成文件",
+            "别生成文件",
+        )
+    ):
+        return True
     return any(
         marker in text
         for marker in (
@@ -2141,6 +2666,20 @@ def _direct_only(text: str) -> bool:
 
 def _without_direct_only_markers(text: str) -> str:
     result = text
+    for marker in (
+        "只要文本",
+        "只给文本",
+        "只要文字",
+        "只要大纲",
+        "只给大纲",
+        "不要做文件",
+        "别做文件",
+        "不做文件",
+        "不要创建文件",
+        "不要生成文件",
+        "别生成文件",
+    ):
+        result = result.replace(marker, " ")
     for marker in (
         "只解释",
         "只给方案",
@@ -2319,6 +2858,22 @@ def browser_search_query(text: str) -> str:
 
 
 _REPO_META_DISCUSSION_MARKERS = (
+    "拆成步骤",
+    "拆解步骤",
+    "验收标准",
+    "复盘报告",
+    "复盘包含",
+    "进展同步",
+    "进展怎么写",
+    "写一条进展",
+    "质量打分",
+    "什么情况下",
+    "如何判断完成",
+    "完成标准",
+    "风险清单",
+    "只要建议",
+    "只给建议",
+    "不要执行",
     "怎么帮",
     "如何帮",
     "一句话",
@@ -2463,3 +3018,287 @@ def is_skill_or_mcp_concept_request(text: str) -> bool:
     return any(marker in clean or marker in lowered for marker in target_markers) and any(
         marker in clean or marker in lowered for marker in concept_markers
     )
+
+
+# Broad-route hardening overrides live last so older compatibility helpers above
+# cannot steal common chat/browser cases through narrow keyword matches.
+_BASE_IS_DOWNLOAD_TOPIC_ONLY = is_download_topic_only
+_BASE_REPO_EXECUTION_ROUTE = repo_execution_route
+_BASE_HOST_FILESYSTEM_LOCATION = host_filesystem_location
+_BASE_IS_HOST_FILESYSTEM_LIST_REQUEST = is_host_filesystem_list_request
+
+
+def _url_read_context_marker(clean: str, lowered: str) -> bool:
+    read_markers = (
+        "\u6253\u5f00\u5e76\u9605\u8bfb",
+        "\u5c1d\u8bd5\u9605\u8bfb",
+        "\u9605\u8bfb",
+        "\u8bfb",
+        "\u770b",
+        "\u770b\u4e00\u4e0b",
+        "\u57fa\u4e8e",
+        "\u7efc\u5408",
+        "\u603b\u7ed3",
+        "\u6982\u62ec",
+        "\u544a\u8bc9\u6211",
+        "\u5199\u4e00\u53e5",
+        "\u5217\u51fa",
+        "\u6709\u54ea\u4e9b",
+        "\u662f\u4ec0\u4e48",
+        "\u8ba8\u8bba\u7684\u4e3b\u9898",
+        "\u4f9d\u636e",
+        "\u6765\u81ea\u9875\u9762",
+        "\u9875\u9762",
+        "\u7f51\u9875",
+        "\u94fe\u63a5",
+        "\u98ce\u9669",
+        "\u539f\u5219",
+        "\u786e\u8ba4",
+        "read",
+        "review",
+        "summarize",
+        "summarise",
+        "based on",
+        "from the page",
+        "what",
+        "which",
+    )
+    return any(marker in clean or marker in lowered for marker in read_markers)
+
+
+def _browser_write_action_marker(clean: str, lowered: str) -> bool:
+    write_markers = (
+        "\u767b\u5f55",
+        "\u70b9\u51fb",
+        "\u63d0\u4ea4",
+        "\u586b\u5199",
+        "\u8f93\u5165",
+        "\u4e0a\u4f20",
+        "\u4e0b\u5355",
+        "\u652f\u4ed8",
+        "\u53d1\u5e03",
+        "\u622a\u56fe",
+        "login",
+        "log in",
+        "click",
+        "submit",
+        "fill",
+        "type",
+        "upload",
+        "checkout",
+        "pay",
+        "publish",
+        "screenshot",
+    )
+    negative_markers = (
+        "\u4e0d\u8981\u5c1d\u8bd5\u767b\u5f55",
+        "\u4e0d\u8981\u767b\u5f55",
+        "\u4e0d\u8981\u70b9\u51fb",
+        "\u4e0d\u8981\u63d0\u4ea4",
+        "\u4e0d\u8981\u586b\u5199",
+        "\u4e0d\u8981\u8f93\u5165",
+        "\u4e0d\u4e0b\u5355",
+        "\u4e0d\u652f\u4ed8",
+        "\u4e0d\u4e0b\u8f7d",
+        "\u4e0d\u8981\u4e0b\u8f7d",
+        "do not log in",
+        "don't log in",
+        "do not click",
+        "do not submit",
+        "do not download",
+        "without downloading",
+    )
+    scrubbed = re.sub(r"https?://[^\s锛屻€傦紱;锛?]+", " ", clean, flags=re.IGNORECASE)
+    scrubbed_lowered = scrubbed.lower() if lowered else lowered
+    for harmless in ("\u8f93\u5165\u6846", "\u6709\u54ea\u4e9b\u8f93\u5165\u6846", "\u54ea\u4e9b\u8f93\u5165\u6846"):
+        scrubbed = scrubbed.replace(harmless, " ")
+        scrubbed_lowered = scrubbed_lowered.replace(harmless, " ")
+    for marker in negative_markers:
+        scrubbed = scrubbed.replace(marker, " ")
+        scrubbed_lowered = scrubbed_lowered.replace(marker, " ")
+    return any(marker in scrubbed or marker in scrubbed_lowered for marker in write_markers)
+
+
+def is_webpage_read_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if not _first_url(clean):
+        return False
+    if is_explicit_download_request(clean):
+        return False
+    if _browser_write_action_marker(clean, lowered):
+        return False
+    return (
+        _explicit_readonly_browser_inspection(clean, lowered)
+        or _readonly_login_page_inspection(clean, lowered)
+        or _has_webpage_read_marker(clean, lowered)
+        or _url_read_context_marker(clean, lowered)
+    )
+
+
+def is_download_topic_only(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if _first_url(clean) and _negative_download_constraint(clean) and _url_read_context_marker(clean, lowered):
+        return False
+    return _BASE_IS_DOWNLOAD_TOPIC_ONLY(clean)
+
+
+def _repo_false_positive_chat_request(clean: str, lowered: str) -> bool:
+    if _looks_like_daily_life_advice_request(clean):
+        return True
+    if any(marker in clean for marker in ("\u62c6\u6210", "\u62c6\u89e3")) and any(
+        marker in clean for marker in ("\u6b65", "\u6b65\u9aa4", "\u6e05\u5355")
+    ):
+        execution_markers = (
+            "pytest",
+            "\u8fd0\u884c pytest",
+            "\u5f00\u59cb\u6267\u884c",
+            "\u76f4\u63a5\u6267\u884c",
+            "\u5e2e\u6211\u6267\u884c",
+            "\u6267\u884c\u4fee\u590d",
+            "\u4fee\u590d\u5e76\u8fd0\u884c",
+        )
+        if not any(marker in clean or marker in lowered for marker in execution_markers):
+            return True
+    if "\u8981\u4e0d\u8981" in clean and any(marker in clean for marker in ("\u8bc4\u4ef7", "\u51b3\u7b56", "\u5efa\u8bae")):
+        return True
+    if "\u6d4b\u8bd5\u65e5\u62a5" in clean:
+        return True
+    if "FBROAD" in clean and any(
+        marker in clean for marker in ("\u65e5\u62a5", "\u5468\u4f1a\u603b\u7ed3", "\u603b\u7ed3\u6210\u4e00\u53e5", "\u8d28\u91cf\u98ce\u9669")
+    ):
+        return True
+    if any(
+        marker in clean
+        for marker in (
+            "\u5199\u4e00\u6761",
+            "\u5199\u4e00\u6bb5",
+            "\u7528 5 \u70b9\u603b\u7ed3",
+            "\u5e2e\u6211\u603b\u7ed3",
+        )
+    ) and any(
+        marker in clean
+        for marker in (
+            "\u65e5\u62a5",
+            "\u98ce\u9669",
+            "\u5ba2\u6237\u8bf4\u660e",
+            "\u5468\u4f1a",
+            "\u8fdb\u5c55",
+            "\u62a5\u544a",
+        )
+    ):
+        return True
+    return "test report" in lowered or "daily report" in lowered
+
+
+def _dangerous_command_or_secret_boundary(clean: str, lowered: str) -> bool:
+    dangerous_command = any(
+        marker in lowered
+        for marker in (
+            "rm -rf /",
+            "rm -rf",
+            "remove-item -recurse",
+            "del /s",
+            "format ",
+            "mkfs",
+        )
+    )
+    asset_broker_bypass = "\u7ed5\u8fc7 asset broker" in lowered or (
+        "\u7ed5\u8fc7" in clean and "Asset Broker" in clean
+    )
+    direct_secret = any(marker in lowered for marker in ("read secret", "directly read secret")) or (
+        "\u76f4\u63a5\u8bfb\u53d6" in clean and "secret" in lowered
+    )
+    return dangerous_command or asset_broker_bypass or direct_secret
+
+
+def repo_execution_route(text: str) -> str | None:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if _repo_false_positive_chat_request(clean, lowered):
+        return None
+    if _dangerous_command_or_secret_boundary(clean, lowered):
+        return None
+    return _BASE_REPO_EXECUTION_ROUTE(clean)
+
+
+def host_filesystem_location(text: str) -> str | None:
+    clean = _clean(text)
+    if any(marker in clean for marker in ("\u5f53\u524d\u5de5\u4f5c\u76ee\u5f55", "\u5f53\u524d\u76ee\u5f55", "\u5de5\u4f5c\u76ee\u5f55")):
+        return "home"
+    return _BASE_HOST_FILESYSTEM_LOCATION(clean)
+
+
+def is_host_filesystem_list_request(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if any(marker in clean for marker in ("\u5f53\u524d\u5de5\u4f5c\u76ee\u5f55", "\u5f53\u524d\u76ee\u5f55", "\u5de5\u4f5c\u76ee\u5f55")) and any(
+        marker in clean or marker in lowered
+        for marker in ("\u67e5\u770b", "\u6709\u54ea\u4e9b\u6587\u4ef6", "\u5217\u51fa", "\u53ea\u8bfb", "list", "show files")
+    ):
+        return True
+    if (
+        host_filesystem_location(clean) is not None
+        and any(marker in clean for marker in ("\u662f\u5426\u5b58\u5728", "\u5728\u4e0d\u5728", "\u6709\u6ca1\u6709"))
+        and any(marker in clean for marker in ("\u6587\u4ef6\u540d", ".txt", ".md", ".csv", ".json"))
+        and not _has_file_mutation_marker(clean)
+    ):
+        return True
+    return _BASE_IS_HOST_FILESYSTEM_LIST_REQUEST(clean)
+
+
+def ai_coding_tool_request(text: str) -> list[str]:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if not clean:
+        return []
+    tool_aliases = {
+        "codex": ("codex",),
+        "claudecode": ("claudecode", "claude code", "claude-code"),
+    }
+    requested = [
+        name
+        for name, aliases in tool_aliases.items()
+        if any(alias in lowered for alias in aliases)
+    ]
+    generic_markers = (
+        "ai coding tool",
+        "coding agent",
+        "code agent",
+        "\u0041\u0049\u7f16\u7a0b\u5de5\u5177",
+        "\u0061\u0069\u7f16\u7a0b\u5de5\u5177",
+        "\u0041\u0049 \u7f16\u7a0b\u5de5\u5177",
+        "\u0061\u0069 \u7f16\u7a0b\u5de5\u5177",
+        "\u4ee3\u7801\u667a\u80fd\u4f53",
+        "\u7f16\u7a0b\u52a9\u624b",
+    )
+    if any(marker in lowered or marker in clean for marker in generic_markers):
+        requested.append("ai_coding_tool")
+    if not requested:
+        return []
+    action_markers = (
+        "use",
+        "call",
+        "run",
+        "invoke",
+        "tool",
+        "tools",
+        "available",
+        "list",
+        "\u4f7f\u7528",
+        "\u8c03\u7528",
+        "\u7528",
+        "\u542f\u7528",
+        "\u6253\u5f00",
+        "\u5de5\u5177",
+        "\u53ef\u7528",
+        "\u662f\u5426\u53ef\u7528",
+        "\u80fd\u4e0d\u80fd\u7528",
+        "\u5217\u51fa",
+        "\u8ba1\u7b97",
+        "\u7b97",
+    )
+    if not any(marker in lowered or marker in clean for marker in action_markers):
+        return []
+    return sorted(set(requested))

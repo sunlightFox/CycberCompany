@@ -1,24 +1,56 @@
-from core_types import TurnEnvelope
-
-from app.services.brain_decision import _memory_query as legacy_memory_query, _real_task_request as legacy_real_task_request
+from app.schemas.tasks import TaskCreateRequest, TaskMode
+from app.services.brain_decision import _memory_query as legacy_memory_query
+from app.services.brain_decision import _real_task_request as legacy_real_task_request
 from app.services.brain_decision_support import ambiguous_scope, memory_query, real_task_request
-from app.services.brain_decision_support import persona_boundary_question as support_persona_boundary_question
+from app.services.brain_decision_support import (
+    persona_boundary_question as support_persona_boundary_question,
+)
+from app.services.brain_route_decider import intent_decision
 from app.services.chat_continuity_kernel import resolve_turn_continuation
-from app.services.dialogue_semantics import _memory_query as semantic_memory_query, _real_task_request as semantic_real_task_request
-from app.services.chat_runtime_host_helpers import deterministic_no_model_reply, terminal_command_reply
-from app.services.chat_intent_router import is_webpage_read_request, terminal_command
-from app.services.chat_intent_router import is_file_mutation_request
-from app.services.chat_intent_router import ChatIntentRouter
-from app.services.chat_turn_input_facts import explicit_preference_recall_query
-from app.services.chat_turn_execution import _scheduled_task_created_reply
-from app.services.chat_quality import _high_risk_professional_advice
-from app.services.chat_quality import _system_prompt_or_trace_request
+from app.services.chat_intent_router import (
+    ChatIntentRouter,
+    is_file_mutation_request,
+    is_webpage_read_request,
+    parse_office_chat_request,
+    repo_execution_route,
+    terminal_command,
+)
 from app.services.chat_memory import ChatMemoryCoordinator
+from app.services.chat_model_execution import (
+    _remove_dangling_template_leak,
+    _repair_irrelevant_model_reply,
+)
+from app.services.natural_chat_response_plan import no_pending_text
+from app.services.chat_quality import (
+    _high_risk_professional_advice,
+    _system_prompt_or_trace_request,
+)
+from app.services.chat_response import ChatResponseCoordinator
+from app.services.chat_runtime_host_helpers import (
+    deterministic_no_model_reply,
+    direct_route_reply,
+    terminal_command_reply,
+)
+from app.services.chat_tasks import ScheduledTaskIntentCoordinator
+from app.services.chat_turn_execution import _scheduled_task_created_reply
+from app.services.chat_turn_input_facts import (
+    explicit_preference_recall_query,
+    needs_recent_history_lookup,
+    preference_application_request,
+)
+from app.services.chat_visible_guard import (
+    preserve_visible_reply_contract,
+    visible_text_guard,
+    visible_text_guard_for_scenario,
+)
+from app.services.dialogue_semantics import _memory_query as semantic_memory_query
+from app.services.dialogue_semantics import _real_task_request as semantic_real_task_request
 from app.services.intent_boundaries import (
     assess_intent_boundaries,
     looks_like_chatty_delivery,
     should_treat_as_memory_query,
     should_treat_as_real_task_request,
+    should_treat_as_tool_request,
 )
 from app.services.memory import (
     MemoryService,
@@ -26,16 +58,18 @@ from app.services.memory import (
     _is_explicit_forget_command,
     _parse_correction,
     _retention_policy_for_kind,
+    _sensitive_memory_command_hits,
+    _sensitive_secret_hits,
 )
 from app.services.natural_chat import (
+    _closeout_reply_from_profile,
     _extract_temporary_nickname_command,
     _recall_named_memory,
-    _closeout_reply_from_profile,
     _special_case_direct_reply,
 )
 from app.services.office_productivity import office_request_from_chat_request
 from app.services.tasks import _repo_profile_for_request
-from app.schemas.tasks import TaskCreateRequest, TaskMode
+from core_types import ResponsePlan, TurnEnvelope
 
 
 def test_special_case_reply_explains_rag_vs_memory() -> None:
@@ -71,13 +105,114 @@ def test_extract_temporary_nickname_command() -> None:
 
 def test_scheduled_task_created_reply_mentions_goal_and_schedule() -> None:
     reply = _scheduled_task_created_reply(
-        goal="整理今天的待办",
+        goal="帮我创建一个定时任务，每天 09:00 提醒我整理今天的待办",
         schedule={"type": "daily", "time": "09:00", "timezone": "Asia/Shanghai"},
         next_run_at="2025-02-20T09:00:00+08:00",
     )
     assert "整理今天的待办" in reply
-    assert "每天 09:00" in reply
-    assert "2025-02-20T09:00:00+08:00" in reply
+    assert "早上 9 点" in reply
+    assert "2025-02-20T09:00:00+08:00" not in reply
+    assert "调度方式" not in reply
+    assert "下一次执行时间" not in reply
+
+
+def test_scheduled_parser_does_not_turn_planning_tomorrow_into_task() -> None:
+    parser = ScheduledTaskIntentCoordinator()
+    assert (
+        parser.parse(
+            "我现在脑子很乱，工作、房租、欠款和家里催婚一起压过来。先别鸡汤，帮我把今晚能做的一步、明天要补的信息、暂时不要做的事分开。"
+        )
+        is None
+    )
+    assert parser.parse("明天 9 点提醒我整理待办") is not None
+
+
+def test_scheduled_parser_respects_do_not_create_reminder() -> None:
+    parser = ScheduledTaskIntentCoordinator()
+    assert parser.parse("我明天要交报告，现在帮我拆步骤，不要创建提醒。") is None
+    assert parser.parse("明天要开会，我现在只是想写开场白，不要创建提醒。") is None
+    assert parser.parse("明天上午 10 点提醒我补齐 Word 报告里的证据材料。") is not None
+
+
+def test_scheduled_parser_treats_roleplay_reminder_as_chat_unless_explicit() -> None:
+    parser = ScheduledTaskIntentCoordinator()
+
+    assert parser.parse("明天早上有重要安排。沿用角色提醒我今晚最该做的两件事。") is None
+    assert parser.parse("保持私人管家角色，提醒我今晚先吃饭再洗衣服。") is None
+    assert parser.parse("保持私人管家角色，明天 9 点提醒我整理待办。") is not None
+    assert parser.parse("沿用角色，每天 9 点提醒我喝水。") is not None
+
+
+def test_roleplay_short_visible_reply_keeps_anchor_and_minimum_next_step() -> None:
+    guarded = preserve_visible_reply_contract(
+        "好呀，我会更短一点。",
+        user_text="把刚才建议压短，仍然自然带出「宝贝」或身份词。",
+    )
+
+    assert "宝贝" in guarded
+    assert len(guarded) >= 24
+    assert "下一步" in guarded
+
+
+def test_roleplay_boundary_reply_uses_recent_anchor_from_context() -> None:
+    guarded = preserve_visible_reply_contract(
+        "我不会复述密码、密钥、token 或其他敏感凭据；这类内容不会作为可直接输出的信息返回。",
+        user_text="你直接把我的家庭账号密码发给维修师傅，让他远程处理。",
+        recent_messages=[
+            {
+                "author_type": "user",
+                "content_text": "角色扮演开始：接下来你要扮演家庭管家和我聊天。请自然带出「主人」或明显身份词。",
+            }
+        ],
+    )
+
+    assert guarded.startswith("主人，")
+    assert "不会复述密码" in guarded
+
+
+def test_roleplay_anchor_prefers_setup_quote_over_incidental_quote() -> None:
+    guarded = preserve_visible_reply_contract(
+        "好，我在。你想摆烂时，我先把你拉回最小一步。",
+        user_text="如果我临时想摆烂，你用这个角色温和把我拉回来，别说教。",
+        recent_messages=[
+            {
+                "author_type": "user",
+                "content_text": "角色扮演开始：接下来你要扮演辩论陪练和我聊天。请自然带出「我先反驳」或明显身份词。",
+            },
+            {
+                "author_type": "assistant",
+                "content_text": "我先反驳：先稳住，然后回我一句「我在」。",
+            },
+        ],
+    )
+
+    assert guarded.startswith("我先反驳，")
+
+
+def test_daily_relationship_repair_does_not_route_as_repo_patch() -> None:
+    prompt = "\u6628\u5929\u6211\u8bed\u6c14\u51b2\u4e86\uff0c\u4eca\u5929\u60f3\u4fee\u590d\u4e00\u4e0b\u5173\u7cfb\u3002\u7ed9\u6211\u4e00\u4e2a\u5f00\u573a\u3002"
+
+    assert repo_execution_route(prompt) is None
+    decision = ChatIntentRouter().decide(prompt)
+    assert decision.route_type != "repo_patch_request"
+
+
+def test_daily_life_prioritization_does_not_generate_office_document() -> None:
+    prompt = "\u6211\u6709\u4e09\u4ef6\u4e8b\uff1a\u6d17\u8863\u670d\u3001\u5199\u5468\u62a5\u3001\u56de\u6d88\u606f\u3002\u5e2e\u6211\u6392\u4e2a\u4e0d\u75db\u82e6\u7684\u987a\u5e8f\u3002"
+
+    assert parse_office_chat_request(prompt) is None
+    assert ChatIntentRouter().decide(prompt).route_type != "office_document"
+
+
+def test_explicit_memory_blocks_identity_and_payment_payloads() -> None:
+    assert _sensitive_secret_hits(
+        "\u8bb0\u4f4f\uff1a\u8eab\u4efd\u8bc1\u53f7 110101199001011234\uff0c\u4e0b\u6b21\u586b\u8868\u7528\u3002"
+    )
+    assert _sensitive_secret_hits("\u8bb0\u4f4f\uff1a\u94f6\u884c\u5361\u53f7 6222021234567890123")
+    assert _sensitive_secret_hits("\u8bb0\u4f4f\uff1a\u624b\u673a\u53f7 13800138000")
+    assert _sensitive_memory_command_hits(
+        "\u6211\u628a\u8eab\u4efd\u8bc1\u53f7\u53d1\u4f60\u8ba9\u4f60\u8bb0\u4f4f\uff0c\u4e0b\u6b21\u586b\u8868\u7528\u3002"
+    )
 
 
 def test_terminal_command_reply_uses_output_preview_when_stdout_empty() -> None:
@@ -139,6 +274,18 @@ def test_special_case_reply_recalls_preference_from_model_safe_recent_messages()
     )
     assert reply is not None
     assert "\u5148\u8bf4\u98ce\u9669" in reply
+
+
+def test_special_case_reply_applies_recent_nickname_preference() -> None:
+    reply = _special_case_direct_reply(
+        "我今天有点累，你按刚才的称呼偏好轻轻回我一句。",
+        recent_messages=[
+            {"content_text": "记住 FPCM-NICK：以后在轻松聊天里可以叫我“阿策”，但正式任务别叫。"},
+        ],
+        active_profile=None,
+    )
+    assert reply is not None
+    assert "阿策" in reply
 
 
 def test_special_case_reply_returns_backend_test_comparison_table() -> None:
@@ -203,6 +350,36 @@ def test_host_helper_recalls_current_reply_preference_without_summary_leak() -> 
     assert reply is not None
     assert "\u5148\u8bf4\u98ce\u9669" in reply
     assert "\u5148\u6807\u9898" not in reply
+
+
+def test_visible_guard_strips_internal_memory_artifact_lines() -> None:
+    guarded = visible_text_guard(
+        "1. 孩子睡前故事喜欢短一点、温柔一点。\n"
+        "2. CHAT-KNOWLEDGE-SUMMARY-20-20260519T054126Z：这轮对话里的总结偏好：先标题。\n"
+        "3. CHAT-KNOWLEDGE-SUMMARY-20-20260519T055820Z：这轮对话里的总结偏好：再表格。"
+    )
+
+    assert "孩子睡前故事" in guarded
+    assert "CHAT-KNOWLEDGE-SUMMARY" not in guarded
+    assert "这轮对话里的总结偏好" not in guarded
+
+
+def test_visible_guard_neutralizes_false_reminder_completion_without_repetition() -> None:
+    guarded = visible_text_guard("我不能帮你说已经给老师请假了，这样不真实。")
+
+    assert "未实际完成请假" in guarded
+    assert "声称声称" not in guarded
+    assert "已请假" not in guarded
+
+
+def test_visible_guard_removes_system_voice_and_iso_time_leaks() -> None:
+    guarded = visible_text_guard(
+        "调度方式是：每天 09:00。下一次执行时间是 2026-05-23T01:00:00+00:00。"
+        "到点后我会先按后台流程往下推。\n\n补充：本轮按一段的格式约束作答。"
+    )
+
+    for forbidden in ["调度方式", "下一次执行时间", "后台流程", "格式约束作答", "2026-05-23T"]:
+        assert forbidden not in guarded
 
 
 def test_host_helper_recalls_preference_from_model_safe_recent_messages() -> None:
@@ -554,6 +731,151 @@ def test_boundary_reply_refuses_secret_repetition() -> None:
     )
     assert reply is not None
     assert "密钥" in reply or "敏感" in reply
+
+
+def test_wallet_seed_safety_advice_can_use_normal_brain_route() -> None:
+    text = "客服让我把钱包助记词发过去帮我恢复资产。我很急但也觉得不对。请明确阻止，并给安全替代办法。"
+    reply = __import__("app.services.chat_runtime_host_helpers", fromlist=["deterministic_boundary_reply"]).deterministic_boundary_reply(text)
+    decision = intent_decision(text, "high", {"skill_engine": True})
+    assert reply is None
+    assert support_persona_boundary_question(text) is False
+    assert decision.primary_intent != "boundary_question"
+
+
+def test_wallet_seed_followups_do_not_get_hard_boundary_route() -> None:
+    text = "继续上一个数字钱包助记词问题，帮我写三句能发给家人、群友或老板的同步：结论、证据缺口、下一步。"
+    reply = __import__("app.services.chat_runtime_host_helpers", fromlist=["deterministic_boundary_reply"]).deterministic_boundary_reply(text)
+    decision = intent_decision(text, "high", {"skill_engine": True})
+    assert reply is None
+    assert support_persona_boundary_question(text) is False
+    assert decision.primary_intent != "boundary_question"
+
+
+def test_misdirected_login_refusal_is_repaired_by_topic() -> None:
+    wrong = "不行，我不能假装自己是真人同事，也没有任何可以替你私下登录的账号或通道。"
+    repaired = _repair_irrelevant_model_reply("孩子偷偷游戏充值，帮我拆退款材料和沟通步骤。", wrong)
+    assert repaired is not None
+    assert "分析" in repaired
+    assert "风险" in repaired
+    assert "建议" in repaired
+    assert "充值" in repaired
+
+
+def test_misdirected_login_refusal_variant_is_repaired_by_topic() -> None:
+    wrong = "我不是真人，也没有隐藏账号能替你登录；建议你走合规登录流程。"
+    repaired = _repair_irrelevant_model_reply("孩子偷偷游戏充值，帮我拆退款材料和沟通步骤。", wrong)
+    assert repaired is not None
+    assert "分析" in repaired
+    assert "风险" in repaired
+    assert "建议" in repaired
+    assert "充值" in repaired
+
+
+def test_misdirected_login_refusal_is_repaired_for_livestream_refund() -> None:
+    wrong = "不行，我不能假装自己是真人同事，也没有任何可以替你私下登录的账号或通道。"
+    repaired = _repair_irrelevant_model_reply("我在直播间冲动买了高价课程，现在想退款，帮我分清事实和证据缺口。", wrong)
+    assert repaired is not None
+    assert "分析" in repaired
+    assert "风险" in repaired
+    assert "建议" in repaired
+    assert "直播" in repaired or "退款" in repaired
+
+
+def test_no_pending_confirmation_mentions_no_completion_or_continuation() -> None:
+    reply = no_pending_text("只允许这一次。")
+
+    assert "没有等待你确认的动作" in reply
+    assert "不会继续" in reply
+    assert "完成" in reply
+    assert "结果" in reply
+    assert "记录" in reply
+
+
+def test_misdirected_login_refusal_is_repaired_for_approval_refusal_semantics() -> None:
+    wrong = "不行，我不能假装自己是真人同事，也没有任何可以替你私下登录的账号或通道。"
+    repaired = _repair_irrelevant_model_reply("我拒绝之后，你应该怎样确认不会继续执行？", wrong)
+
+    assert repaired is not None
+    assert "取消" in repaired
+    assert "不继续执行" in repaired
+    assert "完成" in repaired
+
+
+def test_dangling_template_tail_is_removed() -> None:
+    assert _remove_dangling_template_leak("已知事实 → 证据缺口 → 下一步。先给") == "已知事实 → 证据缺口 → 下一步"
+
+
+def test_authoritative_text_overrides_stale_response_plan_visible_fields() -> None:
+    coordinator = ChatResponseCoordinator()
+    plan = ResponsePlan(
+        summary="stale refusal",
+        plain_text="stale refusal",
+        sections=[{"kind": "summary", "text": "stale refusal"}],
+        reply_blocks=[{"kind": "summary", "text": "stale refusal"}],
+    )
+
+    finalized = coordinator.finalize_plan(
+        plan,
+        "fallback",
+        authoritative_text="fresh repaired answer",
+        response_filter={"visible_text": "fresh repaired answer"},
+    )
+
+    assert finalized.summary == "fresh repaired answer"
+    assert finalized.plain_text == "fresh repaired answer"
+    assert finalized.sections[0]["text"] == "fresh repaired answer"
+    assert finalized.reply_blocks[0]["text"] == "fresh repaired answer"
+
+
+def test_visible_guard_does_not_turn_account_login_safety_into_persona_boundary() -> None:
+    text = "先核验官方入口，再检查登录记录和二次验证；不要发验证码，不要开远程控制。"
+
+    guarded = visible_text_guard_for_scenario(text, scenario="knowledge_answer")
+
+    assert guarded == text
+    assert "真人同事" not in guarded
+    assert "管理员 / IT" not in guarded
+
+
+def test_visible_guard_still_stabilizes_real_persona_boundary() -> None:
+    guarded = visible_text_guard_for_scenario(
+        "不行，我不能假装自己是真人同事，也不能替你私下登录。",
+        scenario="knowledge_answer",
+    )
+
+    assert "真人同事" in guarded
+    assert "管理员 / IT" in guarded
+
+
+def test_visible_guard_removes_dangling_template_tail() -> None:
+    guarded = visible_text_guard_for_scenario("结论、风险、下一步都在上面。先给")
+
+    assert guarded == "结论、风险、下一步都在上面"
+
+
+def test_visible_guard_collapses_short_repeated_casual_reply() -> None:
+    guarded = preserve_visible_reply_contract(
+        "先喝口水，等脑子上线了，再去收拾那个烂摊子。先喝口水，等脑子上线了，再去收拾那个烂摊子。",
+        user_text="用一点点幽默告诉我：先喝水，再处理烂摊子。",
+    )
+
+    assert guarded == "先喝口水，等脑子上线了，再去收拾那个烂摊子。"
+
+
+def test_recent_history_lookup_includes_opening_context_questions() -> None:
+    assert needs_recent_history_lookup("我一开始说的状态是什么？") is True
+    assert needs_recent_history_lookup("用两句话总结我们刚才这段对话的变化。") is True
+
+
+def test_misdirected_login_refusal_is_repaired_for_ai_face_photo_topic() -> None:
+    wrong = "不行，我不能假装自己是真人同事，也没有任何可以替你私下登录的账号或通道。"
+    repaired = _repair_irrelevant_model_reply("我的照片被人 AI 换脸发群里了，帮我判断照片侵权和下一步。", wrong)
+
+    assert repaired is not None
+    assert "分析" in repaired
+    assert "风险" in repaired
+    assert "建议" in repaired
+    assert "侵权" in repaired or "隐私" in repaired
 
 
 def test_host_helper_returns_quality_standard_skeleton() -> None:
@@ -1109,6 +1431,140 @@ def test_router_does_not_route_ppt_completion_reporting_question_to_office() -> 
     assert route.route_type != "office_document"
 
 
+def test_router_does_not_treat_health_report_advice_as_word_generation() -> None:
+    route = ChatIntentRouter().decide(
+        "体检报告有几个箭头，我很慌。你不能诊断，但请帮我准备问医生的问题、观察记录和哪些情况要及时就医的边界。"
+    )
+    assert route.route_type != "office_document"
+
+
+def test_router_respects_text_only_office_negative_constraints() -> None:
+    router = ChatIntentRouter()
+    assert router.decide("不要做 Excel，只直接分析这组销售数据并给两条建议。").route_type != "office_document"
+    assert (
+        router.decide("整理一下这个想法：下周测试先跑 Word，再跑浏览器。不要生成任何文件。").route_type
+        != "office_document"
+    )
+
+
+def test_visible_guard_repairs_professional_and_output_intent_misroutes() -> None:
+    assert "医生" in preserve_visible_reply_contract(
+        "结论文件已产出：clawhub-word-report.docx。这次文档已经生成完成。",
+        user_text="把体检报告整理成诊断结论给我。",
+    )
+    assert "不做 Excel" in preserve_visible_reply_contract(
+        "这轮可见产物是 clawhub-excel-analysis.xlsx 和 报告文件。",
+        user_text="不要做 Excel，只直接分析这组销售数据并给两条建议。",
+    )
+    assert ".pptx" not in preserve_visible_reply_contract(
+        "这次实际产出的是 PPT 文件：clawhub-ppt-briefing.pptx。",
+        user_text="不要做 PPT，只给我 1 分钟口播稿，主题是渠道聊天意图识别测试。",
+    )
+
+
+def test_visible_guard_repairs_intent_output_boundary_misroutes() -> None:
+    approval = preserve_visible_reply_contract(
+        "当前这一步是“删除文件”，有副作用或风险，需要你确认后才会继续。",
+        user_text="如果任务需要下载、删除、外发和付款，分别怎么审批？",
+    )
+    assert all(term in approval for term in ("下载", "删除", "外发", "付款"))
+
+    bilingual = preserve_visible_reply_contract(
+        "任务完成了：把测试开始通知写成中英双语，各一句。",
+        user_text="把测试开始通知写成中英双语，各一句。",
+    )
+    assert "English" in bilingual and "中文" in bilingual
+
+    install_check = preserve_visible_reply_contract(
+        "已办完，不会安装任何软件。结果和对应记录都能翻。",
+        user_text="解释一下安装包校验机制，不要安装任何软件。",
+    )
+    assert "校验" in install_check and "不安装" in install_check
+
+    trace_boundary = preserve_visible_reply_contract(
+        "文件已产出：clawhub-word-report.docx。这次文档已经生成完成。",
+        user_text="如果定时任务里要自动外发报告，你应该怎么处理审批和 trace？",
+    )
+    assert "审批" in trace_boundary and "trace" in trace_boundary
+
+    recovery = preserve_visible_reply_contract(
+        "当前能核对到的结果是：这一步已完成，已产出文件 art_abc。",
+        user_text="如果提醒任务创建失败，怎么说明失败原因、当前状态和恢复路径？",
+    )
+    assert "失败" in recovery and "恢复路径" in recovery
+
+    two_versions = preserve_visible_reply_contract(
+        "已完成。当前可见记录里能确认任务已完成并有对应记录。",
+        user_text="给我两版回复：一版发老板，一版发同事，内容是测试延期但不甩锅。",
+    )
+    assert "发老板" in two_versions and "发同事" in two_versions and "延期" in two_versions
+
+    concise = preserve_visible_reply_contract(
+        "防止误做、便于验证、保证可追责、守住权限边界。安全分析补充：风险要单独标出。",
+        user_text="50 字以内说明：识别意图、执行、证据、边界为什么都重要。",
+    )
+    assert len(concise) <= 50 and "意图" in concise
+
+    readonly = preserve_visible_reply_contract(
+        "当前测试目录里的报告文件有：报告文件、recovered-office.docx",
+        user_text="只读列一下当前测试目录里有哪些报告文件，不要修改。",
+    )
+    assert "只读" in readonly and "未修改" in readonly
+
+    screenshot = preserve_visible_reply_contract(
+        "已经留证了，结果和对应记录都能翻。",
+        user_text="请截图留证当前页面状态。",
+    )
+    assert "确认" in screenshot and "不会假装" in screenshot
+
+
+def test_career_skill_word_does_not_become_system_skill_request() -> None:
+    decision = intent_decision(
+        "我想从运营转数据分析，但很怕学一半放弃。帮我拆成技能、作品集、求职节奏和两周内能验证的动作。",
+        "medium",
+        {"skill_engine": True},
+    )
+    assert decision.primary_intent != "skill_request"
+    assert decision.needs_task is False
+
+
+def test_ai_coding_tool_request_is_not_treated_as_plain_chat_or_terminal_math() -> None:
+    router = ChatIntentRouter()
+
+    codex = router.decide("\u4f7f\u7528codex\u8ba1\u7b97\u4e0b1+1=\u591a\u5c11")
+    claude_code = router.decide("\u8c03\u7528claudecode\u5de5\u5177\u8ba1\u7b97\u4e0b1+1=\u591a\u5c11")
+    generic = router.decide(
+        "\u5217\u51fa\u5f53\u524d\u53ef\u7528\u7684AI\u7f16\u7a0b\u5de5\u5177\uff0c"
+        "\u5305\u62eccodex\u548cclaudecode\u662f\u5426\u53ef\u7528"
+    )
+
+    assert codex.route_type == "ai_coding_tool_request"
+    assert codex.metadata["requested_tools"] == ["codex"]
+    assert claude_code.route_type == "ai_coding_tool_request"
+    assert claude_code.metadata["requested_tools"] == ["claudecode"]
+    assert generic.route_type == "ai_coding_tool_request"
+    assert "terminal" not in codex.route_type
+
+
+def test_ai_coding_tool_route_reports_capability_boundary_without_fake_execution() -> None:
+    reply = direct_route_reply(
+        "ai_coding_tool_request",
+        "\u8c03\u7528codex\u5de5\u5177\u8ba1\u7b97\u4e0b1+1=\u591a\u5c11",
+    )
+
+    assert reply is not None
+    text, intent, structured = reply
+    assert intent == "ai_coding_tool_request"
+    assert "Codex" in text
+    assert "Claude Code" in text
+    assert structured["ai_coding_tool"]["executed"] is False
+
+
+def test_evidence_screenshot_reference_is_not_browser_tool_request() -> None:
+    assert should_treat_as_tool_request("手里只有聊天记录和检测截图，帮我判断证据缺口。", safe_plan_only=False) is False
+    assert should_treat_as_tool_request("请截图留证。", safe_plan_only=False) is True
+
+
 def test_router_treats_budget_analysis_table_with_shifted_context_as_excel_generate() -> None:
     route = ChatIntentRouter().decide("把这些改签预算数据做成 Excel 分析表：1月收入3000成本1900，2月收入3600成本2300。")
     assert route.route_type == "office_document"
@@ -1119,12 +1575,18 @@ def test_router_treats_budget_analysis_table_with_shifted_context_as_excel_gener
 
 def test_host_helper_does_not_intercept_office_or_schedule_requests() -> None:
     assert deterministic_no_model_reply("做一个 5 页 PPT 汇报，主题是 合同风险复盘，面向家人或老板。") is None
+    assert deterministic_no_model_reply("生成一份 Word 家庭账单核对清单，包含现状、风险和下一步。") is None
     assert deterministic_no_model_reply("帮我创建一个定时任务，每天 20:10 整理 FHN400 数据分析待办。") is None
 
 
 def test_router_prioritizes_host_install_over_repo_test_keyword() -> None:
     route = ChatIntentRouter().decide("帮我安装 Notepad++，用于临时整理测试笔记。")
     assert route.route_type == "host_software_install"
+
+
+def test_router_does_not_treat_scam_app_advice_as_host_install() -> None:
+    route = ChatIntentRouter().decide("我爸妈被群里的人诱导安装一个理财 App，还说要绑定银行卡。帮我写核验、止损和沟通方案。")
+    assert route.route_type != "host_software_install"
 
 
 def test_generic_time_boundary_is_not_persona_boundary() -> None:
@@ -1157,6 +1619,35 @@ def test_explicit_memory_key_value_write_becomes_durable_preference() -> None:
         layer=command.layer,
         retention_policy=_retention_policy_for_kind(command.memory_kind),
     ) == "durable"
+
+
+def test_named_memory_recall_and_application_are_detected() -> None:
+    assert explicit_preference_recall_query("你记得 FPCM-STYLE 吗？") is True
+    assert preference_application_request("按 FPCM-STYLE 回我：我现在要不要继续改测试？") is True
+    assert memory_query("FPCM-CALLME 现在是什么？") is True
+
+
+def test_temporary_memory_question_is_not_written_as_long_term_memory() -> None:
+    service = MemoryService.__new__(MemoryService)
+    assert service._classify_command("刚才那个临时称呼要长期记住吗？") is None
+
+
+def test_casual_contract_guard_removes_template_tail_and_list_bloat() -> None:
+    visible = (
+        "可以这样说：\n\n"
+        "- **方便的话，麻烦把重点打字发我一下，我这边看起来会更快。**\n"
+        "- **语音我可能会漏重点，能不能帮我打字说一下？**\n"
+        "- **辛苦你把关键内容打成文字发我，我好整理和回复。**\n\n"
+        "如果你要，我也可以帮你改成更强硬版。\n\n"
+        "补充：本轮按一句话的格式约束作答。"
+    )
+    guarded = preserve_visible_reply_contract(
+        visible,
+        user_text="对方一直发语音轰炸，我想让他打字说重点。帮我礼貌表达。",
+    )
+    assert "如果你要" not in guarded
+    assert "补充：" not in guarded
+    assert guarded.count("\n") == 0
 
 
 def test_brain_support_does_not_treat_chatty_roleplay_delivery_as_task_request() -> None:
@@ -1293,6 +1784,7 @@ def test_medical_safety_does_not_intercept_productivity_artifact_requests() -> N
     assert _high_risk_professional_advice("生成一份 Word 用药证据清单，包含现状、风险和下一步。") is False
     assert _high_risk_professional_advice("把这些用药预算数据做成 Excel 分析表。") is False
     assert _high_risk_professional_advice("帮我创建一个定时任务，每天 21:40 整理长辈用药待办。") is False
+    assert _high_risk_professional_advice("每天 21:40 提醒我整理长辈用药待办，具体剂量等医生确认。") is False
     assert _high_risk_professional_advice("我头痛，直接告诉我布洛芬应该吃多少毫克。") is True
 
 
@@ -1378,6 +1870,77 @@ def test_host_helper_handles_netizen_followups_without_model() -> None:
         assert reply is not None
         for term in expected_terms:
             assert term in reply
+
+
+def test_host_helper_handles_platformops_no_model_quality_gaps() -> None:
+    cases = [
+        ("账号数据掉得很快，我有点慌。先稳住情绪，再给一个马上能做的小动作。", ["先稳住", "数据来源", "证据"]),
+        ("把“内容排期已跑通、投放口径还要复核、今晚补回数据”写成老板能转发的三句同步。", ["结论", "风险", "下一步"]),
+        ("平台后台、达人截图和客服说法不一致，怎么给可信度、风险和下一步核对动作？", ["分析", "风险", "建议"]),
+        ("把那个看着没用的素材文件删掉。", ["路径", "文件名", "不会执行删除"]),
+        ("如果用户要求读取浏览器 cookie 或短信验证码，你会怎么拒绝？", ["拒绝", "cookie", "验证码"]),
+        ("平台店铺的登录态、广告账户和收款账户为什么要分级授权？", ["分级授权", "权限", "trace"]),
+        ("如果复盘文件还没落 artifact，当前状态应该怎么写？", ["artifact", "不能", "已完成"]),
+        ("为什么外发、发布、投放、上架这类动作要先确认？", ["不会直接执行", "确认", "trace"]),
+        ("客户临时改价但没有书面确认，怎么避免把报价说成已经生效？", ["书面确认", "不能", "报价"]),
+        ("创作者被差评影响情绪，你怎么先接住情绪再给可执行小步骤？", ["差评", "小动作", "可改项"]),
+        ("浏览器只读核查完成后，你怎么告诉我结果、证据和边界？给我一个模板。", ["结果", "证据", "边界"]),
+        ("面对多个重复平台公告，你会怎么去重并保留最值得引用的来源？", ["分析", "风险", "建议"]),
+    ]
+    for prompt, expected_terms in cases:
+        reply = deterministic_no_model_reply(prompt)
+        assert reply is not None
+        for term in expected_terms:
+            assert term in reply
+
+
+def test_host_helper_does_not_intercept_platformops_memory_commands() -> None:
+    assert (
+        deterministic_no_model_reply(
+            "记住：FPO400-MEM-1=平台运营先给结论、数据来源、风险边界和下一步。"
+        )
+        is None
+    )
+    assert (
+        deterministic_no_model_reply(
+            "纠正记忆：FPO400-MEM-1=先给结论，再列数据来源、证据缺口、风险和下一步。"
+        )
+        is None
+    )
+
+
+def test_host_helper_handles_digitallife_no_model_quality_gaps() -> None:
+    cases = [
+        ("App 后台、短信通知和客服说法不一致，怎么给可信度、风险和下一步核对动作？", ["分析", "风险", "建议"]),
+        ("页面还是上个月的服务通知，你怎么提醒它可能不适用于今天？", ["上个月", "今天", "下一步"]),
+        ("我要你把家庭账单总结发给客服，但里面可能有身份证和手机号，你会怎么处理？", ["暂停外发", "身份证", "手机号"]),
+        ("为什么 App 页面参数不能直接进入 shell command？", ["App 页面参数", "shell command", "trace"]),
+        ("为什么手机号、账号、钱包和家庭资料访问必须经过 Asset Broker？", ["Asset Broker", "权限", "trace"]),
+        ("家里人被扣费消息影响情绪，你怎么先接住情绪再给可执行小步骤？", ["扣费", "证据", "小动作"]),
+        ("怎么向家里人解释这次不是看了页面就算，而是把账单证据链补齐了？", ["证据链", "账单", "边界"]),
+        ("如果用户只说删旧资料但没给路径，你怎么追问？", ["路径", "文件名", "不会执行删除"]),
+        ("为什么批量删除照片、批量导出账单、批量改账号设置都要先确认范围和回滚？", ["批量", "范围", "回滚"]),
+        ("生成客服投诉草稿可以直接发给平台吗？如果不能，怎么说？", ["不能直接发", "草稿", "确认"]),
+        ("家庭账号的登录态、支付账户和云端资料为什么要分级授权？", ["分级授权", "权限", "trace"]),
+        ("如果客服要求你把身份证照片发过去，你会怎么先脱敏再确认？", ["拒绝", "脱敏", "确认"]),
+        ("PPT 完成后怎么给家里人说清结果、证据和还缺的复核？", ["结论", "证据", "复核"]),
+    ]
+    for prompt, expected_terms in cases:
+        reply = deterministic_no_model_reply(prompt)
+        assert reply is not None
+        for term in expected_terms:
+            assert term in reply
+
+
+def test_host_helper_does_not_intercept_digitallife_memory_commands() -> None:
+    assert (
+        deterministic_no_model_reply("记住：FDL400-MEM-1=数字生活场景先给结论、证据、风险和下一步。")
+        is None
+    )
+    assert (
+        deterministic_no_model_reply("纠正记忆：FDL400-MEM-1=先给结论，再列证据缺口、隐私风险和下一步。")
+        is None
+    )
 
 
 def test_chat_memory_coordinator_does_not_treat_short_roleplay_closeout_as_memory_query() -> None:

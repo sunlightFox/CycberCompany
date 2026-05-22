@@ -30,6 +30,7 @@ data_tmp*/
 *.heapsnapshot
 
 docs/**/evidence/.tmp-data/secrets/
+docs/**/evidence/.tmp-home/.codex/
 docs/**/evidence/**/secrets/
 docs/**/evidence-simulated/**/secrets/
 docs/**/evidence/**/api_token.txt

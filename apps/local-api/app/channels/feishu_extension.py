@@ -61,11 +61,13 @@ def _build_gateways(context: ChannelRuntimeContext) -> dict[str, FeishuChannelGa
         chat_service=context.chat_service,
         notifications=context.notification_gateway_service,
         connectors=context.channel_connector_registry,
+        artifact_store=context.artifact_store,
         secret_store=context.secret_store,
         data_dir=context.data_dir,
         trace_service=context.trace_service,
         audit_service=context.audit_service,
         config=configs["feishu"],
+        multimodal_understanding=context.multimodal_understanding,
     )
     gateway.set_channel_bridges(
         session_context=context.channel_session_context,

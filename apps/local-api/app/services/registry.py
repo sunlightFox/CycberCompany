@@ -389,6 +389,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         artifact_store=artifact_store,
         trace_service=trace_service,
         audit_service=audit_service,
+        secret_store=secret_store,
     )
     voice_service = VoiceService(
         repo=voice_repo,

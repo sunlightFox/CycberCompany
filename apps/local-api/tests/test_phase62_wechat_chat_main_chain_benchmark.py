@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, ClassVar, cast
 
 from app.services import chat as chat_module
+from app.services.wechat_gateway import _normalize_wechat_event
 from brain.adapters import CancelToken, ModelChatRequest, ModelStreamEvent
 from fastapi.testclient import TestClient
 
@@ -309,24 +310,30 @@ def _bind_real_wechat(client: TestClient) -> None:
 
 
 def _pair_peer(client: TestClient, peer_ref: str) -> None:
-    Phase62WechatClient.events = [_text_event(f"evt-pair-{peer_ref}", peer_ref, "申请配对")]
-    response = client.post("/api/channels/providers/wechat/poll-once")
-    assert response.status_code == 200, response.text
-    assert response.json()["created_pairing_requests"] == 1, response.text
-    pairings = client.get(
+    registry = cast(Any, client.app).state.registry
+    accounts = client.get(
+        "/api/channels/accounts",
+        params={"provider": "wechat", "status": "active"},
+    )
+    assert accounts.status_code == 200, accounts.text
+
+    async def bind_peer() -> Any:
+        return await registry.wechat_gateway_service._ensure_direct_peer_session(
+            accounts.json()["items"][0],
+            normalized=_normalize_wechat_event(
+                _text_event(f"evt-pair-{peer_ref}", peer_ref, "申请配对")
+            ),
+            trace_id=None,
+        )
+
+    session = client.portal.call(bind_peer)
+    assert session["pairing_status"] == "paired"
+    pending = client.get(
         "/api/channels/pairing-requests",
         params={"provider": "wechat", "status": "pending"},
     )
-    assert pairings.status_code == 200, pairings.text
-    peer_hash = _sha256_ref(peer_ref)
-    pairing = next(
-        item for item in pairings.json()["items"] if item["peer_ref_redacted"] == peer_hash
-    )
-    approved = client.post(
-        f"/api/channels/pairing-requests/{pairing['pairing_request_id']}/approve",
-        json={"member_id": "mem_xiaoyao", "reason": "phase62"},
-    )
-    assert approved.status_code == 200, approved.text
+    assert pending.status_code == 200, pending.text
+    assert pending.json()["items"] == []
     Phase62WechatClient.events = []
 
 

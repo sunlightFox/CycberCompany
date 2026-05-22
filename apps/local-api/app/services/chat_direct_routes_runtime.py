@@ -626,6 +626,13 @@ class ChatDirectRoutesRuntime:
             ChatEventType.MODE_SELECTED,
             {"mode": TaskMode.DIRECT.value, "needs_tool": True},
         )
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.BROWSER_READ_STARTED,
+            {"url": str(redact(url)), "tool_name": "browser.snapshot", "readonly": True},
+        )
         from app.schemas.tasks import ToolExecuteRequest
 
         try:
@@ -648,6 +655,18 @@ class ChatDirectRoutesRuntime:
             )
         except AppError as exc:
             text = self._browser_read_page_error_reply(exc)
+            yield await self._emit_and_record(
+                turn["turn_id"],
+                turn["trace_id"],
+                events,
+                ChatEventType.BROWSER_READ_FAILED,
+                {
+                    "url": str(redact(url)),
+                    "tool_name": "browser.snapshot",
+                    "error_code": exc.code,
+                    "readonly": True,
+                },
+            )
             response_plan = self._response_plan_for_action_status(
                 turn,
                 facts=self._action_status_facts_for_turn(
@@ -687,6 +706,18 @@ class ChatDirectRoutesRuntime:
             return
         if response.approval is not None or str(self._tool_call_value(response.tool_call, "status") or "") == "approval_required":
             text = "这一步已经到确认边界，当前还没有执行网页读取；你确认后我再继续。"
+            yield await self._emit_and_record(
+                turn["turn_id"],
+                turn["trace_id"],
+                events,
+                ChatEventType.BROWSER_READ_FAILED,
+                {
+                    "url": str(redact(url)),
+                    "tool_name": "browser.snapshot",
+                    "reason": "approval_required",
+                    "readonly": True,
+                },
+            )
             approval_payload = (
                 response.approval.model_dump(mode="json")
                 if hasattr(response.approval, "model_dump")
@@ -748,6 +779,18 @@ class ChatDirectRoutesRuntime:
                 "risk_level": response.tool_call.risk_level.value
                 if hasattr(response.tool_call.risk_level, "value")
                 else str(response.tool_call.risk_level),
+            },
+        )
+        yield await self._emit_and_record(
+            turn["turn_id"],
+            turn["trace_id"],
+            events,
+            ChatEventType.BROWSER_READ_COMPLETED,
+            {
+                "url": str(redact(url)),
+                "tool_name": "browser.snapshot",
+                "status": page_status,
+                "readonly": True,
             },
         )
         text = self._browser_read_page_reply(result)

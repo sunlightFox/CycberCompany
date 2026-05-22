@@ -4,17 +4,18 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
+from app.schemas.brain import BrainUpdateRequest
+from app.services.brain import BrainService
 from brain.adapters import CancelToken, ModelAdapterError, ModelChatRequest, ModelChatResult
 from brain.adapters.types import ModelStreamEvent
 from core_types import ErrorCode, RiskLevel
-
-from app.services.brain import BrainService
 
 
 class _FakeBrainRepo:
     def __init__(self, brain: dict[str, Any]) -> None:
         self.brain = dict(brain)
         self.updates: list[dict[str, Any]] = []
+        self.secret_ref_events: list[dict[str, Any]] = []
 
     async def get_brain(self, brain_id: str) -> dict[str, Any] | None:
         if brain_id != self.brain["brain_id"]:
@@ -25,12 +26,24 @@ class _FakeBrainRepo:
         assert brain_id == self.brain["brain_id"]
         self.updates.append(dict(fields))
         self.brain.update(fields)
+        self.brain["has_api_key"] = bool(self.brain.get("api_key_ref"))
+
+    async def insert_secret_ref(self, **payload: Any) -> None:
+        self.secret_ref_events.append(payload)
 
 
 class _FakeSecretStore:
     def get_secret(self, secret_ref: str | None) -> str | None:
         del secret_ref
         return "secret"
+
+    def put_secret(self, value: str) -> tuple[str, str]:
+        del value
+        return "sec_local_test", "local://secrets/sec_local_test"
+
+    def rotate_secret(self, secret_ref: str, value: str) -> str:
+        del value
+        return f"local://secrets/{secret_ref}"
 
 
 class _FakeAudit:
@@ -122,13 +135,38 @@ def _brain(*, supports_stream: bool = True) -> dict[str, Any]:
     return {
         "brain_id": "brn_test",
         "display_name": "Test Brain",
+        "provider": "openai_compatible",
         "endpoint": "http://127.0.0.1:9000/v1",
         "model_name": "gpt-test",
+        "api_key_ref": "sec_existing",
+        "has_api_key": True,
+        "is_local": False,
+        "context_window": 400000,
+        "supports_tools": True,
+        "supports_vision": True,
+        "supports_audio": False,
+        "cost_policy": {},
+        "privacy_policy": {},
+        "status": "configured",
+        "default_temperature": 0.2,
+        "default_top_p": 1.0,
+        "default_max_output_tokens": 4096,
+        "timeout_seconds": 300,
+        "retry_count": 1,
+        "allow_fallback": True,
+        "allow_cloud": True,
+        "streaming_supported": supports_stream,
         "protocol_family": "chat_completions",
         "request_format": "chat_completions",
         "response_format": "openai_chat",
         "supports_stream": supports_stream,
-        "streaming_supported": supports_stream,
+        "verify_capabilities": {},
+        "last_verified_at": None,
+        "last_error_code": None,
+        "last_error_message": None,
+        "latency_ms": None,
+        "created_at": "2026-05-21T00:00:00+00:00",
+        "updated_at": "2026-05-21T00:00:00+00:00",
     }
 
 
@@ -241,3 +279,23 @@ async def test_verify_brain_auto_protocol_can_fallback_to_responses(
     assert result.verify_capabilities["selected_protocol_family"] == "responses"
     assert result.verify_capabilities["protocol_family"] == "responses"
     assert result.verify_capabilities["request_format"] == "responses"
+
+
+@pytest.mark.anyio
+async def test_update_brain_replaces_external_codex_auth_ref_with_local_secret() -> None:
+    repo = _FakeBrainRepo(
+        {
+            **_brain(),
+            "api_key_ref": "codex-auth://OPENAI_API_KEY",
+        }
+    )
+    service = BrainService(repo=repo, secret_store=_FakeSecretStore(), audit=_FakeAudit())
+
+    result = await service.update_brain(
+        "brn_test",
+        BrainUpdateRequest(api_key="your-api-key-1"),
+    )
+
+    assert result.api_key_ref == "sec_local_test"
+    assert result.has_api_key is True
+    assert repo.updates[-1]["api_key_ref"] == "sec_local_test"

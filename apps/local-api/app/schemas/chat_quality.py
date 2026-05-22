@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field
-
 from core_types.common import ApiModel
+from pydantic import Field
 
 
 class ConversationUnderstandingRequest(ApiModel):
@@ -125,6 +124,7 @@ class ResponsePolicyDecision(ApiModel):
 
 
 class ActionDialogueFacts(ApiModel):
+    domain: str = ""
     action_label: str = ""
     target: str = ""
     detail_status: str = ""
@@ -137,6 +137,11 @@ class ActionDialogueFacts(ApiModel):
     approval_pending: bool = False
     tool_created: bool = False
     task_created: bool = False
+    visible_goal: str = ""
+    human_schedule: str = ""
+    sensitive_boundary_notice: str = ""
+    requires_user_confirmation: bool = False
+    quality_flags: list[str] = Field(default_factory=list)
 
 
 class ActionDialogueDecision(ApiModel):
@@ -149,3 +154,10 @@ class ActionDialogueDecision(ApiModel):
     visible_failure_strategy: str = "partial_honest"
     related_capabilities: list[str] = Field(default_factory=list)
     reason_codes: list[str] = Field(default_factory=list)
+    domain: str = ""
+    visible_goal: str = ""
+    human_schedule: str = ""
+    sensitive_boundary_notice: str = ""
+    requires_user_confirmation: bool = False
+    quality_flags: list[str] = Field(default_factory=list)
+    visible_text: str = ""

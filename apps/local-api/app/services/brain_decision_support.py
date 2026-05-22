@@ -116,7 +116,23 @@ def cancel_or_retry(text: str) -> bool:
 
 
 def skill_request(text: str) -> bool:
-    return "skill" in text.lower() or "技能" in text
+    lowered = text.lower()
+    if "skill" in lowered:
+        return True
+    explicit_skill_markers = (
+        "调用技能",
+        "用技能",
+        "通过技能",
+        "使用技能",
+        "启用技能",
+        "安装技能",
+        "配置技能",
+        "技能列表",
+        "有哪些技能",
+        "这个技能",
+        "系统技能",
+    )
+    return any(marker in text for marker in explicit_skill_markers)
 
 
 def office_document_request(text: str) -> bool:
@@ -164,7 +180,27 @@ def tool_request(text: str) -> bool:
 
 
 def advice_strategy_direct(text: str) -> bool:
-    return any(marker in text for marker in ["建议", "方案", "取舍", "优化思路"])
+    return any(
+        marker in text
+        for marker in [
+            "建议",
+            "方案",
+            "取舍",
+            "优化思路",
+            "风险",
+            "核验",
+            "止损",
+            "沟通",
+            "比较安全",
+            "安全回复",
+            "怎么回复",
+            "怎么回",
+            "该怎么回",
+            "审批",
+            "授权",
+            "高风险",
+        ]
+    )
 
 
 def concept_explanation_request(text: str) -> bool:
@@ -271,6 +307,8 @@ def approval_response(text: str) -> bool:
 def persona_boundary_question(text: str) -> bool:
     if structured_summary_chat_request(text):
         return False
+    if _secret_safety_advice_context(text):
+        return False
     strong_markers = [
         "你能做什么",
         "你不能做什么",
@@ -304,6 +342,35 @@ def persona_boundary_question(text: str) -> bool:
             ]
         )
     return False
+
+
+def _secret_safety_advice_context(text: str) -> bool:
+    if not any(marker in text.lower() for marker in ("private key", "mnemonic")) and not any(
+        marker in text for marker in ("私钥", "助记词", "密钥")
+    ):
+        return False
+    safety_markers = (
+        "客服让我",
+        "有人让我",
+        "发过去",
+        "发给客服",
+        "恢复资产",
+        "明确阻止",
+        "安全替代",
+        "替代办法",
+        "风险",
+        "骗局",
+        "核验",
+        "不要发",
+        "继续上一个",
+        "还是上一个",
+        "三句同步",
+        "证据缺口",
+        "下一步",
+        "边界复核",
+        "场景",
+    )
+    return any(marker in text for marker in safety_markers)
 
 
 def real_task_request(text: str) -> bool:

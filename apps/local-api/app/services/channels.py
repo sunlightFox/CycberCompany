@@ -557,7 +557,7 @@ class ChannelBindingService:
         peer_allows_inbound = (
             chat_type == "private"
             and policy_allows_inbound
-            and requested_pairing not in {"unpaired", "denied", "blocked"}
+            and requested_pairing not in {"denied", "blocked", "revoked"}
         )
         now = utc_now_iso()
         peer = await self._repo.upsert_peer(

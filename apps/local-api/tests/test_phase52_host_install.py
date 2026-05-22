@@ -863,6 +863,27 @@ def test_phase52_winget_bootstrap_script_has_valid_try_catch_shape() -> None:
     assert "} catch {" in script
 
 
+def test_phase52_winget_manifest_rejects_model_package_id_with_spaces() -> None:
+    assert project_deployments._winget_manifest_root_for_package_id("7-Zip 24.09") is None
+    assert project_deployments._winget_manifest_root_for_package_id("7zip.7zip")
+    assert project_deployments._winget_manifest_root_for_package_id("Notepad++.Notepad++")
+
+
+def test_phase52_github_manifest_contents_url_is_path_encoded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[str] = []
+
+    def fake_http_text(url: str) -> str:
+        seen.append(url)
+        return "[]"
+
+    monkeypatch.setattr(project_deployments, "_http_text", fake_http_text)
+
+    assert project_deployments._github_contents_json("manifests/7/7-Zip 24/09") == []
+    assert "%20" in seen[0]
+
+
 def test_phase52_jq_uses_chocolatey_approval_plan(client: TestClient) -> None:
     plan_response = client.post(
         "/api/host-installs/plan",

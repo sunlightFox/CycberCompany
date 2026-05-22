@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -152,6 +153,167 @@ def test_phase36_unattended_high_risk_pauses_before_execution(client: TestClient
     assert task["preflight"]["phase36"]["background_execution"]["session_approval_reuse"] is False
 
 
+def test_phase36_unattended_payment_wording_pauses_before_execution(client: TestClient) -> None:
+    scheduled = _create_scheduled_task(client, goal="明天下午 3 点提醒我给供应商付款 5000 元")
+    run = client.post(
+        f"/api/scheduled-tasks/{scheduled['scheduled_task_id']}/trigger",
+        json={"scheduled_for": "2026-04-30T00:00:00+00:00"},
+    ).json()
+
+    assert run["status"] == "waiting_policy"
+    assert run["policy_decision"]["risk_level"] == "R4"
+    assert run["policy_decision"]["auto_start"] is False
+
+
+def test_phase36_chat_scheduled_task_visible_reply_has_no_internal_leaks(client: TestClient) -> None:
+    conversation_id = client.get("/api/chat/conversations").json()["items"][0]["conversation_id"]
+    created = client.post(
+        "/api/chat/turn",
+        json={
+            "conversation_id": conversation_id,
+            "member_id": "mem_xiaoyao",
+            "session_id": "phase36-scheduled-visible",
+            "input": {
+                "type": "text",
+                "text": "明天下午 3 点提醒我给供应商付款 5000 元。",
+            },
+        },
+    )
+    assert created.status_code == 200, created.text
+
+    stream = client.get(created.json()["stream_url"])
+    detail = client.get(f"/api/chat/turns/{created.json()['turn_id']}").json()
+    reply = _reply_from_sse(stream.text)
+    tasks = client.get("/api/scheduled-tasks").json()["items"]
+
+    assert detail["intent"] == "scheduled_task_request"
+    assert any("供应商付款 5000 元" in str(item.get("goal") or "") for item in tasks)
+    assert reply == "好，明天下午 3 点提醒你给供应商付款 5000 元。到点我会先提醒你确认，这个我只提醒，不会自动付款。"
+    for forbidden in [
+        "调度方式",
+        "下一次执行时间",
+        "后台流程",
+        "高风险动作",
+        "格式约束作答",
+        "trace_id",
+        "task_id",
+        "Asia/Shanghai",
+    ]:
+        assert forbidden not in reply
+    assert re.search(r"\d{4}-\d{2}-\d{2}T", reply) is None
+
+
+def test_phase36_chat_relative_seconds_reminder_creates_near_once_task(client: TestClient) -> None:
+    conversation_id = client.get("/api/chat/conversations").json()["items"][0]["conversation_id"]
+    before_ids = {
+        item["scheduled_task_id"]
+        for item in client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    }
+    created = client.post(
+        "/api/chat/turn",
+        json={
+            "conversation_id": conversation_id,
+            "member_id": "mem_xiaoyao",
+            "session_id": "phase36-relative-seconds-visible",
+            "input": {"type": "text", "text": "再过 20 秒提醒我喝水。"},
+        },
+    )
+    assert created.status_code == 200, created.text
+
+    stream = client.get(created.json()["stream_url"])
+    reply = _reply_from_sse(stream.text)
+    tasks = client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    scheduled = next(item for item in tasks if item["scheduled_task_id"] not in before_ids)
+
+    assert scheduled["schedule"]["type"] == "once"
+    assert scheduled["schedule"]["timezone"] == "Asia/Shanghai"
+    assert "秒后提醒你喝水" in reply
+    assert "明天" not in reply
+    assert "next_run_at" not in reply
+
+
+def test_phase36_upload_id_masking_reminder_is_normal_reminder(client: TestClient) -> None:
+    conversation_id = client.get("/api/chat/conversations").json()["items"][0]["conversation_id"]
+    before_ids = {
+        item["scheduled_task_id"]
+        for item in client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    }
+    created = client.post(
+        "/api/chat/turn",
+        json={
+            "conversation_id": conversation_id,
+            "member_id": "mem_xiaoyao",
+            "session_id": "phase36-id-mask-normal-reminder",
+            "input": {
+                "type": "text",
+                "text": "明天下午 3:15 提醒我上传证件照片前先打码。",
+            },
+        },
+    )
+    assert created.status_code == 200, created.text
+
+    stream = client.get(created.json()["stream_url"])
+    reply = _reply_from_sse(stream.text)
+    tasks = client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    scheduled = next(item for item in tasks if item["scheduled_task_id"] not in before_ids)
+    run = client.post(
+        f"/api/scheduled-tasks/{scheduled['scheduled_task_id']}/trigger",
+        json={"scheduled_for": "2026-05-22T00:00:00+00:00"},
+    ).json()
+
+    assert scheduled["schedule"]["type"] == "once"
+    assert "T15:15" in scheduled["schedule"]["run_at"]
+    assert reply == "好，明天下午 3:15 提醒你上传证件照片前先打码。到点我会直接叫你。"
+    assert "高风险" not in reply
+    assert "不会直接" not in reply
+    assert run["status"] == "completed"
+    assert run["policy_decision"]["risk_level"] == "R2"
+    assert run["policy_decision"]["auto_start"] is True
+
+
+def test_phase36_due_notification_uses_natural_reminder_copy(client: TestClient) -> None:
+    registry = cast(Any, client.app).state.registry
+    scheduled = _create_scheduled_task(
+        client,
+        goal="再过 20 秒提醒我喝水",
+        schedule={"type": "once", "run_at": "2026-05-22T00:00:00+00:00"},
+    )
+    _run_async(
+        client,
+        registry.scheduled_tasks.update_task,
+        scheduled["scheduled_task_id"],
+        {
+            "next_run_at": "2026-05-22T00:00:00+00:00",
+            "updated_at": "2026-05-22T00:00:00+00:00",
+        },
+    )
+
+    runs = _run_async(
+        client,
+        registry.scheduled_task_service.scan_due,
+        now=datetime(2026, 5, 22, 0, 0, 30, tzinfo=UTC),
+    )
+    tick = client.post(
+        "/api/system/background-workers/tick",
+        params={"worker_name": "notification_retry_worker"},
+    )
+    messages = client.get("/api/notification/messages", params={"limit": 50}).json()["items"]
+    related = [
+        item
+        for item in messages
+        if item.get("scheduled_task_id") == scheduled["scheduled_task_id"]
+    ]
+
+    assert len(runs) == 1
+    assert runs[0].status == "completed"
+    assert tick.status_code == 200, tick.text
+    assert related
+    assert related[0]["status"] == "sent"
+    assert related[0]["body_redacted"] == "到点了，提醒你喝水。"
+    assert "定时任务状态" not in related[0]["body_redacted"]
+    assert "completed" not in related[0]["body_redacted"]
+
+
 def test_phase36_consecutive_failures_dead_letter(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -256,6 +418,22 @@ def _run_async(client: TestClient, func: Any, *args: Any, **kwargs: Any) -> Any:
         return await func(*args, **kwargs)
 
     return cast(Any, client).portal.call(runner)
+
+
+def _reply_from_sse(raw: str) -> str:
+    chunks: list[str] = []
+    fallback = ""
+    for block in raw.strip().split("\n\n"):
+        for line in block.splitlines():
+            if not line.startswith("data: "):
+                continue
+            event = json.loads(line[6:])
+            if event.get("event") == "response.delta":
+                chunks.append(str(event.get("payload", {}).get("text") or ""))
+            if event.get("event") == "response.completed":
+                response_plan = event.get("payload", {}).get("response_plan", {})
+                fallback = str(response_plan.get("plain_text") or response_plan.get("summary") or "")
+    return "".join(chunks).strip() or fallback.strip()
 
 
 def _payload_leakage_count(payload: Any) -> int:

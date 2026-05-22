@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.services.chat_intent_router import (
@@ -26,31 +27,67 @@ class ScheduledTaskIntentCoordinator:
     """Parses conservative scheduled-task requests from ordinary chat text."""
 
     def parse(self, text: str) -> ScheduledTaskIntent | None:
+        clean = " ".join(str(text or "").strip().split())
+        if not clean:
+            return None
         direct_only_markers = [
             "不要执行",
             "不要假装执行",
             "别假装执行",
             "不要声称执行",
+            "不要创建",
             "不要创建任务",
+            "不要创建提醒",
+            "不要创建定时任务",
+            "不要创建系统提醒",
+            "不要真的创建",
+            "不要新建提醒",
+            "不要新建定时任务",
+            "不要设置",
+            "不要设置提醒",
+            "不要建任务",
+            "不要建提醒",
+            "不创建提醒",
+            "不创建定时任务",
             "不要调用工具",
+            "只解释",
             "只给方案",
         ]
-        if any(marker in text for marker in direct_only_markers):
+        if any(marker in clean for marker in direct_only_markers):
             return None
-        clean = " ".join(text.strip().split())
+        if _looks_like_roleplay_chat_request(clean) and not _explicit_roleplay_schedule_request(clean):
+            return None
         lowered = clean.lower()
         schedule: dict[str, Any] | None = None
-        if any(marker in clean for marker in ["每天", "每日"]):
+        schedule_kind: str | None = None
+        relative_once = _extract_relative_once(clean)
+        if relative_once is not None:
+            schedule_kind = "once"
+            schedule = {
+                "type": "once",
+                "run_at": _relative_run_at(relative_once[0], relative_once[1]),
+                "timezone": "Asia/Shanghai",
+            }
+        elif any(marker in clean for marker in ["每天", "每日"]):
+            schedule_kind = "daily"
             schedule = {
                 "type": "daily",
                 "time": _extract_clock_text(clean),
                 "timezone": "Asia/Shanghai",
             }
         elif "每周" in clean:
+            schedule_kind = "weekly"
             schedule = {
                 "type": "weekly",
                 "days": [_extract_weekday(clean)],
                 "time": _extract_clock_text(clean),
+                "timezone": "Asia/Shanghai",
+            }
+        elif any(marker in clean for marker in ["明早", "明天早上", "明天上午", "明天"]):
+            schedule_kind = "once"
+            schedule = {
+                "type": "once",
+                "run_at": _tomorrow_run_at(_extract_clock_text(clean)),
                 "timezone": "Asia/Shanghai",
             }
         else:
@@ -66,10 +103,13 @@ class ScheduledTaskIntentCoordinator:
                     multiplier = 3600
                 elif unit in {"天", "day", "days"}:
                     multiplier = 86400
+                schedule_kind = "interval"
                 schedule = {"type": "interval", "every_seconds": amount * multiplier}
         if schedule is None:
             return None
         scheduled_markers = ["帮我", "提醒", "定时", "创建定时任务", "新建定时任务"]
+        if schedule_kind == "once" and not _explicit_once_schedule_request(clean):
+            return None
         if not any(marker in clean for marker in scheduled_markers):
             return None
         goal = clean
@@ -80,6 +120,54 @@ class ScheduledTaskIntentCoordinator:
             goal=goal or clean,
             schedule=schedule,
         )
+
+
+def _explicit_once_schedule_request(text: str) -> bool:
+    clean = " ".join(str(text or "").strip().split())
+    if any(marker in clean for marker in ["提醒", "定时", "创建定时任务", "新建定时任务"]):
+        return True
+    has_clock = bool(re.search(r"\d{1,2}\s*[:：点]\s*\d{0,2}", clean))
+    return has_clock and "帮我" in clean
+
+
+def _looks_like_roleplay_chat_request(text: str) -> bool:
+    raw = str(text or "")
+    roleplay_markers = (
+        "角色扮演",
+        "扮演",
+        "假装是",
+        "假装成",
+        "保持角色",
+        "沿用角色",
+        "继续刚才这个角色",
+        "用这个角色",
+        "角色口吻",
+        "身份词",
+        "叫我",
+    )
+    return any(marker in raw for marker in roleplay_markers) or bool(re.search(r"像.{1,24}一样", raw))
+
+
+def _explicit_roleplay_schedule_request(text: str) -> bool:
+    clean = " ".join(str(text or "").strip().split())
+    explicit_create_markers = (
+        "创建定时任务",
+        "新建定时任务",
+        "创建提醒",
+        "新建提醒",
+        "设置提醒",
+        "设个提醒",
+        "加个提醒",
+        "建个提醒",
+        "定时提醒",
+        "定时任务",
+        "到点提醒",
+    )
+    if any(marker in clean for marker in explicit_create_markers):
+        return True
+    has_clock = bool(re.search(r"\d{1,2}\s*[:：点]\s*\d{0,2}", clean))
+    has_recurrence = any(marker in clean for marker in ("每天", "每日", "每周", "每隔"))
+    return ("提醒我" in clean or "提醒" in clean) and (has_clock or has_recurrence)
 
 
 class ChatTaskCoordinator:
@@ -210,9 +298,16 @@ def _extract_port(text: str) -> int | None:
 
 
 def _extract_clock_text(text: str) -> str:
-    match = re.search(r"(\d{1,2})[:：](\d{2})", text)
+    match = re.search(r"(早上|上午|中午|下午|晚上)?\s*(\d{1,2})[:：](\d{2})", text)
     if match:
-        return f"{int(match.group(1)):02d}:{int(match.group(2)):02d}"
+        prefix = match.group(1) or ""
+        hour = int(match.group(2))
+        minute = int(match.group(3))
+        if prefix in {"下午", "晚上"} and hour < 12:
+            hour += 12
+        if prefix == "中午" and hour < 11:
+            hour += 12
+        return f"{hour % 24:02d}:{minute:02d}"
     match = re.search(r"(早上|上午|中午|下午|晚上)?\s*(\d{1,2})\s*点", text)
     if not match:
         return "09:00"
@@ -223,6 +318,43 @@ def _extract_clock_text(text: str) -> str:
     if prefix == "中午" and hour < 11:
         hour += 12
     return f"{hour % 24:02d}:00"
+
+
+def _extract_relative_once(text: str) -> tuple[int, str] | None:
+    lowered = str(text or "").lower()
+    match = re.search(
+        r"(?:再过|过|等|等到)?\s*(\d+)\s*(秒|分钟|小时|天|second|seconds|minute|minutes|hour|hours|day|days)\s*(?:后|later)?",
+        lowered,
+    )
+    if not match:
+        return None
+    amount = int(match.group(1))
+    unit = match.group(2)
+    return (amount, unit) if amount > 0 else None
+
+
+def _relative_run_at(amount: int, unit: str) -> str:
+    tz = timezone(timedelta(hours=8), "Asia/Shanghai")
+    seconds = amount
+    if unit in {"分钟", "minute", "minutes"}:
+        seconds = amount * 60
+    elif unit in {"小时", "hour", "hours"}:
+        seconds = amount * 3600
+    elif unit in {"天", "day", "days"}:
+        seconds = amount * 86400
+    return (datetime.now(tz) + timedelta(seconds=seconds)).isoformat()
+
+
+def _tomorrow_run_at(clock_text: str) -> str:
+    tz = timezone(timedelta(hours=8), "Asia/Shanghai")
+    now = datetime.now(tz)
+    hour, minute = [int(part) for part in clock_text.split(":", 1)]
+    run_at = datetime.combine(
+        (now + timedelta(days=1)).date(),
+        datetime.min.time().replace(hour=hour, minute=minute),
+        tzinfo=tz,
+    )
+    return run_at.isoformat()
 
 
 def _extract_weekday(text: str) -> str:

@@ -609,7 +609,7 @@ class RuntimeContextGateway:
             current_conversation_summary=current_summary,
             current_open_loops=list(dict.fromkeys(current_open_loops)),
             current_commitments=current_commitments,
-            relevant_recent_messages=list(visible_messages[-4:]),
+            relevant_recent_messages=_relevant_recent_messages_with_roleplay_contract(visible_messages),
             relevant_memory_items=list(previous.get("relevant_memory_items") or []),
             current_action_facts={
                 **dict(previous.get("current_action_facts") or {}),
@@ -800,6 +800,41 @@ def _summary_with_working_state(
     if state_bits:
         lines.append("当前对话工作状态：" + "；".join(state_bits))
     return "\n".join(lines) if lines else None
+
+
+def _relevant_recent_messages_with_roleplay_contract(
+    recent_messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    tail = list(recent_messages[-4:])
+    setup: dict[str, Any] | None = None
+    for item in recent_messages:
+        text = str(item.get("model_safe_content_text") or item.get("content_text") or "")
+        if _looks_like_roleplay_contract_message(text):
+            setup = item
+    if setup is None or any(item is setup for item in tail):
+        return tail
+    return [setup, *tail]
+
+
+def _looks_like_roleplay_contract_message(text: str) -> bool:
+    raw = str(text or "")
+    if "「" not in raw or "」" not in raw:
+        return False
+    return any(
+        marker in raw
+        for marker in (
+            "角色扮演",
+            "扮演",
+            "假装是",
+            "假装成",
+            "保持角色",
+            "沿用角色",
+            "用这个角色",
+            "角色口吻",
+            "身份词",
+            "叫我",
+        )
+    )
 
 
 def _working_state_summary(working_state: dict[str, Any]) -> dict[str, Any]:

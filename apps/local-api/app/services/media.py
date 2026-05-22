@@ -4,11 +4,16 @@ import asyncio
 import io
 import hashlib
 import json
+import os
 import shutil
+import subprocess
+import tempfile
 import wave
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import httpx
 
 from core_types import (
     ErrorCode,
@@ -54,6 +59,7 @@ from app.schemas.media import (
 )
 from app.services.artifacts import ArtifactStore
 from app.services.audit import AuditEventService
+from app.services.secrets import SecretStore
 
 
 @dataclass(frozen=True)
@@ -142,14 +148,21 @@ class MediaRuntime:
                     str(target),
                 ]
             )
-            outputs.append(
-                RuntimeFileOutput(
-                    path=target,
-                    display_name=target.name,
-                    content_type="image/png",
-                    time_ms=time_ms,
-                    metadata={"mode": request.mode, "frame_index": index},
+            if target.exists():
+                outputs.append(
+                    RuntimeFileOutput(
+                        path=target,
+                        display_name=target.name,
+                        content_type="image/png",
+                        time_ms=time_ms,
+                        metadata={"mode": request.mode, "frame_index": index},
+                    )
                 )
+        if not outputs:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "ffmpeg 未生成可用抽帧",
+                status_code=502,
             )
         return outputs
 
@@ -352,6 +365,7 @@ class MediaService:
         trace_service: TraceService,
         audit_service: AuditEventService,
         runtime: MediaRuntime | None = None,
+        secret_store: SecretStore | None = None,
     ) -> None:
         self._repo = repo
         self._task_repo = task_repo
@@ -359,6 +373,7 @@ class MediaService:
         self._trace = trace_service
         self._audit = audit_service
         self._runtime = runtime or MediaRuntime()
+        self._secrets = secret_store
 
     def set_runtime(self, runtime: MediaRuntime) -> None:
         self._runtime = runtime
@@ -682,14 +697,15 @@ class MediaService:
         media = await self.get_media(media_id)
         span_id = await self._start_span(trace_id, "media.stt", media)
         provider = _normalized_provider(request.provider, default="local")
+        provider_configured = provider in {"local", "test"} or (
+            provider == "openai" and self._openai_audio_api_key() is not None
+        ) or (provider == "google" and _speech_recognition_available())
         provider_health = await self._record_provider_health(
             capability="stt",
             provider_name=provider,
             provider_type="local" if provider in {"local", "test"} else "external",
-            status="available" if provider in {"local", "test"} else "degraded",
-            degraded_reason=None
-            if provider in {"local", "test"}
-            else "provider_unavailable",
+            status="available" if provider_configured else "degraded",
+            degraded_reason=None if provider_configured else "provider_unavailable",
             trace_id=trace_id,
         )
         try:
@@ -730,6 +746,56 @@ class MediaService:
                         "idempotent": True,
                     },
                 )
+            if provider == "openai":
+                if not provider_configured:
+                    result = await self._record_stt_io(
+                        media=media,
+                        provider_name=provider,
+                        provider_health=provider_health,
+                        request=request,
+                        trace_id=trace_id,
+                        transcript_text=None,
+                        source_preview=source_preview,
+                        status="degraded",
+                        degraded_reason="provider_unavailable",
+                    )
+                    await self._end_span(span_id, {"status": "degraded"})
+                    return result
+                transcript_text = await self._openai_transcribe(media, source, request)
+                result = await self._record_stt_io(
+                    media=media,
+                    provider_name=provider,
+                    provider_health=provider_health,
+                    request=request,
+                    trace_id=trace_id,
+                    transcript_text=transcript_text,
+                    source_preview=source_preview,
+                    status="completed" if transcript_text else "degraded",
+                    degraded_reason=None if transcript_text else "transcription_empty",
+                )
+                await self._end_span(
+                    span_id,
+                    {"status": result.status, "io_request_id": result.evidence.get("io_request_id")},
+                )
+                return result
+            if provider == "google":
+                transcript_text = await self._google_transcribe(source, request)
+                result = await self._record_stt_io(
+                    media=media,
+                    provider_name=provider,
+                    provider_health=provider_health,
+                    request=request,
+                    trace_id=trace_id,
+                    transcript_text=transcript_text,
+                    source_preview=source_preview,
+                    status="completed" if transcript_text else "degraded",
+                    degraded_reason=None if transcript_text else "transcription_empty",
+                )
+                await self._end_span(
+                    span_id,
+                    {"status": result.status, "io_request_id": result.evidence.get("io_request_id")},
+                )
+                return result
             if provider not in {"local", "test"}:
                 result = await self._record_stt_io(
                     media=media,
@@ -777,6 +843,9 @@ class MediaService:
     ) -> MediaOperationResponse:
         provider = _normalized_provider(request.provider, default="local")
         source_text = str(redact(request.text))
+        provider_configured = provider in {"local", "test"} or (
+            provider == "openai" and self._openai_audio_api_key() is not None
+        ) or (provider == "edge" and _edge_tts_available())
         idempotency_key = _media_io_idempotency(
             request.task_id,
             "tts",
@@ -790,10 +859,8 @@ class MediaService:
             capability="tts",
             provider_name=provider,
             provider_type="local" if provider in {"local", "test"} else "external",
-            status="available" if provider in {"local", "test"} else "degraded",
-            degraded_reason=None
-            if provider in {"local", "test"}
-            else "provider_unavailable",
+            status="available" if provider_configured else "degraded",
+            degraded_reason=None if provider_configured else "provider_unavailable",
             trace_id=trace_id,
         )
         transcript_preview = _preview_text(source_text, 240)
@@ -824,8 +891,8 @@ class MediaService:
             operation="tts",
             direction="output",
             provider_name=provider,
-            status="degraded" if provider not in {"local", "test"} else "completed",
-            degraded_reason=None if provider in {"local", "test"} else "provider_unavailable",
+            status="completed" if provider_configured else "degraded",
+            degraded_reason=None if provider_configured else "provider_unavailable",
             trace_id=trace_id,
             summary={
                 "text_preview": transcript_preview,
@@ -839,7 +906,7 @@ class MediaService:
             },
             idempotency_key=idempotency_key,
         )
-        if provider not in {"local", "test"}:
+        if provider not in {"local", "test", "openai", "edge"}:
             return MediaOperationResponse(
                 status="degraded",
                 message="TTS provider 未启用",
@@ -848,21 +915,53 @@ class MediaService:
                 provider_health=[provider_health],
                 evidence={"io_request_id": io_request.io_request_id},
             )
-        content = _fake_wav_bytes(request.text, request.output_format)
+        if provider == "openai":
+            if not provider_configured:
+                return MediaOperationResponse(
+                    status="degraded",
+                    message="TTS provider 未启用",
+                    degraded_reason="provider_unavailable",
+                    io_records=[io_request],
+                    provider_health=[provider_health],
+                    evidence={"io_request_id": io_request.io_request_id},
+                )
+            content, openai_audio = await self._openai_speech(request)
+            content_type = openai_audio["content_type"]
+            output_format = openai_audio["output_format"]
+            display_name = f"speech.{output_format}"
+        elif provider == "edge":
+            if not provider_configured:
+                return MediaOperationResponse(
+                    status="degraded",
+                    message="TTS provider 未启用",
+                    degraded_reason="provider_unavailable",
+                    io_records=[io_request],
+                    provider_health=[provider_health],
+                    evidence={"io_request_id": io_request.io_request_id},
+                )
+            content, edge_audio = await self._edge_speech(request)
+            content_type = edge_audio["content_type"]
+            output_format = edge_audio["output_format"]
+            display_name = f"speech.{output_format}"
+        else:
+            content = _fake_wav_bytes(request.text, request.output_format)
+            output_format = request.output_format
+            content_type = "audio/wav" if request.output_format == "wav" else f"audio/{request.output_format}"
+            display_name = "speech.wav" if request.output_format == "wav" else f"speech.{request.output_format}"
         artifact = await self._artifacts.write_bytes(
             task_id=request.task_id,
             organization_id=request.organization_id or "org_default",
-            display_name="speech.wav" if request.output_format == "wav" else f"speech.{request.output_format}",
+            display_name=display_name,
             content=content,
             artifact_type="audio",
-            content_type="audio/wav" if request.output_format == "wav" else f"audio/{request.output_format}",
+            content_type=content_type,
             subdir="media/tts",
             sensitivity=request.sensitivity,
             metadata={
                 "media_io_request_id": io_request.io_request_id,
                 "provider": provider,
                 "voice": request.voice,
-                "output_format": request.output_format,
+                "output_format": output_format,
                 "text_preview": transcript_preview,
                 "redacted": True,
             },
@@ -896,7 +995,7 @@ class MediaService:
                 "replay_summary": {
                     "io_request_id": io_request.io_request_id,
                     "voice": request.voice,
-                    "output_format": request.output_format,
+                    "output_format": output_format,
                     "text_preview": transcript_preview,
                 },
                 "updated_at": utc_now_iso(),
@@ -909,7 +1008,7 @@ class MediaService:
             provider_name=provider,
             artifact=artifact,
             voice=request.voice,
-            output_format=request.output_format,
+            output_format=output_format,
             source_text=request.text,
             trace_id=trace_id,
         )
@@ -1588,7 +1687,8 @@ class MediaService:
             "evidence": _redacted_dict(
                 {
                     "runtime": self.runtime_status(),
-                    "cloud_provider_enabled": False,
+                    "cloud_provider_enabled": provider_name in {"openai", "google", "edge"}
+                    and status == "available",
                     "provider_secret_visible": False,
                 }
             ),
@@ -1988,6 +2088,202 @@ class MediaService:
         duration = f"，时长 {media.duration_ms} ms" if media.duration_ms else ""
         return f"音频转写线索：{media.display_name}{duration}。本地测试转写 provider 仅返回受控摘要，不包含原始音频内容。"
 
+    def _openai_audio_api_key(self) -> str | None:
+        for ref_name in ("CYCBER_MEDIA_OPENAI_API_KEY_REF", "CYCBER_OPENAI_API_KEY_REF"):
+            ref = os.environ.get(ref_name)
+            if ref and self._secrets is not None:
+                try:
+                    value = self._secrets.get_secret(ref)
+                except Exception:
+                    value = None
+                if value:
+                    return value
+        for env_name in ("CYCBER_MEDIA_OPENAI_API_KEY", "CYCBER_OPENAI_API_KEY", "OPENAI_API_KEY"):
+            value = os.environ.get(env_name)
+            if value:
+                return value
+        if self._secrets is not None:
+            try:
+                return self._secrets.get_secret("codex-auth://OPENAI_API_KEY")
+            except Exception:
+                return None
+        return None
+
+    def _openai_audio_base_url(self) -> str:
+        return (
+            os.environ.get("CYCBER_MEDIA_OPENAI_BASE_URL")
+            or os.environ.get("CYCBER_OPENAI_BASE_URL")
+            or "https://api.openai.com/v1"
+        ).rstrip("/")
+
+    async def _openai_transcribe(
+        self,
+        media: MediaAsset,
+        source: Path,
+        request: MediaSTTRequest,
+    ) -> str | None:
+        api_key = self._openai_audio_api_key()
+        if not api_key:
+            return None
+        model = os.environ.get("CYCBER_OPENAI_STT_MODEL", "gpt-4o-mini-transcribe")
+        data = {
+            "model": model,
+            "response_format": "json",
+        }
+        language = _openai_language(request.language)
+        if language:
+            data["language"] = language
+        content_type = media.content_type or "application/octet-stream"
+        try:
+            with source.open("rb") as handle:
+                files = {"file": (media.display_name or source.name, handle, content_type)}
+                async with httpx.AsyncClient(timeout=_openai_audio_timeout()) as client:
+                    response = await client.post(
+                        f"{self._openai_audio_base_url()}/audio/transcriptions",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        data=data,
+                        files=files,
+                    )
+        except OSError as exc:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "读取转写音频失败",
+                status_code=502,
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "OpenAI STT 请求失败",
+                status_code=502,
+            ) from exc
+        if response.status_code >= 400:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "OpenAI STT 请求失败",
+                status_code=502,
+                details={"status_code": response.status_code},
+            )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "OpenAI STT 返回无法解析",
+                status_code=502,
+            ) from exc
+        text = payload.get("text") if isinstance(payload, dict) else None
+        return _preview_text(text, 4000) if isinstance(text, str) and text.strip() else None
+
+    async def _openai_speech(self, request: MediaTTSRequest) -> tuple[bytes, dict[str, str]]:
+        api_key = self._openai_audio_api_key()
+        if not api_key:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "OpenAI TTS 未配置 API key",
+                status_code=503,
+            )
+        output_format = _openai_tts_format(request.output_format)
+        payload = {
+            "model": os.environ.get("CYCBER_OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
+            "voice": _openai_tts_voice(request.voice),
+            "input": request.text,
+            "response_format": output_format,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=_openai_audio_timeout()) as client:
+                response = await client.post(
+                    f"{self._openai_audio_base_url()}/audio/speech",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+        except httpx.HTTPError as exc:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "OpenAI TTS 请求失败",
+                status_code=502,
+            ) from exc
+        if response.status_code >= 400:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "OpenAI TTS 请求失败",
+                status_code=502,
+                details={"status_code": response.status_code},
+            )
+        content_type = response.headers.get("content-type") or _audio_content_type(output_format)
+        return response.content, {
+            "content_type": content_type.split(";")[0],
+            "output_format": output_format,
+        }
+
+    async def _google_transcribe(
+        self,
+        source: Path,
+        request: MediaSTTRequest,
+    ) -> str | None:
+        def _recognize() -> str | None:
+            try:
+                import speech_recognition as sr  # type: ignore
+            except Exception as exc:  # pragma: no cover - optional dependency boundary
+                raise AppError(
+                    ErrorCode.MEDIA_RUNTIME_FAILED,
+                    "SpeechRecognition STT 未安装",
+                    status_code=503,
+                ) from exc
+            recognizer = sr.Recognizer()
+            try:
+                with sr.AudioFile(str(source)) as audio_source:
+                    audio = recognizer.record(audio_source)
+                text = recognizer.recognize_google(
+                    audio,
+                    language=request.language or "zh-CN",
+                    show_all=False,
+                )
+            except sr.UnknownValueError:
+                return None
+            except Exception as exc:
+                raise AppError(
+                    ErrorCode.MEDIA_RUNTIME_FAILED,
+                    "Google STT 请求失败",
+                    status_code=502,
+                ) from exc
+            return _preview_text(text, 4000) if isinstance(text, str) and text.strip() else None
+
+        return await asyncio.to_thread(_recognize)
+
+    async def _edge_speech(self, request: MediaTTSRequest) -> tuple[bytes, dict[str, str]]:
+        try:
+            import edge_tts  # type: ignore
+        except Exception as exc:  # pragma: no cover - optional dependency boundary
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "edge-tts TTS 未安装",
+                status_code=503,
+            ) from exc
+        voice = _edge_tts_voice(request.voice)
+        communicate = edge_tts.Communicate(request.text, voice=voice)
+        chunks: list[bytes] = []
+        async for chunk in communicate.stream():
+            if chunk.get("type") == "audio":
+                chunks.append(chunk["data"])
+        audio = b"".join(chunks)
+        if not audio:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "edge-tts 返回空音频",
+                status_code=502,
+            )
+        output_format = _edge_tts_format(request.output_format)
+        if output_format == "mp3":
+            return audio, {"content_type": "audio/mpeg", "output_format": "mp3"}
+        converted = await asyncio.to_thread(_convert_audio_bytes, audio, "mp3", output_format)
+        return converted, {
+            "content_type": _audio_content_type(output_format),
+            "output_format": output_format,
+        }
+
     async def _latest_transcript_analysis(self, media_id: str) -> MediaAnalysis | None:
         row = await self._repo.get_latest_analysis(media_id, "transcript")
         return MediaAnalysis(**row) if row else None
@@ -2077,6 +2373,121 @@ def _infer_media_type(artifact: TaskArtifact) -> str:
 def _normalized_provider(value: str, *, default: str = "local") -> str:
     provider = str(value or default).strip().lower()
     return provider or default
+
+
+def _openai_audio_timeout() -> float:
+    try:
+        return float(os.environ.get("CYCBER_OPENAI_AUDIO_TIMEOUT_SECONDS", "120"))
+    except ValueError:
+        return 120.0
+
+
+def _openai_language(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = value.strip().lower().replace("_", "-")
+    if not normalized:
+        return None
+    return normalized.split("-", 1)[0]
+
+
+def _openai_tts_voice(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    allowed = {
+        "alloy",
+        "ash",
+        "ballad",
+        "coral",
+        "echo",
+        "fable",
+        "nova",
+        "onyx",
+        "sage",
+        "shimmer",
+        "verse",
+    }
+    return normalized if normalized in allowed else "alloy"
+
+
+def _openai_tts_format(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in {"mp3", "opus", "aac", "flac", "wav", "pcm"} else "mp3"
+
+
+def _edge_tts_voice(value: str | None) -> str:
+    normalized = str(value or "").strip()
+    if normalized and normalized.lower() not in {"neutral", "alloy", "default"}:
+        return normalized
+    return "zh-CN-XiaoxiaoNeural"
+
+
+def _edge_tts_format(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in {"mp3", "wav"} else "mp3"
+
+
+def _speech_recognition_available() -> bool:
+    try:
+        import speech_recognition  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
+def _edge_tts_available() -> bool:
+    try:
+        import edge_tts  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
+def _convert_audio_bytes(content: bytes, source_format: str, output_format: str) -> bytes:
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise AppError(
+            ErrorCode.MEDIA_BACKEND_UNAVAILABLE,
+            "音频格式转换需要 ffmpeg",
+            status_code=503,
+            details={"reason": "ffmpeg_missing"},
+        )
+    with tempfile.TemporaryDirectory(prefix="cycber_media_convert_") as temp:
+        temp_dir = Path(temp)
+        source = temp_dir / f"source.{source_format}"
+        target = temp_dir / f"target.{output_format}"
+        source.write_bytes(content)
+        command = [ffmpeg, "-y", "-i", str(source)]
+        if output_format == "wav":
+            command.extend(["-ar", "16000", "-ac", "1"])
+        command.append(str(target))
+        completed = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise AppError(
+                ErrorCode.MEDIA_RUNTIME_FAILED,
+                "音频格式转换失败",
+                status_code=502,
+            )
+        return target.read_bytes()
+
+
+def _audio_content_type(output_format: str) -> str:
+    return {
+        "mp3": "audio/mpeg",
+        "opus": "audio/opus",
+        "aac": "audio/aac",
+        "flac": "audio/flac",
+        "wav": "audio/wav",
+        "pcm": "audio/L16",
+    }.get(output_format, "application/octet-stream")
 
 
 def _privacy_level_for_sensitivity(sensitivity: str | None) -> str:

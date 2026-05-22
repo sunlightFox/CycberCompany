@@ -187,7 +187,7 @@ def test_phase88_wechat_wrong_conversation_reuse_and_duplicate_are_visible(
     assert "duplicate_turn" in duplicate.json()["taxonomy"]
 
 
-def test_phase88_wechat_rejected_and_unpaired_inbound_are_visible_as_no_turn(
+def test_phase88_wechat_rejected_group_inbound_is_visible_as_no_turn(
     client: TestClient,
 ) -> None:
     _install_fake_wechat(client, GatewayWechatClient)
@@ -199,24 +199,17 @@ def test_phase88_wechat_rejected_and_unpaired_inbound_are_visible_as_no_turn(
             "wxid-phase88-group-peer",
             "群里消息",
             chat_type="group",
-        ),
-        _wechat_text_event(
-            "evt-phase88-unpaired",
-            "wxid-phase88-unpaired-peer",
-            "未配对私聊",
-        ),
+        )
     ]
     response = client.post("/api/channels/providers/wechat/poll-once")
     assert response.status_code == 200, response.text
     payload = response.json()
 
-    assert payload["details"]["phase88"]["taxonomy_counts"]["no_turn"] == 2
+    assert payload["details"]["phase88"]["taxonomy_counts"]["no_turn"] == 1
     assert payload["details"]["phase88"]["failure_reason_counts"]["ingress_policy_blocked"] == 1
     assert (
-        payload["details"]["phase88"]["failure_reason_counts"][
-            "pairing_rejected_or_missing"
-        ]
-        == 1
+        payload["details"]["phase88"]["failure_reason_counts"]["pairing_rejected_or_missing"]
+        == 0
     )
 
 

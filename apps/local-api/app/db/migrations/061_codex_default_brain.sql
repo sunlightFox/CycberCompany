@@ -1,0 +1,33 @@
+UPDATE brains
+SET
+  display_name = 'Codex 默认大脑',
+  provider = 'openai',
+  endpoint = 'https://api.openai.com/v1',
+  model_name = 'gpt-5.5',
+  api_key_ref = NULL,
+  is_local = 0,
+  context_window = 400000,
+  supports_tools = 1,
+  supports_vision = 1,
+  supports_audio = 0,
+  cost_policy_json = '{"mode":"cloud","profile":"codex_current_default"}',
+  privacy_policy_json = '{"allow_cloud":true,"provider_display_name":"OpenAI","adapter_family":"openai_compatible","codex_profile":"current_codex","codex_wire_api":"responses","reasoning_effort":"medium","text_verbosity":"medium","api_key_env_var":"OPENAI_API_KEY"}',
+  status = 'needs_configuration',
+  default_temperature = 0.2,
+  default_top_p = 1.0,
+  default_max_output_tokens = 4096,
+  timeout_seconds = 300,
+  retry_count = 1,
+  allow_fallback = 1,
+  allow_cloud = 1,
+  streaming_supported = 1,
+  protocol_family = 'responses',
+  request_format = 'responses',
+  response_format = 'openai_responses',
+  supports_stream = 1,
+  verify_capabilities_json = '{}',
+  updated_at = CURRENT_TIMESTAMP
+WHERE brain_id = 'brain_not_configured'
+  AND provider = 'local_placeholder'
+  AND model_name = 'not_configured'
+  AND status = 'not_configured';

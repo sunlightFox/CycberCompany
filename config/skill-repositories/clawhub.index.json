@@ -2,7 +2,7 @@
   "schema_version": "skill_repository.index.v1",
   "repository_id": "clawhub",
   "display_name": "ClawHub",
-  "updated_at": "2026-05-01T00:00:00Z",
+  "updated_at": "2026-05-21T00:00:00Z",
   "packages": [
     {
       "package_ref": "community/openclaw/xiaohongshu-publish",
@@ -301,6 +301,35 @@
       "source": {
         "type": "local_directory",
         "uri": "config/skill-repositories/fixtures/clawhub-github-pr-workflow"
+      },
+      "trust_level": "curated"
+    },
+    {
+      "package_ref": "official/email/mailslurp-email-registration",
+      "bundle_id": "clawhub-mailslurp-email-registration",
+      "display_name": "ClawHub MailSlurp Email Registration",
+      "description": "Automatically creates a MailSlurp test inbox through a governed API-key asset handle and writes the generated email address to a task artifact.",
+      "version": "0.1.0",
+      "author": "clawhub",
+      "tags": ["email", "registration", "verification", "mailslurp", "testing", "automatic"],
+      "keywords": [
+        "mailslurp",
+        "auto email",
+        "automatic mailbox",
+        "register email",
+        "create inbox",
+        "verification inbox",
+        "activation email",
+        "otp",
+        "注册邮箱",
+        "帮我注册邮箱",
+        "自动注册邮箱",
+        "验证码邮箱",
+        "创建邮箱"
+      ],
+      "source": {
+        "type": "local_directory",
+        "uri": "config/skill-repositories/fixtures/clawhub-mailslurp-email-registration"
       },
       "trust_level": "curated"
     }

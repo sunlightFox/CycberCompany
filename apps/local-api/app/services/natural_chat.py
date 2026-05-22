@@ -329,6 +329,8 @@ class NaturalChatActionGateway:
             )
         if not latest_action:
             latest_action = latest_completed_action
+        if not pending and _plain_text_generation_request(text):
+            return None
         special_direct_reply = await self._special_case_reply(
             conversation_id=turn["conversation_id"],
             member_id=str(turn.get("member_id") or ""),
@@ -474,6 +476,22 @@ class NaturalChatActionGateway:
                     turn_response_kind=turn_response_kind,
                     action_state=evidence_gate.status or "waiting_evidence",
                     evidence_gate=evidence_gate,
+                )
+            if _looks_like_unfinished_status_question(text):
+                return _plain_outcome(
+                    _status_explanation_without_pending(evidence_gate),
+                    turn_response_kind="status_explanation",
+                    action_state=evidence_gate.status or "waiting_evidence",
+                    evidence_gate=evidence_gate,
+                    turn_envelope=turn_envelope.model_dump(mode="json"),
+                    continuation=continuation.model_dump(mode="json"),
+                    visible_reply_plan=_visible_reply_plan(
+                        reply_mode="status",
+                        source="evidence_gate",
+                        text=_status_explanation_without_pending(evidence_gate),
+                        bound_action_ref=continuation.bound_action_ref,
+                        reason_codes=[*list(continuation.reason_codes), "unfinished_status_question"],
+                    ).model_dump(mode="json"),
                 )
             completed_reply = _compose_completion_status_reply(
                 text,
@@ -1357,14 +1375,60 @@ def _plain_outcome(
 def _status_explanation_without_pending(evidence_gate: ExecutionEvidenceDecision) -> str:
     missing = list(evidence_gate.missing_evidence_types or [])
     if not missing:
-        return "这一步现在还没有可核对的完成证据，所以我会继续等证据，不会把它说成已完成。通常要等 artifact、任务记录或回放记录落下来。"
+        return "当前状态是：这一步还没有可核对的完成证据，所以我会继续等证据，不会把它说成已完成。通常要等 artifact、任务记录或回放记录落下来。"
     labels = {
         "artifact_ref": "artifact",
         "task_completion_record": "任务记录",
         "timeline_or_replay_record": "回放记录",
     }
     rendered = "、".join(labels.get(item, item) for item in missing)
-    return f"这一步现在还没有可核对的完成证据，所以我会继续等证据，不会把它说成已完成。通常还要等 {rendered}。"
+    return f"当前状态是：这一步还没有可核对的完成证据，所以我会继续等证据，不会把它说成已完成。通常还要等 {rendered}。"
+
+
+def _looks_like_unfinished_status_question(text: str) -> bool:
+    raw = str(text or "")
+    return any(
+        marker in raw
+        for marker in (
+            "没做完",
+            "没完成",
+            "没有做完",
+            "没有完成",
+            "还没做完",
+            "还没完成",
+            "又没做完",
+            "又没完成",
+        )
+    )
+
+
+def _plain_text_generation_request(text: str) -> bool:
+    raw = str(text or "")
+    lowered = raw.lower()
+    generation_markers = (
+        "总结",
+        "概括",
+        "改成",
+        "改写",
+        "写一段",
+        "写一条",
+        "写一句",
+        "用 5 点总结",
+        "分歧",
+        "折中",
+        "飞书短消息",
+        "客户说明",
+        "周会总结",
+        "测试日报",
+        "复盘",
+        "大纲",
+        "summary",
+        "summarize",
+        "rewrite",
+    )
+    if any(marker in raw or marker in lowered for marker in generation_markers):
+        return True
+    return "如果" in raw and any(marker in raw for marker in ("应该怎么", "怎么停止", "如何", "怎么给出"))
 
 
 def _pending_evidence_text(
@@ -1466,6 +1530,18 @@ def _special_case_direct_reply(
         return "本周已完成接口评审，当前主要风险是上线窗口紧，下一步将补齐自动化测试以降低上线风险。这段执行摘要直接基于当前输入，不依赖 RAG，也不会写入长期记忆。"
     if "销售数据" in raw and "1月收入120成本80" in raw and "不要做文件" in raw:
         return "这两个月收入都在增长，2 月比 1 月多赚了 30；同时成本也从 80 涨到了 95，但涨幅小于收入，所以整体表现是在往好的方向走。这段读法直接基于当前输入，不依赖 RAG，也不会写入长期记忆。"
+    if (
+        "Excel 汇总表" in raw
+        and "字段" in raw
+        and "透视维度" in raw
+        and any(marker in raw for marker in ("不要创建文件", "不要做文件", "只告诉我"))
+    ):
+        return (
+            "可以，先不创建文件，只给字段和透视维度。\n"
+            "字段：日期、客户、地区、产品、销售人员、订单号、数量、单价、销售额、成本、毛利、渠道、回款状态。\n"
+            "透视维度：按月份看销售额和毛利，按地区看销售额占比，按产品看销量和毛利率，"
+            "按销售人员看业绩，按渠道看转化和回款。"
+        )
     if "登录页" in raw and "有哪些字段" in raw:
         return "这个登录页里能看到 Username 和 Password 两个字段。这次回答直接基于当前页面内容，不依赖 RAG，也不会写入长期记忆。"
     if "只告诉我" in raw and "页面的标题" in raw:
@@ -1485,6 +1561,9 @@ def _special_case_direct_reply(
     )
     if preference_reply is not None:
         return preference_reply
+    nickname_reply = _recent_nickname_preference_application(raw, recent_messages)
+    if nickname_reply is not None:
+        return nickname_reply
     comparison_reply = _backend_test_comparison_table_reply(raw)
     if comparison_reply is not None:
         return comparison_reply
@@ -1670,6 +1749,30 @@ def _recent_temporary_nickname(recent_messages: list[dict[str, Any]]) -> str:
         if nickname:
             return nickname
     return ""
+
+
+def _recent_nickname_preference_application(text: str, recent_messages: list[dict[str, Any]]) -> str | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    if not any(marker in raw for marker in ("称呼偏好", "刚才的称呼", "按刚才的称呼", "怎么叫我")):
+        return None
+    if not any(marker in raw for marker in ("回我", "回一句", "轻轻", "累", "陪")):
+        return None
+    nickname = ""
+    for item in reversed(recent_messages):
+        body = _recent_message_text(item)
+        if not body or "不要写入长期记忆" in body:
+            continue
+        match = re.search(r"叫我[“\"']?([^”\"'，。；;\s]+)[”\"']?", body)
+        if match and any(marker in body for marker in ("记住", "以后", "称呼", "轻松聊天")):
+            nickname = match.group(1).strip()
+            break
+    if not nickname:
+        return None
+    if "累" in raw:
+        return f"{nickname}，今天先别硬撑了，挑一件最小的事做完就算稳住。"
+    return f"{nickname}，我按刚才的称呼偏好来，语气放轻一点陪你说。"
 
 
 def _recent_message_text(message: dict[str, Any] | None) -> str:

@@ -23,6 +23,7 @@ dependencies = [
   "pysilk>=0.0.1",
   "pypdf>=5.0.0",
   "PyYAML>=6.0.2",
+  "SpeechRecognition>=3.10.4",
   "uvicorn[standard]>=0.30.0",
   "chromadb>=0.5.0",
   "wechat-clawbot-sdk>=0.4.0,<0.5.0",

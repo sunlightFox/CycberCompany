@@ -410,14 +410,28 @@ class ChatHookRuntime:
             or payload.get("scenario")
             or ""
         )
+        payload_plain_text = str(payload.get("plain_text") or "")
+        payload_summary = str(payload.get("summary") or "")
         plan_plain_text = str(response_plan.get("plain_text") or "")
         plan_summary = str(response_plan.get("summary") or "")
+        user_text = str(payload.get("user_text") or "")
+        if user_text:
+            from app.services.chat_model_execution import _repair_irrelevant_model_reply
+
+            repaired_plain = _repair_irrelevant_model_reply(user_text, payload_plain_text or plan_plain_text)
+            if repaired_plain is not None:
+                payload_plain_text = repaired_plain
+                plan_plain_text = repaired_plain
+            repaired_summary = _repair_irrelevant_model_reply(user_text, payload_summary or plan_summary or payload_plain_text)
+            if repaired_summary is not None:
+                payload_summary = repaired_summary
+                plan_summary = repaired_summary
         plain_text = visible_text_guard_for_scenario(
-            plan_plain_text or str(payload.get("plain_text") or ""),
+            payload_plain_text or plan_plain_text,
             scenario=scenario,
         )
         summary = visible_text_guard_for_scenario(
-            plan_summary or str(payload.get("summary") or plain_text),
+            payload_summary or plan_summary or plain_text,
             scenario=scenario,
         )
         if plain_text != payload.get("plain_text") or summary != payload.get("summary"):
@@ -475,7 +489,7 @@ def _sanitize_tool_result(value: Any) -> Any:
 
 
 def _sanitize_large_text(text: str) -> str:
-    visible = visible_text_guard(str(text))
+    visible = visible_text_guard_for_scenario(str(text), scenario="tool_output")
     if len(visible) > 1200:
         return f"{visible[:1200].rstrip()}...[truncated]"
     return visible

@@ -158,12 +158,164 @@ def test_phase66_feishu_inbound_pairing_chat_delivery_and_operations(
         )
 
 
+def test_phase117_feishu_adjacent_file_events_are_coalesced_and_understood(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CYCBER_ROOT", str(ROOT_DIR))
+    monkeypatch.setenv("CYCBER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("FEISHU_APP_ID", "cli_phase117")
+    monkeypatch.setenv("FEISHU_APP_SECRET", "phase117-secret")
+    with TestClient(create_app()) as client:
+        _bind_feishu(client)
+        fake = _install_fake_feishu(client)
+
+        fake.enqueue_event(_text_event("evt-feishu-pair-117", "oc_phase117", "ou_sender", "你好"))
+        first = client.post("/api/channels/providers/feishu/poll-once")
+        assert first.status_code == 200, first.text
+        pairing = client.get(
+            "/api/channels/pairing-requests",
+            params={"provider": "feishu", "status": "pending"},
+        ).json()["items"][0]
+        approved = client.post(
+            f"/api/channels/pairing-requests/{pairing['pairing_request_id']}/approve",
+            json={"member_id": "mem_xiaoyao", "reason": "phase117"},
+        )
+        assert approved.status_code == 200, approved.text
+
+        fake.register_blob("file_phase117_a", "青藤计划 12800 Beta供应商 6月15日 陈澈".encode("utf-8"))
+        fake.register_blob("file_phase117_b", "补充附件：青藤计划需要合并归纳。".encode("utf-8"))
+        registry = cast(Any, client.app).state.registry
+        captured: list[Any] = []
+
+        async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+            request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
+            captured.append(request)
+            return await _insert_completed_turn(
+                registry,
+                request,
+                assistant_text="已读取两个附件并合并归纳。",
+                conversation_id=request.conversation_id or "conv_phase117_feishu",
+            )
+
+        registry.feishu_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
+        fake.enqueue_event(
+            _file_event(
+                "evt-feishu-file-117-a",
+                "oc_phase117",
+                "ou_sender",
+                "请合并总结两个附件",
+                file_key="file_phase117_a",
+                file_name="a.txt",
+                content_type="text/plain",
+            )
+        )
+        fake.enqueue_event(
+            _file_event(
+                "evt-feishu-file-117-b",
+                "oc_phase117",
+                "ou_sender",
+                "补充附件",
+                file_key="file_phase117_b",
+                file_name="b.txt",
+                content_type="text/plain",
+            )
+        )
+
+        routed = client.post("/api/channels/providers/feishu/poll-once")
+        assert routed.status_code == 200, routed.text
+        assert routed.json()["chat_turns_created"] == 1
+        assert routed.json()["media_attachments"] == 2
+        assert len(captured) == 1
+        request = captured[-1]
+        assert len(request.attachments) == 2
+        assert request.ingress_metadata.channel_message_id.startswith("coalesced:")
+        assert request.ingress_metadata.raw_payload["attachment_count"] == 2
+        assert request.ingress_metadata.raw_payload["multimodal_understanding"][
+            "understood_attachment_count"
+        ] == 2
+        safe_text = "\n".join(part.text or "" for part in request.input.content_parts)
+        assert "青藤计划" in safe_text
+        assert "12800" in safe_text
+        assert "Beta供应商" in safe_text
+
+
+def test_phase117_feishu_pdf_understanding_keeps_canonical_attachment_terms(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CYCBER_ROOT", str(ROOT_DIR))
+    monkeypatch.setenv("CYCBER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("FEISHU_APP_ID", "cli_phase117_pdf")
+    monkeypatch.setenv("FEISHU_APP_SECRET", "phase117-pdf-secret")
+    with TestClient(create_app()) as client:
+        _bind_feishu(client)
+        fake = _install_fake_feishu(client)
+
+        fake.enqueue_event(_text_event("evt-feishu-pair-117-pdf", "oc_phase117_pdf", "ou_sender", "你好"))
+        first = client.post("/api/channels/providers/feishu/poll-once")
+        assert first.status_code == 200, first.text
+        pairing = client.get(
+            "/api/channels/pairing-requests",
+            params={"provider": "feishu", "status": "pending"},
+        ).json()["items"][0]
+        approved = client.post(
+            f"/api/channels/pairing-requests/{pairing['pairing_request_id']}/approve",
+            json={"member_id": "mem_xiaoyao", "reason": "phase117-pdf"},
+        )
+        assert approved.status_code == 200, approved.text
+
+        fake.register_blob("file_phase117_pdf", _minimal_pdf_bytes())
+        registry = cast(Any, client.app).state.registry
+        captured: list[Any] = []
+
+        async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+            request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
+            captured.append(request)
+            return await _insert_completed_turn(
+                registry,
+                request,
+                assistant_text="已读取附件并总结。",
+                conversation_id=request.conversation_id or "conv_phase117_feishu_pdf",
+            )
+
+        registry.feishu_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
+        fake.enqueue_event(
+            _file_event(
+                "evt-feishu-file-117-pdf",
+                "oc_phase117_pdf",
+                "ou_sender",
+                "请阅读附件并总结成三点，必须只基于附件。",
+                file_key="file_phase117_pdf",
+                file_name="qingting-plan.pdf",
+                content_type="application/pdf",
+            )
+        )
+
+        routed = client.post("/api/channels/providers/feishu/poll-once")
+        assert routed.status_code == 200, routed.text
+        assert routed.json()["chat_turns_created"] == 1
+        assert routed.json()["media_attachments"] == 1
+        request = captured[-1]
+        safe_text = "\n".join(part.text or "" for part in request.input.content_parts)
+        assert "标准事实" in safe_text
+        assert "青藤计划" in safe_text
+        assert "12800" in safe_text
+        assert "Beta供应商" in safe_text
+        assert "6月15日" in safe_text
+        assert "陈澈" in safe_text
+
+
 class _FeishuTestConnector(FeishuMockConnector):
     provider = "feishu"
 
     def __init__(self) -> None:
         super().__init__(ChannelProviderSection(enabled=True, poll_enabled=True))
         self.sent_text: list[dict[str, Any]] = []
+        self._blobs: dict[str, bytes] = {}
+
+    def register_blob(self, key: str, content: bytes) -> None:
+        self._blobs[key] = content
 
     async def send_text(
         self,
@@ -179,6 +331,22 @@ class _FeishuTestConnector(FeishuMockConnector):
             provider_state=provider_state,
             recipient=recipient,
             text=text,
+        )
+
+    async def download_media(
+        self,
+        *,
+        provider_state: dict[str, Any] | None,
+        event: dict[str, Any],
+        attachment: dict[str, Any],
+    ) -> bytes:
+        key = str(attachment.get("file_key") or attachment.get("media_id") or "")
+        if key in self._blobs:
+            return self._blobs[key]
+        return await super().download_media(
+            provider_state=provider_state,
+            event=event,
+            attachment=attachment,
         )
 
 
@@ -251,6 +419,79 @@ def _text_event(event_id: str, chat_id: str, sender_id: str, text: str) -> dict[
             },
         },
     }
+
+
+def _file_event(
+    event_id: str,
+    chat_id: str,
+    sender_id: str,
+    text: str,
+    *,
+    file_key: str,
+    file_name: str,
+    content_type: str,
+) -> dict[str, Any]:
+    return {
+        "schema": "2.0",
+        "header": {
+            "event_id": event_id,
+            "event_type": "im.message.receive_v1",
+            "create_time": "2026-05-04T00:00:00+08:00",
+        },
+        "event": {
+            "sender": {
+                "sender_id": {"open_id": sender_id},
+                "sender_type": "user",
+            },
+            "message": {
+                "message_id": f"om_{event_id}",
+                "chat_id": chat_id,
+                "chat_type": "p2p",
+                "message_type": "file",
+                "content": json.dumps(
+                    {
+                        "text": text,
+                        "file_key": file_key,
+                        "file_name": file_name,
+                        "content_type": content_type,
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        },
+    }
+
+
+def _minimal_pdf_bytes() -> bytes:
+    stream = (
+        "BT /F1 13 Tf 72 730 Td (Qingteng Plan) Tj "
+        "0 -22 Td (Budget 12800 CNY) Tj "
+        "0 -22 Td (Risk Beta supplier delay) Tj "
+        "0 -22 Td (Deadline June 15) Tj "
+        "0 -22 Td (Owner Chen Che) Tj ET"
+    )
+    objects = [
+        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
+        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
+        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n",
+        b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
+        f"5 0 obj << /Length {len(stream.encode('ascii'))} >> stream\n{stream}\nendstream endobj\n".encode(
+            "ascii"
+        ),
+    ]
+    chunks = [b"%PDF-1.4\n"]
+    offsets = [0]
+    for obj in objects:
+        offsets.append(sum(len(chunk) for chunk in chunks))
+        chunks.append(obj)
+    xref_offset = sum(len(chunk) for chunk in chunks)
+    xref = [b"xref\n0 6\n", b"0000000000 65535 f \n"]
+    xref.extend(f"{offset:010d} 00000 n \n".encode("ascii") for offset in offsets[1:])
+    chunks.extend(xref)
+    chunks.append(b"trailer << /Size 6 /Root 1 0 R >>\n")
+    chunks.append(f"startxref\n{xref_offset}\n%%EOF\n".encode("ascii"))
+    return b"".join(chunks)
 
 
 async def _insert_completed_turn(

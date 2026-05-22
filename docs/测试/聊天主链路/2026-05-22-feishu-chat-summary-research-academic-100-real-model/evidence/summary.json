@@ -1,0 +1,158 @@
+{
+  "run_label": "FCSR100-REAL-20260522",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 3262,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-22 21:58:30,460 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-22 21:58:31,447 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-22 21:58:32,019 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_not_too_short": 20,
+    "knowledge_structure_examples_evidence": 20,
+    "honest_boundaries_no_overpromise": 10
+  },
+  "total": 3,
+  "passed": 0,
+  "warned": 2,
+  "failed": 1,
+  "score_avg": 83.67,
+  "model_started": 3,
+  "model_completed": 3,
+  "delivery_sent": 3,
+  "trace_count": 3,
+  "by_category": {
+    "闲聊陪伴": {
+      "total": 3,
+      "pass": 0,
+      "warn": 2,
+      "fail": 1
+    }
+  },
+  "results": [
+    {
+      "case_id": "FCSR100-001",
+      "category": "闲聊陪伴",
+      "title": "低能量但不鸡汤",
+      "peer_ref": "oc_fcsr100_casual",
+      "prompt": "我今天低能量，不想听大道理。你像熟人一样陪我收个尾，别太短。",
+      "verdict": "warn",
+      "score": 92,
+      "notes": [
+        "missing_expected_terms:低能量"
+      ],
+      "reply_text": "那今天就先不硬撑了，我陪你把这一天轻轻收住。你现在这个状态，不适合再跟自己较劲，能撑到这会儿已经很不容易了。\n\n你先只做一件最省力的事：把今晚要紧的那点收尾处理掉，其他的都先放一边。然后就可以允许自己慢下来一点——洗个脸、喝口水、把灯调暗，或者直接躺一会儿，都算数。\n\n今天不需要把一切想明白，也不用表现得很有精神。你只要把自己安安稳稳送到休息那一步，就已经够好了。我在这儿，先陪你把这一晚收住。",
+      "turn_id": "turn_d56e37cf49b541cc98c21b32501dca1d",
+      "conversation_id": "conv_40d0c4a40a2a41c79012d34be5e840bc",
+      "trace_id": "trc_13736da1eb094ee68d38b8f0a5a3141e",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    },
+    {
+      "case_id": "FCSR100-002",
+      "category": "闲聊陪伴",
+      "title": "被会议打断",
+      "peer_ref": "oc_fcsr100_casual",
+      "prompt": "刚才会上一直被打断，我有点烦。帮我把这个情绪接住，再给一句下次能用的话。",
+      "verdict": "warn",
+      "score": 92,
+      "notes": [
+        "reply_short_allowed_but_watch_quality"
+      ],
+      "reply_text": "我懂，刚才那种一直被打断的感觉真的很烦，像话还没落地就被拎走了，谁都会憋一下。  \n下次你可以直接说一句：**“我先把这点说完，后面你再接。”**",
+      "turn_id": "turn_0e05eaefb1c04c64a84a9ceabd8c32fa",
+      "conversation_id": "conv_40d0c4a40a2a41c79012d34be5e840bc",
+      "trace_id": "trc_f21ea4d6848c4177b60cb0a9e5a042ff",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    },
+    {
+      "case_id": "FCSR100-003",
+      "category": "闲聊陪伴",
+      "title": "拖延启动",
+      "peer_ref": "oc_fcsr100_casual",
+      "prompt": "我又拖延了。不要分析人格，也别夸我，给我一个现在能开始的小动作。",
+      "verdict": "fail",
+      "score": 67,
+      "notes": [
+        "reply_too_short_or_thin",
+        "missing_expected_terms:拖延"
+      ],
+      "reply_text": "先做这一个动作：**现在就打开你要做的那个东西，停在首页，不许做别的。**\n\n只要完成“打开”这一步就算开始了。",
+      "turn_id": "turn_e9ea03d09edf410c8927dbb5833324f8",
+      "conversation_id": "conv_40d0c4a40a2a41c79012d34be5e840bc",
+      "trace_id": "trc_d485ab89924c497bab48f7cdf35ee70a",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

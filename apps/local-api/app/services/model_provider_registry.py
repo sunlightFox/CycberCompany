@@ -14,11 +14,15 @@ class ModelProviderRegistry:
     def build_client(self, brain: dict[str, Any]) -> Any:
         endpoint = str(brain["endpoint"])
         api_key = self._secrets.get_secret(brain.get("api_key_ref"))
+        privacy_policy = brain.get("privacy_policy")
+        privacy = privacy_policy if isinstance(privacy_policy, dict) else {}
         kwargs = {
             "protocol_family": str(brain.get("protocol_family") or ""),
             "request_format": str(brain.get("request_format") or ""),
             "response_format": str(brain.get("response_format") or ""),
             "supports_stream": brain.get("supports_stream"),
+            "reasoning_effort": privacy.get("reasoning_effort"),
+            "text_verbosity": privacy.get("text_verbosity"),
         }
         try:
             return self._client_cls(endpoint, api_key, **kwargs)

@@ -34,8 +34,11 @@ from app.schemas.channels import (
 )
 from app.schemas.notifications import NotificationMessageCreateRequest
 from app.services.audit import AuditEventService
+from app.services.artifacts import ArtifactStore
+from app.services.channel_artifact_delivery import channel_outbound_attachment_selection
 from app.services.channel_connectors import ChannelConnectorRegistry
 from app.services.channel_approval_bridge import ChannelApprovalBridge
+from app.services.channel_event_coalescer import ChannelEventCoalescer
 from app.services.channel_reliability import (
     PHASE88_CHANNEL_RELIABILITY_VERSION,
     build_correlation,
@@ -50,6 +53,8 @@ from app.services.channel_reliability import (
 from app.services.channel_session_context import ChannelSessionContext
 from app.services.channel_session_semantics import ChannelSessionSemanticsRuntime
 from app.services.channel_stream_bridge import ChannelStreamBridge
+from app.services.channel_attachment_ingestion import ChannelAttachmentIngestionService
+from app.services.multimodal_understanding import MultimodalUnderstandingService
 from app.services.chat import ChatService
 from app.services.notifications import NotificationGatewayService
 from app.services.secrets import SecretStore
@@ -124,17 +129,20 @@ class FeishuChannelGatewayService:
         chat_service: ChatService,
         notifications: NotificationGatewayService,
         connectors: ChannelConnectorRegistry,
+        artifact_store: ArtifactStore,
         secret_store: SecretStore,
         data_dir: Path,
         trace_service: TraceService,
         audit_service: AuditEventService,
         config: ChannelProviderSection,
+        multimodal_understanding: MultimodalUnderstandingService | None = None,
     ) -> None:
         self._repo = repo
         self._chat_repo = chat_repo
         self._chat = chat_service
         self._notifications = notifications
         self._connectors = connectors
+        self._artifacts = artifact_store
         self._secrets = secret_store
         self._blob_dir = data_dir / "channel-attachments" / "feishu"
         self._trace = trace_service
@@ -150,6 +158,17 @@ class FeishuChannelGatewayService:
         self._session_semantics_runtime = ChannelSessionSemanticsRuntime()
         self._stream_bridge = ChannelStreamBridge()
         self._approval_bridge = ChannelApprovalBridge()
+        self._event_coalescer = ChannelEventCoalescer(
+            provider="feishu",
+            normalize=_normalize_feishu_event,
+        )
+        self._attachment_ingestion = ChannelAttachmentIngestionService(
+            repo=repo,
+            connectors=connectors,
+            data_dir=data_dir,
+            trace_service=trace_service,
+        )
+        self._multimodal_understanding = multimodal_understanding
 
     def set_channel_ingress_runtime(self, runtime: Any) -> None:
         self._channel_ingress_runtime = runtime
@@ -232,7 +251,7 @@ class FeishuChannelGatewayService:
             await self._upsert_connection(account, provider_state, trace_id=trace_id)
             try:
                 events = await connector.poll_events(provider_state=provider_state, limit=batch_limit)
-                for event in events:
+                for event in self._event_coalescer.coalesce(events):
                     await self._handle_event(
                         account,
                         provider_state=provider_state,
@@ -903,6 +922,16 @@ class FeishuChannelGatewayService:
         text = normalized["text"].strip()
         if not text:
             text = f"收到一条飞书{normalized['message_type']}消息。"
+        attachments = await self._attachment_ingestion.process_attachments(
+            provider="feishu",
+            account=account,
+            session=session,
+            provider_state=self._load_provider_state(account.get("provider_state_ref")),
+            channel_event_id=channel_event_id,
+            normalized=normalized,
+            trace_id=trace_id,
+        )
+        stats.media_attachments += len(attachments)
         span_id = None
         if trace_id:
             span_id = await self._trace.start_span(
@@ -913,11 +942,30 @@ class FeishuChannelGatewayService:
                     "channel_event_id": channel_event_id,
                     "message_type": normalized["message_type"],
                     "text_length": len(text),
-                    "attachment_count": len(normalized["attachments"]),
+                    "attachment_count": len(attachments),
                 },
             )
         try:
-            attachments = _feishu_runtime_attachments(normalized["attachments"])
+            understanding_result = None
+            if attachments and self._multimodal_understanding is not None:
+                try:
+                    understanding_result = (
+                        await self._multimodal_understanding.understand_channel_attachments(
+                            provider="feishu",
+                            account=account,
+                            session=session,
+                            channel_event_id=channel_event_id,
+                            normalized=normalized,
+                            attachments=attachments,
+                            trace_id=trace_id,
+                            root_span_id=span_id,
+                        )
+                    )
+                except Exception:
+                    understanding_result = None
+            content_parts = []
+            if understanding_result is not None:
+                content_parts.extend(understanding_result.content_parts)
             raw_payload = {
                 "provider": "feishu",
                 "channel_event_id": channel_event_id,
@@ -931,6 +979,8 @@ class FeishuChannelGatewayService:
                 "attachment_count": len(attachments),
                 "source_timestamp": normalized["received_at"],
             }
+            if understanding_result is not None:
+                raw_payload["multimodal_understanding"] = understanding_result.ingress_payload
             semantics = self._session_semantics_runtime.resolve_inbound(
                 provider="feishu",
                 channel_account_id=account["channel_account_id"],
@@ -956,7 +1006,8 @@ class FeishuChannelGatewayService:
                 text=text,
                 raw_payload={**raw_payload, "channel_session_context": inbound_context},
                 ui_mode="feishu_chat",
-                input_type="multi_part" if attachments else "text",
+                input_type="multi_part" if content_parts or attachments else "text",
+                content_parts=content_parts,
                 attachments=attachments,
                 channel_account_id=semantics.get("channel_account_id"),
                 channel_peer_id_redacted=semantics.get("channel_peer_id_redacted"),
@@ -966,6 +1017,20 @@ class FeishuChannelGatewayService:
                 dedupe_key=semantics.get("dedupe_key"),
                 queue_policy=str(semantics["queue_policy"]),
             )
+            if understanding_result is not None and self._multimodal_understanding is not None:
+                try:
+                    await self._multimodal_understanding.commit_after_turn(
+                        understanding_result,
+                        account=account,
+                        session=session,
+                        channel_event_id=channel_event_id,
+                        conversation_id=response.conversation_id,
+                        turn_id=response.turn_id,
+                        message_id=response.message_id,
+                        trace_id=response.trace_id,
+                    )
+                except Exception:
+                    pass
         except Exception as exc:
             if span_id:
                 await self._trace.end_span(
@@ -1029,6 +1094,12 @@ class FeishuChannelGatewayService:
         message = await self._chat_repo.get_message(str(message_id))
         if not message or not message.get("content_text"):
             return None
+        user_text = ""
+        user_message_id = turn.get("user_message_id")
+        if user_message_id:
+            user_message = await self._chat_repo.get_message(str(user_message_id))
+            if user_message is not None:
+                user_text = str(user_message.get("content_text") or "")
         session = await self._repo.get_peer_session(str(peer_session_id))
         if not session or not session.get("channel_id"):
             return None
@@ -1039,18 +1110,33 @@ class FeishuChannelGatewayService:
                 {"status": "failed", "failure_reason": "peer_state_missing", "updated_at": utc_now_iso()},
             )
             return False
+        final_text = self._stream_bridge.final_plain_text(message)
+        selection = await channel_outbound_attachment_selection(
+            artifacts=self._artifacts,
+            turn=turn,
+            message=message,
+            user_text=user_text,
+            final_text=final_text,
+        )
         notification = await self._notifications.create_message(
             NotificationMessageCreateRequest(
                 channel_id=session["channel_id"],
                 message_type="feishu_chat_reply",
                 recipient=recipient,
                 subject="飞书回复",
-                body=self._stream_bridge.final_plain_text(message),
+                body=final_text,
                 metadata={
                     "channel_delivery_binding_id": binding["channel_delivery_binding_id"],
                     "turn_id": turn_id,
                     "message_id": message_id,
                     "voice_reply": dict(message.get("voice_metadata") or {}),
+                    "attachments": selection["selected_attachments"],
+                    "attachment_selection": {
+                        "reason_codes": selection["selection_reason_codes"],
+                        "scene": selection["scene"],
+                        "explicit_request_detected": selection["explicit_request_detected"],
+                        "suppressed_attachments": selection["suppressed_attachments"],
+                    },
                     "channel_session_context": self._session_context_runtime.build_outbound(
                         provider="feishu",
                         session=session,
@@ -1270,6 +1356,14 @@ class FeishuChannelGatewayService:
 
 def _normalize_feishu_event(raw: dict[str, Any]) -> dict[str, Any]:
     event = raw.get("event") if isinstance(raw.get("event"), dict) else raw
+    coalesced = event.get("coalesced_normalized") if isinstance(event, dict) else None
+    if isinstance(coalesced, str) and coalesced:
+        try:
+            parsed = json.loads(coalesced)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return parsed
     header = raw.get("header") if isinstance(raw.get("header"), dict) else {}
     message = event.get("message") if isinstance(event.get("message"), dict) else event.get("message_event", {})
     if not isinstance(message, dict):
@@ -1354,6 +1448,7 @@ def _feishu_attachments(message_type: str, content: dict[str, Any], message: dic
             "type": message_type,
             "file_key": candidates.get("file_key") or candidates.get("image_key") or candidates.get("audio_key"),
             "media_id": candidates.get("media_id") or candidates.get("file_id"),
+            "message_id": message.get("message_id"),
             "name": candidates.get("file_name") or candidates.get("name") or f"feishu-{message_type}",
             "content_type": candidates.get("content_type") or "application/octet-stream",
             "size_bytes": candidates.get("size"),

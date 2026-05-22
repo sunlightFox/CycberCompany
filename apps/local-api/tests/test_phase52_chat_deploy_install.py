@@ -56,6 +56,29 @@ def test_phase52_chat_host_install_generates_approval_plan(client: TestClient) -
     assert payload["reply_option_items"]
 
 
+def test_phase52_chat_host_install_plan_error_stays_in_safe_boundary(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry = cast(Any, client.app).state.registry
+
+    async def broken_create_plan(*args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        raise RuntimeError("package resolver unavailable")
+
+    monkeypatch.setattr(registry.host_install_service, "create_plan", broken_create_plan)
+
+    body = _turn(client, "phase52-host-install-plan-error", "帮我安装 7-Zip。")
+
+    assert body["status"] == "completed"
+    events = _events(client, body["turn_id"])
+    payload = _completed_payload(events)["response_plan"]["structured_payload"]
+    assert payload["route_semantics"]["route"] == "host_software_install_request"
+    assert payload["route_semantics"]["task_created"] is False
+    assert payload["task_status"]["status"] == "blocked_by_boundary"
+    assert "host_install_plan_error" in payload
+
+
 def test_phase52_chat_host_uninstall_generates_approval_or_manual_plan(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

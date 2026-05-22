@@ -549,6 +549,30 @@ class ToolRuntime:
             return await self._account_publish_post(request, trace_id=trace_id)
         raise AppError(ErrorCode.TOOL_NOT_FOUND, "账号工具不存在", status_code=404)
 
+    async def _execute_email_test_tool(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        if request.tool_name == "email_test.create_inbox":
+            return await self._email_test_create_inbox(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                trace_id=trace_id,
+            )
+        if request.tool_name == "email_test.wait_latest_email":
+            return await self._email_test_wait_latest_email(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                trace_id=trace_id,
+            )
+        raise AppError(ErrorCode.TOOL_NOT_FOUND, "email test tool not found", status_code=404)
+
     async def _execute_office_tool(
         self,
         request: ToolExecuteRequest,
@@ -672,6 +696,235 @@ class ToolRuntime:
                 "untrusted_external_content": True,
             },
             artifacts=[],
+        )
+
+    async def _email_test_api_key(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        action: str,
+        trace_id: str | None,
+    ) -> str:
+        handle_id = str(request.args.get("handle_id") or "")
+        if not handle_id:
+            raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "handle_id is required", status_code=422)
+        if request.args.get("api_key"):
+            raise AppError(
+                ErrorCode.TOOL_SCHEMA_INVALID,
+                "MailSlurp API key must be provided through an Asset Broker handle",
+                status_code=422,
+            )
+        resolved = await self._asset_broker.resolve_secret_for_tool(
+            handle_id,
+            AssetResolveForToolRequest(
+                subject_id=request.member_id,
+                action=action,
+                tool_name=request.tool_name,
+                task_id=request.task_id,
+                conversation_id=None,
+                approval_id=request.approval_id,
+            ),
+            trace_id=trace_id,
+        )
+        if not resolved.secret_value:
+            raise AppError(
+                ErrorCode.ASSET_HANDLE_INVALID,
+                "MailSlurp API key asset has no secret value",
+                status_code=422,
+            )
+        return resolved.secret_value
+
+    async def _email_test_create_inbox(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        if not request.task_id:
+            raise AppError(
+                ErrorCode.TOOL_PERMISSION_DENIED,
+                "email_test.create_inbox requires a task",
+                status_code=422,
+            )
+        provider = str(request.args.get("provider") or "mailslurp").strip().lower()
+        if provider != "mailslurp":
+            raise AppError(
+                ErrorCode.TOOL_SCHEMA_INVALID,
+                "Only provider=mailslurp is supported",
+                status_code=422,
+            )
+        api_key = await self._email_test_api_key(
+            request,
+            action="use_api_key",
+            trace_id=trace_id,
+        )
+        payload = {
+            key: value
+            for key, value in {
+                "name": request.args.get("name"),
+                "description": request.args.get("description"),
+                "expiresAt": request.args.get("expires_at"),
+                "useDomainPool": request.args.get("use_domain_pool"),
+            }.items()
+            if value not in (None, "")
+        }
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                "https://api.mailslurp.com/inboxes",
+                headers={"x-api-key": api_key, "accept": "application/json"},
+                json=payload or None,
+            )
+        if response.status_code >= 400:
+            raise AppError(
+                ErrorCode.TOOL_EXECUTION_FAILED,
+                "MailSlurp inbox creation failed",
+                status_code=502,
+                details={
+                    "http_status": response.status_code,
+                    "response": _http_response_preview(response),
+                },
+            )
+        inbox = response.json()
+        inbox_id = str(inbox.get("id") or inbox.get("inboxId") or "")
+        email_address = str(inbox.get("emailAddress") or inbox.get("email") or "")
+        if not inbox_id or not email_address:
+            raise AppError(
+                ErrorCode.TOOL_EXECUTION_FAILED,
+                "MailSlurp response did not include inbox id and email address",
+                status_code=502,
+                details={"response": _http_response_preview(response)},
+            )
+        artifact = await self._artifacts.write_text(
+            task_id=request.task_id,
+            organization_id=organization_id,
+            step_id=request.step_id,
+            tool_call_id=tool_call_id,
+            display_name="mailslurp-inbox.md",
+            content=(
+                "# MailSlurp Test Inbox\n\n"
+                "- provider: MailSlurp\n"
+                f"- inbox_id: {inbox_id}\n"
+                f"- email_address: {email_address}\n"
+                f"- name: {redact(str(inbox.get('name') or payload.get('name') or ''))}\n"
+                "- status: created\n"
+            ),
+            artifact_type="email_test_inbox",
+            subdir="outputs",
+            metadata={
+                "provider": "mailslurp",
+                "inbox_id": inbox_id,
+                "email_address": email_address,
+            },
+            trace_id=trace_id,
+        )
+        return ToolRunOutcome(
+            result={
+                "status": "created",
+                "provider": "mailslurp",
+                "inbox_id": inbox_id,
+                "email_address": email_address,
+                "artifact_id": artifact.artifact_id,
+                "redaction_summary": {"api_key": "asset_handle_only"},
+            },
+            artifacts=[artifact],
+        )
+
+    async def _email_test_wait_latest_email(
+        self,
+        request: ToolExecuteRequest,
+        *,
+        tool_call_id: str,
+        organization_id: str,
+        trace_id: str | None,
+    ) -> ToolRunOutcome:
+        if not request.task_id:
+            raise AppError(
+                ErrorCode.TOOL_PERMISSION_DENIED,
+                "email_test.wait_latest_email requires a task",
+                status_code=422,
+            )
+        provider = str(request.args.get("provider") or "mailslurp").strip().lower()
+        if provider != "mailslurp":
+            raise AppError(
+                ErrorCode.TOOL_SCHEMA_INVALID,
+                "Only provider=mailslurp is supported",
+                status_code=422,
+            )
+        inbox_id = str(request.args.get("inbox_id") or "")
+        if not inbox_id:
+            raise AppError(ErrorCode.TOOL_SCHEMA_INVALID, "inbox_id is required", status_code=422)
+        api_key = await self._email_test_api_key(
+            request,
+            action="use_api_key",
+            trace_id=trace_id,
+        )
+        timeout_ms = int(request.args.get("timeout_ms") or 120000)
+        unread_only = bool(request.args.get("unread_only", True))
+        async with httpx.AsyncClient(timeout=max(10, timeout_ms / 1000 + 5)) as client:
+            response = await client.get(
+                "https://api.mailslurp.com/waitForLatestEmail",
+                headers={"x-api-key": api_key, "accept": "application/json"},
+                params={
+                    "inboxId": inbox_id,
+                    "timeout": timeout_ms,
+                    "unreadOnly": str(unread_only).lower(),
+                },
+            )
+        if response.status_code >= 400:
+            raise AppError(
+                ErrorCode.TOOL_EXECUTION_FAILED,
+                "MailSlurp wait for latest email failed",
+                status_code=502,
+                details={
+                    "http_status": response.status_code,
+                    "response": _http_response_preview(response),
+                },
+            )
+        email = response.json()
+        subject = str(email.get("subject") or "")
+        sender = str(email.get("from") or email.get("sender") or "")
+        email_id = str(email.get("id") or "")
+        received_at = str(email.get("createdAt") or email.get("receivedAt") or "")
+        artifact = await self._artifacts.write_text(
+            task_id=request.task_id,
+            organization_id=organization_id,
+            step_id=request.step_id,
+            tool_call_id=tool_call_id,
+            display_name="mailslurp-latest-email.md",
+            content=(
+                "# MailSlurp Latest Email\n\n"
+                "- provider: MailSlurp\n"
+                f"- inbox_id: {inbox_id}\n"
+                f"- email_id: {email_id}\n"
+                f"- from: {redact(sender)}\n"
+                f"- subject: {redact(subject)}\n"
+                f"- received_at: {redact(received_at)}\n"
+                "- body: redacted by design; fetch explicitly only if needed for a governed test\n"
+            ),
+            artifact_type="email_test_message",
+            subdir="outputs",
+            metadata={
+                "provider": "mailslurp",
+                "inbox_id": inbox_id,
+                "email_id": email_id,
+                "subject": redact(subject),
+                "from": redact(sender),
+            },
+            trace_id=trace_id,
+        )
+        return ToolRunOutcome(
+            result={
+                "status": "received",
+                "provider": "mailslurp",
+                "inbox_id": inbox_id,
+                "email_id": email_id,
+                "from": redact(sender),
+                "subject": redact(subject),
+                "artifact_id": artifact.artifact_id,
+            },
+            artifacts=[artifact],
         )
 
     async def _resolve_account_secret(
@@ -2999,6 +3252,8 @@ BUILTIN_TOOLS: list[dict[str, Any]] = [
             "office.document.delete": "R5",
             "office.document.overwrite": "R4",
             "office.document.modify_shared": "R4",
+            "email_test.create_inbox": "R2",
+            "email_test.wait_latest_email": "R2",
             "hardware.query_status": "R1",
         }.items()
     ],

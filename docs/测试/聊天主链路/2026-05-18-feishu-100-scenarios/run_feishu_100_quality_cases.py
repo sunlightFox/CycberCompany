@@ -200,8 +200,9 @@ def _patched_host_software() -> Iterator[None]:
     async def fake_execute_host_install_step(step: dict[str, Any]) -> dict[str, Any]:
         command = [str(step.get("executable") or ""), *list(step.get("args") or [])]
         joined = " ".join(command).lower()
-        package_id = str(step.get("package_id") or "mock.unknown")
-        if "uninstall" in joined or "remove" in joined:
+        action = str(step.get("action") or "").lower()
+        package_id = str(step.get("package_id") or step.get("target_package_id") or "mock.unknown")
+        if action == "uninstall" or (not action and ("uninstall" in joined or "remove" in joined)):
             installed_packages.discard(package_id)
             stdout_tail = "removed"
         else:

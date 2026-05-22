@@ -43,12 +43,20 @@ class MemorySettings(ApiModel):
     candidate_review_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
 
 
+class ChatQualitySettings(ApiModel):
+    enable_scheduled_dialogue_mapper: bool = True
+    enable_visible_quality_gate_shadow: bool = True
+    enable_visible_quality_gate_blocking: bool = False
+    enable_action_dialogue_mapper_primary: bool = True
+
+
 class RuntimeSettings(ApiModel):
     model_routing: ModelRoutingSettings = Field(default_factory=ModelRoutingSettings)
     safety: SafetySettings = Field(default_factory=SafetySettings)
     vector: VectorSettings = Field(default_factory=VectorSettings)
     mcp: MCPSettings = Field(default_factory=MCPSettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)
+    chat_quality: ChatQualitySettings = Field(default_factory=ChatQualitySettings)
 
 
 class RuntimeSettingsPatch(ApiModel):
@@ -57,6 +65,7 @@ class RuntimeSettingsPatch(ApiModel):
     vector: VectorSettings | None = None
     mcp: MCPSettings | None = None
     memory: MemorySettings | None = None
+    chat_quality: ChatQualitySettings | None = None
     updated_by_member_id: EntityId | None = None
 
 

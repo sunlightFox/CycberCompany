@@ -156,8 +156,12 @@ def test_phase45_chat_paths_remain_compatible_after_refactor(client: TestClient)
     assert any(event["event"] == "turn.completed" for event in scheduled_events)
     assert scheduled_detail["intent"] == "scheduled_task_request"
     scheduled_reply = _reply_from_events(scheduled_events)
-    assert "定时任务" in scheduled_reply
-    assert any(marker in scheduled_reply for marker in ["建好了", "已创建", "创建"])
+    assert "好，" in scheduled_reply
+    assert "早上 9 点" in scheduled_reply
+    assert "整理一次今天的待办" in scheduled_reply
+    assert "调度方式" not in scheduled_reply
+    assert "下一次执行时间" not in scheduled_reply
+    assert "后台流程" not in scheduled_reply
 
 
 def test_phase45_release_contracts_eval_report_and_diagnostic(

@@ -22,6 +22,8 @@ class OpenAICompatibleClient:
         request_format: str = "chat_completions",
         response_format: str = "auto",
         supports_stream: bool | None = None,
+        reasoning_effort: str | None = None,
+        text_verbosity: str | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._endpoint = endpoint.rstrip("/")
@@ -30,6 +32,11 @@ class OpenAICompatibleClient:
         self._request_format = request_format or "chat_completions"
         self._response_format = response_format or "auto"
         self._supports_stream = True if supports_stream is None else bool(supports_stream)
+        self._reasoning_effort = _safe_choice(
+            reasoning_effort,
+            {"minimal", "low", "medium", "high"},
+        )
+        self._text_verbosity = _safe_choice(text_verbosity, {"low", "medium", "high"})
         self._transport = transport
 
     async def stream_chat(
@@ -244,7 +251,7 @@ class OpenAICompatibleClient:
     def _payload(self, request: ModelChatRequest, *, stream: bool) -> dict[str, Any]:
         family = self._selected_protocol_family()
         if family == "responses":
-            return {
+            payload = {
                 "model": request.model,
                 "input": self._responses_input(request.messages),
                 "temperature": request.temperature,
@@ -252,6 +259,19 @@ class OpenAICompatibleClient:
                 "max_output_tokens": request.max_output_tokens,
                 "stream": stream,
             }
+            reasoning_effort = _safe_choice(
+                request.metadata.get("reasoning_effort") or self._reasoning_effort,
+                {"minimal", "low", "medium", "high"},
+            )
+            text_verbosity = _safe_choice(
+                request.metadata.get("text_verbosity") or self._text_verbosity,
+                {"low", "medium", "high"},
+            )
+            if reasoning_effort:
+                payload["reasoning"] = {"effort": reasoning_effort}
+            if text_verbosity:
+                payload["text"] = {"verbosity": text_verbosity}
+            return payload
         return {
             "model": request.model,
             "messages": request.messages,
@@ -266,12 +286,14 @@ class OpenAICompatibleClient:
             return str(messages[0].get("content") or "")
         items: list[dict[str, Any]] = []
         for message in messages:
+            role = message.get("role") or "user"
+            content_type = "output_text" if role == "assistant" else "input_text"
             items.append(
                 {
-                    "role": message.get("role") or "user",
+                    "role": role,
                     "content": [
                         {
-                            "type": "input_text",
+                            "type": content_type,
                             "text": str(message.get("content") or ""),
                         }
                     ],
@@ -520,6 +542,13 @@ def _looks_like_responses_stream_event(data: Any) -> bool:
         return False
     event_type = str(data.get("type") or "")
     return event_type.startswith("response.")
+
+
+def _safe_choice(value: Any, allowed: set[str]) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized if normalized in allowed else None
 
 
 async def _next_stream_line(

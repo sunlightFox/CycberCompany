@@ -8,7 +8,25 @@ from response_composer import canonical_action_status, normalize_action_status_s
 
 from app.services.chat_safety import ChatVisibleOutputFilter, response_filter_payload
 from app.services.chat_turn_input_facts import structured_summary_chat_request
-from app.services.chat_visible_guard import visible_text_guard
+from app.services.chat_visible_guard import preserve_visible_reply_contract, visible_text_guard
+
+
+def _scrub_visible_response_plan_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        cleaned: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)
+            if key_text.lower() in {"trace_id", "prompt_snapshot_id", "tool_call_id", "approval_id"}:
+                continue
+            cleaned[key] = _scrub_visible_response_plan_payload(item)
+        return cleaned
+    if isinstance(value, list):
+        return [_scrub_visible_response_plan_payload(item) for item in value]
+    if isinstance(value, str):
+        value = re.sub(r"\btrc_[A-Za-z0-9_-]+", "审计记录", value)
+        value = re.sub(r"\bapr_[A-Za-z0-9_-]+", "确认编号", value)
+        value = re.sub(r"\b(?:toolcall|tool_call|call)_[A-Za-z0-9_-]+", "工具记录", value)
+    return value
 
 
 class ChatResponseCoordinator:
@@ -80,8 +98,18 @@ class ChatResponseCoordinator:
 
     def normalize_plan_text(self, plan: ResponsePlan, fallback_text: str) -> dict[str, str]:
         structured_payload = dict(plan.structured_payload or {})
+        user_text = str(structured_payload.get("current_user_text") or "")
         summary_text = self.visible_text(plan.summary or fallback_text)
         plain_text = self.visible_text(plan.plain_text or fallback_text)
+        if user_text:
+            from app.services.chat_model_execution import _repair_irrelevant_model_reply
+
+            repaired_summary = _repair_irrelevant_model_reply(user_text, summary_text)
+            if repaired_summary is not None:
+                summary_text = self.visible_text(repaired_summary)
+            repaired_plain = _repair_irrelevant_model_reply(user_text, plain_text)
+            if repaired_plain is not None:
+                plain_text = self.visible_text(repaired_plain)
         summary_text = self._repair_structured_summary_text(
             summary_text,
             structured_payload=structured_payload,
@@ -90,6 +118,9 @@ class ChatResponseCoordinator:
             plain_text,
             structured_payload=structured_payload,
         )
+        if user_text and not structured_summary_chat_request(user_text):
+            summary_text = preserve_visible_reply_contract(summary_text, user_text=user_text)
+            plain_text = preserve_visible_reply_contract(plain_text, user_text=user_text)
         return {
             "summary": summary_text,
             "plain_text": plain_text,
@@ -125,6 +156,7 @@ class ChatResponseCoordinator:
         *,
         response_filter: dict[str, Any],
         text_update: dict[str, str],
+        authoritative_text_provided: bool = False,
     ) -> dict[str, Any]:
         structured_payload = dict(plan.structured_payload or {})
         normalized_filter = response_filter_payload(response_filter or plan.response_filter)
@@ -218,6 +250,9 @@ class ChatResponseCoordinator:
         channel_render_overrides = dict(plan.channel_render_overrides or {})
         reply_blocks = list(plan.reply_blocks or plan.sections or [])
         sections = list(plan.sections or reply_blocks)
+        if authoritative_text_provided and text_update["plain_text"]:
+            sections = [{"kind": "summary", "text": text_update["plain_text"]}]
+            reply_blocks = list(sections)
 
         if isinstance(structured_payload.get("action_dialogue"), dict):
             action_dialogue = dict(structured_payload.get("action_dialogue") or {})
@@ -241,6 +276,7 @@ class ChatResponseCoordinator:
             "visible_layer_fields": list(ResponsePlan.VISIBLE_LAYER_FIELDS),
             "internal_layer_fields": list(ResponsePlan.INTERNAL_LAYER_FIELDS),
         }
+        structured_payload = _scrub_visible_response_plan_payload(structured_payload)
         normalized_filter["visible_text"] = text_update["plain_text"]
 
         return {
@@ -269,11 +305,24 @@ class ChatResponseCoordinator:
         response_filter: dict[str, Any] | None = None,
     ) -> ResponsePlan:
         if authoritative_text is not None:
+            structured_payload = dict(plan.structured_payload or {})
+            user_text = str(structured_payload.get("current_user_text") or "")
             visible_main_text = self.visible_text(authoritative_text or fallback_text)
+            if user_text:
+                from app.services.chat_model_execution import _repair_irrelevant_model_reply
+
+                repaired_main = _repair_irrelevant_model_reply(user_text, visible_main_text)
+                if repaired_main is not None:
+                    visible_main_text = self.visible_text(repaired_main)
             visible_main_text = self._repair_structured_summary_text(
                 visible_main_text,
-                structured_payload=dict(plan.structured_payload or {}),
+                structured_payload=structured_payload,
             )
+            if user_text and not structured_summary_chat_request(user_text):
+                visible_main_text = preserve_visible_reply_contract(
+                    visible_main_text,
+                    user_text=user_text,
+                )
             text_update = {
                 "summary": visible_main_text,
                 "plain_text": visible_main_text,
@@ -284,6 +333,7 @@ class ChatResponseCoordinator:
             plan,
             response_filter=response_filter_payload(response_filter or plan.response_filter),
             text_update=text_update,
+            authoritative_text_provided=authoritative_text is not None,
         )
         return plan.model_copy(update=layered_payload)
 

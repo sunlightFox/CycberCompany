@@ -78,6 +78,21 @@ EXTRA_CORRECTION_PREFIXES = (
 SECRET_TOKEN_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"),
     re.compile(r"\b(?:token|password|secret|api[_-]?key)\b\s*(?:is|=|:)\s*\S+", re.I),
+    re.compile(
+        r"(?:验证码|短信码|动态码|一次性密码|临时口令|otp|2fa|mfa)"
+        r"\s*(?:是|为|=|:|：)?\s*[A-Za-z0-9_-]{4,12}",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:verification|auth|login)\s*code\s*(?:is|=|:)?"
+        r"\s*[A-Za-z0-9_-]{4,12}\b",
+        re.I,
+    ),
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----", re.I),
+    re.compile(r"(?:身份证号?|证件号|护照号)\s*(?:是|为|=|:|：)?\s*[0-9A-Za-z]{6,24}", re.I),
+    re.compile(r"\b[1-9]\d{5}(?:18|19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[0-9Xx]\b"),
+    re.compile(r"(?:银行卡号?|卡号)\s*(?:是|为|=|:|：)?\s*\d[\d -]{12,24}\d"),
+    re.compile(r"(?:手机号|手机号码|电话号|电话号码)\s*(?:是|为|=|:|：)?\s*1[3-9]\d{9}"),
 )
 
 
@@ -1415,10 +1430,12 @@ class MemoryService:
         root_span_id: str | None,
     ) -> MemoryCommandResult:
         if _is_explicit_forget_command(text):
+            targets = _named_memory_targets(text)
+            target_text = f"关于 {', '.join(targets)}，" if targets else ""
             return MemoryCommandResult(
                 handled=True,
                 response_text=(
-                    "我不能在聊天里假装已经删除长期记忆，因为删除需要明确权限和操作记录。"
+                    f"{target_text}我不能在聊天里假装已经删除长期记忆，因为删除需要明确权限和操作记录。"
                     "我现在能做的是：先把这批临时测试偏好停用，后续不再主动沿用它；"
                     "如果要真正删除，还需要通过记忆管理功能明确删除范围、来源和操作记录。"
                     "在那之前，我只会如实说明边界，不会把“已经忘记”说成既成事实。"
@@ -1443,7 +1460,7 @@ class MemoryService:
         if result.blocked:
             response = (
                 "这条内容涉及敏感信息，我不会把它写入长期记忆。"
-                "如果你只是想让我记住处理方式，请用占位符描述，不要贴真实 token、密码或私钥。"
+                "如果你只是想让我记住处理方式，请用占位符描述，不要贴真实身份证号、银行卡号、验证码、密码、token 或私钥。"
             )
         elif command.kind == "block":
             response = "好的，这条不会写入长期记忆；后续我也不会把它当作长期偏好、长期规则或事实主动使用。"
@@ -1491,6 +1508,12 @@ class MemoryService:
         trace_id: str | None,
         turn_id: str | None = None,
     ) -> str | None:
+        recent_named_reply = await self._recent_named_memory_reply(
+            text=text,
+            conversation_id=conversation_id,
+        )
+        if recent_named_reply is not None:
+            return recent_named_reply
         preference_only = explicit_preference_recall_query(text)
         search_response = await self.search(
             MemorySearchApiRequest(
@@ -1524,6 +1547,34 @@ class MemoryService:
         if len(summaries) == 1:
             return summaries[0]
         return "\n".join(f"{idx}. {summary}" for idx, summary in enumerate(summaries, start=1))
+
+    async def _recent_named_memory_reply(
+        self,
+        *,
+        text: str,
+        conversation_id: str,
+    ) -> str | None:
+        targets = _named_memory_targets(text)
+        if not targets:
+            return None
+        recent_messages = await self._chat.list_recent_messages(conversation_id, limit=40)
+        current = str(text or "").strip()
+        for target in targets:
+            for message in reversed(recent_messages):
+                body = _recent_message_text(message)
+                if not body or body == current or target not in body:
+                    continue
+                if any(marker in body for marker in ("忘记", "请忘记", "别再记", "不要再记")):
+                    return f"你刚才要求停止使用 {target}，我不会再按旧内容编一个答案。"
+                if any(marker in body for marker in ("不要写入长期记忆", "别写入长期记忆", "别写进长期记忆")):
+                    continue
+                if any(pattern.search(body) for pattern in SECRET_TOKEN_PATTERNS):
+                    return "这条内容像敏感凭证，我不会把它写进长期记忆，也不会在聊天里复述。"
+                if any(marker in body for marker in ("记住", "纠正", "更正", "更新", "改成", "以后")):
+                    summary = _named_memory_summary_from_text(body, target)
+                    if summary:
+                        return summary
+        return None
 
     async def approve_candidate(
         self,
@@ -1973,7 +2024,7 @@ class MemoryService:
     ) -> MemoryCommandResult:
         source = _normalize_memory_source_dict(source)
         classification = self._safety.classify_chat_input(text)
-        secret_hits = _sensitive_secret_hits(text)
+        secret_hits = [*_sensitive_secret_hits(text), *_sensitive_memory_command_hits(text)]
         summary = command.summary
         now = utc_now_iso()
         if classification.sensitivity_hits or secret_hits:
@@ -3532,6 +3583,44 @@ def _sensitive_secret_hits(text: str) -> list[str]:
     return hits
 
 
+def _sensitive_memory_command_hits(text: str) -> list[str]:
+    clean = str(text or "").strip()
+    if not clean:
+        return []
+    remember_intent = _is_explicit_remember_command(clean) or any(
+        marker in clean for marker in ("让你记住", "帮我保存", "下次填表用", "以后填表用", "长期记忆")
+    )
+    if not remember_intent:
+        return []
+    sensitive_topics = (
+        "身份证",
+        "证件号",
+        "护照号",
+        "银行卡",
+        "卡号",
+        "手机号",
+        "手机号码",
+        "电话号码",
+        "家庭住址",
+        "住址",
+        "详细地址",
+        "社保号",
+        "医保号",
+        "验证码",
+        "短信码",
+        "密码",
+        "私钥",
+        "助记词",
+        "cookie",
+        "token",
+        "api_key",
+        "secret",
+    )
+    if any(marker in clean for marker in sensitive_topics):
+        return ["sensitive_memory_payload"]
+    return []
+
+
 
 def _parse_correction(text: str) -> dict[str, str] | None:
     stripped = text.strip()
@@ -3594,6 +3683,10 @@ def _is_explicit_forget_command(text: str) -> bool:
 
 def _is_explicit_remember_command(text: str) -> bool:
     stripped = text.strip()
+    if any(marker in stripped for marker in ("吗", "？", "?", "是否", "要不要")) and not stripped.startswith(
+        ("记住", "请记住", "再记住", "帮我记住")
+    ):
+        return False
     return any(stripped.startswith(marker) for marker in EXPLICIT_REMEMBER_PREFIXES) or any(
         marker in stripped for marker in EXTRA_EXPLICIT_REMEMBER_PREFIXES
     )
@@ -3604,11 +3697,50 @@ def _looks_like_memory_query(text: str) -> bool:
         return False
     if explicit_preference_recall_query(text):
         return True
-    query_markers = ("记得", "还记得", "之前", "说过", "回忆", "复述", "什么")
-    query_refs = ("偏好", "长期记忆", "记住", "记住了什么", "项目", "风格")
+    query_markers = ("记得", "还记得", "之前", "说过", "回忆", "复述", "什么", "吗", "是否", "要不要")
+    query_refs = ("偏好", "长期记忆", "长期", "临时称呼", "记住", "记住了什么", "项目", "风格")
     return any(marker in text for marker in query_markers) and any(
         marker in text for marker in query_refs
     )
+
+
+def _named_memory_targets(text: str) -> list[str]:
+    return list(
+        dict.fromkeys(
+            re.findall(r"\b[A-Z]{2,12}(?:\d{0,4})-[A-Z0-9][A-Z0-9_-]{1,}\b", str(text or ""))
+        )
+    )
+
+
+def _recent_message_text(message: dict[str, Any] | None) -> str:
+    if not isinstance(message, dict):
+        return ""
+    return str(
+        message.get("model_safe_content_text")
+        or message.get("content_text")
+        or message.get("text")
+        or ""
+    ).strip()
+
+
+def _named_memory_summary_from_text(text: str, target: str) -> str:
+    value = str(text or "").strip()
+    for prefix in ("纠正记忆：", "纠正记忆:", "纠正 ", "更正 ", "更新 ", "记住 ", "记住：", "记住:", "请记住 "):
+        if value.startswith(prefix):
+            value = value[len(prefix):].strip()
+            break
+    for marker in ("请一句话确认", "一句话确认"):
+        if marker in value:
+            value = value.split(marker, 1)[0].strip(" ，。；;")
+    if "：" in value and value.split("：", 1)[0].strip() == target:
+        value = value.split("：", 1)[1].strip()
+    elif ":" in value and value.split(":", 1)[0].strip() == target:
+        value = value.split(":", 1)[1].strip()
+    if value.startswith(target):
+        value = value[len(target):].strip(" ：:")
+    if not value:
+        return ""
+    return f"{target}：{value[:220]}"
 
 
 def _implicit_memory_command(text: str) -> MemoryCommand | None:

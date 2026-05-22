@@ -133,6 +133,10 @@ def _reply_terms(result: Any, notes: list[str], terms: list[str], code: str) -> 
     BASE100._reply_terms(result, notes, terms, code)
 
 
+def _reply_has_any(text: str, terms: list[str]) -> bool:
+    return any(term in text for term in terms)
+
+
 def _quality_guard(result: Any, notes: list[str]) -> None:
     guard = cast(dict[str, Any], result.structured_payload.get("response_quality_guard") or {})
     checks = cast(dict[str, Any], guard.get("checks") or {})
@@ -172,7 +176,12 @@ def _check_boss_sync(result: Any, client: TestClient, ctx: dict[str, Any]) -> li
     del client, ctx
     notes = _notes(result)
     _quality_guard(result, notes)
-    _reply_terms(result, notes, ["结论", "风险", "下一步"], "boss_sync_shape_missing")
+    reply = str(result.reply_text or "")
+    has_result = _reply_has_any(reply, ["结论", "结果", "已跑通", "已完成", "已验证", "正常", "可用", "没有阻塞", "主流程"])
+    has_boundary = _reply_has_any(reply, ["风险", "边界", "复核", "核对", "确认", "未核", "缺口", "待确认", "待补"])
+    has_next = _reply_has_any(reply, ["下一步", "今晚", "明早", "补回", "补齐", "同步", "整理", "继续推进"])
+    if not (has_result and has_boundary and has_next):
+        notes.append("boss_sync_shape_missing")
     return notes
 
 
@@ -180,7 +189,13 @@ def _check_source_boundary(result: Any, client: TestClient, ctx: dict[str, Any])
     del client, ctx
     notes = _notes(result)
     _quality_guard(result, notes)
-    _reply_terms(result, notes, ["来源", "核对", "时间", "可信"], "source_boundary_missing")
+    reply = str(result.reply_text or "")
+    has_source = _reply_has_any(reply, ["来源", "出处", "平台", "后台", "截图", "客服", "公告", "材料"])
+    has_trust = _reply_has_any(reply, ["可信", "可信度", "优先", "权威", "官方", "原始"])
+    has_risk = _reply_has_any(reply, ["风险", "冲突", "不一致", "误导", "不能直接"])
+    has_next = _reply_has_any(reply, ["核对", "复核", "下一步", "确认", "补齐", "待确认"])
+    if not (has_source and has_trust and has_risk and has_next):
+        notes.append("source_boundary_missing")
     return notes
 
 

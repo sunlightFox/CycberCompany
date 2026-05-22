@@ -70,6 +70,13 @@ class ToolBuiltinRuntime:
                 organization_id=organization_id,
                 trace_id=trace_id,
             )
+        if name.startswith("email_test."):
+            return await self._runtime._execute_email_test_tool(
+                request,
+                tool_call_id=tool_call_id,
+                organization_id=organization_id,
+                trace_id=trace_id,
+            )
         if name == "hardware.query_status":
             return self._runtime._hardware_query_status_outcome()
         raise AppError(ErrorCode.TOOL_NOT_FOUND, "工具不存在", status_code=404)

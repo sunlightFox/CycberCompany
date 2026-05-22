@@ -18,11 +18,13 @@ from core_types import (
 from trace_service import redact
 
 from app.core.time import utc_now_iso
-from app.schemas.chat_turn_execution import ChatTurnExecutionContext
-from app.schemas.chat_turn_execution import TurnExecutionPlan
+from app.schemas.chat_quality import ActionDialogueDecision, ActionDialogueFacts
+from app.schemas.chat_turn_execution import ChatTurnExecutionContext, TurnExecutionPlan
+from app.services.action_dialogue_mapper import ActionDialogueMapperService
 from app.services.chat_runtime_host_helpers import (
     deterministic_no_model_reply as _deterministic_no_model_reply,
 )
+from app.services.chat_visible_guard import visible_text_guard
 from app.services.natural_chat import response_plan_for_pending_action
 
 
@@ -83,6 +85,11 @@ class ChatTurnExecutionOrchestrator:
             conversation_id=turn.get("conversation_id"),
             member_id=turn.get("member_id"),
             trace_metadata={"trace_id": trace_id},
+            model_policy={"required": False},
+            attachment_requirements={"required": False, "expected_count": 0},
+            output_requirements={"required": False, "expected_formats": []},
+            delivery_requirements={"required": False, "channel": None, "artifact_refs": []},
+            evidence_requirements={"required": False, "required_evidence": []},
             completion_semantics={"status": "running"},
             response_contract={"event_stream": "chat_events"},
         )
@@ -98,6 +105,26 @@ class ChatTurnExecutionOrchestrator:
             yield await emit(ChatEventType.TURN_QUEUE_STARTED, {"queue_id": ctx.queue_item["queue_id"], "status": "running", "session_id": ctx.queue_item["session_id"]})
         if ctx.envelope is not None:
             yield await emit(ChatEventType.CONTENT_NORMALIZED, {"envelope_id": ctx.envelope["envelope_id"], "dedupe_key": ctx.envelope["dedupe_key"], "normalized_summary": ctx.envelope["normalized_summary"], "content": facade._content_payload_for_envelope(ctx.envelope)})
+            summary = ctx.envelope.get("normalized_summary") or {}
+            attachment_count = int(summary.get("attachment_count") or 0)
+            if attachment_count and ctx.execution_plan is not None:
+                raw_payload = (ctx.envelope.get("ingress_metadata") or {}).get("raw_payload") or {}
+                provider = str(raw_payload.get("provider") or raw_payload.get("channel") or "")
+                ctx.execution_plan.model_policy = {
+                    "required": True,
+                    "reason": "channel_attachment_requires_real_model",
+                }
+                ctx.execution_plan.attachment_requirements = {
+                    "required": True,
+                    "expected_count": attachment_count,
+                    "understanding_required": True,
+                }
+                ctx.execution_plan.delivery_requirements = {
+                    "required": provider in {"feishu", "wechat"},
+                    "channel": provider or None,
+                    "artifact_refs": [],
+                }
+                _sync_turn_execution_plan(turn, ctx.execution_plan)
         yield await emit(ChatEventType.TURN_STARTED, {"status": "running"})
         yield await emit(ChatEventType.CONTEXT_STARTED)
         user_message = await facade._chat_repo.get_message(turn["user_message_id"])
@@ -153,6 +180,11 @@ class ChatTurnExecutionOrchestrator:
             "browser_search_with_citation",
             "terminal_readonly_command",
         }
+        available_model_brains = await facade._brains.list_routable_brains()
+        model_can_be_attempted = bool(available_model_brains) and not (
+            privacy.privacy_level == "high"
+            and not any(bool(brain.get("is_local")) for brain in available_model_brains)
+        )
         deterministic_text = _deterministic_no_model_reply(user_text)
         deterministic_route_blockers = {
             "browser_download",
@@ -176,6 +208,7 @@ class ChatTurnExecutionOrchestrator:
         }
         if (
             deterministic_text is not None
+            and not model_can_be_attempted
             and pre_route_decision.route_type not in direct_readonly_routes
             and pre_route_decision.route_type not in deterministic_route_blockers
         ):
@@ -336,6 +369,8 @@ class ChatTurnExecutionOrchestrator:
                 ):
                     yield event
             return
+        if _model_required(ctx):
+            return
 
         async def emit(event_type: ChatEventType, payload: dict[str, Any] | None = None) -> ChatEvent:
             return await facade._emit_and_record(turn_id, trace_id, events, event_type, payload)
@@ -364,6 +399,107 @@ class ChatTurnExecutionOrchestrator:
             "download_topic",
             "skill_mcp_concept",
         }
+        if (
+            ctx.route_decision is not None
+            and ctx.route_decision.route_type == "ai_coding_tool_request"
+        ):
+            direct_route_reply = facade._direct_route_reply_for_decision(
+                ctx.route_decision.route_type,
+                user_text,
+            )
+            if direct_route_reply is not None:
+                text, intent, structured = direct_route_reply
+                response_plan = facade._response_plan_for_status(
+                    turn,
+                    summary=text,
+                    task_status={
+                        "status": "not_created",
+                        "reason": ctx.route_decision.reason_code,
+                    },
+                    safety_notice="没有创建任务，也没有执行外部工具。",
+                )
+                response_plan = response_plan.model_copy(
+                    update={
+                        "structured_payload": {
+                            **response_plan.structured_payload,
+                            "route_semantics": {
+                                "route": ctx.route_decision.route_type,
+                                "route_taxonomy": "default_chat",
+                                "model_called": False,
+                                "task_created": False,
+                                "tool_created": False,
+                                "reason_code": ctx.route_decision.reason_code,
+                            },
+                            **structured,
+                        }
+                    }
+                )
+                yield await emit(
+                    ChatEventType.INTENT_DETECTED,
+                    {"intent": intent, "reason_codes": [ctx.route_decision.reason_code]},
+                )
+                yield await emit(
+                    ChatEventType.MODE_SELECTED,
+                    {"mode": TaskMode.DIRECT.value, "needs_tool": False},
+                )
+                async for event in facade._complete_without_model(
+                    turn,
+                    events,
+                    text,
+                    root_span_id,
+                    intent=intent,
+                    mode=TaskMode.DIRECT.value,
+                    response_plan=response_plan,
+                ):
+                    yield event
+                return
+        scheduled_request = facade._task_coordinator.scheduled_intents.parse(user_text)
+        if scheduled_request is not None and facade._scheduled_tasks is not None:
+            from app.schemas.scheduled_tasks import ScheduledTaskCreateRequest
+            scheduled_task = await facade._scheduled_tasks.create(ScheduledTaskCreateRequest(conversation_id=turn["conversation_id"], owner_member_id=turn["member_id"], title=scheduled_request.title, goal=scheduled_request.goal, schedule=scheduled_request.schedule, execution_policy={"attendance": "unattended"}, constraints={"source": "chat_text", "phase": "phase36"}, created_by_member_id=facade._default_user_id()), trace_id=trace_id)
+            action_dialogue = _scheduled_task_created_dialogue(goal=str(scheduled_task.goal or scheduled_request.goal), schedule=dict(scheduled_task.schedule or scheduled_request.schedule), next_run_at=scheduled_task.next_run_at.isoformat() if scheduled_task.next_run_at else None)
+            text = action_dialogue.visible_text
+            response_plan = facade._response_plan_for_status(turn, summary=text, task_status={"scheduled_task_id": scheduled_task.scheduled_task_id, "status": scheduled_task.status, "next_run_at": scheduled_task.next_run_at.isoformat() if scheduled_task.next_run_at else None, "background_execution_policy": scheduled_task.execution_policy, "schedule": scheduled_task.schedule, "action_dialogue": action_dialogue.model_dump(mode="json")})
+            yield await emit(ChatEventType.INTENT_DETECTED, {"intent": "scheduled_task_request", "reason_codes": ["phase36_scheduled_task_text"]})
+            yield await emit(ChatEventType.MODE_SELECTED, {"mode": TaskMode.DIRECT.value, "needs_tool": False})
+            async for event in facade._complete_without_model(turn, events, text, root_span_id, intent="scheduled_task_request", mode=TaskMode.DIRECT.value, response_plan=response_plan):
+                yield event
+            return
+        browser_capability_text = facade._browser_capability_explanation_reply_text(user_text)
+        if browser_capability_text is not None:
+            yield await emit(ChatEventType.INTENT_DETECTED, {"intent": "simple_question", "reason_codes": ["browser_capability_explanation"]})
+            yield await emit(ChatEventType.MODE_SELECTED, {"mode": TaskMode.DIRECT.value, "needs_tool": False})
+            async for event in facade._complete_without_model(
+                turn,
+                events,
+                browser_capability_text,
+                root_span_id,
+                intent="simple_question",
+                mode=TaskMode.DIRECT.value,
+                response_plan=facade._response_plan_for_status(turn, summary=browser_capability_text),
+            ):
+                yield event
+            return
+        boundary_text = facade._deterministic_boundary_reply_text(user_text)
+        if boundary_text is not None:
+            yield await emit(ChatEventType.INTENT_DETECTED, {"intent": "boundary_question", "reason_codes": ["deterministic_boundary_reply"]})
+            yield await emit(ChatEventType.MODE_SELECTED, {"mode": TaskMode.DIRECT.value, "needs_tool": False})
+            response_plan = facade._response_plan_for_status(
+                turn,
+                summary=boundary_text,
+                safety_notice=boundary_text,
+            )
+            async for event in facade._complete_without_model(turn, events, boundary_text, root_span_id, intent="boundary_question", mode=TaskMode.DIRECT.value, response_plan=response_plan):
+                yield event
+            return
+        if facade._natural_chat is not None and "称呼偏好" in user_text:
+            natural_outcome = await facade._natural_chat.handle(turn=turn, user_text=user_text, session_id=session_id, trace_id=trace_id, presence_runtime=dict(turn.get("presence_runtime") or {}))
+            if natural_outcome is not None:
+                yield await emit(ChatEventType.INTENT_DETECTED, {"intent": natural_outcome.intent, "reason_codes": ["natural_chat_nickname_preference"]})
+                yield await emit(ChatEventType.MODE_SELECTED, {"mode": natural_outcome.mode, "needs_tool": False})
+                async for event in facade._complete_without_model(turn, events, natural_outcome.text, root_span_id, intent=natural_outcome.intent, mode=natural_outcome.mode, response_plan=natural_outcome.response_plan):
+                    yield event
+                return
         if (
             facade._natural_chat is not None
             and not allow_direct_memory_command
@@ -449,8 +585,9 @@ class ChatTurnExecutionOrchestrator:
         if scheduled_request is not None and facade._scheduled_tasks is not None:
             from app.schemas.scheduled_tasks import ScheduledTaskCreateRequest
             scheduled_task = await facade._scheduled_tasks.create(ScheduledTaskCreateRequest(conversation_id=turn["conversation_id"], owner_member_id=turn["member_id"], title=scheduled_request.title, goal=scheduled_request.goal, schedule=scheduled_request.schedule, execution_policy={"attendance": "unattended"}, constraints={"source": "chat_text", "phase": "phase36"}, created_by_member_id=facade._default_user_id()), trace_id=trace_id)
-            text = _scheduled_task_created_reply(goal=str(scheduled_task.goal or scheduled_request.goal), schedule=dict(scheduled_task.schedule or scheduled_request.schedule), next_run_at=scheduled_task.next_run_at.isoformat() if scheduled_task.next_run_at else None)
-            response_plan = facade._response_plan_for_status(turn, summary=text, task_status={"scheduled_task_id": scheduled_task.scheduled_task_id, "status": scheduled_task.status, "next_run_at": scheduled_task.next_run_at.isoformat() if scheduled_task.next_run_at else None, "background_execution_policy": scheduled_task.execution_policy})
+            action_dialogue = _scheduled_task_created_dialogue(goal=str(scheduled_task.goal or scheduled_request.goal), schedule=dict(scheduled_task.schedule or scheduled_request.schedule), next_run_at=scheduled_task.next_run_at.isoformat() if scheduled_task.next_run_at else None)
+            text = action_dialogue.visible_text
+            response_plan = facade._response_plan_for_status(turn, summary=text, task_status={"scheduled_task_id": scheduled_task.scheduled_task_id, "status": scheduled_task.status, "next_run_at": scheduled_task.next_run_at.isoformat() if scheduled_task.next_run_at else None, "background_execution_policy": scheduled_task.execution_policy, "schedule": scheduled_task.schedule, "action_dialogue": action_dialogue.model_dump(mode="json")})
             yield await emit(ChatEventType.INTENT_DETECTED, {"intent": "scheduled_task_request", "reason_codes": ["phase36_scheduled_task_text"]})
             yield await emit(ChatEventType.MODE_SELECTED, {"mode": TaskMode.DIRECT.value, "needs_tool": False})
             async for event in facade._complete_without_model(turn, events, text, root_span_id, intent="scheduled_task_request", mode=TaskMode.DIRECT.value, response_plan=response_plan):
@@ -499,6 +636,12 @@ class ChatTurnExecutionOrchestrator:
                 "reason_code": route_decision.reason_code,
             }
             _sync_turn_execution_plan(turn, ctx.execution_plan)
+        if (
+            _model_required(ctx)
+            and route_decision.office_request is None
+            and not _attachment_output_file_request(user_text)
+        ):
+            return
         direct_readonly_routes = {
             "host_filesystem_list",
             "browser_read_page",
@@ -810,9 +953,9 @@ class ChatTurnExecutionOrchestrator:
                 },
             }
             task = await facade._task_engine.create_task(TaskCreateRequest(conversation_id=turn["conversation_id"], owner_member_id=turn["member_id"], goal=ctx.user_text, mode_hint=TaskMode.WORKFLOW, planner_context={"intent": "video_workflow_request", "phase": "phase102", "media_request": media_request, "video_workflow_profile": video_workflow_profile, "privacy": facade._privacy.planner_context(privacy_level=ctx.privacy.privacy_level, allow_cloud=ctx.privacy.allow_cloud, sensitivity_hits=getattr(ctx.privacy, "sensitivity_hits", []))}, auto_start=False, client_request_id=f"chat:{turn['turn_id']}:media-task"), trace_id=trace_id)
-            text = "已创建受控视频工作流任务。请先把视频作为任务 artifact 绑定进来；后续分析、剪辑、渲染都会走 artifact 边界，渲染和导出前会再次确认。"
+            text = "好，视频处理任务先建好了。你把视频发上来后，我再继续分析和剪辑；需要渲染或导出前会再让你确认。"
             if media_request["plan_only"]:
-                text = "已创建受控视频计划任务；我会只生成剪辑方案，不渲染或导出视频。"
+                text = "好，剪辑方案任务先建好了。我只整理方案，不会渲染或导出视频。"
             response_plan = facade._response_plan_for_status(turn, summary=text, task_status={"task_id": task.task_id, "status": task.status.value, "mode": task.mode.value, "media_runtime": media_request, "video_workflow": {"status": "planned", "next_step": "import_or_bind_task_artifact"}})
             response_plan = response_plan.model_copy(update={"structured_payload": {**response_plan.structured_payload, "video_workflow_profile": video_workflow_profile, "video_workflow": {"task_id": task.task_id, "status": "planned", "next_step": "import_or_bind_task_artifact", "source_boundary": "task_artifact_only"}}})
             async for event in self._complete_workflow_without_model(
@@ -978,16 +1121,77 @@ class ChatTurnExecutionOrchestrator:
             route_metadata={"host_install_request": host_install_request},
             safe_user_summary=str(ctx.user_text or "").strip() or None,
         )
-        plan = await facade._host_installs.create_plan(
-            HostInstallPlanRequest(
-                member_id=turn["member_id"],
-                conversation_id=turn["conversation_id"],
-                requested_software=host_install_request["requested_software"],
-                install_scope=host_install_request["install_scope"],
-                dry_run=True,
-            ),
-            trace_id=turn["trace_id"],
-        )
+        try:
+            plan = await facade._host_installs.create_plan(
+                HostInstallPlanRequest(
+                    member_id=turn["member_id"],
+                    conversation_id=turn["conversation_id"],
+                    requested_software=host_install_request["requested_software"],
+                    install_scope=host_install_request["install_scope"],
+                    dry_run=True,
+                ),
+                trace_id=turn["trace_id"],
+            )
+        except Exception as exc:
+            target = str(host_install_request.get("requested_software") or "").strip()
+            failure_reason = (
+                "创建本机软件安装计划时失败，已停在安全边界内，没有执行安装。"
+            )
+            facts = facade._action_status_facts_for_turn(
+                turn,
+                status="blocked_by_boundary",
+                route=f"host.{host_action}_software",
+                action_label=f"{action_label}本机软件",
+                target=target,
+                failure_reason=failure_reason,
+                evidence_summary=failure_reason,
+                task_created=False,
+            )
+            response_plan = facade._response_plan_for_action_status(
+                turn,
+                facts=facts,
+                task_status={"status": "blocked_by_boundary", "mode": "workflow"},
+            )
+            route_semantics = {
+                **dict(route_selected_payload.get("route_semantics") or {}),
+                "route_dispatch_stage": "blocked_by_boundary",
+                "task_created": False,
+                "approval_pending": False,
+            }
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **response_plan.structured_payload,
+                        "route_semantics": route_semantics,
+                        "host_install_plan_error": {
+                            "error_type": exc.__class__.__name__,
+                            "message": str(redact(str(exc)))[:240],
+                        },
+                    }
+                }
+            )
+            text = response_plan.plain_text or response_plan.summary or failure_reason
+            async for event in facade._complete_without_model(
+                turn,
+                ctx.events,
+                text,
+                ctx.root_span_id,
+                intent=route_type,
+                mode=TaskMode.WORKFLOW.value,
+                response_plan=response_plan,
+            ):
+                yield event
+            if route_span is not None:
+                await facade._trace.end_span(
+                    route_span,
+                    output_data={
+                        "route": route_type,
+                        "reason_code": reason_code,
+                        "route_dispatch_stage": "blocked_by_boundary",
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+            return
         pending_action: dict[str, Any] | None = None
         if plan.approval_id and facade._approval_service is not None:
             approval = await facade._approval_service.get(plan.approval_id)
@@ -1409,6 +1613,9 @@ class ChatTurnExecutionOrchestrator:
             if brain_decision
             else False
         )
+        if _model_required(ctx):
+            mode = TaskMode.DIRECT
+            needs_tool = False
         intent_span = await facade._trace.start_span(trace_id, span_type=TraceSpanType.BRAIN_INTENT, name="emit brain intent decision", parent_span_id=root_span_id, input_data={"text": redact(user_text)})
         await facade._trace.end_span(intent_span, output_data={"intent": intent, "reason_codes": brain_decision.intent.reason_codes if brain_decision else [], "decision_id": brain_decision.brain_decision_id if brain_decision else None})
         yield await facade._emit_and_record(turn_id, trace_id, events, ChatEventType.INTENT_DETECTED, {"intent": intent, "decision_id": brain_decision.brain_decision_id if brain_decision else None, "confidence": brain_decision.confidence if brain_decision else None, "reason_codes": brain_decision.intent.reason_codes if brain_decision else [], "intent_decision": brain_decision.intent.model_dump(mode="json") if brain_decision else {}})
@@ -1419,6 +1626,52 @@ class ChatTurnExecutionOrchestrator:
             async for event in facade._cancel_turn_during_stream(turn, events, root_span_id):
                 yield event
             return
+        if (
+            ctx.route_decision is not None
+            and ctx.route_decision.route_type == "ai_coding_tool_request"
+        ):
+            direct_route_reply = facade._direct_route_reply_for_decision(
+                ctx.route_decision.route_type,
+                user_text,
+            )
+            if direct_route_reply is not None:
+                text, route_intent, structured = direct_route_reply
+                response_plan = facade._response_plan_for_status(
+                    turn,
+                    summary=text,
+                    task_status={
+                        "status": "not_created",
+                        "reason": ctx.route_decision.reason_code,
+                    },
+                    safety_notice="没有创建任务，也没有执行外部工具。",
+                )
+                response_plan = response_plan.model_copy(
+                    update={
+                        "structured_payload": {
+                            **response_plan.structured_payload,
+                            "route_semantics": {
+                                "route": ctx.route_decision.route_type,
+                                "route_taxonomy": "default_chat",
+                                "model_called": False,
+                                "task_created": False,
+                                "tool_created": False,
+                                "reason_code": ctx.route_decision.reason_code,
+                            },
+                            **structured,
+                        }
+                    }
+                )
+                async for event in facade._complete_without_model(
+                    turn,
+                    events,
+                    text,
+                    root_span_id,
+                    intent=route_intent,
+                    mode=TaskMode.DIRECT.value,
+                    response_plan=response_plan,
+                ):
+                    yield event
+                return
         if brain_decision is not None and brain_decision.mode.submode == "capability_boundary":
             text = facade._composer.compose_tool_unavailable()
             response_plan = facade._composer.response_plan_for_tool_boundary(summary=text, required_capability=intent, next_actions=["先生成方案", "连接或启用对应能力后重试"], safety_notice="对应 Skill/MCP/工具能力当前不可用；没有执行任何外部动作。")
@@ -1455,17 +1708,40 @@ def _scheduled_task_created_reply(
     schedule: dict[str, Any],
     next_run_at: str | None,
 ) -> str:
-    next_run_text = (
-        f"下一次执行时间是 {next_run_at}。"
-        if next_run_at
-        else "下一次执行时间会按这个调度规则计算。"
+    return _scheduled_task_created_dialogue(
+        goal=goal,
+        schedule=schedule,
+        next_run_at=next_run_at,
+    ).visible_text
+
+
+def _scheduled_task_created_dialogue(
+    *,
+    goal: str,
+    schedule: dict[str, Any],
+    next_run_at: str | None,
+) -> ActionDialogueDecision:
+    decision = ActionDialogueMapperService().map(
+        ActionDialogueFacts(
+            domain="scheduled_task",
+            action_label="提醒",
+            target=goal,
+            visible_goal=goal,
+            route_semantics={
+                "route": "scheduled_task",
+                "domain": "scheduled_task",
+                "schedule": dict(schedule or {}),
+            },
+            task_status={
+                "status": "completed_with_evidence",
+                "goal": goal,
+                "schedule": dict(schedule or {}),
+                "next_run_at": next_run_at,
+            },
+            task_created=True,
+        )
     )
-    return (
-        f"定时任务已经建好了，目标是：{goal}。"
-        f"调度方式是：{_human_schedule_text(schedule)}。"
-        f"{next_run_text}"
-        "到点后我会先按后台流程往下推；如果过程中碰到下载、删除、终端、登录或外发这类高风险动作，我会停一下，再找你确认。"
-    )
+    return decision.model_copy(update={"visible_text": visible_text_guard(decision.visible_text)})
 
 
 def _human_schedule_text(schedule: dict[str, Any]) -> str:
@@ -1497,3 +1773,21 @@ def _sync_turn_execution_plan(turn: dict[str, Any], plan: TurnExecutionPlan) -> 
         **dict(turn.get("experience") or {}),
         "turn_execution_plan": payload,
     }
+
+
+def _model_required(ctx: ChatTurnExecutionContext) -> bool:
+    plan = ctx.execution_plan
+    if plan is None:
+        return False
+    return bool(dict(plan.model_policy or {}).get("required"))
+
+
+def _attachment_output_file_request(text: str) -> bool:
+    raw = str(text or "")
+    lowered = raw.lower()
+    if not any(marker in raw for marker in ("生成", "导出", "产出", "制作")):
+        return False
+    return any(
+        marker in lowered or marker in raw
+        for marker in ("txt", ".txt", "pdf", ".pdf", "文件")
+    )

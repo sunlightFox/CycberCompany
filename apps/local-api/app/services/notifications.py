@@ -110,6 +110,17 @@ class DisabledProvider:
         )
 
 
+def _scheduled_run_notification_body(*, status: str, summary: str) -> str:
+    text = " ".join(str(summary or "").strip().split())
+    if text.startswith("提醒你"):
+        return f"到点了，{text}"
+    if status == "waiting_policy":
+        return "到点了，这件事需要你确认后再继续，不会自动执行。"
+    if status == "failed":
+        return f"到点了，但这次提醒后的处理没有完成。{text}".strip()
+    return f"到点了，{text}" if text else "到点了。"
+
+
 class NotificationGatewayService:
     def __init__(
         self,
@@ -814,13 +825,14 @@ class NotificationGatewayService:
         trace_id: str | None = None,
     ) -> NotificationMessage | None:
         channel = await self.ensure_default_channel(trace_id=trace_id)
+        body = _scheduled_run_notification_body(status=status, summary=summary)
         return await self.create_message(
             NotificationMessageCreateRequest(
                 channel_id=channel.channel_id,
                 message_type="scheduled_summary",
                 recipient="user_local_owner",
                 subject="定时任务更新",
-                body=f"定时任务状态：{status}。{summary}",
+                body=body,
                 task_id=task_id,
                 scheduled_task_id=scheduled_task_id,
                 scheduled_run_id=scheduled_run_id,
@@ -991,7 +1003,8 @@ def _redact_outbound(
     max_length: int,
 ) -> tuple[str | None, str, dict[str, Any]]:
     raw = f"{subject or ''}\n{body}"
-    sensitive_matches = sum(len(pattern.findall(raw)) for pattern in SECRET_PATTERNS)
+    dlp_scan_text = _outbound_dlp_scan_text(raw)
+    sensitive_matches = sum(len(pattern.findall(dlp_scan_text)) for pattern in SECRET_PATTERNS)
     redacted_subject = str(redact(subject))[:200] if subject else None
     redacted_body = str(redact(body))[:max_length]
     changed = int(redacted_body != body[:max_length]) + int((redacted_subject or None) != subject)
@@ -1002,6 +1015,18 @@ def _redact_outbound(
         "blocked_reason": "sensitive_content" if blocked else None,
         "policy": "trace_service.redact",
     }
+
+
+def _outbound_dlp_scan_text(raw: str) -> str:
+    text = str(raw or "")
+    placeholder = r"(?:`?\[REDACTED_[A-Z0-9_]+\]`?)"
+    assignment_prefix = (
+        r"(?i)\b(api[_-]?key|token|cookie|private[_-]?key|mnemonic|"
+        r"password|passwd|pwd|secret)\s*[:=]\s*"
+    )
+    text = re.sub(assignment_prefix + placeholder, r"\1 already_redacted", text)
+    text = re.sub(r"(?i)sk-\[REDACTED_[A-Z0-9_]+\]", "[already_redacted]", text)
+    return text
 
 
 def _parse_inbound_intent(content: str) -> str:

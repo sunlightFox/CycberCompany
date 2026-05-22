@@ -996,6 +996,20 @@ def _sheets(args: dict[str, Any]) -> list[dict[str, Any]]:
     raw = args.get("sheets")
     if isinstance(raw, list) and raw:
         return [item for item in raw if isinstance(item, dict)] or [{"name": "Sheet1"}]
+    inferred_budget_rows = _budget_rows_from_text(
+        _text(args.get("content") or args.get("goal") or args.get("summary"), "")
+    )
+    if inferred_budget_rows:
+        return [
+            {
+                "name": args.get("sheet_name") or "Data",
+                "headers": ["项目", "金额"],
+                "rows": inferred_budget_rows,
+                "summary": args.get("summary") or "家庭预算明细；风险提醒：固定支出占比高时要预留应急金。",
+                "add_totals": True,
+                "chart": args.get("chart"),
+            }
+        ]
     return [
         {
             "name": args.get("sheet_name") or "Sheet1",
@@ -1009,6 +1023,17 @@ def _sheets(args: dict[str, Any]) -> list[dict[str, Any]]:
             "chart": args.get("chart"),
         }
     ]
+
+
+def _budget_rows_from_text(text: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for label, amount in re.findall(r"([\u4e00-\u9fffA-Za-z]{1,12})\s*(\d+(?:\.\d+)?)", text or ""):
+        if label in {"Excel", "excel", "xlsx"}:
+            continue
+        value = float(amount)
+        rows.append({"项目": label, "金额": int(value) if value.is_integer() else value})
+    budget_labels = {"房租", "餐饮", "交通", "医疗", "学习", "水电", "通讯", "娱乐", "保险"}
+    return rows if any(str(row.get("项目")) in budget_labels for row in rows) else []
 
 
 def _fill_sheet(worksheet: Any, sheet: dict[str, Any]) -> None:
@@ -1299,7 +1324,14 @@ def _parse_office_model_result(raw: str) -> dict[str, Any]:
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
-    payload = json.loads(text)
+    decoder = json.JSONDecoder()
+    try:
+        payload, _ = decoder.raw_decode(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        if start < 0:
+            raise
+        payload, _ = decoder.raw_decode(text[start:])
     if not isinstance(payload, dict):
         raise TypeError("office composer model output must be an object")
     return payload

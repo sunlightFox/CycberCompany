@@ -72,7 +72,7 @@ def test_phase76_readiness_and_runtime_topology_are_consistent(
     by_name = {item["name"]: item for item in topology}
 
     assert by_name["session"]["runtime"] == "session_runtime"
-    assert by_name["session"]["details"]["delegates_to"] == "chat_runtime"
+    assert by_name["session"]["details"]["delegates_to"] == "agent_runtime"
     assert by_name["chat_execution_batches"]["runtime"] == "chat_execution_batches_control_plane"
     assert by_name["channel_ingress"]["status"] == "runtime_native"
     assert by_name["wechat_gateway"]["status"] == "compat_shell"

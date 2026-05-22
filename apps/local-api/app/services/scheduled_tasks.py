@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta, timezone, tzinfo
@@ -480,7 +481,7 @@ class ScheduledTaskService:
                 run_id=run_id,
                 task_id=created_task.task_id,
                 status=run_status,
-                summary=f"已创建普通任务，当前状态 {created_task.status.value}",
+                summary=_scheduled_run_visible_summary(task.goal, run_status),
                 trace_id=trace_id,
             )
             await self._trace.end_span(span_id, output_data=result)
@@ -753,16 +754,112 @@ def _policy_decision(task: ScheduledTask, *, trigger_type: str) -> dict[str, Any
 
 def _risk_level(goal: str, constraints: dict[str, Any]) -> str:
     text = f"{goal} {constraints}".lower()
+    if _looks_like_manual_sensitive_prep_reminder(text):
+        return "R2"
     if any(
         word in text
-        for word in ["delete", "删除", "terminal", "终端", "命令", "private_key", "root"]
+        for word in [
+            "delete",
+            "删除",
+            "清空",
+            "卸载",
+            "重启",
+            "terminal",
+            "终端",
+            "命令",
+            "private_key",
+            "root",
+        ]
     ):
         return "R5"
-    if any(word in text for word in ["login", "登录", "upload", "上传", "发送", "支付", "payment"]):
+    if any(
+        word in text
+        for word in [
+            "login",
+            "登录",
+            "upload",
+            "上传",
+            "发送",
+            "外部邮箱",
+            "发资料",
+            "支付",
+            "付款",
+            "转账",
+            "汇款",
+            "打款",
+            "钱包",
+            "信用卡",
+            "还款",
+            "扣款",
+            "发布",
+            "外发",
+            "改密码",
+            "密码",
+            "导出",
+            "投放",
+            "批量归档",
+            "客户资料",
+            "证件",
+            "payment",
+            "transfer",
+        ]
+    ):
         return "R4"
     if any(word in text for word in ["download", "下载", "browser", "浏览器", "提交"]):
         return "R3"
     return "R2"
+
+
+def _scheduled_run_visible_summary(goal: str, run_status: str) -> str:
+    visible_goal = _visible_scheduled_goal(goal)
+    if run_status == "waiting_policy":
+        return f"提醒你{visible_goal}。这类操作不会自动执行，需要你确认后再继续。"
+    if run_status == "failed":
+        return f"提醒你{visible_goal}，但这次后续处理没有完成。"
+    return f"提醒你{visible_goal}。"
+
+
+def _visible_scheduled_goal(goal: str) -> str:
+    text = " ".join(str(goal or "").strip().split())
+    text = text.strip("。！？!?.,，；;：: “”（）()[]【】'\" ")
+    text = re.sub(
+        r"^(?:please\s+)?(?:create|set(?:\s+up)?|add|make)\s+(?:a\s+)?(?:scheduled\s+)?reminder(?:\s+(?:for|to))?[，,：:\s]*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(r"^(?:scheduled\s+reminder|reminder)[，,：:\s]*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^(?:please\s+)?remind\s+me\s*(?:to|about)?[，,：:\s]*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^(?:帮我)?(?:创建|新建|设置|设个|加个|建个)?(?:一个|个)?(?:定时任务|提醒)[，,：:\s“”'\"\[\]【】]*", "", text)
+    text = re.sub(r"^(?:每天|每日|每周|每隔)[，,：:\s]*", "", text)
+    text = re.sub(
+        r"^(?:再过|过|等|等到)?\s*\d+\s*(?:秒|分钟|小时|天|second|seconds|minute|minutes|hour|hours|day|days)\s*(?:后|later)?\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(r"^(?:周一|周二|周三|周四|周五|周六|周日|周天|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^[一二三四五六七八九十两0-9]+\s*(?:分钟|小时|天|minutes|minute|hours|hour|days|day)\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^(?:明天|明早|明天早上|明天上午|明天下午|明天晚上)\s*", "", text)
+    text = re.sub(r"^\d{1,2}\s*[:：点]\s*\d{0,2}\s*", "", text)
+    text = re.sub(r"^(?:上午|早上|中午|下午|晚上)\s*\d{1,2}\s*[:：]\s*\d{2}\s*", "", text)
+    text = re.sub(r"^(?:上午|早上|中午|下午|晚上)\s*\d{1,2}\s*点\s*(?:半|[0-9]{1,2}\s*分?)?\s*", "", text)
+    if re.search(r"提醒(?:我|你)?", text):
+        text = re.split(r"提醒(?:我|你)?[，,：:\s]*", text)[-1]
+    text = re.sub(r"^提醒(?:我|你)?[，,：:\s]*", "", text)
+    text = re.sub(r"^帮我[，,：:\s]*", "", text)
+    text = text.strip("。！？!?.,，；;：: “”（）()[]【】'\" ")
+    if text.startswith("我"):
+        text = text[1:].strip()
+    return text or "这件事"
+
+
+def _looks_like_manual_sensitive_prep_reminder(text: str) -> bool:
+    if not any(marker in text for marker in ("上传", "证件", "身份证", "照片")):
+        return False
+    if any(marker in text for marker in ("自动上传", "自动发送", "外发", "外部邮箱", "发资料")):
+        return False
+    return any(marker in text for marker in ("打码", "脱敏", "遮住", "确认", "核对", "检查", "带"))
 
 
 def _risk_order(value: str) -> int:

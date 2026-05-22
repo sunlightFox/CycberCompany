@@ -27,6 +27,7 @@ class SessionContextCuratorService:
             else (latest_continuity.get("continuity_summary") or conversation.get("active_topic") or "")
         )
         canonical_memory_items = _canonical_memory_items(memory_candidates, latest_instruction_override=override)
+        relevant_recent_messages = _relevant_recent_messages_with_roleplay_contract(recent_messages)
         return SessionContext(
             stable_identity_block=(
                 f"{identity.get('display_name','助手')}不是现实真人，不虚构隐藏账号，不把未执行动作说成完成。"
@@ -38,7 +39,7 @@ class SessionContextCuratorService:
             current_conversation_summary=summary,
             current_open_loops=_open_loops(conversation, action_state, latest_continuity),
             current_commitments=[] if override else list(latest_continuity.get("assistant_commitments") or []),
-            relevant_recent_messages=list(recent_messages[-4:]),
+            relevant_recent_messages=relevant_recent_messages,
             relevant_memory_items=canonical_memory_items,
             current_action_facts={
                 "pending_approval": bool(action_state.get("pending_approval")),
@@ -86,6 +87,41 @@ def _user_profile_block(
     if user_profile.get("style_avoidances"):
         parts.append(f"避免风格：{'、'.join(user_profile['style_avoidances'])}")
     return "；".join(parts) if parts else "当前没有稳定用户画像，优先服从这轮显式要求。"
+
+
+def _relevant_recent_messages_with_roleplay_contract(
+    recent_messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    tail = list(recent_messages[-4:])
+    setup: dict[str, Any] | None = None
+    for item in recent_messages:
+        text = str(item.get("model_safe_content_text") or item.get("content_text") or "")
+        if _looks_like_roleplay_contract_message(text):
+            setup = item
+    if setup is None or any(item is setup for item in tail):
+        return tail
+    return [setup, *tail]
+
+
+def _looks_like_roleplay_contract_message(text: str) -> bool:
+    raw = str(text or "")
+    if "「" not in raw or "」" not in raw:
+        return False
+    return any(
+        marker in raw
+        for marker in (
+            "角色扮演",
+            "扮演",
+            "假装是",
+            "假装成",
+            "保持角色",
+            "沿用角色",
+            "用这个角色",
+            "角色口吻",
+            "身份词",
+            "叫我",
+        )
+    )
 
 
 def _canonical_memory_items(

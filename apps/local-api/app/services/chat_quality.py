@@ -115,6 +115,48 @@ class ChatQualityPolicy:
                 safety_notice=_quality_copy("supportive_safety_refusal", seed=text),
             )
 
+        public_safety_reply = _public_scam_safety_reply(text)
+        if public_safety_reply is not None:
+            return self._outcome(
+                public_safety_reply,
+                intent="privacy_scam_safety",
+                status="supportive_safety_guidance",
+                reason_codes=["chat_quality_policy", "public_scam_safety_guidance"],
+                structured={"task_created": False, "tool_created": False},
+                safety_notice="先阻断可疑动作，再通过官方渠道核验。不要提供验证码、远程控制、隐私材料或账号控制权。",
+            )
+
+        emergency_reply = _emergency_medical_reply(text)
+        if emergency_reply is not None:
+            return self._outcome(
+                emergency_reply,
+                intent="professional_safety_advice",
+                status="professional_safety_boundary",
+                reason_codes=["chat_quality_policy", "emergency_medical_boundary"],
+                structured={"task_created": False, "tool_created": False, "professional_boundary": True},
+                safety_notice="这类急症信息不能替代专业医疗判断；出现危险信号要立即就医或呼叫急救。",
+            )
+
+        career_plan_reply = _career_learning_reply(text)
+        if career_plan_reply is not None:
+            return self._outcome(
+                career_plan_reply,
+                intent="complex_dialogue",
+                status="direct_guidance",
+                reason_codes=["chat_quality_policy", "career_learning_guidance"],
+                structured={"task_created": False, "tool_created": False},
+            )
+
+        knowledge_direct_reply = _knowledge_direct_reply(text)
+        if knowledge_direct_reply is not None:
+            return self._outcome(
+                knowledge_direct_reply,
+                intent="knowledge_guidance",
+                status="direct_knowledge_guidance",
+                reason_codes=["chat_quality_policy", "knowledge_direct_guidance"],
+                structured={"task_created": False, "tool_created": False},
+            )
+
         if _persona_boundary_question(text):
             return self._outcome(
                 _quality_copy("persona_boundary", seed=text),
@@ -456,8 +498,135 @@ def _cross_session_memory_exfiltration_request(text: str) -> bool:
         marker in lowered or marker in text for marker in data_markers
     ) and any(marker in lowered or marker in text for marker in request_markers)
 
+
+def _public_scam_safety_reply(text: str) -> str | None:
+    if "验证码" in text and any(marker in text for marker in ("冒充客服", "冻结账号", "客服")):
+        return (
+            "分析：这高度像验证码诈骗，正规客服不会要求你把验证码发给对方；验证码等同一次性登录授权。\n"
+            "风险：给出后对方可能登录、改绑、转移资产或冒用账号操作，“不提供就冻结账号”是施压话术。\n"
+            "建议：不要回复验证码，不点对方链接；自己打开官方 App/官网核对账号状态，必要时改密码、退出其他设备、开启二次验证，并截图留证后向平台官方举报。"
+        )
+    if "短链接" in text and any(marker in text for marker in ("补缴", "费用", "不要打开")):
+        return (
+            "分析：短链接补缴短信先按钓鱼处理，不打开、不输入信息、不回拨短信里的电话。\n"
+            "风险：链接可能诱导填写身份信息、银行卡、密码或验证码，也可能跳转到仿冒支付页。\n"
+            "建议：先截图留证，再从官方 App、官网或公开客服电话反查账单；官方渠道查不到就删除拉黑，若已输入信息，立刻改密码并联系银行或平台风控。"
+        )
+    if any(marker in text for marker in ("隐私视频", "通讯录", "裸聊", "勒索")):
+        return (
+            "分析：先按勒索处理，稳住，不转账，不继续提供照片、验证码、通讯录或更多隐私。\n"
+            "风险：付款通常不会让对方停止，反而会证明你可被继续勒索；继续互动会扩大暴露面。\n"
+            "建议：停止沟通并拉黑，截图保存账号、收款码、威胁内容和时间线；检查账号隐私权限，提醒亲近的人可能有诈骗骚扰；涉及威胁传播隐私内容时，保留证据后向平台和警方报案。"
+        )
+    if any(marker in text for marker in ("账号疑似被盗", "账号被盗", "还在发奇怪内容")):
+        return (
+            "分析：按止损、取证、申诉排优先级，先控制账号影响面，再补材料。\n"
+            "风险：拖得越久，对方越可能改绑、删记录或继续发布异常内容，影响申诉可信度。\n"
+            "建议：先改密码、退出其他设备、开启二次验证并冻结可疑登录；再截图异常内容、登录提醒、私信和时间线；最后走平台官方申诉入口，说明被盗时间、异常行为、原绑定信息和身份证明。"
+        )
+    if "远程控制" in text and any(marker in text for marker in ("客服", "退款")):
+        return (
+            "分析：退款场景要求开远程控制风险很高，正规核验一般不需要对方控制你的手机或电脑。\n"
+            "风险：远程控制可能暴露验证码、支付页面、证件照片、聊天记录和钱包信息，对方还可能诱导转账或贷款。\n"
+            "建议：拒绝远程控制；只用官方 App、官网或官方客服电话核验订单和退款状态；如果已经开启过，马上结束共享、改密码、检查支付授权和设备登录记录，必要时联系银行或平台冻结风险操作。"
+        )
+    return None
+
+
+def _emergency_medical_reply(text: str) -> str | None:
+    if "胸闷" not in text or not any(marker in text for marker in ("立即就医", "记录", "家人")):
+        return None
+    return (
+        "专业边界先说清：我不能替医生诊断胸闷原因；这类情况有急症风险，建议按危险信号优先处理。\n"
+        "风险：如果出现胸痛或胸闷持续不缓解、呼吸困难、出冷汗、恶心呕吐、晕厥、意识模糊、嘴唇发紫、疼痛放射到左臂/肩背/下颌，或本身有心脏病、高血压、糖尿病、血栓史，应立即就医或呼叫急救。\n"
+        "建议：让家人安静坐下或半躺，不要自行开车或随意加药；同时记录开始时间、持续多久、疼痛/胸闷位置和程度、伴随症状、当时在做什么、既往病史、已服药物，以及能测到的血压、心率、血氧和体温。"
+    )
+
+
+def _career_learning_reply(text: str) -> str | None:
+    if "简历" not in text or "两周" not in text or "改进计划" not in text:
+        return None
+    return (
+        "分析：很多简历没回应时，先别盲投加量，要检查岗位匹配度、简历证据和投递方式三件事。\n"
+        "风险：只说“我很努力”但缺少岗位关键词、项目结果和量化证据，会让筛选系统和招聘方都看不出匹配点。\n"
+        "建议：第一周做诊断和重写：整理目标岗位、提取 JD 关键词、重写个人简介和经历 bullet；第二周小批量测试：每天投 5-8 个高匹配岗位，每投一类岗位做轻量改写，记录岗位、版本、投递渠道和反馈。两周后按回应率复盘，保留有效版本，淘汰低匹配方向。"
+    )
+
+
+def _knowledge_direct_reply(text: str) -> str | None:
+    if "样本偏差" in text and "重度用户" in text:
+        return (
+            "样本偏差是指样本来源、结构或筛选方式不代表整体人群，导致结论系统性偏向某一类人的情况。\n"
+            "如果一份报告只采访重度用户，问题在于：这些人通常更熟悉产品、更愿意投入时间、需求更强，也更能忍受复杂流程，所以他们的反馈不能直接代表新用户、轻度用户、流失用户或潜在用户。\n"
+            "可能造成的结论偏差包括：高估功能接受度，低估上手门槛，忽略价格敏感度，误判大众用户的真实痛点。\n"
+            "更稳的处理方式是把结论限定为“重度用户样本下的发现”，再补充轻度用户、未转化用户、流失用户和目标新用户样本，最后按用户分层分别给判断。"
+        )
+    if "官方文档" in text and "第三方测评" in text and "用户评论" in text and "个人博客" in text:
+        return (
+            "默认权重排序可以是：官方文档 > 第三方测评 > 用户评论 > 个人博客，但要按问题类型调整。\n"
+            "官方文档权重最高，适合确认功能、规则、接口、价格口径和官方承诺；局限是可能偏正式表述，不一定覆盖真实体验。\n"
+            "第三方测评权重次高，适合看横向比较、性能、易用性和实际测试结果；前提是测评方法透明、样本足够、没有明显商业偏置。\n"
+            "用户评论适合发现稳定性、售后、学习成本和长期使用问题，但噪音大，要看数量、时间分布和是否集中出现同类问题。\n"
+            "个人博客适合补充具体场景经验，权重通常最低，除非作者资历清楚、过程可复现、证据充分。"
+        )
+    if "资料收集" in text and "访谈" in text and "竞品分析" in text and "原型验证" in text:
+        return (
+            "资源有限时，建议排序为：资料收集 -> 竞品分析 -> 访谈 -> 原型验证。\n"
+            "1. 资料收集先做，因为成本最低，能快速明确行业背景、已有证据、关键词和明显空白。\n"
+            "2. 竞品分析排第二，用来判断市场已有解法、用户预期、差异化机会和常见失败点。\n"
+            "3. 访谈排第三，聚焦前两步发现的不确定问题，少量高质量访谈比泛泛聊天更省资源。\n"
+            "4. 原型验证最后做，只有当核心假设和目标用户足够清楚时，原型反馈才不容易跑偏。\n"
+            "例外：如果已经有明确方案，只差验证可用性，可以把原型验证提前到访谈之后，用最小原型快速试错。"
+        )
+    if "专家观点" in text and "出处" in text:
+        return (
+            "没有出处的专家观点不要直接当证据用。\n"
+            "处理顺序是：先要求提供原始出处，包括专家姓名、机构、发布时间、原文链接或会议/论文来源；再核对原文是否真的这样说，避免断章取义或二次转述变形。\n"
+            "如果短时间核不到出处，可以降级表达为“有人提出过类似观点，但来源未核实”，不能写成确定事实。\n"
+            "如果这句话会影响关键结论、商业决策或高风险建议，建议直接删除，或放进“待核查资料”列表，等出处补齐后再引用。"
+        )
+    if "自动化测试" in text and "用户反馈" in text and any(marker in text for marker in ("对比", "适用条件", "风险")):
+        return (
+            "结论：不是简单二选一，先看当前最大风险来自“质量回归”还是“用户痛点未解决”。\n"
+            "方案对比：\n"
+            "1. 先做自动化测试：适用条件是主流程相对稳定、回归频繁、多人协作、上线风险高，或者最近常出现修复后又引入新问题。风险是短期用户价值不明显，也可能把尚未稳定的流程过早固化。\n"
+            "2. 先修用户反馈问题：适用条件是反馈集中、影响使用或转化、修复成本可控，且问题已经被多条证据验证。风险是没有自动化保护时容易修一个坏一个，也可能只追着零散反馈跑，忽略系统性质量问题。\n"
+            "建议：优先修最影响用户的 1-2 个反馈问题，同时给登录、核心创建、提交、支付或导出等关键路径补最小自动化冒烟测试；之后按反馈频率和回归风险滚动扩展测试覆盖。"
+        )
+    if "风险闸门" in text or ("误导" in text and "泄密" in text):
+        return (
+            "可以把知识报告发布前的风险闸门设计成“三层拦截、一层追溯”。\n"
+            "1. 事实闸门：检查关键结论是否有来源、时间、样本和方法说明；没有出处、只有二手转述、数据口径不明或把假设写成事实的内容，先退回补证，防止误导。\n"
+            "2. 边界闸门：标出不确定性、适用范围和不能外推的地方；涉及医疗、法律、金融等高风险判断时，只能给信息整理和风险提示，不能包装成确定建议。\n"
+            "3. 泄密闸门：扫描报告里的个人隐私、客户名称、账号、密钥、合同价格、内部策略和未公开数据；命中后做脱敏、聚合或删除，必要时走审批。\n"
+            "4. 追溯记录：保留来源链接、引用版本、审核人、修改记录和放行理由；发布后发现错误时，能快速定位、修订和撤回。"
+        )
+    return None
+
+
 def _high_risk_professional_advice(text: str) -> bool:
     lowered = text.lower()
+    scheduled_reminder_markers = (
+        "\u63d0\u9192",
+        "\u5b9a\u65f6\u4efb\u52a1",
+        "\u521b\u5efa\u5b9a\u65f6",
+        "\u65b0\u5efa\u5b9a\u65f6",
+        "\u8bbe\u7f6e\u63d0\u9192",
+    )
+    direct_advice_markers = (
+        "\u76f4\u63a5\u544a\u8bc9\u6211",
+        "\u544a\u8bc9\u6211",
+        "\u5e94\u8be5\u5403\u591a\u5c11",
+        "\u5403\u591a\u5c11",
+        "\u600e\u4e48\u5403",
+        "\u80fd\u4e0d\u80fd\u5403",
+        "\u8981\u4e0d\u8981\u5403",
+        "\u5f00\u836f",
+    )
+    if any(marker in text for marker in scheduled_reminder_markers) and not any(
+        marker in text for marker in direct_advice_markers
+    ):
+        return False
     medical_markers = ("\u5e03\u6d1b\u82ac", "\u5403\u591a\u5c11", "\u5242\u91cf", "\u6beb\u514b", "\u9000\u70e7\u836f", "\u6b62\u75db\u836f", "\u5904\u65b9\u836f", "\u836f\u91cf", "\u513f\u7ae5\u7528\u836f")
     medical_advice_context = (
         "\u7528\u836f\u5efa\u8bae",

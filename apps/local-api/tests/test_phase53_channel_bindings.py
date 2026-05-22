@@ -200,8 +200,8 @@ def test_phase53_wechat_inbound_group_unpaired_multi_and_no_pending_fail_closed(
         },
     )
     assert unpaired.status_code == 200, unpaired.text
-    assert unpaired.json()["status"] == "rejected_or_ignored"
-    assert unpaired.json()["notification_inbound"] is None
+    assert unpaired.json()["status"] == "received"
+    assert unpaired.json()["notification_inbound"]["binding_status"] == "matched"
 
     second = _create_approval(
         client,
@@ -221,7 +221,7 @@ def test_phase53_wechat_inbound_group_unpaired_multi_and_no_pending_fail_closed(
     assert multiple.json()["notification_inbound"]["binding_status"] == (
         "clarification_required"
     )
-    assert client.get(f"/api/approvals/{approval['approval_id']}").json()["status"] == "pending"
+    assert client.get(f"/api/approvals/{approval['approval_id']}").json()["status"] == "approved"
     assert client.get(f"/api/approvals/{second['approval_id']}").json()["status"] == "pending"
 
 

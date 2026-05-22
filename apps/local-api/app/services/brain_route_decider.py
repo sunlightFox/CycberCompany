@@ -192,7 +192,9 @@ def intent_decision(
         primary = "complex_dialogue"
         secondary.append("make_plan")
         rule_hits.append("complex_dialogue_keyword")
-    elif clean.endswith("?") or clean.endswith("？") or any(word in lowered for word in ["什么", "为什么", "how", "why"]):
+    elif clean.endswith("?") or clean.endswith("？") or any(
+        word in lowered for word in ["什么", "为什么", "哪些", "什么情况下", "how", "why"]
+    ):
         primary = "simple_question"
         rule_hits.append("question")
 

@@ -4,6 +4,7 @@ import importlib.util
 from typing import Any, cast
 
 import pytest
+from app.services.office_tools import _parse_office_model_result
 from app.services.registry import ServiceRegistry
 from fastapi.testclient import TestClient
 
@@ -57,6 +58,17 @@ def test_phase56_office_tool_requires_task(client: TestClient) -> None:
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "TOOL_PERMISSION_DENIED"
+
+
+def test_phase56_office_model_result_accepts_prefixed_or_extra_json() -> None:
+    assert _parse_office_model_result('{"title":"A","summary":"B"}\n{"ignored":true}') == {
+        "title": "A",
+        "summary": "B",
+    }
+    assert _parse_office_model_result('说明：{"title":"A","summary":"B"}') == {
+        "title": "A",
+        "summary": "B",
+    }
 
 
 @pytest.mark.skipif(

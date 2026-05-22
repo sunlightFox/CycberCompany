@@ -147,7 +147,7 @@ class BrainService:
         if request.api_key:
             api_key_ref = fields.get("api_key_ref") or existing.get("api_key_ref")
             now_for_secret = utc_now_iso()
-            if api_key_ref:
+            if api_key_ref and not _is_external_secret_ref(str(api_key_ref)):
                 storage_uri = self._secrets.rotate_secret(str(api_key_ref), request.api_key)
             else:
                 api_key_ref, storage_uri = self._secrets.put_secret(request.api_key)
@@ -499,3 +499,7 @@ def _protocol_candidates(brain: dict[str, object]) -> list[dict[str, object]]:
         if family in {"responses", "chat_completions"} and family not in ordered:
             ordered.append(str(family))
     return [candidate(family) for family in ordered] or [candidate("chat_completions")]
+
+
+def _is_external_secret_ref(secret_ref: str) -> bool:
+    return secret_ref.startswith(("env://", "codex-auth://"))

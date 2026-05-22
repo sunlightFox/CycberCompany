@@ -946,22 +946,29 @@ class FeishuOpenPlatformConnector:
         event: dict[str, Any],
         attachment: dict[str, Any],
     ) -> bytes:
-        del event
         file_key = str(attachment.get("file_key") or attachment.get("media_id") or "")
         if not file_key:
             inline = attachment.get("content_bytes")
             if isinstance(inline, bytes):
                 return inline
             return str(attachment.get("content_text") or "").encode("utf-8")
+        message_id = str(attachment.get("message_id") or _message_id_from_event(event) or "")
         token = await self._tenant_access_token(provider_state)
         import httpx
 
         async with httpx.AsyncClient(timeout=float(self._config.timeout_seconds or 10.0)) as client:
-            response = await client.get(
-                f"{self._base_url}/open-apis/im/v1/messages/{file_key}/resources",
-                headers={"Authorization": f"Bearer {token}"},
-                params={"type": attachment.get("type") or attachment.get("file_type") or "file"},
-            )
+            if message_id:
+                response = await client.get(
+                    f"{self._base_url}/open-apis/im/v1/messages/{message_id}/resources/{file_key}",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params={"type": attachment.get("type") or attachment.get("file_type") or "file"},
+                )
+            else:
+                response = await client.get(
+                    f"{self._base_url}/open-apis/im/v1/messages/{file_key}/resources",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params={"type": attachment.get("type") or attachment.get("file_type") or "file"},
+                )
             if response.status_code == 404:
                 return b""
             response.raise_for_status()
@@ -2254,6 +2261,17 @@ def _feishu_receive_id_type(recipient: str) -> str:
     if recipient.startswith("on_"):
         return "union_id"
     return "chat_id"
+
+
+def _message_id_from_event(event: dict[str, Any]) -> str | None:
+    raw_event = event.get("event") if isinstance(event.get("event"), dict) else event
+    message = raw_event.get("message") if isinstance(raw_event.get("message"), dict) else {}
+    if not message and isinstance(raw_event.get("raw_event"), dict):
+        nested = raw_event["raw_event"].get("event")
+        if isinstance(nested, dict) and isinstance(nested.get("message"), dict):
+            message = nested["message"]
+    value = message.get("message_id") or raw_event.get("message_id") or event.get("message_id")
+    return str(value) if value else None
 
 
 def _feishu_retryable(code: int) -> bool:

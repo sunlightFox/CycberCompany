@@ -29,6 +29,16 @@ _STATUS_MARKERS: tuple[str, ...] = (
     "还没真正执行",
     "不要说已完成",
 )
+_STATUS_MARKERS = (
+    *_STATUS_MARKERS,
+    "没做完",
+    "没完成",
+    "没有做完",
+    "没有完成",
+    "还没做完",
+    "还没完成",
+)
+
 _BOUNDARY_MARKERS: tuple[str, ...] = (
     "忽略规则",
     "应该怎么处理这类边界",

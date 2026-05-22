@@ -4,6 +4,10 @@ from typing import cast
 
 import anyio
 from app.services.bootstrap import (
+    DEFAULT_BRAIN_ID,
+    DEFAULT_CODEX_DISPLAY_NAME,
+    DEFAULT_CODEX_MODEL,
+    DEFAULT_CODEX_TEXT_VERBOSITY,
     DEFAULT_MEMBER_VOICE_IDS,
     DEFAULT_ORGANIZATION_ID,
     DIRECT_MEMBER_SEEDS,
@@ -16,6 +20,7 @@ def test_boot_001_first_start_creates_default_foundation(client: TestClient) -> 
     health = client.get("/health")
     organization = client.get("/api/organization/current")
     members = client.get("/api/members")
+    brains = client.get("/api/brains")
     conversations = client.get("/api/chat/conversations")
 
     assert health.status_code == 200
@@ -24,6 +29,27 @@ def test_boot_001_first_start_creates_default_foundation(client: TestClient) -> 
     assert organization.status_code == 200
     assert organization.json()["display_name"] == "我的一人公司"
     assert members.status_code == 200
+    assert brains.status_code == 200
+    brain_by_id = {item["brain_id"]: item for item in brains.json()["items"]}
+    default_brain = brain_by_id[DEFAULT_BRAIN_ID]
+    assert default_brain["display_name"] == DEFAULT_CODEX_DISPLAY_NAME
+    assert default_brain["provider"] in {"openai", "openai_compatible"}
+    assert default_brain["endpoint"]
+    assert default_brain["model_name"] == DEFAULT_CODEX_MODEL
+    assert default_brain["status"] in {"configured", "needs_configuration"}
+    assert default_brain["is_local"] is False
+    assert default_brain["allow_cloud"] is True
+    assert default_brain["protocol_family"] == "responses"
+    assert default_brain["request_format"] == "responses"
+    assert default_brain["response_format"] == "openai_responses"
+    assert default_brain["context_window"] == 400000
+    assert default_brain["privacy_policy"]["reasoning_effort"] in {
+        "minimal",
+        "low",
+        "medium",
+        "high",
+    }
+    assert default_brain["privacy_policy"]["text_verbosity"] == DEFAULT_CODEX_TEXT_VERBOSITY
     member_items = members.json()["items"]
     assert len(member_items) == 11
     member_by_id = {item["member_id"]: item for item in member_items}

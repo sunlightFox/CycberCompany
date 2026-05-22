@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from app.schemas.chat_quality import (
     ActionDialogueFacts,
     ConversationUnderstanding,
@@ -151,6 +150,70 @@ def test_action_dialogue_pending_approval_never_claims_done() -> None:
     assert decision.visible_failure_strategy == "boundary_helpful"
 
 
+def test_action_dialogue_scheduled_task_reply_is_natural_and_non_technical() -> None:
+    decision = ActionDialogueMapperService().map(
+        ActionDialogueFacts(
+            domain="scheduled_task",
+            visible_goal="帮我创建一个定时任务，每天 09:00 提醒我整理今天待办。",
+            route_semantics={"route": "scheduled_task"},
+            task_status={
+                "status": "completed_with_evidence",
+                "schedule": {"type": "daily", "time": "09:00", "timezone": "Asia/Shanghai"},
+            },
+            task_created=True,
+        )
+    )
+
+    assert decision.action_status == "scheduled_created"
+    assert decision.visible_text == "好，以后每天早上 9 点提醒你整理今天待办。"
+    assert "调度方式" not in decision.visible_text
+    assert "下一次执行时间" not in decision.visible_text
+    assert "Asia/Shanghai" not in decision.visible_text
+
+
+def test_action_dialogue_scheduled_payment_reply_only_sets_reminder_boundary() -> None:
+    decision = ActionDialogueMapperService().map(
+        ActionDialogueFacts(
+            domain="scheduled_task",
+            visible_goal="明天下午 3 点提醒我给供应商付款 5000 元",
+            route_semantics={"route": "scheduled_task"},
+            task_status={
+                "status": "completed_with_evidence",
+                "schedule": {
+                    "type": "once",
+                    "run_at": "2026-05-23T15:00:00+08:00",
+                    "timezone": "Asia/Shanghai",
+                },
+            },
+            task_created=True,
+        )
+    )
+
+    assert decision.visible_text == "好，明天下午 3 点提醒你给供应商付款 5000 元。这个我只提醒，不会自动付款。"
+    assert decision.requires_user_confirmation is True
+    assert "高风险动作" not in decision.visible_text
+    assert "后台流程" not in decision.visible_text
+
+
+def test_action_dialogue_scheduled_english_prefix_is_removed() -> None:
+    decision = ActionDialogueMapperService().map(
+        ActionDialogueFacts(
+            domain="scheduled_task",
+            visible_goal="Create a scheduled reminder: 每天 06:40 提醒我 stretch and drink water.",
+            route_semantics={"route": "scheduled_task"},
+            task_status={
+                "status": "completed_with_evidence",
+                "schedule": {"type": "daily", "time": "06:40", "timezone": "Asia/Shanghai"},
+            },
+            task_created=True,
+        )
+    )
+
+    assert decision.visible_text == "好，以后每天早上 6:40 提醒你 stretch and drink water。"
+    assert "Create a scheduled reminder" not in decision.visible_text
+    assert "06:40 提醒我" not in decision.visible_text
+
+
 def test_presence_state_does_not_treat_commitments_as_completed_action() -> None:
     understanding = ConversationUnderstanding(
         conversation_mode="deep_talk",
@@ -269,6 +332,44 @@ def test_session_context_keeps_identity_and_profile_blocks() -> None:
     assert "不是现实真人" in context.stable_identity_block
     assert "risk_then_conclusion" in context.stable_user_profile_block
     assert "继续往下推一步" in context.current_open_loops
+
+
+def test_session_context_keeps_roleplay_contract_beyond_recent_tail() -> None:
+    understanding = ConversationUnderstanding(
+        conversation_mode="deep_talk",
+        user_goal="继续角色聊天",
+        relationship_expectation="companionship",
+        current_turn_priority="reply_first",
+        emotional_state="neutral",
+    )
+    presence = PresenceStateResolverService().resolve(
+        PresenceStateRequest(
+            turn_id="turn_roleplay",
+            conversation_id="conv_1",
+            member_id="mem_xiaowu",
+            user_text="沿用角色提醒我今晚最该做的两件事。",
+            understanding=understanding,
+        )
+    )
+
+    context = SessionContextCuratorService().curate(
+        presence_state=presence,
+        user_profile={},
+        latest_continuity={},
+        recent_messages=[
+            {"author_type": "user", "content_text": "角色扮演开始：接下来你要扮演可靠姐姐和我聊天。请自然带出「别硬撑」或明显身份词。"},
+            {"author_type": "assistant", "content_text": "姐姐在。"},
+            {"author_type": "user", "content_text": "我不想听大道理。"},
+            {"author_type": "assistant", "content_text": "先稳住。"},
+            {"author_type": "user", "content_text": "明天早上有重要安排。"},
+            {"author_type": "assistant", "content_text": "先准备东西。"},
+        ],
+        memory_candidates=[],
+    )
+
+    serialized = "\n".join(str(item.get("content_text") or "") for item in context.relevant_recent_messages)
+    assert "别硬撑" in serialized
+    assert len(context.relevant_recent_messages) == 5
 
 
 @pytest.mark.asyncio

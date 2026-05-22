@@ -33,6 +33,26 @@ class ChatTurnFinalizeService:
         response_plan: ResponsePlan | None = None,
         clarification_decision: ClarificationDecision | None = None,
     ) -> AsyncIterator[ChatEvent]:
+        if getattr(facade, "_turn_requires_model_evidence", lambda _turn: False)(turn):
+            async for event in facade._ensure_required_model_evidence(
+                turn,
+                events,
+                text,
+                root_span_id,
+            ):
+                yield event
+        if hasattr(facade, "_append_channel_attachment_fact_footer"):
+            text, _attachment_evidence = await facade._append_channel_attachment_fact_footer(turn, text)
+        if hasattr(facade, "_finalize_without_model_visible_text"):
+            text = await facade._finalize_without_model_visible_text(
+                turn,
+                events,
+                text,
+                root_span_id,
+                intent=intent,
+                mode=mode,
+                response_plan=response_plan,
+            )
         text = facade._style_visible_text(turn, text, response_plan=response_plan)
         text, response_filter = facade._response_coordinator.filter_text(text)
         yield await facade._emit_and_record(

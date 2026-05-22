@@ -336,10 +336,10 @@ def plain_next_step_text(pending: list[dict[str, Any]]) -> str:
 
 def no_pending_text(text: str) -> str:
     if _is_deny(text):
-        return "现在没有等待你确认的动作，所以我不会把这句话当成拒绝执行；也不会执行任何新的操作。"
+        return "现在没有等待你确认的动作，所以我不会把这句话当成拒绝执行；也不会继续任何操作，也没有完成结果或记录。"
     if _is_edit(text):
         return "现在没有等待你确认的动作，所以我还不知道要改哪一步。"
-    return "现在没有等待你确认的动作，所以我不会把这句话直接当成执行口令。"
+    return "现在没有等待你确认的动作，所以我不会把这句话直接当成执行口令；不会继续处理，也没有完成任何操作、结果或记录。"
 
 
 def ambiguous_pending_text(pending: list[dict[str, Any]]) -> str:

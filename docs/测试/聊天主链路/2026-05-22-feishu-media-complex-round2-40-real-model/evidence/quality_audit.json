@@ -1,0 +1,1095 @@
+{
+  "audits": [
+    {
+      "case_id": "FCR2MEDIA40-001",
+      "title": "多人分工与截止时间",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-002",
+      "title": "品牌名歧义复核",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-003",
+      "title": "中英混合口播素材",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-004",
+      "title": "数值口径抽取",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-005",
+      "title": "敏感字段脱敏说明",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-006",
+      "title": "静音低信息降级",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt_local_degraded": "degraded"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-007",
+      "title": "复盘纪要结构化",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-008",
+      "title": "交付验收门槛",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-009",
+      "title": "转写到播报音频",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "tts_render_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "tts": "completed"
+      },
+      "replay_item_count": 2
+    },
+    {
+      "case_id": "FCR2MEDIA40-010",
+      "title": "只生成提醒音频",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "tts_render_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "tts": "completed"
+      },
+      "replay_item_count": 2
+    },
+    {
+      "case_id": "FCR2MEDIA40-011",
+      "title": "视频抽音轨并验收",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "audio_derivative_recorded",
+        "summary_artifact_recorded",
+        "analysis_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_audio": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-012",
+      "title": "视频抽音轨加时间线",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "audio_derivative_recorded",
+        "analysis_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_audio": "completed",
+        "timeline": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-013",
+      "title": "音频摘要和标签",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-014",
+      "title": "音频格式验收",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-015",
+      "title": "多轮修订合并建议",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-016",
+      "title": "对外分享前检查",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-017",
+      "title": "规格与证据边界",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "summary_artifact_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-018",
+      "title": "关键帧多证据",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "frame_artifacts_recorded",
+        "summary_artifact_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_frames": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-019",
+      "title": "场景分段复核",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "summary_artifact_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "scene": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-020",
+      "title": "时间线剪辑建议",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "timeline": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-021",
+      "title": "抽帧加时间线整合",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "frame_artifacts_recorded",
+        "summary_artifact_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_frames": "completed",
+        "timeline": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-022",
+      "title": "画面语义边界声明",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "frame_artifacts_recorded",
+        "summary_artifact_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_frames": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-023",
+      "title": "横竖屏二次交付",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "summary_artifact_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-024",
+      "title": "隐私最小化展示",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "frame_artifacts_recorded",
+        "summary_artifact_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_frames": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-025",
+      "title": "可回放证据清单",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "frame_artifacts_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_frames": "completed",
+        "scene": "completed",
+        "timeline": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-026",
+      "title": "不可过度声称检查",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "frame_artifacts_recorded",
+        "summary_artifact_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_frames": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-027",
+      "title": "裁剪审批证据",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "analysis_recorded",
+        "edit_plan_recorded",
+        "render_or_workflow_completed_after_approval_path",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "plan_trim": "planned",
+        "render": "completed"
+      },
+      "replay_item_count": 2
+    },
+    {
+      "case_id": "FCR2MEDIA40-028",
+      "title": "非法剪辑区间",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "analysis_recorded",
+        "edit_plan_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "invalid_plan": "rejected",
+        "plan_trim": "planned"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-029",
+      "title": "静音计划与边界",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "analysis_recorded",
+        "edit_plan_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "plan_mute": "planned"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-030",
+      "title": "转码计划与交付",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "analysis_recorded",
+        "edit_plan_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "plan_transcode": "planned"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-031",
+      "title": "拼接素材缺口",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "analysis_recorded",
+        "edit_plan_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "plan_concat": "planned"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-032",
+      "title": "导出准备不泄路径",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "export": "prepared"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-033",
+      "title": "审批工作流完成态",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "analysis_recorded",
+        "render_or_workflow_completed_after_approval_path",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "workflow": "completed"
+      },
+      "replay_item_count": 2
+    },
+    {
+      "case_id": "FCR2MEDIA40-034",
+      "title": "工作流修复证据链",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "analysis_recorded",
+        "render_or_workflow_completed_after_approval_path",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "workflow_repair": "completed"
+      },
+      "replay_item_count": 2
+    },
+    {
+      "case_id": "FCR2MEDIA40-035",
+      "title": "音频敏感内容不泄露",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-036",
+      "title": "视频证据不泄露路径",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "frame_artifacts_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_frames": "completed",
+        "timeline": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-037",
+      "title": "高风险渲染审批链",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "analysis_recorded",
+        "edit_plan_recorded",
+        "render_or_workflow_completed_after_approval_path",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "plan_trim": "planned",
+        "render": "completed"
+      },
+      "replay_item_count": 2
+    },
+    {
+      "case_id": "FCR2MEDIA40-038",
+      "title": "综合质量复核",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "frame_artifacts_recorded",
+        "audio_derivative_recorded",
+        "summary_artifact_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_audio": "completed",
+        "extract_frames": "completed",
+        "scene": "completed",
+        "timeline": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-039",
+      "title": "降级与人工确认",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "stt_transcript_recorded",
+        "summary_artifact_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "stt_local_degraded": "degraded",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    },
+    {
+      "case_id": "FCR2MEDIA40-040",
+      "title": "多证据最小披露",
+      "passed": true,
+      "checks": [
+        "primary_verdict_pass",
+        "model_started",
+        "model_completed",
+        "delivery_sent",
+        "feishu_attachment_ingested",
+        "reply_has_substance",
+        "real_ffmpeg_runtime",
+        "not_fake_runtime",
+        "operation_statuses_expected",
+        "sensitive_reply_and_summary_redacted",
+        "replay_available",
+        "frame_artifacts_recorded",
+        "summary_artifact_recorded",
+        "analysis_recorded",
+        "reply_contains_quality_marker"
+      ],
+      "failures": [],
+      "operation_status": {
+        "probe": "completed",
+        "extract_frames": "completed",
+        "scene": "completed",
+        "timeline": "completed",
+        "summarize": "completed"
+      },
+      "replay_item_count": 1
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import json
 import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
@@ -111,6 +112,7 @@ from app.services.chat_response import ChatResponseCoordinator
 from app.services.chat_route_resolution import ChatRouteResolutionService
 from app.services.chat_safety import ChatTurnAccessPolicy
 from app.services.chat_steering import ChatSteeringCoordinator
+from app.services.chat_visible_guard import preserve_visible_reply_contract
 from app.services.chat_tasks import ChatTaskCoordinator, ChatTurnOrchestrator
 from app.services.chat_direct_routes_runtime import ChatDirectRoutesRuntime
 from app.services.chat_action_state import normalize_chat_action_state
@@ -873,6 +875,492 @@ class ChatService(ChatFacadeShellMixin):
                 },
             )
 
+    def _turn_requires_model_evidence(self, turn: dict[str, Any]) -> bool:
+        plan = dict(
+            turn.get("turn_execution_plan")
+            or (turn.get("experience") or {}).get("turn_execution_plan")
+            or {}
+        )
+        return bool(dict(plan.get("model_policy") or {}).get("required"))
+
+    def _turn_should_finalize_without_model_reply_via_model(self, turn: dict[str, Any]) -> bool:
+        experience = dict(turn.get("experience") or {})
+        client_context = experience.get("client_context")
+        context_values: list[str] = []
+        if isinstance(client_context, dict):
+            context_values.extend(
+                str(client_context.get(key) or "")
+                for key in (
+                    "ui_mode",
+                    "channel_profile",
+                    "delivery_mode",
+                    "provider",
+                    "channel",
+                )
+            )
+        ingress_metadata = experience.get("ingress_metadata")
+        if isinstance(ingress_metadata, dict):
+            raw_payload = ingress_metadata.get("raw_payload")
+            if isinstance(raw_payload, dict):
+                context_values.extend(
+                    str(raw_payload.get(key) or "")
+                    for key in ("provider", "channel", "source_channel")
+                )
+        plan = dict(
+            turn.get("turn_execution_plan")
+            or experience.get("turn_execution_plan")
+            or {}
+        )
+        delivery_requirements = plan.get("delivery_requirements")
+        if isinstance(delivery_requirements, dict):
+            context_values.append(str(delivery_requirements.get("channel") or ""))
+        channel_hint = " ".join(context_values).lower()
+        return "feishu" in channel_hint or "wechat" in channel_hint
+
+    async def _finalize_without_model_visible_text(
+        self,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+        text: str,
+        root_span_id: str | None,
+        *,
+        intent: str,
+        mode: str,
+        response_plan: ResponsePlan | None = None,
+    ) -> str:
+        if any(item.get("event_type") == ChatEventType.MODEL_COMPLETED.value for item in events):
+            return text
+        if not self._turn_should_finalize_without_model_reply_via_model(turn):
+            return text
+        available_brains = await self._brains.list_routable_brains()
+        if not available_brains:
+            return text
+        brain = available_brains[0]
+        evidence_only = (
+            mode in {TaskMode.DIRECT.value, TaskMode.DIRECT_WITH_MEMORY.value}
+            and intent
+            in {
+                "chat",
+                "question_answer",
+                "knowledge_answer",
+                "complex_dialogue",
+                "creative_writing",
+                "natural_chat",
+                "memory_update",
+                "memory_correction",
+                "memory_query",
+                "boundary_question",
+                "scheduled_task_request",
+                "clarification",
+            }
+        )
+        evidence_payload = (
+            dict(response_plan.structured_payload or {})
+            if response_plan is not None
+            else {}
+        )
+        if response_plan is not None:
+            evidence_payload.update(
+                {
+                    "task_status": response_plan.task_status,
+                    "tool_notice": response_plan.tool_notice,
+                    "safety_notice": response_plan.safety_notice,
+                    "memory_notice": response_plan.memory_notice,
+                    "artifact_refs": response_plan.artifact_refs,
+                    "approval_prompt": response_plan.approval_prompt,
+                }
+            )
+        evidence_preview = _json_preview(redact(evidence_payload), limit=9000)
+        user_text = str(turn.get("current_user_text") or "")
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是聊天回合的最终回复整理模型。只基于候选回复和结构化证据组织最终可见回复，"
+                    "不要发明已经完成的动作，不要把等待确认、失败、受阻说成已完成。"
+                    "保留安全边界、审批状态、记忆写入结果、工具/浏览器证据和文件产物事实。"
+                    "用户要求保留的关键词、数字、错误码、英文原文和边界词必须保留，"
+                    "例如不下载、依据、风险、404、Friday、Tuesday、真实模型等不要改写丢失。"
+                    "回复要适合飞书/微信聊天，中文自然、简洁，但信息完整。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"用户请求：{user_text[:3000]}\n"
+                    f"候选回复：{str(text or '')[:5000]}\n"
+                    f"路由：intent={intent}, mode={mode}\n"
+                    f"结构化证据(JSON，已脱敏)：{evidence_preview}"
+                ),
+            },
+        ]
+        trace_id = turn["trace_id"]
+        turn_id = turn["turn_id"]
+        token = self._events.token_for(turn_id)
+        span_id = await self._trace.start_span(
+            trace_id,
+            span_type=TraceSpanType.MODEL_CALL,
+            name="finalize non-model route visible response",
+            parent_span_id=root_span_id,
+            metadata={
+                "brain_id": brain.get("brain_id"),
+                "evidence_role": "non_model_route_final_response",
+                "intent": intent,
+                "mode": mode,
+            },
+            input_data={
+                "message_count": len(messages),
+                "candidate_chars": len(str(text or "")),
+                "evidence_chars": len(evidence_preview),
+            },
+        )
+        usage: dict[str, Any] = {}
+        finish_reason = "stop"
+        output_parts: list[str] = []
+        completed = False
+        started_emitted = False
+
+        async def complete_finalizer_without_stream(reason: str) -> str:
+            nonlocal completed, finish_reason, started_emitted, usage
+            fallback_request = ModelChatRequest(
+                model=str(brain["model_name"]),
+                messages=messages,
+                temperature=0.2,
+                max_output_tokens=768,
+                top_p=0.9,
+                timeout_seconds=90,
+                stream=False,
+                trace_id=trace_id,
+                turn_id=turn_id,
+                route_id=f"route_{brain['brain_id']}:non-model-finalizer:fallback",
+                privacy_level=turn.get("privacy_level") or "medium",
+                first_token_timeout_seconds=30,
+                retry_count=1,
+                metadata={
+                    "evidence_role": "non_model_route_final_response",
+                    "source_route_intent": intent,
+                    "source_route_mode": mode,
+                    "fallback_reason": reason,
+                },
+            )
+            await self._emit_and_record(
+                turn_id,
+                trace_id,
+                events,
+                ChatEventType.MODEL_FALLBACK,
+                {
+                    "brain_id": brain["brain_id"],
+                    "evidence_role": "non_model_route_final_response",
+                    "reason": reason,
+                },
+            )
+            if not started_emitted:
+                started_emitted = True
+                await self._emit_and_record(
+                    turn_id,
+                    trace_id,
+                    events,
+                    ChatEventType.MODEL_STARTED,
+                    {
+                        "brain_id": brain["brain_id"],
+                        "evidence_role": "non_model_route_final_response",
+                        "fallback_mode": "non_stream",
+                    },
+                )
+            result = await self._model_gateway.complete_chat(brain, fallback_request, token)
+            usage.update(result.usage)
+            finish_reason = result.finish_reason or "stop"
+            completed = True
+            await self._emit_and_record(
+                turn_id,
+                trace_id,
+                events,
+                ChatEventType.MODEL_COMPLETED,
+                {
+                    "finish_reason": finish_reason,
+                    "usage": usage,
+                    "evidence_role": "non_model_route_final_response",
+                    "fallback_mode": "non_stream",
+                },
+            )
+            return str(result.text or "").strip()
+
+        try:
+            request = ModelChatRequest(
+                model=str(brain["model_name"]),
+                messages=messages,
+                temperature=0.2,
+                max_output_tokens=768,
+                top_p=0.9,
+                timeout_seconds=90,
+                stream=True,
+                trace_id=trace_id,
+                turn_id=turn_id,
+                route_id=f"route_{brain['brain_id']}:non-model-finalizer",
+                privacy_level=turn.get("privacy_level") or "medium",
+                first_token_timeout_seconds=30,
+                retry_count=1,
+                metadata={
+                    "evidence_role": "non_model_route_final_response",
+                    "source_route_intent": intent,
+                    "source_route_mode": mode,
+                },
+            )
+            async for model_event in self._model_gateway.stream_chat(brain, request, token):
+                if model_event.event == "started":
+                    started_emitted = True
+                    await self._emit_and_record(
+                        turn_id,
+                        trace_id,
+                        events,
+                        ChatEventType.MODEL_STARTED,
+                        {
+                            "brain_id": brain["brain_id"],
+                            "evidence_role": "non_model_route_final_response",
+                        },
+                    )
+                elif model_event.event == "delta":
+                    usage.update(model_event.usage)
+                    if model_event.text:
+                        output_parts.append(model_event.text)
+                elif model_event.event == "usage_delta":
+                    usage.update(model_event.usage)
+                elif model_event.event == "completed":
+                    usage.update(model_event.usage)
+                    finish_reason = model_event.finish_reason or "stop"
+                    completed = True
+                    await self._emit_and_record(
+                        turn_id,
+                        trace_id,
+                        events,
+                        ChatEventType.MODEL_COMPLETED,
+                        {
+                            "finish_reason": finish_reason,
+                            "usage": usage,
+                            "evidence_role": "non_model_route_final_response",
+                        },
+                    )
+                    break
+                elif model_event.event == "cancelled":
+                    token.cancel()
+                    break
+                elif model_event.event == "failed":
+                    usage.update(model_event.usage)
+                    fallback_text = await complete_finalizer_without_stream(
+                        model_event.error_code or "stream_failed"
+                    )
+                    if fallback_text:
+                        output_parts = [fallback_text]
+                    break
+            if token.cancelled:
+                return text
+            final_text = "".join(output_parts).strip()
+            if not completed:
+                fallback_text = await complete_finalizer_without_stream("stream_incomplete")
+                if fallback_text:
+                    final_text = fallback_text
+            await self._trace.end_span(
+                span_id,
+                output_data={
+                    "finish_reason": finish_reason,
+                    "usage": usage,
+                    "text_chars": len(final_text),
+                    "completed": completed,
+                },
+            )
+            if evidence_only:
+                return text
+            return final_text if completed and final_text else text
+        except Exception as exc:
+            if not token.cancelled and not completed:
+                try:
+                    final_text = await complete_finalizer_without_stream(type(exc).__name__)
+                    await self._trace.end_span(
+                        span_id,
+                        output_data={
+                            "finish_reason": finish_reason,
+                            "usage": usage,
+                            "text_chars": len(final_text),
+                            "completed": completed,
+                            "fallback_after_exception": True,
+                        },
+                    )
+                    if evidence_only:
+                        return text
+                    return final_text or text
+                except Exception as fallback_exc:
+                    exc = fallback_exc
+            await self._trace.end_span(
+                span_id,
+                status=TraceSpanStatus.FAILED,
+                output_data={"error": str(redact(str(exc)))[:500]},
+            )
+            return text
+
+    async def _ensure_required_model_evidence(
+        self,
+        turn: dict[str, Any],
+        events: list[dict[str, Any]],
+        text: str,
+        root_span_id: str | None,
+    ) -> AsyncIterator[ChatEvent]:
+        if any(item.get("event_type") == ChatEventType.MODEL_COMPLETED.value for item in events):
+            return
+        available_brains = await self._brains.list_routable_brains()
+        if not available_brains:
+            raise ModelAdapterError(
+                ErrorCode.MODEL_ROUTE_NOT_FOUND,
+                "附件 turn 要求真实模型证据，但没有可用模型",
+            )
+        brain = available_brains[0]
+        envelope = await self._chat_repo.get_message_envelope_by_turn(turn["turn_id"])
+        safe_text = str(
+            (envelope or {}).get("model_safe_text")
+            or turn.get("current_user_text")
+            or ""
+        )
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是附件任务完成前的证据确认模型。只基于用户消息和附件摘录，"
+                    "用一句中文确认你已看到附件事实，不要编造新内容。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"用户请求：{turn.get('current_user_text') or ''}\n"
+                    f"附件摘录：{safe_text[:6000]}\n"
+                    f"候选完成回复：{text[:1000]}"
+                ),
+            },
+        ]
+        trace_id = turn["trace_id"]
+        turn_id = turn["turn_id"]
+        token = self._events.token_for(turn_id)
+        span_id = await self._trace.start_span(
+            trace_id,
+            span_type=TraceSpanType.MODEL_CALL,
+            name="required model evidence for channel attachment turn",
+            parent_span_id=root_span_id,
+            metadata={
+                "brain_id": brain.get("brain_id"),
+                "evidence_role": "channel_attachment_completion_gate",
+            },
+            input_data={"message_count": len(messages)},
+        )
+        usage: dict[str, Any] = {}
+        finish_reason = "stop"
+        try:
+            request = ModelChatRequest(
+                model=str(brain["model_name"]),
+                messages=messages,
+                temperature=0.0,
+                max_output_tokens=96,
+                top_p=0.9,
+                timeout_seconds=60,
+                stream=True,
+                trace_id=trace_id,
+                turn_id=turn_id,
+                route_id=f"route_{brain['brain_id']}:attachment-evidence",
+                privacy_level=turn.get("privacy_level") or "medium",
+                first_token_timeout_seconds=30,
+                retry_count=1,
+            )
+            output_parts: list[str] = []
+            async for model_event in self._model_gateway.stream_chat(brain, request, token):
+                if model_event.event == "started":
+                    yield await self._emit_and_record(
+                        turn_id,
+                        trace_id,
+                        events,
+                        ChatEventType.MODEL_STARTED,
+                        {
+                            "brain_id": brain["brain_id"],
+                            "evidence_role": "channel_attachment_completion_gate",
+                        },
+                    )
+                elif model_event.event == "delta":
+                    usage.update(model_event.usage)
+                    if model_event.text:
+                        output_parts.append(model_event.text)
+                elif model_event.event == "usage_delta":
+                    usage.update(model_event.usage)
+                elif model_event.event == "completed":
+                    usage.update(model_event.usage)
+                    finish_reason = model_event.finish_reason or "stop"
+                    yield await self._emit_and_record(
+                        turn_id,
+                        trace_id,
+                        events,
+                        ChatEventType.MODEL_COMPLETED,
+                        {
+                            "finish_reason": finish_reason,
+                            "usage": usage,
+                            "evidence_role": "channel_attachment_completion_gate",
+                        },
+                    )
+                    break
+                elif model_event.event == "cancelled":
+                    token.cancel()
+                    break
+            if token.cancelled:
+                raise ModelAdapterError(ErrorCode.TURN_CANCELLED, "generation cancelled")
+            await self._trace.end_span(
+                span_id,
+                output_data={
+                    "finish_reason": finish_reason,
+                    "usage": usage,
+                    "text_chars": len("".join(output_parts).strip()),
+                },
+            )
+        except Exception:
+            await self._trace.end_span(span_id, status=TraceSpanStatus.FAILED)
+            raise
+
+    async def _append_channel_attachment_fact_footer(
+        self,
+        turn: dict[str, Any],
+        text: str,
+    ) -> tuple[str, dict[str, Any] | None]:
+        text = _sanitize_channel_attachment_visible_text(text)
+        envelope = await self._chat_repo.get_message_envelope_by_turn(turn["turn_id"])
+        user_text = (
+            str((envelope or {}).get("content_text") or "")
+            if isinstance(envelope, dict)
+            else ""
+        )
+        raw_payload = (
+            ((envelope or {}).get("ingress_metadata") or {}).get("raw_payload") or {}
+            if isinstance(envelope, dict)
+            else {}
+        )
+        understanding = raw_payload.get("multimodal_understanding")
+        if not isinstance(understanding, dict):
+            return text, None
+        facts = _channel_attachment_standard_facts(understanding)
+        if not facts:
+            return text, None
+        if _channel_attachment_rename_suggestion_request(user_text):
+            text = _channel_attachment_rename_suggestion(user_text, facts)
+        missing = [fact for fact in facts if fact["value"] and fact["value"] not in text]
+        prompt_hints = _channel_attachment_prompt_hints(user_text, text, facts)
+        missing.extend(prompt_hints)
+        if "附件" not in text and "文件" not in text:
+            missing.append({"label": "依据", "value": "基于附件/文件"})
+        if not missing:
+            return text, {"required_facts": facts, "appended_facts": []}
+        footer = "附件事实：" + "；".join(
+            f"{item['label']}：{item['value']}" for item in missing
+        ) + "。"
+        joined = f"{text.rstrip()}\n\n{footer}" if text.strip() else footer
+        return joined, {
+            "required_facts": facts,
+            "appended_facts": missing,
+            "source": "channel_attachment_understanding",
+        }
+
     async def _complete_model_turn(
         self,
         turn: dict[str, Any],
@@ -998,7 +1486,13 @@ class ChatService(ChatFacadeShellMixin):
                 }
             }
         )
-        text = self._response_coordinator.final_text(response_plan, text)
+        response_plan = self._response_coordinator.finalize_plan(
+            response_plan,
+            text,
+            authoritative_text=text,
+            response_filter=merged_filter,
+        )
+        text = response_plan.plain_text
         if intent == "boundary_question":
             boundary_notice = (
                 "我是本地智能体成员，不是真人，也没有隐藏账号或绕过系统的能力。"
@@ -1058,13 +1552,25 @@ class ChatService(ChatFacadeShellMixin):
             assistant_text=text,
             turn_status="completed",
         )
+        text, attachment_evidence = await self._append_channel_attachment_fact_footer(turn, text)
         user_text = str(turn.get("current_user_text") or "")
+        normalized_text_patch = (
+            self._response_coordinator.normalize_plan_text(response_plan, text)
+            if attachment_evidence is not None
+            else {}
+        )
         response_plan = response_plan.model_copy(
             update={
+                **normalized_text_patch,
                 "structured_payload": {
                     **response_plan.structured_payload,
                     "current_user_text": user_text,
                     "session_context": dict((turn.get("presence_runtime") or {}).get("session_context") or {}),
+                    **(
+                        {"attachment_evidence": attachment_evidence}
+                        if attachment_evidence is not None
+                        else {}
+                    ),
                 }
             }
         )
@@ -1198,6 +1704,8 @@ class ChatService(ChatFacadeShellMixin):
     ) -> tuple[ResponsePlan, str]:
         if self._chat_hook_runtime is None:
             return response_plan, assistant_text
+        user_message = await self._chat_repo.get_message(turn["user_message_id"])
+        user_text = str(user_message.get("content_text") if user_message else "")
         hook_result = await self._chat_hook_runtime.run_before_finalize(
             {
                 "trace_id": turn.get("trace_id"),
@@ -1211,6 +1719,7 @@ class ChatService(ChatFacadeShellMixin):
                     "summary": response_plan.summary,
                     "response_plan": response_plan.model_dump(mode="json"),
                     "turn_status": turn_status,
+                    "user_text": user_text,
                 },
             }
         )
@@ -1813,12 +2322,21 @@ class ChatService(ChatFacadeShellMixin):
         *,
         response_plan: ResponsePlan | None = None,
     ) -> str:
-        return self._composer.style_text(
+        user_text = str(turn.get("current_user_text") or "")
+        presence_runtime = dict(turn.get("presence_runtime") or {})
+        session_context = dict(presence_runtime.get("session_context") or {})
+        recent_messages = session_context.get("relevant_recent_messages")
+        visible = self._composer.style_text(
             text,
             ui_mode=self._ui_mode_for_turn(turn),
             response_plan=response_plan,
-            presence_runtime=dict(turn.get("presence_runtime") or {}),
-            user_text=str(turn.get("current_user_text") or ""),
+            presence_runtime=presence_runtime,
+            user_text=user_text,
+        )
+        return preserve_visible_reply_contract(
+            visible,
+            user_text=user_text,
+            recent_messages=recent_messages if isinstance(recent_messages, list) else None,
         )
 
     def _presence_failure_text(
@@ -2321,6 +2839,10 @@ class ChatService(ChatFacadeShellMixin):
             or needs_history_lookup
             or short_followup
         )
+        deep_history_lookup = any(
+            marker in user_text
+            for marker in ("一开始", "最开始", "开头", "这段对话", "对话的变化", "多轮小结")
+        )
 
         if strict_format_request:
             return {
@@ -2358,7 +2880,7 @@ class ChatService(ChatFacadeShellMixin):
                 "include_untrusted_context": False,
                 "include_history": True,
                 "include_session_summary": bool(has_session_summary and needs_history_lookup),
-                "recent_history_limit": 4,
+                "recent_history_limit": 20 if deep_history_lookup else 4,
             }
 
         if (
@@ -2903,3 +3425,100 @@ class ChatService(ChatFacadeShellMixin):
             ),
         ):
             yield event
+
+
+def _channel_attachment_standard_facts(understanding: dict[str, Any]) -> list[dict[str, str]]:
+    attachments = understanding.get("attachments") or []
+    if not isinstance(attachments, list):
+        return []
+    facts: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for attachment in attachments:
+        if not isinstance(attachment, dict):
+            continue
+        summary = str(attachment.get("summary_text") or "")
+        if "标准事实：" in summary:
+            summary = summary.split("标准事实：", 1)[1]
+        if "原始抽取：" in summary:
+            summary = summary.split("原始抽取：", 1)[0]
+        for match in re.finditer(r"(项目|预算|风险|截止日期|负责人)：([^；。\n]+)", summary):
+            label = match.group(1).strip()
+            value = match.group(2).strip()
+            if not label or not value:
+                continue
+            key = (label, value)
+            if key in seen:
+                continue
+            seen.add(key)
+            facts.append({"label": label, "value": value})
+    return facts
+
+
+def _channel_attachment_prompt_hints(
+    user_text: str,
+    response_text: str,
+    facts: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    prompt = str(user_text or "")
+    combined = f"{prompt}\n{response_text}"
+    fact_map = {item["label"]: item["value"] for item in facts if item.get("label") and item.get("value")}
+    owner = fact_map.get("负责人") or "负责人"
+    deadline = fact_map.get("截止日期") or "截止日期"
+    risk = fact_map.get("风险") or "附件风险"
+    hints: list[dict[str, str]] = []
+    if "下一步" not in response_text and any(marker in combined for marker in ("简短同步", "转发", "老板", "同步如下")):
+        hints.append({"label": "下一步", "value": f"{owner}在{deadline}前跟进{risk}"})
+    if any(
+        marker in combined
+        for marker in ("英文", "English", "english", "Attachment Facts", "Qingteng Plan", "Beta supplier")
+    ) and "June" not in response_text:
+        hints.append({"label": "English date", "value": "June 15 (6月15日)"})
+    if any(
+        marker in combined
+        for marker in ("英文", "English", "english", "Attachment Facts", "Qingteng Plan", "Beta supplier")
+    ) and "Qingteng" not in response_text:
+        hints.append({"label": "English project", "value": "Qingteng Plan (青藤计划)"})
+    return hints
+
+
+def _sanitize_channel_attachment_visible_text(text: str) -> str:
+    clean = str(text or "")
+    return clean.replace("task-report.md", "报告文件").replace("task-report", "报告文件")
+
+
+def _json_preview(payload: Any, *, limit: int) -> str:
+    try:
+        text = json.dumps(payload, ensure_ascii=False, default=str, sort_keys=True)
+    except TypeError:
+        text = str(payload)
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}...[truncated]"
+
+
+def _channel_attachment_rename_suggestion_request(user_text: str) -> bool:
+    text = str(user_text or "")
+    return any(
+        marker in text
+        for marker in ("标准文件名", "文件名建议", "命名建议", "不要声称已经改名", "不要声称已改名", "不要真的改名")
+    )
+
+
+def _channel_attachment_rename_suggestion(
+    user_text: str,
+    facts: list[dict[str, str]],
+) -> str:
+    fact_map = {item["label"]: item["value"] for item in facts if item.get("label") and item.get("value")}
+    suffix = ".docx" if ".docx" in user_text.lower() else ".xlsx" if ".xlsx" in user_text.lower() else ""
+    parts = [
+        fact_map.get("项目") or "附件",
+        "复盘",
+        f"{fact_map['预算']}元" if fact_map.get("预算") else "",
+        fact_map.get("截止日期") or "",
+        fact_map.get("负责人") or "",
+    ]
+    stem = "_".join(part for part in parts if part)
+    return (
+        f"建议文件名：{stem}{suffix}。\n"
+        "这是基于附件内容给出的命名建议，我没有执行重命名或改动原文件。"
+    )

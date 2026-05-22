@@ -158,6 +158,11 @@ class SettingsService:
         await self._repo.upsert_app_setting("mcp", settings.mcp.model_dump(mode="json"), now)
         await self._repo.upsert_app_setting("memory", settings.memory.model_dump(mode="json"), now)
         await self._repo.upsert_app_setting("vector", settings.vector.model_dump(mode="json"), now)
+        await self._repo.upsert_app_setting(
+            "chat_quality",
+            settings.chat_quality.model_dump(mode="json"),
+            now,
+        )
 
     def _default_response(
         self,
@@ -232,6 +237,12 @@ class SettingsService:
             memory={
                 "implicit_extraction_enabled": True,
                 "candidate_review_threshold": 0.55,
+            },
+            chat_quality={
+                "enable_scheduled_dialogue_mapper": True,
+                "enable_visible_quality_gate_shadow": True,
+                "enable_visible_quality_gate_blocking": False,
+                "enable_action_dialogue_mapper_primary": True,
             },
         )
 

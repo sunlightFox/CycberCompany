@@ -17,7 +17,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import yaml
 from brain.adapters import CancelToken, ModelAdapterError, ModelChatRequest, OpenAICompatibleClient
@@ -3805,6 +3805,11 @@ def _candidate_queries_for_manifest_lookup(software: str) -> list[str]:
     normalized = _normalize_software_query(software)
     visible = _host_install_visible_software_name(software)
     queries = [visible, normalized]
+    lowered = normalized.lower()
+    if "7zip" in lowered or "7-zip" in lowered or "7 zip" in lowered:
+        queries.insert(0, "7zip.7zip")
+    if "notepad++" in lowered or "notepad plus plus" in lowered:
+        queries.insert(0, "Notepad++.Notepad++")
     if "." in visible and re.search(r"[a-zA-Z]", visible):
         queries.insert(0, visible)
     if "." in normalized and re.search(r"[a-zA-Z]", normalized):
@@ -3848,7 +3853,7 @@ def _winget_manifest_candidate_for_query(query: str) -> HostPackageCandidate | N
     )[0]
     filename = f"{package_id}.installer.yaml"
     manifest_path = f"{manifest_root['raw_path']}/{version}/{filename}"
-    manifest_url = f"{_WINGET_MANIFEST_REPO_RAW}/{manifest_path}"
+    manifest_url = f"{_WINGET_MANIFEST_REPO_RAW}/{quote(manifest_path, safe='/-._+')}"
     manifest_text = _http_text(manifest_url)
     if manifest_text is None:
         return None
@@ -4272,6 +4277,8 @@ def _winget_manifest_root_for_package_id(package_id: str) -> dict[str, str] | No
     parts = [part for part in package_id.split(".") if part]
     if len(parts) < 2:
         return None
+    if any(re.fullmatch(r"[A-Za-z0-9_+-]+", part) is None for part in parts):
+        return None
     first = parts[0]
     if not first or not first[0].isalnum():
         return None
@@ -4282,7 +4289,7 @@ def _winget_manifest_root_for_package_id(package_id: str) -> dict[str, str] | No
 
 
 def _github_contents_json(path: str) -> list[dict[str, Any]]:
-    url = f"{_WINGET_MANIFEST_REPO_API}/{path}?ref=master"
+    url = f"{_WINGET_MANIFEST_REPO_API}/{quote(path, safe='/-._+')}?ref=master"
     text = _http_text(url)
     if text is None:
         return []
@@ -4304,7 +4311,7 @@ def _http_text(url: str) -> str | None:
         )
         with urllib.request.urlopen(request, timeout=20) as response:
             return response.read().decode("utf-8", errors="replace")
-    except (OSError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
+    except (OSError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
         return None
 
 

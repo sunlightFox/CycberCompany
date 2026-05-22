@@ -19,6 +19,11 @@ class TurnExecutionPlan:
     context_policy: dict[str, Any] = field(default_factory=dict)
     persona_policy: dict[str, Any] = field(default_factory=dict)
     capability_intent: dict[str, Any] = field(default_factory=dict)
+    model_policy: dict[str, Any] = field(default_factory=dict)
+    attachment_requirements: dict[str, Any] = field(default_factory=dict)
+    output_requirements: dict[str, Any] = field(default_factory=dict)
+    delivery_requirements: dict[str, Any] = field(default_factory=dict)
+    evidence_requirements: dict[str, Any] = field(default_factory=dict)
     approval_requirements: dict[str, Any] = field(default_factory=dict)
     completion_semantics: dict[str, Any] = field(default_factory=dict)
     response_contract: dict[str, Any] = field(default_factory=dict)
@@ -35,6 +40,11 @@ class TurnExecutionPlan:
             "context_policy": dict(self.context_policy),
             "persona_policy": dict(self.persona_policy),
             "capability_intent": dict(self.capability_intent),
+            "model_policy": dict(self.model_policy),
+            "attachment_requirements": dict(self.attachment_requirements),
+            "output_requirements": dict(self.output_requirements),
+            "delivery_requirements": dict(self.delivery_requirements),
+            "evidence_requirements": dict(self.evidence_requirements),
             "approval_requirements": dict(self.approval_requirements),
             "completion_semantics": dict(self.completion_semantics),
             "response_contract": dict(self.response_contract),

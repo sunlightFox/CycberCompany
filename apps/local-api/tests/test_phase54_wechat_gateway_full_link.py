@@ -23,7 +23,10 @@ from app.services.channel_connectors import (
     _encode_wechat_voice_silk,
     _send_audio_as_voice_message,
 )
-from app.services.wechat_gateway import _wechat_outbound_attachment_selection
+from app.services.wechat_gateway import (
+    _normalize_wechat_event,
+    _wechat_outbound_attachment_selection,
+)
 from core_types import ChatTurnResponse
 from fastapi.testclient import TestClient
 
@@ -34,14 +37,35 @@ def test_phase54_wechat_gateway_pairing_idempotency_and_reply_once(
     _install_fake_wechat(client, GatewayWechatClient)
     _bind_real_wechat(client)
 
+    registry = cast(Any, client.app).state.registry
+    registry.wechat_gateway_service._blob_dir.mkdir(parents=True, exist_ok=True)
+
+    captured: list[Any] = []
+
+    async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
+        request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
+        captured.append(request)
+        assistant_text = (
+            "扫码后已自动接上聊天。"
+            if request.input.text == "你好"
+            else "能收到，我们可以直接像聊天一样继续。"
+        )
+        return await _insert_completed_turn(
+            registry,
+            request,
+            assistant_text=assistant_text,
+            conversation_id=request.conversation_id or "conv_phase54_wechat",
+        )
+
+    registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
     GatewayWechatClient.events = [
         _text_event("evt-unknown", "wxid-phase54-peer-secret", "你好")
     ]
     first = client.post("/api/channels/providers/wechat/poll-once")
     assert first.status_code == 200, first.text
-    assert first.json()["created_pairing_requests"] == 1
-    assert first.json()["chat_turns_created"] == 0
-    assert GatewayWechatClient.send_calls[-1]["user_id"] == "wxid-phase54-peer-secret"
+    assert first.json()["created_pairing_requests"] == 0
+    assert first.json()["chat_turns_created"] == 1
+    assert captured[-1].input.text == "你好"
 
     duplicate = client.post("/api/channels/providers/wechat/poll-once")
     assert duplicate.status_code == 200, duplicate.text
@@ -52,34 +76,10 @@ def test_phase54_wechat_gateway_pairing_idempotency_and_reply_once(
         params={"provider": "wechat", "status": "pending"},
     )
     assert pairings.status_code == 200, pairings.text
-    pairing = pairings.json()["items"][0]
-    serialized_pairing = json.dumps(pairing, ensure_ascii=False)
-    assert pairing["peer_ref_redacted"].startswith("sha256:")
-    assert "wxid-phase54-peer-secret" not in serialized_pairing
+    assert pairings.json()["items"] == []
+    first_delivery = client.post("/api/channels/providers/wechat/deliver-due")
+    assert first_delivery.status_code == 200, first_delivery.text
 
-    approved = client.post(
-        f"/api/channels/pairing-requests/{pairing['pairing_request_id']}/approve",
-        json={"member_id": "mem_xiaoyao", "reason": "phase54"},
-    )
-    assert approved.status_code == 200, approved.text
-    assert approved.json()["peer_session"]["pairing_status"] == "paired"
-
-    registry = cast(Any, client.app).state.registry
-    registry.wechat_gateway_service._blob_dir.mkdir(parents=True, exist_ok=True)
-
-    captured: list[Any] = []
-
-    async def fake_submit_channel_turn(**kwargs: Any) -> ChatTurnResponse:
-        request = registry.channel_ingress_runtime._router.route(**kwargs).to_turn_request()
-        captured.append(request)
-        return await _insert_completed_turn(
-            registry,
-            request,
-            assistant_text="能收到，我们可以直接像聊天一样继续。",
-            conversation_id=request.conversation_id or "conv_phase54_wechat",
-        )
-
-    registry.wechat_gateway_service._channel_ingress_runtime.submit_channel_turn = fake_submit_channel_turn
     GatewayWechatClient.events = [
         _text_event("evt-paired", "wxid-phase54-peer-secret", "你能收到吗")
     ]
@@ -351,22 +351,14 @@ def test_phase54_wechat_gateway_fail_closed_and_media_degraded(
 
     GatewayWechatClient.events = [
         _text_event("evt-group", "room-phase54-secret", "群消息", chat_type="group"),
-        _text_event("evt-blocked", "wxid-blocked-secret", "未配对消息"),
     ]
     result = client.post("/api/channels/providers/wechat/poll-once")
     assert result.status_code == 200, result.text
-    assert result.json()["rejected_events"] >= 2
+    assert result.json()["rejected_events"] >= 1
     assert result.json()["chat_turns_created"] == 0
 
-    pairing = client.get(
-        "/api/channels/pairing-requests",
-        params={"provider": "wechat", "status": "pending"},
-    ).json()["items"][0]
-    approved = client.post(
-        f"/api/channels/pairing-requests/{pairing['pairing_request_id']}/approve",
-        json={"member_id": "mem_xiaoyao"},
-    ).json()
-    peer_id = approved["peer_session"]["channel_peer_session_id"]
+    session = _pair_peer(client, "wxid-blocked-secret")
+    peer_id = session["channel_peer_session_id"]
     revoked = client.post(
         f"/api/channels/peers/{peer_id}/revoke",
         json={"member_id": "mem_xiaoyao"},
@@ -1343,33 +1335,25 @@ def _test_wav_bytes(*, duration_ms: int = 180, sample_rate: int = 24000) -> byte
     return output.getvalue()
 
 
-def _pair_peer(client: TestClient, peer_ref: str) -> None:
+def _pair_peer(client: TestClient, peer_ref: str) -> dict[str, Any]:
     registry = cast(Any, client.app).state.registry
-    connector = registry.channel_binding_service.connector_registry().get("wechat")
-    client_factory = cast(Any, connector)._client_factory or GatewayWechatClient
-    client_factory.events = [_text_event(f"evt-pair-{peer_ref}", peer_ref, "申请配对")]
-    response = client.post("/api/channels/providers/wechat/poll-once")
-    assert response.status_code == 200, response.text
-    peer_hash = _sha256_ref(peer_ref)
-    pairing = None
-    deadline = time.monotonic() + 3.0
-    while time.monotonic() < deadline and pairing is None:
-        pairings = client.get(
-            "/api/channels/pairing-requests",
-            params={"provider": "wechat", "status": "pending"},
-        ).json()["items"]
-        pairing = next(
-            (item for item in pairings if item["peer_ref_redacted"] == peer_hash),
-            None,
-        )
-        if pairing is None:
-            time.sleep(0.05)
-    assert pairing is not None
-    approved = client.post(
-        f"/api/channels/pairing-requests/{pairing['pairing_request_id']}/approve",
-        json={"member_id": "mem_xiaoyao"},
+    accounts = client.get(
+        "/api/channels/accounts",
+        params={"provider": "wechat", "status": "active"},
     )
-    assert approved.status_code == 200, approved.text
+    assert accounts.status_code == 200, accounts.text
+    account = accounts.json()["items"][0]
+    session = _run_async(
+        client,
+        registry.wechat_gateway_service._ensure_direct_peer_session,
+        account,
+        normalized=_normalize_wechat_event(
+            _text_event(f"evt-pair-{peer_ref}", peer_ref, "申请配对")
+        ),
+        trace_id=None,
+    )
+    assert session["pairing_status"] == "paired"
+    return session
 
 
 def _run_async(client: TestClient, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:

@@ -1,0 +1,61 @@
+id: clawhub-mailslurp-email-registration
+bundle_revision: 0.1.0
+display_name: ClawHub MailSlurp Email Registration
+description: Automatically creates a MailSlurp test inbox through a governed API-key asset handle and writes the generated email address to a task artifact.
+author: clawhub
+triggers:
+  intents:
+    - email_registration_test
+    - automatic_email_registration
+    - test_inbox_create
+    - mailslurp_inbox_create
+  keywords:
+    - mailslurp
+    - auto email
+    - automatic mailbox
+    - register email
+    - create inbox
+    - verification inbox
+    - activation email
+    - otp
+    - 注册邮箱
+    - 帮我注册邮箱
+    - 自动注册邮箱
+    - 验证码邮箱
+    - 创建邮箱
+required_tools:
+  - email_test.create_inbox
+permissions:
+  tools:
+    - name: email_test.create_inbox
+      actions:
+        - create_test_inbox
+      risk: R2
+  assets:
+    - asset_type: account
+      required_actions:
+        - use_api_key
+filesystem:
+  allowed_roots:
+    - workspace://artifacts/**
+safety:
+  unattended_allowed: true
+  external_account_creation: provider_api_test_inbox_only
+  secret_handling: asset_broker_handle_only
+steps:
+  - tool_name: email_test.create_inbox
+    args:
+      provider: mailslurp
+      handle_id: "{handle_id}"
+      name: "{name}"
+      description: "{content}"
+      expires_at: "{expires_at}"
+eval_cases:
+  - id: creates_mailslurp_inbox_artifact
+    input:
+      handle_id: ah_demo
+      name: codex-demo-inbox
+      content: "Create one automated test inbox for signup verification."
+      expires_at: ""
+    expected:
+      artifact: outputs/mailslurp-inbox.md

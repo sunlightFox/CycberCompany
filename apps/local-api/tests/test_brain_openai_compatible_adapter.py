@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 from brain.adapters import CancelToken, ModelChatRequest, OpenAICompatibleClient
-from brain.adapters.types import ModelStreamEvent
 
 
 def _request(*, stream: bool) -> ModelChatRequest:
@@ -72,7 +71,13 @@ class _MockAsyncClient:
     async def __aexit__(self, exc_type, exc, tb) -> None:
         return None
 
-    async def post(self, url: str, *, headers: dict[str, str], json: dict[str, Any]) -> _MockResponse:
+    async def post(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, Any],
+    ) -> _MockResponse:
         del headers
         if url.endswith("/chat/completions"):
             return _MockResponse(
@@ -125,14 +130,23 @@ class _MockAsyncClient:
         return _MockResponse(
             lines=[
                 'data: {"type":"response.output_text.delta","delta":"pong"}',
-                'data: {"type":"response.completed","status":"completed","usage":{"output_tokens":1}}',
+                (
+                    'data: {"type":"response.completed","status":"completed",'
+                    '"usage":{"output_tokens":1}}'
+                ),
             ],
             content_type="text/event-stream",
         )
 
 
 class _FallbackAsyncClient(_MockAsyncClient):
-    async def post(self, url: str, *, headers: dict[str, str], json: dict[str, Any]) -> _MockResponse:
+    async def post(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, Any],
+    ) -> _MockResponse:
         del headers, json
         return _MockResponse(
             json_data={
@@ -168,10 +182,27 @@ class _FallbackAsyncClient(_MockAsyncClient):
                 'data: {"type":"response.output_text.delta","delta":"pong"}',
                 "",
                 "event: response.completed",
-                'data: {"type":"response.completed","status":"completed","usage":{"output_tokens":1}}',
+                (
+                    'data: {"type":"response.completed","status":"completed",'
+                    '"usage":{"output_tokens":1}}'
+                ),
             ],
             content_type="text/event-stream",
         )
+
+
+class _PayloadCaptureAsyncClient(_MockAsyncClient):
+    payloads: list[dict[str, Any]] = []
+
+    async def post(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, Any],
+    ) -> _MockResponse:
+        self.payloads.append(dict(json))
+        return await super().post(url, headers=headers, json=json)
 
 
 @pytest.mark.anyio
@@ -231,6 +262,59 @@ async def test_openai_compatible_responses_modes_are_supported(
     assert result.text == "pong-from-responses"
     assert any(event.event == "delta" and event.text == "pong" for event in events)
     assert any(event.event == "completed" for event in events)
+
+
+@pytest.mark.anyio
+async def test_openai_compatible_responses_payload_includes_codex_reasoning_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _PayloadCaptureAsyncClient.payloads = []
+    monkeypatch.setattr(
+        "brain.adapters.openai_compatible.httpx.AsyncClient",
+        _PayloadCaptureAsyncClient,
+    )
+    client = OpenAICompatibleClient(
+        "https://example.com/v1",
+        "secret",
+        protocol_family="responses",
+        reasoning_effort="medium",
+        text_verbosity="medium",
+    )
+
+    await client.complete_chat(_request(stream=False), CancelToken())
+
+    payload = _PayloadCaptureAsyncClient.payloads[-1]
+    assert payload["reasoning"] == {"effort": "medium"}
+    assert payload["text"] == {"verbosity": "medium"}
+
+
+@pytest.mark.anyio
+async def test_openai_compatible_responses_payload_marks_assistant_history_as_output_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _PayloadCaptureAsyncClient.payloads = []
+    monkeypatch.setattr(
+        "brain.adapters.openai_compatible.httpx.AsyncClient",
+        _PayloadCaptureAsyncClient,
+    )
+    client = OpenAICompatibleClient(
+        "https://example.com/v1",
+        "secret",
+        protocol_family="responses",
+    )
+    request = _request(stream=False)
+    request.messages = [
+        {"role": "system", "content": "answer briefly"},
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "previous answer"},
+        {"role": "user", "content": "follow up"},
+    ]
+
+    await client.complete_chat(request, CancelToken())
+
+    payload = _PayloadCaptureAsyncClient.payloads[-1]
+    content_types = [item["content"][0]["type"] for item in payload["input"]]
+    assert content_types == ["input_text", "input_text", "output_text", "input_text"]
 
 
 @pytest.mark.anyio
