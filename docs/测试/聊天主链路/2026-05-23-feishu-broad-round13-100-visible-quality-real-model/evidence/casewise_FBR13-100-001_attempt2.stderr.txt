@@ -1,0 +1,49 @@
+Exception in thread Thread-1 (_readerthread):
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\threading.py", line 1075, in _bootstrap_inner
+    self.run()
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\threading.py", line 1012, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\subprocess.py", line 1599, in _readerthread
+    buffer.append(fh.read())
+                  ^^^^^^^^^
+  File "<frozen codecs>", line 322, in decode
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xd0 in position 112: invalid continuation byte
+Traceback (most recent call last):
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round13-100-visible-quality-real-model\run_feishu_broad_round13_100_visible_quality_real_model_cases.py", line 636, in <module>
+    )
+    ^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round13-100-visible-quality-real-model\run_feishu_broad_round13_100_visible_quality_real_model_cases.py", line 609, in main
+    only_problematic=args.only_problematic,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round13-100-visible-quality-real-model\run_feishu_broad_round13_100_visible_quality_real_model_cases.py", line 477, in run
+    limit: int | None = None,
+           ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round12-100-visible-quality-real-model\run_feishu_broad_round12_100_visible_quality_real_model_cases.py", line 976, in run
+    results = R9.run(
+              ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round9-100-visible-quality-real-model\run_feishu_broad_round9_100_visible_quality_real_model_cases.py", line 547, in run
+    return R8.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round8-100-visible-quality-real-model\run_feishu_broad_round8_100_visible_quality_real_model_cases.py", line 500, in run
+    return R7.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round7-100-visible-quality-real-model\run_feishu_broad_round7_100_visible_quality_real_model_cases.py", line 642, in run
+    results = R6.run(
+              ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round6-100-visible-quality-real-model\run_feishu_broad_round6_100_visible_quality_real_model_cases.py", line 581, in run
+    return R5.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round5-100-visible-quality-real-model\run_feishu_broad_round5_100_visible_quality_real_model_cases.py", line 476, in run
+    return R4.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round4-100-visible-quality-real-model\run_feishu_broad_round4_100_visible_quality_real_model_cases.py", line 924, in run
+    verify_payload = BASE._verify_real_model_subprocess(data_dir)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round12-100-visible-quality-real-model\run_feishu_broad_round12_100_visible_quality_real_model_cases.py", line 71, in _verify_real_model_cached
+    return _R4_VERIFY_REAL_MODEL_SUBPROCESS(data_dir)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-21-feishu-broad-100-real-model\run_feishu_broad_100_real_model_cases.py", line 879, in _verify_real_model_subprocess
+    stdout = completed.stdout.strip()
+             ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'strip'

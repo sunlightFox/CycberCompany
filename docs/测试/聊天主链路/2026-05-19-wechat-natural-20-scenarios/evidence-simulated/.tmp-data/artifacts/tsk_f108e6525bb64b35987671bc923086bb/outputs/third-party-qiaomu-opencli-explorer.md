@@ -1,1 +1,0 @@
-OpenCLI Explorer skill installed from project repository.

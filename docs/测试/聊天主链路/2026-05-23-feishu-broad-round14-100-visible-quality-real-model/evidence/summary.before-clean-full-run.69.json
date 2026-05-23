@@ -1,0 +1,81 @@
+{
+  "run_label": "FBR14-100-VISIBLE-REAL-20260523",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 3555,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 00:39:35,682 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:39:37,013 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:39:37,213 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 1,
+  "passed": 0,
+  "warned": 0,
+  "failed": 1,
+  "score_avg": 0.0,
+  "model_started": 1,
+  "model_completed": 0,
+  "delivery_sent": 0,
+  "trace_count": 1,
+  "by_category": {
+    "测试治理": {
+      "total": 1,
+      "pass": 0,
+      "warn": 0,
+      "fail": 1
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR14-100-099",
+      "category": "测试治理",
+      "title": "开头",
+      "peer_ref": "oc_fbr14_eval",
+      "prompt": "写一个第十四轮 100 场景测试报告开头，语气自然，不像工单。",
+      "verdict": "fail",
+      "score": 0,
+      "notes": [
+        "real_model_not_completed",
+        "delivery_not_sent",
+        "missing_clear_structure_or_usefulness",
+        "round12_hard_quality_marker:clawhub-word-report.docx"
+      ],
+      "reply_text": "文件已产出：clawhub-word-report.docx。这次文档已经生成完成。写一个第十四轮 100 场景测试报告开头，语气自然，不像工单。后面如果你要继续改这个文档，直接告诉我想补哪一段就行。",
+      "turn_id": "turn_05636f43531d4f9fa9576efce4754c07",
+      "conversation_id": "conv_092ec43f7dd34ba69185ab1d78cdc03e",
+      "trace_id": "trc_8d47a022eaed4690b0533a1a6e1c9fe4",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": false,
+      "usage_total_tokens": null,
+      "delivery_sent": false,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "task.created",
+        "model.started",
+        "model.fallback",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

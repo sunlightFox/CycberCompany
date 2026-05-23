@@ -1,0 +1,25 @@
+Exception in thread Thread-2 (_readerthread):
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\threading.py", line 1075, in _bootstrap_inner
+    self.run()
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\threading.py", line 1012, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\subprocess.py", line 1599, in _readerthread
+    buffer.append(fh.read())
+                  ^^^^^^^^^
+  File "<frozen codecs>", line 322, in decode
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb2 in position 139: invalid start byte
+Traceback (most recent call last):
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round13-100-visible-quality-real-model\run_feishu_broad_round13_100_visible_quality_real_model_cases.py", line 506, in <module>
+    main()
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round13-100-visible-quality-real-model\run_feishu_broad_round13_100_visible_quality_real_model_cases.py", line 471, in main
+    results = _run_casewise(
+              ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round13-100-visible-quality-real-model\run_feishu_broad_round13_100_visible_quality_real_model_cases.py", line 441, in _run_casewise
+    return R12._run_casewise(
+           ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round12-100-visible-quality-real-model\run_feishu_broad_round12_100_visible_quality_real_model_cases.py", line 887, in _run_casewise
+    log_prefix.with_suffix(".stdout.txt").write_text(completed.stdout, encoding="utf-8")
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1044, in write_text
+    raise TypeError('data must be str, not %s' %
+TypeError: data must be str, not NoneType

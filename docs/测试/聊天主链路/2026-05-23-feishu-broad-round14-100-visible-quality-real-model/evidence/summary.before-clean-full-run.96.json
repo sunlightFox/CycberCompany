@@ -1,0 +1,77 @@
+{
+  "run_label": "FBR14-100-VISIBLE-REAL-20260523",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 2961,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 00:56:32,243 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:56:33,095 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:56:33,823 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 1,
+  "passed": 1,
+  "warned": 0,
+  "failed": 0,
+  "score_avg": 100.0,
+  "model_started": 1,
+  "model_completed": 1,
+  "delivery_sent": 1,
+  "trace_count": 1,
+  "by_category": {
+    "测试治理": {
+      "total": 1,
+      "pass": 1,
+      "warn": 0,
+      "fail": 0
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR14-100-092",
+      "category": "测试治理",
+      "title": "异常复跑",
+      "peer_ref": "oc_fbr14_eval",
+      "prompt": "100 个场景里 2 fail、5 warn，修完后应该怎么跑？",
+      "verdict": "pass",
+      "score": 100,
+      "notes": [],
+      "reply_text": "修完后不要全量起步，先只重跑这 2 个 fail 和 5 个 warn。如果修到公共逻辑，再补跑受影响的邻近场景；等异常项都通过、证据也齐了，最后再考虑全量 100 个回归。",
+      "turn_id": "turn_415b77f046f8401cb529fe0799b783e7",
+      "conversation_id": "conv_82b9b41b855a441d98ede3ae9405d2fd",
+      "trace_id": "trc_5b066e4ec5ad4208b9e6b9a547eceff3",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

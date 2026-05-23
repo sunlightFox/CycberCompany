@@ -1,1 +1,0 @@
-OpenCLI Usage skill installed from project repository.

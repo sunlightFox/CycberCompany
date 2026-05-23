@@ -1,0 +1,50 @@
+﻿{
+    "run_label":  "FBR10-100-VISIBLE-REAL-20260523",
+    "mode":  "missing-casewise-powershell",
+    "updated_at":  "2026-05-23T16:45:11",
+    "completed":  6,
+    "items":  [
+                  {
+                      "case_id":  "FBR10-100-029",
+                      "exit_code":  1,
+                      "started_at":  "2026-05-23T16:41:34",
+                      "ended_at":  "2026-05-23T16:42:21",
+                      "result_exists":  true
+                  },
+                  {
+                      "case_id":  "FBR10-100-030",
+                      "exit_code":  1,
+                      "started_at":  "2026-05-23T16:42:22",
+                      "ended_at":  "2026-05-23T16:43:04",
+                      "result_exists":  true
+                  },
+                  {
+                      "case_id":  "FBR10-100-031",
+                      "exit_code":  1,
+                      "started_at":  "2026-05-23T16:43:04",
+                      "ended_at":  "2026-05-23T16:43:37",
+                      "result_exists":  true
+                  },
+                  {
+                      "case_id":  "FBR10-100-032",
+                      "exit_code":  1,
+                      "started_at":  "2026-05-23T16:43:37",
+                      "ended_at":  "2026-05-23T16:44:29",
+                      "result_exists":  false
+                  },
+                  {
+                      "case_id":  "FBR10-100-033",
+                      "exit_code":  -1,
+                      "started_at":  "2026-05-23T16:44:29",
+                      "ended_at":  "2026-05-23T16:44:45",
+                      "result_exists":  false
+                  },
+                  {
+                      "case_id":  "FBR10-100-034",
+                      "exit_code":  -1,
+                      "started_at":  "2026-05-23T16:44:45",
+                      "ended_at":  "2026-05-23T16:45:11",
+                      "result_exists":  false
+                  }
+              ]
+}

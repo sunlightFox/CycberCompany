@@ -1,0 +1,55 @@
+{
+  "run_label": "FBR13-100-VISIBLE-REAL-20260523",
+  "mode": "casewise",
+  "started_at": "2026-05-23T22:44:44",
+  "total_selected": 9,
+  "completed": 9,
+  "last_case_id": "FBR13-100-099",
+  "items": [
+    {
+      "case_id": "FBR13-100-006",
+      "ok": true,
+      "error": "case_verdict:pass"
+    },
+    {
+      "case_id": "FBR13-100-062",
+      "ok": true,
+      "error": "case_verdict:pass"
+    },
+    {
+      "case_id": "FBR13-100-067",
+      "ok": true,
+      "error": "case_verdict:pass"
+    },
+    {
+      "case_id": "FBR13-100-080",
+      "ok": true,
+      "error": "case_verdict:pass"
+    },
+    {
+      "case_id": "FBR13-100-085",
+      "ok": true,
+      "error": "case_verdict:pass"
+    },
+    {
+      "case_id": "FBR13-100-089",
+      "ok": true,
+      "error": "case_verdict:pass"
+    },
+    {
+      "case_id": "FBR13-100-090",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR13-100-093",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR13-100-099",
+      "ok": true,
+      "error": ""
+    }
+  ]
+}

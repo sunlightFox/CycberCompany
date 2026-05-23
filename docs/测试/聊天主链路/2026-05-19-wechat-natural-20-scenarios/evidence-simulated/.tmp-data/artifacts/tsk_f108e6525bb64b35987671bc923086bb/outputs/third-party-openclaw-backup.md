@@ -1,1 +1,0 @@
-OpenClaw Backup skill installed from project repository.

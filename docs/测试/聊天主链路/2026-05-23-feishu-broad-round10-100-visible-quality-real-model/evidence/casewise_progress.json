@@ -1,0 +1,20 @@
+{
+  "run_label": "FBR10-100-VISIBLE-REAL-20260523",
+  "mode": "casewise",
+  "started_at": "2026-05-23T16:54:47",
+  "total_selected": 67,
+  "completed": 2,
+  "last_case_id": "FBR10-100-035",
+  "items": [
+    {
+      "case_id": "FBR10-100-034",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR10-100-035",
+      "ok": true,
+      "error": "case_verdict:fail"
+    }
+  ]
+}

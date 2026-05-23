@@ -1,1 +1,0 @@
-Skill Vetter skill installed from project repository.

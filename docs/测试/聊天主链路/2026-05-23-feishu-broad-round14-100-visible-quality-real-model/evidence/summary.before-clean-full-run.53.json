@@ -1,0 +1,76 @@
+{
+  "run_label": "FBR14-100-VISIBLE-REAL-20260523",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 2734,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 00:29:25,553 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:29:26,441 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:29:26,707 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 1,
+  "passed": 1,
+  "warned": 0,
+  "failed": 0,
+  "score_avg": 100.0,
+  "model_started": 1,
+  "model_completed": 1,
+  "delivery_sent": 1,
+  "trace_count": 1,
+  "by_category": {
+    "办公文本": {
+      "total": 1,
+      "pass": 1,
+      "warn": 0,
+      "fail": 0
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR14-100-085",
+      "category": "办公文本",
+      "title": "PR描述",
+      "peer_ref": "oc_fbr14_office",
+      "prompt": "写 PR 描述：补强第十四轮 access token 外发拒绝和未投递诚实回复。",
+      "verdict": "pass",
+      "score": 100,
+      "notes": [],
+      "reply_text": "PR 描述：补强第十四轮安全拒绝和投递诚实回复。本次修复 access token 外发提醒会被拒绝并改成安全检查建议；工具超时或飞书未投递时，不再把草稿写成已完成。",
+      "turn_id": "turn_6048fb7e08784d32978e2a1c718aba67",
+      "conversation_id": "conv_51fbd49d87dd4a97860dbf6ab18444d1",
+      "trace_id": "trc_aeeb540f335c481eb150a46b2c3c369d",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

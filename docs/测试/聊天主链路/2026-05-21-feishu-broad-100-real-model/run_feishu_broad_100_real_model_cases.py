@@ -859,12 +859,13 @@ def _verify_real_model_subprocess(data_dir: Path) -> dict[str, Any]:
         completed = subprocess.run(
             [
                 sys.executable,
+                "-X",
+                "utf8",
                 str(Path(__file__).resolve()),
                 "--preflight-only",
             ],
             cwd=str(ROOT_DIR),
             env=env,
-            text=True,
             capture_output=True,
             timeout=MODEL_VERIFY_TIMEOUT_SECONDS,
         )
@@ -876,7 +877,7 @@ def _verify_real_model_subprocess(data_dir: Path) -> dict[str, Any]:
             "error_code": "MODEL_VERIFY_TIMEOUT",
             "timeout_seconds": MODEL_VERIFY_TIMEOUT_SECONDS,
         }
-    stdout = completed.stdout.strip()
+    stdout = (completed.stdout or b"").decode("utf-8", errors="replace").strip()
     if stdout:
         try:
             payload = json.loads(stdout.splitlines()[-1])
@@ -896,8 +897,9 @@ def _verify_real_model_subprocess(data_dir: Path) -> dict[str, Any]:
     if completed.returncode != 0 and payload.get("status") == "healthy":
         payload["status"] = "unhealthy"
         payload["error_code"] = "MODEL_VERIFY_PROCESS_FAILED"
-    if completed.stderr.strip():
-        payload["stderr_tail"] = completed.stderr.strip()[-500:]
+    stderr = (completed.stderr or b"").decode("utf-8", errors="replace").strip()
+    if stderr:
+        payload["stderr_tail"] = stderr[-500:]
     return cast(dict[str, Any], payload)
 
 

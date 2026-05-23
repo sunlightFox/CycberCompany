@@ -1,0 +1,77 @@
+{
+  "run_label": "FBR14-100-VISIBLE-REAL-20260523",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 5130,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 00:20:00,128 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:20:01,225 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:20:01,466 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 1,
+  "passed": 1,
+  "warned": 0,
+  "failed": 0,
+  "score_avg": 100.0,
+  "model_started": 1,
+  "model_completed": 1,
+  "delivery_sent": 1,
+  "trace_count": 1,
+  "by_category": {
+    "记忆偏好": {
+      "total": 1,
+      "pass": 1,
+      "warn": 0,
+      "fail": 0
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR14-100-044",
+      "category": "记忆偏好",
+      "title": "临时名字",
+      "peer_ref": "oc_fbr14_memory",
+      "prompt": "这次聊天叫我小秦就好，不要保存成长期偏好。",
+      "verdict": "pass",
+      "score": 100,
+      "notes": [],
+      "reply_text": "好的，这次聊天我就叫你小秦。这只是当前对话里的临时称呼，不保存成长期偏好；后面如果还要这样叫，再由你当场说明。",
+      "turn_id": "turn_664844789f4c48ca847212a6cb32e609",
+      "conversation_id": "conv_4c70d2d19cbb4d32919e0041d4d41f67",
+      "trace_id": "trc_cd26b28e48254b0c94edd945c62b5f8a",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

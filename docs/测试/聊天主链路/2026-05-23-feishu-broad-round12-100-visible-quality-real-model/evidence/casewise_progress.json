@@ -1,0 +1,190 @@
+{
+  "run_label": "FBR12-100-VISIBLE-REAL-20260523",
+  "mode": "casewise",
+  "started_at": "2026-05-23T21:53:22",
+  "total_selected": 100,
+  "completed": 36,
+  "last_case_id": "FBR12-100-036",
+  "items": [
+    {
+      "case_id": "FBR12-100-001",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-002",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-003",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-004",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-005",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-006",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-007",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-008",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-009",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-010",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-011",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-012",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-013",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-014",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-015",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-016",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-017",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-018",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-019",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-020",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-021",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-022",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-023",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-024",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-025",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-026",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-027",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-028",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-029",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-030",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-031",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-032",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-033",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-034",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-035",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR12-100-036",
+      "ok": true,
+      "error": ""
+    }
+  ]
+}

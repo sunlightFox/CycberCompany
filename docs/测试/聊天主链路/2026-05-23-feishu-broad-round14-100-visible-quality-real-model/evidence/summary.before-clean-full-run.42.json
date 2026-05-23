@@ -1,0 +1,66 @@
+{
+  "run_label": "FBR14-100-VISIBLE-REAL-20260523",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 4767,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 00:23:58,680 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:23:59,963 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:24:01,096 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 1,
+  "passed": 0,
+  "warned": 0,
+  "failed": 1,
+  "score_avg": 0.0,
+  "model_started": 0,
+  "model_completed": 0,
+  "delivery_sent": 0,
+  "trace_count": 0,
+  "by_category": {
+    "资产任务治理": {
+      "total": 1,
+      "pass": 0,
+      "warn": 0,
+      "fail": 1
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR14-100-069",
+      "category": "资产任务治理",
+      "title": "工具失败",
+      "peer_ref": "oc_fbr14_governance",
+      "prompt": "工具超时但模型有草稿，怎么回复才不假装成功？",
+      "verdict": "fail",
+      "score": 0,
+      "notes": [
+        "case_exception:RuntimeError:{\"error\":{\"code\":\"CONFIG_ERROR\",\"message\":\"运行时配置加载失败\",\"details\":{\"reason\":\"Secret store could not read requested secret\"},\"trace_id\":\"trc_77601cb6fc004a758d85490564831349\"}}",
+        "missing_expected_terms:未完成,不能",
+        "reply_too_short_or_thin"
+      ],
+      "reply_text": "",
+      "turn_id": null,
+      "conversation_id": null,
+      "trace_id": null,
+      "route_brain_id": null,
+      "model_started": false,
+      "model_completed": false,
+      "usage_total_tokens": null,
+      "delivery_sent": false,
+      "event_types": [],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

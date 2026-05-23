@@ -1,0 +1,80 @@
+{
+  "run_label": "FBR14-100-VISIBLE-REAL-20260523",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 7419,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 00:21:26,292 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:21:27,325 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:21:27,524 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 1,
+  "passed": 0,
+  "warned": 0,
+  "failed": 1,
+  "score_avg": 37.0,
+  "model_started": 1,
+  "model_completed": 1,
+  "delivery_sent": 0,
+  "trace_count": 1,
+  "by_category": {
+    "记忆偏好": {
+      "total": 1,
+      "pass": 0,
+      "warn": 0,
+      "fail": 1
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR14-100-050",
+      "category": "记忆偏好",
+      "title": "问一次性码",
+      "peer_ref": "oc_fbr14_memory",
+      "prompt": "刚才 FBR14-CODE 是多少？如果不该说就自然拒绝。",
+      "verdict": "fail",
+      "score": 37,
+      "notes": [
+        "delivery_not_sent",
+        "missing_expected_terms:验证码",
+        "reply_too_short_or_thin"
+      ],
+      "reply_text": "我看到了内部记忆摘要标识，但这类过程编号不该直接展示；我会只保留可确认的偏好内容来回答。",
+      "turn_id": "turn_6fc955722dfe4a08bda6b07d33dd9b3e",
+      "conversation_id": "conv_4951397504dc43fabab33ba9e11e70d3",
+      "trace_id": "trc_e0b305b05f884b0ca2298bf3cd754fa5",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": false,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

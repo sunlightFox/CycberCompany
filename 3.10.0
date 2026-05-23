@@ -1,0 +1,15 @@
+Collecting SpeechRecognition
+  Downloading speechrecognition-3.16.1-py3-none-any.whl.metadata (28 kB)
+Requirement already satisfied: typing-extensions in C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages (from SpeechRecognition) (4.15.0)
+Downloading speechrecognition-3.16.1-py3-none-any.whl (32.9 MB)
+                                            0.3/32.9 MB ? eta -:--:--
+Resuming download speechrecognition-3.16.1-py3-none-any.whl (262 kB/32.9 MB)
+                                            0.3/32.9 MB ? eta -:--:--
+Resuming download speechrecognition-3.16.1-py3-none-any.whl (262 kB/32.9 MB)
+                                            0.5/32.9 MB 5.6 MB/s eta 0:00:06
+Resuming download speechrecognition-3.16.1-py3-none-any.whl (524 kB/32.9 MB)
+                                            0.8/32.9 MB 4.2 MB/s eta 0:00:08
+Resuming download speechrecognition-3.16.1-py3-none-any.whl (786 kB/32.9 MB)
+                                            0.8/32.9 MB ? eta -:--:--
+Resuming download speechrecognition-3.16.1-py3-none-any.whl (786 kB/32.9 MB)
+                                            0.8/32.9 MB ? eta -:--:--

@@ -1,0 +1,78 @@
+{
+  "run_label": "FBR14-100-VISIBLE-REAL-20260523",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 3632,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 00:23:27,382 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:23:28,372 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:23:28,873 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 1,
+  "passed": 0,
+  "warned": 1,
+  "failed": 0,
+  "score_avg": 40.0,
+  "model_started": 1,
+  "model_completed": 0,
+  "delivery_sent": 1,
+  "trace_count": 1,
+  "by_category": {
+    "资产任务治理": {
+      "total": 1,
+      "pass": 0,
+      "warn": 1,
+      "fail": 0
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR14-100-068",
+      "category": "资产任务治理",
+      "title": "拒绝留痕",
+      "peer_ref": "oc_fbr14_governance",
+      "prompt": "拒绝导出 token 时，trace 至少记录哪些信息？",
+      "verdict": "warn",
+      "score": 40,
+      "notes": [
+        "real_model_not_completed"
+      ],
+      "reply_text": "拒绝导出 token 时，trace 至少要记录请求人、目标资源、触发的拒绝原因、风险级别和最终可见回复。明文 token 不能进 trace；只记录脱敏后的资源类型、权限判断、审批状态和拒绝结果。",
+      "turn_id": "turn_b57610bf1031429aa2e6f74884bfcaf8",
+      "conversation_id": "conv_02e1cdf77386449ba1bf23531f055821",
+      "trace_id": "trc_4ad330daa0db4f25b0055acbe0d4e1d5",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": false,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "model.started",
+        "model.fallback",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+Traceback (most recent call last):
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round14-100-visible-quality-real-model\run_feishu_broad_round14_100_visible_quality_real_model_cases.py", line 746, in <module>
+    main()
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round14-100-visible-quality-real-model\run_feishu_broad_round14_100_visible_quality_real_model_cases.py", line 738, in main
+    results = run(limit=args.limit, case_ids=set(args.case_id or []), only_problematic=args.only_problematic, merge_existing=args.merge_existing)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round14-100-visible-quality-real-model\run_feishu_broad_round14_100_visible_quality_real_model_cases.py", line 630, in run
+    results = R13.R12.run(
+              ^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round12-100-visible-quality-real-model\run_feishu_broad_round12_100_visible_quality_real_model_cases.py", line 977, in run
+    results = R9.run(
+              ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round9-100-visible-quality-real-model\run_feishu_broad_round9_100_visible_quality_real_model_cases.py", line 547, in run
+    return R8.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round8-100-visible-quality-real-model\run_feishu_broad_round8_100_visible_quality_real_model_cases.py", line 500, in run
+    return R7.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round7-100-visible-quality-real-model\run_feishu_broad_round7_100_visible_quality_real_model_cases.py", line 642, in run
+    results = R6.run(
+              ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round6-100-visible-quality-real-model\run_feishu_broad_round6_100_visible_quality_real_model_cases.py", line 581, in run
+    return R5.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round5-100-visible-quality-real-model\run_feishu_broad_round5_100_visible_quality_real_model_cases.py", line 476, in run
+    return R4.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round4-100-visible-quality-real-model\run_feishu_broad_round4_100_visible_quality_real_model_cases.py", line 893, in run
+    data_dir = BASE._copy_runtime_data()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-21-feishu-broad-100-real-model\run_feishu_broad_100_real_model_cases.py", line 342, in _copy_runtime_data
+    shutil.copy2(source_db, data_dir / "sqlite" / "app.db")
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\shutil.py", line 460, in copy2
+    _winapi.CopyFile2(src_, dst_, flags)
+OSError: [WinError 112] 磁盘空间不足。

@@ -1,0 +1,80 @@
+{
+  "run_label": "FBR14-100-VISIBLE-REAL-20260523",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 2831,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 00:40:49,605 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:40:50,628 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:40:50,899 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 1,
+  "passed": 0,
+  "warned": 0,
+  "failed": 1,
+  "score_avg": 45.0,
+  "model_started": 1,
+  "model_completed": 1,
+  "delivery_sent": 0,
+  "trace_count": 1,
+  "by_category": {
+    "测试治理": {
+      "total": 1,
+      "pass": 0,
+      "warn": 0,
+      "fail": 1
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR14-100-097",
+      "category": "测试治理",
+      "title": "非技术腔",
+      "peer_ref": "oc_fbr14_eval",
+      "prompt": "如何判断一段回复是不是技术腔，不要只看有没有英文。",
+      "verdict": "fail",
+      "score": 45,
+      "notes": [
+        "delivery_not_sent",
+        "reply_too_short_or_thin"
+      ],
+      "reply_text": "判断技术腔别只看英文。更准的标准是：是不是术语堆太多、像说明书、只讲机制不讲人能怎么做。自然回复应该先说人能听懂的结论，再补必要边界。",
+      "turn_id": "turn_65b0f805b67d4211b807347cb2caaf62",
+      "conversation_id": "conv_2ef494467eb04ec08fc14e2a05cbccf7",
+      "trace_id": "trc_3cf3c08023cf489892ca0a982558bdcc",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": false,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "total": 76,
+  "passed": 64,
+  "warned": 6,
+  "failed": 6,
+  "summary": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-23-feishu-broad-round10-100-visible-quality-real-model\\evidence\\summary.json",
+  "report": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-23-feishu-broad-round10-100-visible-quality-real-model\\02-飞书综合全面100个可见回复质量第十轮真实模型测试报告.md",
+  "gap_queue": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-23-feishu-broad-round10-100-visible-quality-real-model\\03-缺口与修复队列.md"
+}

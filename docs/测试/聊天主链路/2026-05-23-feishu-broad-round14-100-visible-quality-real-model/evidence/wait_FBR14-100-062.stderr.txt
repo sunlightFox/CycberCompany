@@ -1,0 +1,58 @@
+2026-05-24 00:23:02,043 INFO httpx HTTP Request: POST http://testserver/api/channels/bind-sessions "HTTP/1.1 200 OK"
+2026-05-24 00:23:02,166 INFO httpx HTTP Request: GET http://testserver/api/channels/inbound/feishu/bind-callback?state=chbind_868adf76d45a4dcab6e1bb6c94b1f756&code=feishu-broad100-oauth-code&tenant_key=tenant_feishu_broad100_secret&open_id=ou_feishu_broad100_secret "HTTP/1.1 200 OK"
+2026-05-24 00:23:02,299 INFO httpx HTTP Request: POST http://testserver/api/channels/bind-sessions/chbind_868adf76d45a4dcab6e1bb6c94b1f756/finalize "HTTP/1.1 200 OK"
+2026-05-24 00:23:02,414 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/poll-once "HTTP/1.1 200 OK"
+2026-05-24 00:23:02,432 INFO httpx HTTP Request: GET http://testserver/api/channels/pairing-requests?provider=feishu&status=pending "HTTP/1.1 200 OK"
+2026-05-24 00:23:02,455 INFO httpx HTTP Request: POST http://testserver/api/channels/pairing-requests/chpair_cf290d18972b4c2aa0a061d897e6d37c/approve "HTTP/1.1 200 OK"
+2026-05-24 00:23:02,540 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/poll-once "HTTP/1.1 200 OK"
+2026-05-24 00:23:02,563 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:23:02,588 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_238599c7d60f40e6998b7ec3b2f593d3&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:23:02,608 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768 "HTTP/1.1 200 OK"
+2026-05-24 00:23:02,853 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:23:03,304 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_238599c7d60f40e6998b7ec3b2f593d3&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:23:03,317 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses "HTTP/1.1 401 Unauthorized"
+2026-05-24 00:23:03,318 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768 "HTTP/1.1 200 OK"
+2026-05-24 00:23:03,550 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:23:03,574 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_238599c7d60f40e6998b7ec3b2f593d3&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:23:03,657 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768 "HTTP/1.1 200 OK"
+2026-05-24 00:23:03,896 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:23:03,908 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_238599c7d60f40e6998b7ec3b2f593d3&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:23:03,926 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768 "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,000 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,013 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,024 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,042 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,060 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768 "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,078 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768/events "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,103 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/poll-once "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,117 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,130 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_238599c7d60f40e6998b7ec3b2f593d3&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,145 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768 "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,160 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,173 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,187 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,199 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,213 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768 "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,238 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768/events "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,263 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/poll-once "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,276 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,290 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_238599c7d60f40e6998b7ec3b2f593d3&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,303 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768 "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,316 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,326 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,339 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,350 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,363 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768 "HTTP/1.1 200 OK"
+2026-05-24 00:23:04,378 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_b9fd128ff697447bbd222e8506a6a768/events "HTTP/1.1 200 OK"
+Traceback (most recent call last):
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round14-100-visible-quality-real-model\run_feishu_broad_round14_100_visible_quality_real_model_cases.py", line 764, in <module>
+    main()
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round14-100-visible-quality-real-model\run_feishu_broad_round14_100_visible_quality_real_model_cases.py", line 756, in main
+    results = run(limit=args.limit, case_ids=set(args.case_id or []), only_problematic=args.only_problematic, merge_existing=args.merge_existing)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round14-100-visible-quality-real-model\run_feishu_broad_round14_100_visible_quality_real_model_cases.py", line 645, in run
+    results = R13.R12.run(
+              ^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round12-100-visible-quality-real-model\run_feishu_broad_round12_100_visible_quality_real_model_cases.py", line 985, in run
+    raise RuntimeError(f"clean full run must produce 100 results, got {len(results)}")
+RuntimeError: clean full run must produce 100 results, got 1

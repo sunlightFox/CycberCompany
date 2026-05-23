@@ -1,0 +1,30 @@
+{
+  "run_label": "FBR11-100-VISIBLE-REAL-20260523",
+  "mode": "casewise",
+  "started_at": "2026-05-23T19:00:42",
+  "total_selected": 12,
+  "completed": 4,
+  "last_case_id": "FBR11-100-066",
+  "items": [
+    {
+      "case_id": "FBR11-100-059",
+      "ok": true,
+      "error": "case_verdict:pass"
+    },
+    {
+      "case_id": "FBR11-100-061",
+      "ok": true,
+      "error": "case_verdict:pass"
+    },
+    {
+      "case_id": "FBR11-100-062",
+      "ok": true,
+      "error": "case_verdict:pass"
+    },
+    {
+      "case_id": "FBR11-100-066",
+      "ok": true,
+      "error": "case_verdict:pass"
+    }
+  ]
+}

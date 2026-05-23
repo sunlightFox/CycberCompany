@@ -1,0 +1,79 @@
+{
+  "run_label": "FBR14-100-VISIBLE-REAL-20260523",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 2971,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 00:33:17,515 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:33:18,419 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:33:18,856 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 1,
+  "passed": 0,
+  "warned": 1,
+  "failed": 0,
+  "score_avg": 88.0,
+  "model_started": 1,
+  "model_completed": 1,
+  "delivery_sent": 1,
+  "trace_count": 1,
+  "by_category": {
+    "测试治理": {
+      "total": 1,
+      "pass": 0,
+      "warn": 1,
+      "fail": 0
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR14-100-092",
+      "category": "测试治理",
+      "title": "异常复跑",
+      "peer_ref": "oc_fbr14_eval",
+      "prompt": "100 个场景里 2 fail、5 warn，修完后应该怎么跑？",
+      "verdict": "warn",
+      "score": 88,
+      "notes": [
+        "missing_expected_terms:不要全量"
+      ],
+      "reply_text": "结论：**修完以后不要只跑那 2 个 fail，至少要把这 2 fail + 5 warn 一起复跑；如果改动碰到公共逻辑，最好把 100 个全量再跑一遍。**\n\n我来理一下，建议按这个顺序：\n\n1. **先复跑 2 个 fail**\n   - 确认这次修复真的把硬失败打掉了。\n   - 这是最优先的“止血验证”。\n\n2. **再复跑 5 个 warn**\n   - 看看是警告消失了，还是只是从 warn 变成 pass。\n   - 如果 warn 里有边界条件，修复后很容易暴露新问题。\n\n3. **跑相关回归**\n   - 只要这次修复碰到的是：\n     - 公共函数\n     - 通用配置\n     - 核心链路\n     - 数据结构/接口\n   - 那就别只看那 7 个，应该把**受影响的邻近场景**也跑一下。\n\n4. **条件允许就全量 100 个再跑**\n   - 这是最稳的做法。\n   - 尤其当你修的是“基础层”问题时，全量跑能防止修A 坏 B。\n\n**实操上最常见的跑法：**\n- **小修**：`2 fail + 5 warn + 相关回归`\n- **中修/公共逻辑改动**：`2 fail + 5 warn + 全量 100`\n- **上线前最终确认**：尽量 `100/100` 过一遍\n\n如果你要一个更像测试门槛的标准，我会建议：\n- **fail = 0**\n- **warn = 0 或有明确豁免理由**\n- 修复影响范围内的场景全部通过\n\n你要是愿意，我可以直接帮你把它整理成一个**测试重跑策略模板**，你拿去发给同事就能用。",
+      "turn_id": "turn_3a5d302395b54eb7a565dc9ef3927426",
+      "conversation_id": "conv_9ed765bf1ac24800b2ebeeccb0ec4a26",
+      "trace_id": "trc_b63fb31951c046d9a685b7f888e80ca5",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

@@ -1,1 +1,0 @@
-OpenCLI AutoFix skill installed from project repository.

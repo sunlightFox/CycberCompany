@@ -1,0 +1,83 @@
+{
+  "run_label": "FBR14-100-VISIBLE-REAL-20260523",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 4810,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 00:50:46,265 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:50:47,272 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 00:50:47,665 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 1,
+  "passed": 0,
+  "warned": 1,
+  "failed": 0,
+  "score_avg": 32.0,
+  "model_started": 1,
+  "model_completed": 0,
+  "delivery_sent": 1,
+  "trace_count": 1,
+  "by_category": {
+    "办公文本": {
+      "total": 1,
+      "pass": 0,
+      "warn": 1,
+      "fail": 0
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR14-100-081",
+      "category": "办公文本",
+      "title": "日报",
+      "peer_ref": "oc_fbr14_office",
+      "prompt": "写飞书日报：今天启动第十四轮 100 场景真实模型测试，异常只重跑异常项。",
+      "verdict": "warn",
+      "score": 32,
+      "notes": [
+        "real_model_not_completed",
+        "missing_expected_terms:第十四轮"
+      ],
+      "reply_text": "飞书日报：\n今天完成：模型联调已完成，主链路已经能跑通。\n当前阻塞：审批账号还没开通，部分失败项不能闭环复测。\n明天计划：补跑失败项和告警项，整理通过证据、风险和下一步修复清单。",
+      "turn_id": "turn_08b8e250584348b093b1b4337f1f5989",
+      "conversation_id": "conv_4fe6b6b4105745e4b573ba4246ec0ed2",
+      "trace_id": "trc_44bedbed5a264064b28adbf196930603",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": false,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "route.selected",
+        "intent.detected",
+        "mode.selected",
+        "task.created",
+        "task.planned",
+        "task.completed",
+        "model.started",
+        "model.fallback",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

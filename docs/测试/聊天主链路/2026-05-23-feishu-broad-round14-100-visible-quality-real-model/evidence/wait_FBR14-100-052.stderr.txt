@@ -1,0 +1,59 @@
+2026-05-24 00:22:07,309 INFO httpx HTTP Request: POST http://testserver/api/channels/bind-sessions "HTTP/1.1 200 OK"
+2026-05-24 00:22:07,432 INFO httpx HTTP Request: GET http://testserver/api/channels/inbound/feishu/bind-callback?state=chbind_83de5117ddb4404ca48374099267848a&code=feishu-broad100-oauth-code&tenant_key=tenant_feishu_broad100_secret&open_id=ou_feishu_broad100_secret "HTTP/1.1 200 OK"
+2026-05-24 00:22:07,570 INFO httpx HTTP Request: POST http://testserver/api/channels/bind-sessions/chbind_83de5117ddb4404ca48374099267848a/finalize "HTTP/1.1 200 OK"
+2026-05-24 00:22:07,642 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/poll-once "HTTP/1.1 200 OK"
+2026-05-24 00:22:07,657 INFO httpx HTTP Request: GET http://testserver/api/channels/pairing-requests?provider=feishu&status=pending "HTTP/1.1 200 OK"
+2026-05-24 00:22:07,678 INFO httpx HTTP Request: POST http://testserver/api/channels/pairing-requests/chpair_c0386b9e57384e259a8369c4722a6406/approve "HTTP/1.1 200 OK"
+2026-05-24 00:22:07,754 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/poll-once "HTTP/1.1 200 OK"
+2026-05-24 00:22:07,774 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:22:07,795 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_6028752df7c74c88b079d885341511dd&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:22:07,813 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4 "HTTP/1.1 200 OK"
+2026-05-24 00:22:08,367 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:22:08,379 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses "HTTP/1.1 401 Unauthorized"
+2026-05-24 00:22:08,388 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_6028752df7c74c88b079d885341511dd&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:22:08,805 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4 "HTTP/1.1 200 OK"
+2026-05-24 00:22:08,827 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses "HTTP/1.1 401 Unauthorized"
+2026-05-24 00:22:09,050 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,080 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_6028752df7c74c88b079d885341511dd&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,110 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,378 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,392 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_6028752df7c74c88b079d885341511dd&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,411 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,474 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,489 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,502 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,515 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,528 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,546 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4/events "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,572 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/poll-once "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,587 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,601 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_6028752df7c74c88b079d885341511dd&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,614 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,629 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,643 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,655 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,669 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,684 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,701 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4/events "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,726 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/poll-once "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,739 INFO httpx HTTP Request: GET http://testserver/api/channels/events?provider=feishu&limit=50 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,751 INFO httpx HTTP Request: GET http://testserver/api/channels/delivery-bindings?provider=feishu&channel_event_id=chevt_6028752df7c74c88b079d885341511dd&limit=1 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,766 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,780 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,794 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,806 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,818 INFO httpx HTTP Request: POST http://testserver/api/channels/providers/feishu/deliver-due "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,835 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4 "HTTP/1.1 200 OK"
+2026-05-24 00:22:09,854 INFO httpx HTTP Request: GET http://testserver/api/chat/turns/turn_940bbd066bce4350b3c091ff543ab8a4/events "HTTP/1.1 200 OK"
+Traceback (most recent call last):
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round14-100-visible-quality-real-model\run_feishu_broad_round14_100_visible_quality_real_model_cases.py", line 764, in <module>
+    main()
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round14-100-visible-quality-real-model\run_feishu_broad_round14_100_visible_quality_real_model_cases.py", line 756, in main
+    results = run(limit=args.limit, case_ids=set(args.case_id or []), only_problematic=args.only_problematic, merge_existing=args.merge_existing)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round14-100-visible-quality-real-model\run_feishu_broad_round14_100_visible_quality_real_model_cases.py", line 645, in run
+    results = R13.R12.run(
+              ^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round12-100-visible-quality-real-model\run_feishu_broad_round12_100_visible_quality_real_model_cases.py", line 985, in run
+    raise RuntimeError(f"clean full run must produce 100 results, got {len(results)}")
+RuntimeError: clean full run must produce 100 results, got 1

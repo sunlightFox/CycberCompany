@@ -1,0 +1,35 @@
+2026-05-23 22:04:16,956 INFO httpx HTTP Request: POST http://testserver/api/channels/bind-sessions "HTTP/1.1 200 OK"
+2026-05-23 22:04:17,060 INFO httpx HTTP Request: GET http://testserver/api/channels/inbound/feishu/bind-callback?state=chbind_e4f18064d7b74832944a4a1d7bf56ba0&code=feishu-broad100-oauth-code&tenant_key=tenant_feishu_broad100_secret&open_id=ou_feishu_broad100_secret "HTTP/1.1 200 OK"
+2026-05-23 22:04:17,114 INFO httpx HTTP Request: POST http://testserver/api/channels/bind-sessions/chbind_e4f18064d7b74832944a4a1d7bf56ba0/finalize "HTTP/1.1 503 Service Unavailable"
+Traceback (most recent call last):
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round13-100-visible-quality-real-model\run_feishu_broad_round13_100_visible_quality_real_model_cases.py", line 642, in <module>
+    main()
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round13-100-visible-quality-real-model\run_feishu_broad_round13_100_visible_quality_real_model_cases.py", line 615, in main
+    results = run(
+              ^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round13-100-visible-quality-real-model\run_feishu_broad_round13_100_visible_quality_real_model_cases.py", line 483, in run
+    return R12.run(
+           ^^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round12-100-visible-quality-real-model\run_feishu_broad_round12_100_visible_quality_real_model_cases.py", line 976, in run
+    results = R9.run(
+              ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round9-100-visible-quality-real-model\run_feishu_broad_round9_100_visible_quality_real_model_cases.py", line 547, in run
+    return R8.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round8-100-visible-quality-real-model\run_feishu_broad_round8_100_visible_quality_real_model_cases.py", line 500, in run
+    return R7.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round7-100-visible-quality-real-model\run_feishu_broad_round7_100_visible_quality_real_model_cases.py", line 642, in run
+    results = R6.run(
+              ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round6-100-visible-quality-real-model\run_feishu_broad_round6_100_visible_quality_real_model_cases.py", line 581, in run
+    return R5.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round5-100-visible-quality-real-model\run_feishu_broad_round5_100_visible_quality_real_model_cases.py", line 476, in run
+    return R4.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round4-100-visible-quality-real-model\run_feishu_broad_round4_100_visible_quality_real_model_cases.py", line 958, in run
+    BASE._bind_feishu(client)
+  File "C:\Users\Administrator\Desktop\CycberCompany\docs\测试\聊天主链路\2026-05-21-feishu-broad-100-real-model\run_feishu_broad_100_real_model_cases.py", line 398, in _bind_feishu
+    raise RuntimeError(finalized.text)
+RuntimeError: {"error":{"code":"MCP_UNAVAILABLE","message":"微信 connector 不可用","details":{"reason":"feishu bind is not confirmed"},"trace_id":"trc_243202a6380440f582e59654893a73d7"}}
