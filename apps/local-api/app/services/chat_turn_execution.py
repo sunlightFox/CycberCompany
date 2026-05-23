@@ -1953,6 +1953,7 @@ def _scheduled_task_visible_text_guard(text: str, *, goal: str, schedule: dict[s
     raw_goal = str(goal or "")
     if "明早" in raw_goal and "明早" not in visible:
         visible = visible.replace("明天早上", "明早")
+        visible = visible.replace("今天早上", "明早")
     visible = re.sub(r"10\s*点\s*半", "10点半", visible)
     if "不要自动付款" in raw_goal and "不会自动" not in visible:
         visible = visible.rstrip("。") + "，不会自动付款。"

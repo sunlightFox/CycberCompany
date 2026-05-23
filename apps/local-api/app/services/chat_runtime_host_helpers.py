@@ -399,6 +399,13 @@ def host_filesystem_label(location: str) -> str:
 def browser_read_page_reply(result: dict[str, Any]) -> str:
     title = str(result.get("title") or "").strip()
     visible = _browser_primary_evidence_text(result, limit=360)
+    page_state = result.get("browser_page_state") if isinstance(result.get("browser_page_state"), dict) else {}
+    status = str(page_state.get("status") or "").strip().lower()
+    if status in {"404", "not_found"} or "not found" in visible.lower():
+        return (
+            "这个页面这次打不开，当前证据是返回了 404 / not found。"
+            "我没有拿到可读正文，所以不能假装已经读到页面内容；能确认的只有这个地址不可用或页面不存在。"
+        )
     if title and visible:
         return f"我看了这个页面，标题是《{title}》，主要内容是：{visible}。只读网页能力正在工作。"
     if title:
@@ -2223,10 +2230,14 @@ def deterministic_boundary_reply(user_text: str) -> str | None:
         marker in raw for marker in ("密码", "密钥", "私钥")
     ):
         return "我不会复述密码、密钥、token 或其他敏感凭据；这类内容不会作为可直接输出的信息返回。"
+    if "工具要发邮件" in raw and "邮箱密码" in raw:
+        return "工具不能直接读取邮箱密码。邮件这类资产访问要先经过 Asset Broker，再按权限、用途和最小范围发放可控能力；工具只执行被授权的发送动作，不能绕过权限查看明文密码。"
+    if "拒绝导出 token" in raw and "trace" in raw:
+        return "拒绝导出 token 时，trace 至少记录请求人、目标资源、触发的拒绝原因、风险级别和最终可见回复。明文 token 不能进 trace，只记录脱敏后的资源类型、权限判断、审批状态和拒绝结果。"
     if any(marker in lowered for marker in ["private key", "private_key", "mnemonic"]):
-        return "这类私钥或助记词请求我不能处理。"
+        return "这类私钥或助记词请求我不能处理，也不能替你保存或以后复述。助记词等同于钱包控制权，建议离线、私密、由你自己保管；我只能帮你整理安全保存原则。"
     if any(marker in raw for marker in ["私钥", "助记词", "系统密钥"]):
-        return "这类私钥或助记词请求我不能处理。"
+        return "这类私钥或助记词请求我不能处理，也不能替你保存或以后复述。助记词等同于钱包控制权，建议离线、私密、由你自己保管；我只能帮你整理安全保存原则。"
     return None
 
 

@@ -239,6 +239,8 @@ def _unsafe_scheduled_goal(text: str) -> bool:
         "发给外部",
         "发到外部",
         "外部供应商",
+        "外包",
+        "外包同事",
         "外部群",
         "转给",
         "发送",
@@ -491,6 +493,16 @@ def _extract_clock_text(text: str) -> str:
         if prefix == "中午" and hour < 11:
             hour += 12
         return f"{hour % 24:02d}:{minute:02d}"
+    match = re.search(r"(早上|上午|中午|下午|晚上)?\s*(\d{1,2})\s*点\s*(\d{1,2})\s*分?", text)
+    if match:
+        prefix = match.group(1) or ""
+        hour = int(match.group(2))
+        minute = int(match.group(3))
+        if prefix in {"下午", "晚上"} and hour < 12:
+            hour += 12
+        if prefix == "中午" and hour < 11:
+            hour += 12
+        return f"{hour % 24:02d}:{minute % 60:02d}"
     match = re.search(r"(早上|上午|中午|下午|晚上)?\s*(\d{1,2})\s*点", text)
     if not match:
         return "09:00"

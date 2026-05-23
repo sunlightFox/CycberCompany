@@ -930,7 +930,7 @@ class ChatService(ChatFacadeShellMixin):
     ) -> str:
         if any(item.get("event_type") == ChatEventType.MODEL_COMPLETED.value for item in events):
             return text
-        if not self._turn_should_finalize_without_model_reply_via_model(turn):
+        if intent != "browser_read" and not self._turn_should_finalize_without_model_reply_via_model(turn):
             return text
         available_brains = await self._brains.list_routable_brains()
         if not available_brains:
@@ -1379,6 +1379,41 @@ class ChatService(ChatFacadeShellMixin):
         prompt_metadata: dict[str, Any] | None = None,
         emit_final_delta: bool = False,
     ) -> AsyncIterator[ChatEvent]:
+        user_text = str(turn.get("current_user_text") or "")
+        if not user_text:
+            user_message = await self._chat_repo.get_message(turn["user_message_id"])
+            user_text = str(user_message.get("content_text") if user_message else "")
+            if not user_text and isinstance(user_message, dict):
+                content = user_message.get("content")
+                if isinstance(content, dict):
+                    user_text = str(
+                        content.get("text")
+                        or content.get("content_text")
+                        or content.get("model_safe_text")
+                        or ""
+                    )
+            if not user_text:
+                envelope = await self._chat_repo.get_message_envelope_by_turn(turn["turn_id"])
+                if isinstance(envelope, dict):
+                    user_text = str(
+                        envelope.get("content_text")
+                        or envelope.get("model_safe_text")
+                        or envelope.get("model_safe_content_text")
+                        or ""
+                    )
+                    if not user_text:
+                        for part in envelope.get("content_parts") or []:
+                            if isinstance(part, dict):
+                                user_text = str(
+                                    part.get("text")
+                                    or part.get("content_text")
+                                    or part.get("model_safe_text")
+                                    or ""
+                                )
+                                if user_text:
+                                    break
+            if user_text:
+                turn["current_user_text"] = user_text
         text = self._style_visible_text(turn, text, response_plan=response_plan)
         filtered_text, final_filter = self._response_coordinator.filter_text(text)
         text = filtered_text
@@ -1553,12 +1588,7 @@ class ChatService(ChatFacadeShellMixin):
             turn_status="completed",
         )
         text, attachment_evidence = await self._append_channel_attachment_fact_footer(turn, text)
-        user_text = str(turn.get("current_user_text") or "")
-        if not user_text:
-            user_message = await self._chat_repo.get_message(turn["user_message_id"])
-            user_text = str(user_message.get("content_text") if user_message else "")
-            if user_text:
-                turn["current_user_text"] = user_text
+        user_text = str(turn.get("current_user_text") or user_text)
         normalized_text_patch = self._response_coordinator.normalize_plan_text(
             response_plan,
             text,
@@ -1585,6 +1615,29 @@ class ChatService(ChatFacadeShellMixin):
             response_filter=merged_filter,
         )
         text = response_plan.plain_text
+        final_user_text = user_text
+        if not final_user_text:
+            structured_payload = dict(response_plan.structured_payload or {})
+            quality_shadow = structured_payload.get("chat_quality_shadow")
+            if isinstance(quality_shadow, dict):
+                dialogue_state = quality_shadow.get("dialogue_state")
+                if isinstance(dialogue_state, dict):
+                    final_user_text = str(
+                        dialogue_state.get("active_topic")
+                        or dialogue_state.get("user_goal")
+                        or ""
+                    )
+        if final_user_text:
+            guarded_text = preserve_visible_reply_contract(text, user_text=final_user_text)
+            if guarded_text != text:
+                text = guarded_text
+                response_plan = self._response_coordinator.finalize_plan(
+                    response_plan,
+                    text,
+                    authoritative_text=text,
+                    response_filter=merged_filter,
+                )
+                text = response_plan.plain_text
         if emit_final_delta and text:
             yield await self._emit_and_record(
                 turn["turn_id"],
