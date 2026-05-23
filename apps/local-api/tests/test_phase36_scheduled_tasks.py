@@ -6,6 +6,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import pytest
+from app.services.chat_tasks import (
+    ScheduledTaskCancelIntentCoordinator,
+    ScheduledTaskIntentCoordinator,
+)
 from app.services.scheduled_tasks import ScheduleParser
 from fastapi.testclient import TestClient
 from phase_contracts import assert_phase_migration_contract
@@ -29,6 +33,48 @@ def test_phase36_schedule_parser_daily_interval_once_weekly() -> None:
     assert once.next_run_at == datetime(2026, 4, 30, 9, 0, tzinfo=UTC)
     assert weekly.next_run_at is not None
     assert weekly.next_run_at > now
+
+
+def test_phase36_chat_scheduled_parser_does_not_confuse_duration_with_relative_once() -> None:
+    parser = ScheduledTaskIntentCoordinator()
+
+    daily_with_duration = parser.parse("每天 06:35 提醒我听 10 分钟英语听力。")
+    english_daily = parser.parse("Please remind me every day at 09:10 to check the build status.")
+    interval = parser.parse("每隔 50 分钟提醒我喝几口水。")
+    relative = parser.parse("再过 20 秒提醒我喝水。")
+
+    assert daily_with_duration is not None
+    assert daily_with_duration.schedule["type"] == "daily"
+    assert daily_with_duration.schedule["time"] == "06:35"
+    assert english_daily is not None
+    assert english_daily.schedule["type"] == "daily"
+    assert english_daily.schedule["time"] == "09:10"
+    assert interval is not None
+    assert interval.schedule["type"] == "interval"
+    assert interval.schedule["every_seconds"] == 50 * 60
+    assert relative is not None
+    assert relative.schedule["type"] == "once"
+
+
+def test_phase36_chat_scheduled_parser_allows_no_fuzzy_task_boundary() -> None:
+    parser = ScheduledTaskIntentCoordinator()
+
+    intent = parser.parse("每周五 18 点提醒我整理本周风险，不要创建模糊任务。")
+
+    assert intent is not None
+    assert intent.schedule["type"] == "weekly"
+    assert intent.schedule["days"] == ["周五"]
+    assert intent.schedule["time"] == "18:00"
+    assert intent.goal == "整理本周风险"
+
+
+def test_phase36_chat_cancel_parser_does_not_steal_manual_action_reminders() -> None:
+    parser = ScheduledTaskCancelIntentCoordinator()
+
+    assert parser.parse("每天 22:25 提醒我删除废弃素材前确认文件夹。") is None
+    assert parser.parse("明天 10 点提醒我取消会议前先问一下对方。") is None
+    assert parser.parse("撤销喝水提醒。") is not None
+    assert parser.parse("取消刚才那个提醒。") is not None
 
 
 def test_phase36_crud_lifecycle_and_api(client: TestClient) -> None:
@@ -271,6 +317,217 @@ def test_phase36_upload_id_masking_reminder_is_normal_reminder(client: TestClien
     assert run["policy_decision"]["auto_start"] is True
 
 
+def test_phase36_chat_cancel_latest_scheduled_task_confirms_and_disables_trigger(
+    client: TestClient,
+) -> None:
+    conversation_id = client.get("/api/chat/conversations").json()["items"][0]["conversation_id"]
+    create_reply = _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-latest-create",
+        text="明天上午 9 点提醒我喝水。",
+    )
+    tasks = client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    scheduled = next(item for item in tasks if "喝水" in str(item.get("goal") or ""))
+
+    cancel_reply = _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-latest-cancel",
+        text="取消刚才那个提醒。",
+    )
+    detail = client.get(f"/api/scheduled-tasks/{scheduled['scheduled_task_id']}").json()
+    trigger = client.post(
+        f"/api/scheduled-tasks/{scheduled['scheduled_task_id']}/trigger",
+        json={"scheduled_for": "2026-05-22T00:00:00+00:00"},
+    )
+    events = client.get(f"/api/scheduled-tasks/{scheduled['scheduled_task_id']}/events").json()["items"]
+
+    assert "提醒你喝水" in create_reply
+    assert "已取消" in cancel_reply
+    assert "喝水" in cancel_reply
+    assert "不会再提醒你" in cancel_reply
+    assert detail["status"] == "cancelled"
+    assert detail["next_run_at"] is None
+    assert trigger.status_code == 409
+    assert any(item["event_type"] == "scheduled_task.cancelled" for item in events)
+    _assert_no_scheduled_reply_leak(cancel_reply)
+
+
+def test_phase36_chat_cancel_by_keyword_only_cancels_matching_task(client: TestClient) -> None:
+    conversation_id = client.get("/api/chat/conversations").json()["items"][0]["conversation_id"]
+    _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-keyword-water",
+        text="明天上午 8 点提醒我喝水。",
+    )
+    _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-keyword-groceries",
+        text="明天上午 10 点提醒我买菜。",
+    )
+    tasks = client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    water = next(item for item in tasks if "喝水" in str(item.get("goal") or ""))
+    groceries = next(item for item in tasks if "买菜" in str(item.get("goal") or ""))
+
+    reply = _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-keyword-cancel",
+        text="撤销喝水提醒。",
+    )
+    water_detail = client.get(f"/api/scheduled-tasks/{water['scheduled_task_id']}").json()
+    groceries_detail = client.get(f"/api/scheduled-tasks/{groceries['scheduled_task_id']}").json()
+
+    assert "已取消" in reply
+    assert "喝水" in reply
+    assert water_detail["status"] == "cancelled"
+    assert groceries_detail["status"] == "active"
+    _assert_no_scheduled_reply_leak(reply)
+
+
+def test_phase36_chat_cancel_ambiguous_reminders_asks_before_cancel(client: TestClient) -> None:
+    conversation_id = client.get("/api/chat/conversations").json()["items"][0]["conversation_id"]
+    _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-ambiguous-morning",
+        text="明天上午 8 点提醒我喝水。",
+    )
+    _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-ambiguous-evening",
+        text="明天晚上 9 点提醒我喝水。",
+    )
+    before = client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    water_ids = {
+        item["scheduled_task_id"]
+        for item in before
+        if item["status"] == "active" and "喝水" in str(item.get("goal") or "")
+    }
+
+    reply = _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-ambiguous-cancel",
+        text="取消喝水提醒。",
+    )
+    after = client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    still_active = {
+        item["scheduled_task_id"]
+        for item in after
+        if item["status"] == "active" and "喝水" in str(item.get("goal") or "")
+    }
+
+    assert "你想取消哪一个" in reply
+    assert water_ids <= still_active
+    _assert_no_scheduled_reply_leak(reply)
+
+
+def test_phase36_chat_cancel_no_match_does_not_cancel_any_task(client: TestClient) -> None:
+    conversation_id = client.get("/api/chat/conversations").json()["items"][0]["conversation_id"]
+    _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-no-match-create",
+        text="明天上午 9 点提醒我喝水。",
+    )
+    before = client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    active_before = {item["scheduled_task_id"] for item in before if item["status"] == "active"}
+
+    reply = _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-no-match-cancel",
+        text="取消买菜提醒。",
+    )
+    after = client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    active_after = {item["scheduled_task_id"] for item in after if item["status"] == "active"}
+
+    assert "没找到对应的提醒" in reply
+    assert active_before <= active_after
+    _assert_no_scheduled_reply_leak(reply)
+
+
+def test_phase36_chat_cancel_already_cancelled_reminder_is_idempotent(client: TestClient) -> None:
+    conversation_id = client.get("/api/chat/conversations").json()["items"][0]["conversation_id"]
+    _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-already-create",
+        text="明天上午 9 点提醒我喝水。",
+    )
+    tasks = client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    scheduled = next(item for item in tasks if "喝水" in str(item.get("goal") or ""))
+    client.post(f"/api/scheduled-tasks/{scheduled['scheduled_task_id']}/cancel", json={})
+
+    reply = _chat_reply(
+        client,
+        conversation_id=conversation_id,
+        session_id="phase36-cancel-already-cancel",
+        text="取消喝水提醒。",
+    )
+    detail = client.get(f"/api/scheduled-tasks/{scheduled['scheduled_task_id']}").json()
+
+    assert "已经取消" in reply
+    assert detail["status"] == "cancelled"
+    assert detail["next_run_at"] is None
+    _assert_no_scheduled_reply_leak(reply)
+
+
+@pytest.mark.parametrize(
+    ("session_suffix", "prompt", "visible_term"),
+    [
+        ("delete-precheck", "每天 22:25 提醒我删除废弃素材前确认文件夹。", "删除废弃素材"),
+        ("wallet-seed-precheck", "每周周六 11:10 提醒我备份钱包助记词前确认环境安全。", "钱包助记词"),
+        ("external-mail-precheck", "明天下午 4:20 提醒我给外部邮箱发资料前再确认。", "外部邮箱"),
+        ("export-desensitize-precheck", "每天 17:15 提醒我导出用户报表前确认脱敏字段。", "用户报表"),
+    ],
+)
+def test_phase36_manual_precheck_reminders_are_not_misjudged_as_auto_actions(
+    client: TestClient,
+    session_suffix: str,
+    prompt: str,
+    visible_term: str,
+) -> None:
+    conversation_id = client.get("/api/chat/conversations").json()["items"][0]["conversation_id"]
+    before_ids = {
+        item["scheduled_task_id"]
+        for item in client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    }
+    created = client.post(
+        "/api/chat/turn",
+        json={
+            "conversation_id": conversation_id,
+            "member_id": "mem_xiaoyao",
+            "session_id": f"phase36-manual-precheck-{session_suffix}",
+            "input": {"type": "text", "text": prompt},
+        },
+    )
+    assert created.status_code == 200, created.text
+
+    stream = client.get(created.json()["stream_url"])
+    reply = _reply_from_sse(stream.text)
+    tasks = client.get("/api/scheduled-tasks", params={"limit": 200}).json()["items"]
+    scheduled = next(item for item in tasks if item["scheduled_task_id"] not in before_ids)
+    run = client.post(
+        f"/api/scheduled-tasks/{scheduled['scheduled_task_id']}/trigger",
+        json={"scheduled_for": "2026-05-22T00:00:00+00:00"},
+    ).json()
+
+    assert visible_term in reply
+    assert "到点我会直接叫你" in reply
+    assert "高风险" not in reply
+    assert "不会直接" not in reply
+    assert "不会自动付款" not in reply
+    assert run["status"] == "completed"
+    assert run["policy_decision"]["risk_level"] == "R2"
+    assert run["policy_decision"]["auto_start"] is True
+
+
 def test_phase36_due_notification_uses_natural_reminder_copy(client: TestClient) -> None:
     registry = cast(Any, client.app).state.registry
     scheduled = _create_scheduled_task(
@@ -418,6 +675,42 @@ def _run_async(client: TestClient, func: Any, *args: Any, **kwargs: Any) -> Any:
         return await func(*args, **kwargs)
 
     return cast(Any, client).portal.call(runner)
+
+
+def _chat_reply(
+    client: TestClient,
+    *,
+    conversation_id: str,
+    text: str,
+    session_id: str,
+) -> str:
+    created = client.post(
+        "/api/chat/turn",
+        json={
+            "conversation_id": conversation_id,
+            "member_id": "mem_xiaoyao",
+            "session_id": session_id,
+            "input": {"type": "text", "text": text},
+        },
+    )
+    assert created.status_code == 200, created.text
+    stream = client.get(created.json()["stream_url"])
+    return _reply_from_sse(stream.text)
+
+
+def _assert_no_scheduled_reply_leak(reply: str) -> None:
+    for forbidden in [
+        "调度方式",
+        "下一次执行时间",
+        "后台流程",
+        "高风险动作",
+        "格式约束作答",
+        "trace_id",
+        "task_id",
+        "Asia/Shanghai",
+    ]:
+        assert forbidden not in reply
+    assert re.search(r"\d{4}-\d{2}-\d{2}T", reply) is None
 
 
 def _reply_from_sse(raw: str) -> str:

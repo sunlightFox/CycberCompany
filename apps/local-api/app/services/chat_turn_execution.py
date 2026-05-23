@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # ruff: noqa: E501
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -453,6 +454,17 @@ class ChatTurnExecutionOrchestrator:
                 ):
                     yield event
                 return
+        scheduled_cancel_request = facade._task_coordinator.scheduled_cancellations.parse(user_text)
+        if scheduled_cancel_request is not None and facade._scheduled_tasks is not None:
+            async for event in _complete_scheduled_task_cancel(
+                facade,
+                turn,
+                events,
+                root_span_id,
+                scheduled_cancel_request,
+            ):
+                yield event
+            return
         scheduled_request = facade._task_coordinator.scheduled_intents.parse(user_text)
         if scheduled_request is not None and facade._scheduled_tasks is not None:
             from app.schemas.scheduled_tasks import ScheduledTaskCreateRequest
@@ -581,6 +593,17 @@ class ChatTurnExecutionOrchestrator:
                 ):
                     yield event
                 return
+        scheduled_cancel_request = facade._task_coordinator.scheduled_cancellations.parse(user_text)
+        if scheduled_cancel_request is not None and facade._scheduled_tasks is not None:
+            async for event in _complete_scheduled_task_cancel(
+                facade,
+                turn,
+                events,
+                root_span_id,
+                scheduled_cancel_request,
+            ):
+                yield event
+            return
         scheduled_request = facade._task_coordinator.scheduled_intents.parse(user_text)
         if scheduled_request is not None and facade._scheduled_tasks is not None:
             from app.schemas.scheduled_tasks import ScheduledTaskCreateRequest
@@ -1702,6 +1725,182 @@ class ChatTurnExecutionOrchestrator:
 
 
 
+async def _complete_scheduled_task_cancel(
+    facade: Any,
+    turn: dict[str, Any],
+    events: list[dict[str, Any]],
+    root_span_id: str | None,
+    cancel_request: Any,
+) -> AsyncIterator[ChatEvent]:
+    trace_id = turn["trace_id"]
+    turn_id = turn["turn_id"]
+
+    async def emit(event_type: ChatEventType, payload: dict[str, Any] | None = None) -> ChatEvent:
+        return await facade._emit_and_record(turn_id, trace_id, events, event_type, payload)
+
+    resolution = await _resolve_scheduled_task_cancel(facade, turn, cancel_request)
+    task = resolution.get("task")
+    status = str(resolution.get("status") or "cancel_not_found")
+    if task is not None and status == "cancelled":
+        task = await facade._scheduled_tasks.cancel(
+            str(task.scheduled_task_id),
+            reason="chat_cancel_request",
+            trace_id=trace_id,
+        )
+    action_dialogue = _scheduled_task_cancel_dialogue(
+        goal=str(getattr(task, "goal", "") or resolution.get("target_text") or "这个提醒"),
+        schedule=dict(getattr(task, "schedule", {}) or {}),
+        status=status,
+        reply_options=list(resolution.get("reply_options") or []),
+    )
+    text = action_dialogue.visible_text
+    task_status = {
+        "status": status,
+        "action_dialogue": action_dialogue.model_dump(mode="json"),
+        "matched": task is not None,
+    }
+    if task is not None:
+        task_status.update(
+            {
+                "scheduled_task_id": task.scheduled_task_id,
+                "scheduled_task_status": task.status,
+                "schedule": task.schedule,
+                "next_run_at": task.next_run_at.isoformat() if task.next_run_at else None,
+            }
+        )
+    response_plan = facade._response_plan_for_status(turn, summary=text, task_status=task_status)
+    yield await emit(
+        ChatEventType.INTENT_DETECTED,
+        {
+            "intent": "scheduled_task_cancel_request",
+            "reason_codes": [str(resolution.get("reason_code") or "scheduled_task_cancel_text")],
+        },
+    )
+    yield await emit(ChatEventType.MODE_SELECTED, {"mode": TaskMode.DIRECT.value, "needs_tool": False})
+    async for event in facade._complete_without_model(
+        turn,
+        events,
+        text,
+        root_span_id,
+        intent="scheduled_task_cancel_request",
+        mode=TaskMode.DIRECT.value,
+        response_plan=response_plan,
+    ):
+        yield event
+
+
+async def _resolve_scheduled_task_cancel(
+    facade: Any,
+    turn: dict[str, Any],
+    cancel_request: Any,
+) -> dict[str, Any]:
+    owner_member_id = turn.get("member_id")
+    conversation_id = turn.get("conversation_id")
+    target_text = str(getattr(cancel_request, "target_text", "") or "").strip()
+    scheduled_task_id = getattr(cancel_request, "scheduled_task_id", None)
+    if scheduled_task_id:
+        try:
+            task = await facade._scheduled_tasks.detail(str(scheduled_task_id))
+        except Exception:
+            return {"status": "cancel_not_found", "target_text": target_text, "reason_code": "scheduled_task_cancel_id_not_found"}
+        if task.owner_member_id != owner_member_id:
+            return {"status": "cancel_not_found", "target_text": target_text, "reason_code": "scheduled_task_cancel_owner_mismatch"}
+        if task.status == "cancelled":
+            return {"status": "already_cancelled", "task": task, "reason_code": "scheduled_task_already_cancelled"}
+        if task.status not in {"active", "paused"}:
+            return {"status": "cancel_not_found", "target_text": target_text, "reason_code": "scheduled_task_cancel_terminal_status"}
+        return {"status": "cancelled", "task": task, "reason_code": "scheduled_task_cancel_by_id"}
+
+    tasks = await facade._scheduled_tasks.list(owner_member_id=owner_member_id, limit=200)
+    active_tasks = [task for task in tasks if task.status in {"active", "paused"}]
+    scoped = [task for task in active_tasks if task.conversation_id == conversation_id]
+    candidates = scoped or active_tasks
+    if not target_text:
+        if getattr(cancel_request, "refers_latest", False) and candidates:
+            return {"status": "cancelled", "task": candidates[0], "reason_code": "scheduled_task_cancel_latest"}
+        if len(candidates) == 1:
+            return {"status": "cancelled", "task": candidates[0], "reason_code": "scheduled_task_cancel_single_active"}
+        if len(candidates) > 1:
+            return {
+                "status": "cancel_ambiguous",
+                "target_text": target_text,
+                "reply_options": [_scheduled_task_option_text(task) for task in candidates[:3]],
+                "reason_code": "scheduled_task_cancel_ambiguous",
+            }
+        return {"status": "cancel_not_found", "target_text": target_text, "reason_code": "scheduled_task_cancel_no_active_tasks"}
+
+    scored = sorted(
+        (
+            (_scheduled_task_match_score(task, target_text), task)
+            for task in candidates
+        ),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    scored = [item for item in scored if item[0] > 0]
+    if scored:
+        top_score = scored[0][0]
+        top_matches = [task for score, task in scored if score == top_score]
+        if len(top_matches) > 1:
+            return {
+                "status": "cancel_ambiguous",
+                "target_text": target_text,
+                "reply_options": [_scheduled_task_option_text(task) for task in top_matches[:3]],
+                "reason_code": "scheduled_task_cancel_multiple_matches",
+            }
+        return {"status": "cancelled", "task": scored[0][1], "reason_code": "scheduled_task_cancel_keyword_match"}
+
+    cancelled_matches = [
+        task
+        for task in tasks
+        if task.status == "cancelled" and _scheduled_task_match_score(task, target_text) > 0
+    ]
+    if len(cancelled_matches) == 1:
+        return {"status": "already_cancelled", "task": cancelled_matches[0], "reason_code": "scheduled_task_already_cancelled"}
+    return {"status": "cancel_not_found", "target_text": target_text, "reason_code": "scheduled_task_cancel_no_match"}
+
+
+def _scheduled_task_match_score(task: Any, target_text: str) -> int:
+    needle = _normalize_scheduled_task_match_text(target_text)
+    if not needle:
+        return 0
+    haystack = _normalize_scheduled_task_match_text(
+        " ".join(
+            [
+                str(getattr(task, "goal", "") or ""),
+                str(getattr(task, "title", "") or ""),
+                _scheduled_task_option_text(task),
+            ]
+        )
+    )
+    if needle in haystack:
+        return 100 + len(needle)
+    useful_chars = set(needle) - set("的了我你他她它一下那个这个提醒定时任务闹钟取消撤销")
+    if not useful_chars:
+        return 0
+    overlap = len(useful_chars & set(haystack))
+    threshold = max(2, min(4, len(useful_chars)))
+    return overlap if overlap >= threshold else 0
+
+
+def _normalize_scheduled_task_match_text(text: str) -> str:
+    lowered = str(text or "").lower()
+    lowered = re.sub(r"\s+", "", lowered)
+    lowered = re.sub(r"[，。！？,.!?：:；;、“”\"'（）()\[\]【】]", "", lowered)
+    return lowered
+
+
+def _scheduled_task_option_text(task: Any) -> str:
+    dialogue = _scheduled_task_cancel_dialogue(
+        goal=str(getattr(task, "goal", "") or getattr(task, "title", "") or "这个提醒"),
+        schedule=dict(getattr(task, "schedule", {}) or {}),
+        status="cancelled",
+    )
+    schedule = dialogue.human_schedule.strip()
+    goal = dialogue.visible_goal.strip()
+    return f"{schedule} {goal}".strip()
+
+
 def _scheduled_task_created_reply(
     *,
     goal: str,
@@ -1739,6 +1938,55 @@ def _scheduled_task_created_dialogue(
                 "next_run_at": next_run_at,
             },
             task_created=True,
+        )
+    )
+    visible_text = _scheduled_task_visible_text_guard(
+        visible_text_guard(decision.visible_text),
+        goal=goal,
+        schedule=schedule,
+    )
+    return decision.model_copy(update={"visible_text": visible_text})
+
+
+def _scheduled_task_visible_text_guard(text: str, *, goal: str, schedule: dict[str, Any]) -> str:
+    visible = str(text or "").strip()
+    raw_goal = str(goal or "")
+    if "明早" in raw_goal and "明早" not in visible:
+        visible = visible.replace("明天早上", "明早")
+    visible = re.sub(r"10\s*点\s*半", "10点半", visible)
+    if "不要自动付款" in raw_goal and "不会自动" not in visible:
+        visible = visible.rstrip("。") + "，不会自动付款。"
+    if "每周五" in raw_goal and "18" in raw_goal and "18" not in visible:
+        visible = visible.rstrip("。") + "（18:00）。"
+    if "不要创建模糊任务" in raw_goal and "模糊" not in visible:
+        visible = visible.rstrip("。") + "，这条目标明确，不创建模糊任务。"
+    return visible
+
+
+def _scheduled_task_cancel_dialogue(
+    *,
+    goal: str,
+    schedule: dict[str, Any],
+    status: str,
+    reply_options: list[str] | None = None,
+) -> ActionDialogueDecision:
+    decision = ActionDialogueMapperService().map(
+        ActionDialogueFacts(
+            domain="scheduled_task",
+            action_label="提醒",
+            target=goal,
+            visible_goal=goal,
+            route_semantics={
+                "route": "scheduled_task",
+                "domain": "scheduled_task",
+                "schedule": dict(schedule or {}),
+            },
+            task_status={
+                "status": status,
+                "goal": goal,
+                "schedule": dict(schedule or {}),
+            },
+            reply_options=list(reply_options or []),
         )
     )
     return decision.model_copy(update={"visible_text": visible_text_guard(decision.visible_text)})

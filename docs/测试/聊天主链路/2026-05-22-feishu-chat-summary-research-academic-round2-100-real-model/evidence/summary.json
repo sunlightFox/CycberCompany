@@ -1,0 +1,121 @@
+{
+  "run_label": "FCSR2-100-REAL-20260522",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 3169,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-22 23:50:48,166 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-22 23:50:49,164 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-22 23:50:49,618 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_not_too_short": 20,
+    "knowledge_structure_examples_evidence": 20,
+    "honest_boundaries_no_overpromise": 10
+  },
+  "total": 2,
+  "passed": 2,
+  "warned": 0,
+  "failed": 0,
+  "score_avg": 100.0,
+  "model_started": 2,
+  "model_completed": 2,
+  "delivery_sent": 2,
+  "trace_count": 2,
+  "by_category": {
+    "自然沟通": {
+      "total": 1,
+      "pass": 1,
+      "warn": 0,
+      "fail": 0
+    },
+    "总结压缩": {
+      "total": 1,
+      "pass": 1,
+      "warn": 0,
+      "fail": 0
+    }
+  },
+  "results": [
+    {
+      "case_id": "FCSR2-015",
+      "category": "自然沟通",
+      "title": "感谢克制",
+      "peer_ref": "oc_fcsr2_relation",
+      "prompt": "朋友帮我救了个急，我想认真感谢但不肉麻，写一段。",
+      "verdict": "pass",
+      "score": 100,
+      "notes": [],
+      "reply_text": "我来理一下，给你一段不肉麻、但很真诚的：\n\n这次真的多亏你及时帮我，不然我一下子还真不知道该怎么处理。你这次的帮忙对我很重要，我记在心里了。谢谢你在我最需要的时候伸手，之后你有什么需要我帮忙的，尽管说。",
+      "turn_id": "turn_6de6f344b60b484a854aee8dfea6abb7",
+      "conversation_id": "conv_f31598d5ddff4f038c815d3506855b3e",
+      "trace_id": "trc_62b85433722942f8884871c5700371db",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    },
+    {
+      "case_id": "FCSR2-036",
+      "category": "总结压缩",
+      "title": "只说重点",
+      "peer_ref": "oc_fcsr2_summary",
+      "prompt": "这段只保留重点：数据没齐，但留存下降信号一致，先查渠道质量。",
+      "verdict": "pass",
+      "score": 100,
+      "notes": [],
+      "reply_text": "重点：数据还没齐，不能下最终结论；但留存下降信号一致，优先排查渠道质量，先看新增来源、转化路径和低质流量占比。",
+      "turn_id": "turn_b2af3c41e5c7470c979e046142f8d2d8",
+      "conversation_id": "conv_640fa869b0c94da3b4d54d770d1bdf9a",
+      "trace_id": "trc_8765880d5abd44e99b16bb7c652fd9d8",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ],
+  "round": "round2_new_100"
+}

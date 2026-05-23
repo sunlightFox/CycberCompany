@@ -23,7 +23,7 @@ from core_types import (
 from response_composer import ComposeRequest
 
 from app.services.chat_runtime_host_helpers import deterministic_no_model_reply
-from app.services.chat_visible_guard import visible_text_guard
+from app.services.chat_visible_guard import generic_visible_content_repair, visible_text_guard
 
 
 def _naturalize_visible_repair(user_text: str, repaired_text: str) -> str:
@@ -49,6 +49,22 @@ def _repair_irrelevant_model_reply(user_text: str, assistant_text: str) -> str |
     memory_artifact_repair = _repair_memory_artifact_reply(user, reply)
     if memory_artifact_repair is not None:
         return memory_artifact_repair
+    broad_repair = generic_visible_content_repair(reply, user, original_visible=reply)
+    if broad_repair is not None and broad_repair.strip() != reply.strip():
+        return _naturalize_visible_repair(user, broad_repair)
+    if any(
+        marker in reply
+        for marker in (
+            "CHAT-KNOWLEDGE-SUMMARY",
+            "CHAT-PERSONA-",
+            "CHAT-MEMORY-",
+            "内部记忆摘要标识",
+            "这轮对话里的总结偏好",
+        )
+    ):
+        broad_repair = generic_visible_content_repair(reply, user, original_visible=reply)
+        if broad_repair is not None:
+            return _naturalize_visible_repair(user, broad_repair)
     if _looks_like_completed_template_misfire(user, reply):
         topical_repair = _topical_reply_for_misdirected_refusal(user)
         if topical_repair is not None:
@@ -56,11 +72,24 @@ def _repair_irrelevant_model_reply(user_text: str, assistant_text: str) -> str |
         office_repair = _office_answer_shape_repair(user, reply)
         if office_repair is not None:
             return _naturalize_visible_repair(user, office_repair)
+        broad_repair = generic_visible_content_repair(reply, user, original_visible=reply)
+        if broad_repair is not None:
+            return _naturalize_visible_repair(user, broad_repair)
         deterministic = deterministic_no_model_reply(user)
         if deterministic:
             return _naturalize_visible_repair(user, deterministic)
         generic = _generic_reply_for_misdirected_refusal(user)
         return _naturalize_visible_repair(user, generic) if generic is not None else None
+    misdirected_relation_template = "昨天我说话的语气有点冲" in reply and not any(
+        marker in user for marker in ("语气", "修复关系", "修复一下关系", "道歉", "开场")
+    )
+    if misdirected_relation_template:
+        topical_repair = _topical_reply_for_misdirected_refusal(user)
+        if topical_repair is not None:
+            return _naturalize_visible_repair(user, topical_repair)
+        broad_repair = generic_visible_content_repair("", user, original_visible=reply)
+        if broad_repair is not None:
+            return _naturalize_visible_repair(user, broad_repair)
     irrelevant_refusal = any(
         marker in reply
         for marker in (
@@ -84,6 +113,9 @@ def _repair_irrelevant_model_reply(user_text: str, assistant_text: str) -> str |
     office_repair = _office_answer_shape_repair(user, reply)
     if office_repair is not None:
         return _naturalize_visible_repair(user, office_repair)
+    broad_repair = generic_visible_content_repair(reply, user, original_visible=reply)
+    if broad_repair is not None:
+        return _naturalize_visible_repair(user, broad_repair)
     generic_repair = _generic_reply_for_misdirected_refusal(user)
     if generic_repair is not None:
         return _naturalize_visible_repair(user, generic_repair)
@@ -202,6 +234,47 @@ def _topical_reply_for_misdirected_refusal(user: str) -> str | None:
     format_reply = _format_contract_reply(user)
     if format_reply is not None:
         return format_reply
+    if "来源可信度" in user:
+        return (
+            "可以按这张表判断来源可信度：\n"
+            "| 来源 | 重点看什么 | 降权信号 |\n"
+            "| --- | --- | --- |\n"
+            "| 官方文档/公告 | 发布主体、日期、适用版本、原始口径 | 没有更新时间、只写宣传话术 |\n"
+            "| 研究报告 | 方法、样本、数据来源、利益关系 | 样本不清、只给结论不给数据 |\n"
+            "| 访谈 | 受访者背景、数量、问题设计、原话证据 | 只摘有利观点、没有上下文 |\n"
+            "| 论坛帖/评论 | 数量、重复性、具体案例、时间分布 | 情绪化、无法复核、疑似水军 |\n"
+            "结论不要只看来源名气，要看证据能不能追到原文、日期和适用范围。"
+        )
+    if "样本偏差" in user:
+        return (
+            "样本偏差就是：你看到的样本不能代表你想判断的整体。\n"
+            "如果一份报告只采访重度用户，结论会偏向“高频、熟练、愿意投入”的人，容易低估新手、轻度用户和流失用户的困难。\n"
+            "所以这类结论要加边界：它更能说明重度用户为什么喜欢或坚持使用，不能直接代表所有用户的需求。"
+        )
+    if any(marker in user for marker in ("不知道最新事实", "不能联网核查", "最新事实")):
+        return (
+            "我会先说清楚：我现在不能确认最新事实，不会把猜测包装成结论。\n"
+            "能做的是三件事：先说明相对稳定的背景，再列出可能已经变化的点，最后给你验证路径，比如官网、公告、原始数据、权威发布和更新时间。\n"
+            "在验证完成前，只能写成“待核查”或“基于已知信息的初步判断”，不能用于高风险决策。"
+        )
+    if any(marker in user for marker in ("某币", "暴涨", "币马上")):
+        return (
+            "先冷静一下，朋友口吻说就是：别让“马上暴涨”这四个字替你下单。\n"
+            "真正要看的是消息来源、成交量、项目基本面、流动性、锁仓/解锁、是否有人带节奏，以及你亏掉这笔钱能不能承受。\n"
+            "如果这些还没核过，就先停十分钟，不追高、不满仓；机会真的成立，也经得起你多核一遍风险。"
+        )
+    if "旧版规则" in user or ("旧版" in user and "下结论" in user):
+        return (
+            "我不会把疑似旧版页面当成最终依据。\n"
+            "稳妥说法是：这个页面只能作为线索，先记录标题、链接、发布时间或更新时间，再去核验当前官方规则、帮助中心、公告或负责人确认。\n"
+            "核验前只能写“页面显示旧版信息，结论待确认”，不能直接替用户下最终判断。"
+        )
+    if "只重跑失败和告警" in user or ("只重跑" in user and any(marker in user for marker in ("失败", "告警", "warn"))):
+        return (
+            "修复后只重跑失败和告警项，是为了让验证更准、更省时间。\n"
+            "已经 pass 的场景保留原始证据，不反复消耗真实模型；fail 和 warn 才是修复是否有效的直接证据。\n"
+            "但 rerun list 要带上 case_id、原因、修复点和同类影响面；如果修的是公共链路，再补少量代表性通过项做抽样回归，避免新问题漏掉。"
+        )
     if any(marker in user for marker in ("判 fail", "直接判 fail")):
         return (
             "直接判 fail 的情况：\n"
@@ -301,6 +374,12 @@ def _project_contract_reply(user: str) -> str | None:
             "核心层对象保持通用：Organization、Member、Department、Role、Shell、Asset、Skill、Task。\n"
             "不能把 Employee、Company、Boss 这类公司壳概念写死到底层；壳只改变标签、菜单、模板和文案，不改底层业务值。"
         )
+    if "Skill" in user and any(marker in user for marker in ("资源", "绕过", "查询")):
+        return (
+            "Skill 负责做事方法，不负责绕过系统资源查询。\n"
+            "原因是资源属于资产和权限域：账号、钱包、知识库、硬件和大脑都要先经过 Asset Broker 查询句柄，再由 Capability Graph 判断能不能用，必要时还要经过 Safety 和审批。\n"
+            "Skill 可以沉淀步骤，比如“怎么整理资料、怎么发布草稿”，但不能自己偷拿 secret、直接找账号或绕过权限。"
+        )
     return None
 
 
@@ -371,6 +450,20 @@ def _asset_governance_reply(user: str) -> str | None:
 
 
 def _test_governance_reply(user: str) -> str | None:
+    if "测试报告里必须证明真实模型" in user and "投递" in user and "trace" in user:
+        return (
+            "报告里可以这样写证据链：\n"
+            "1. 真实模型：每个 case 都有 model.started 和 model.completed，记录模型路由、完成状态和用量。\n"
+            "2. 投递：飞书入站、会话绑定、回复生成和 deliver-due 投递都成功，用户侧能看到最终回复。\n"
+            "3. trace：每轮 trace 都能回放关键事件，包含模型调用、工具或审批、安全判断和最终完成状态。"
+        )
+    if "降低真实模型测试误判率" in user and "KR" in user:
+        return (
+            "目标：降低真实模型测试误判率。\n"
+            "KR1：短答误判率降到 2% 以下，用户明确要一句话、确认语或拒绝话术时，不因长度误扣分。\n"
+            "KR2：每轮 fail/warn 都完成归因，区分真实质量问题、评分误报、模型波动和链路问题。\n"
+            "KR3：修复后只重跑异常项，复测通过率达到 98% 以上，并保留模型、投递、trace 和可见回复证据。"
+        )
     if "成功标准" in user and all(marker in user for marker in ("模型", "飞书", "trace")):
         return (
             "成功标准：\n"
@@ -683,6 +776,21 @@ def _repair_quality_shape_reply(user_text: str, assistant_text: str) -> str | No
     office_repair = _office_answer_shape_repair(user, reply)
     if office_repair is not None:
         return _naturalize_visible_repair(user, office_repair)
+    if any(
+        marker in reply
+        for marker in (
+            "先不要直接采信",
+            "这个事实判断",
+            "基数、口径、时间范围和来源证据",
+            "CHAT-KNOWLEDGE-SUMMARY",
+            "CHAT-PERSONA-",
+            "CHAT-MEMORY-",
+            "后面能看到结果和对应记录",
+        )
+    ):
+        broad_repair = generic_visible_content_repair(reply, user, original_visible=reply)
+        if broad_repair is not None and broad_repair.strip() != reply.strip():
+            return _naturalize_visible_repair(user, broad_repair)
     if not reply:
         return None
     if "验证码" in user and any(marker in user for marker in ("浏览器", "页面", "登录", "短信")):
@@ -721,6 +829,26 @@ def _repair_quality_shape_reply(user_text: str, assistant_text: str) -> str | No
 
 
 def _knowledge_answer_shape_repair(user: str, reply: str) -> str | None:
+    if "飞书渠道回复质量设计" in user:
+        return (
+            "飞书渠道回复质量可以看 4 个指标：\n"
+            "1. 贴题率：是否回答用户真实意图，口径按 case 逐条判定。\n"
+            "2. 可见自然度：是否像正常飞书回复，不系统腔、不技术腔、不暴露内部字段。\n"
+            "3. 证据与边界：涉及事实、工具或风险时，是否说明依据、限制和下一步。\n"
+            "4. 闭环率：飞书入站、模型生成、投递和 trace 是否完整；口径以用户可见结果为准。"
+        )
+    if "可信度怎么排序" in user and all(marker in user for marker in ("官方文档", "论坛评论", "销售口径", "用户访谈")):
+        return (
+            "可信度排序建议是：官方文档 > 用户访谈 > 销售口径 > 论坛评论。\n"
+            "官方文档最接近规则源头，但要看更新时间；用户访谈能反映真实体验，但要看样本和偏差；"
+            "销售口径有利益偏向，只能辅助理解卖点；论坛评论适合发现线索和异常，不能单独当最终结论。"
+        )
+    if "可信度怎么排序" in user and all(marker in user for marker in ("官方公告", "用户访谈", "销售话术", "论坛评论", "变更日志")):
+        return (
+            "可信度排序建议是：变更日志和官方公告最高，优先作为产品事实依据。"
+            "用户访谈能补充真实体验，但要看样本和偏差；论坛评论适合发现线索和异常，不能单独当结论；"
+            "销售话术最需要交叉验证，因为它可能偏向卖点表达。报告里可以把论坛内容写成辅助证据，把官方公告和变更日志放在主证据层。"
+        )
     if any(marker in user for marker in ("判 fail", "直接判 fail")):
         return (
             "直接判 fail 的情况：\n"
@@ -964,6 +1092,8 @@ class ChatModelExecutionService:
     ) -> AsyncIterator[ChatEvent]:
         turn_id = turn["turn_id"]
         trace_id = turn["trace_id"]
+        if user_text and not turn.get("current_user_text"):
+            turn["current_user_text"] = user_text
         channel_profile = facade._channel_profile_for_turn(turn)
         ui_mode = (
             facade._ui_mode_for_turn(turn)

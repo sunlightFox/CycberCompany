@@ -1554,10 +1554,14 @@ class ChatService(ChatFacadeShellMixin):
         )
         text, attachment_evidence = await self._append_channel_attachment_fact_footer(turn, text)
         user_text = str(turn.get("current_user_text") or "")
-        normalized_text_patch = (
-            self._response_coordinator.normalize_plan_text(response_plan, text)
-            if attachment_evidence is not None
-            else {}
+        if not user_text:
+            user_message = await self._chat_repo.get_message(turn["user_message_id"])
+            user_text = str(user_message.get("content_text") if user_message else "")
+            if user_text:
+                turn["current_user_text"] = user_text
+        normalized_text_patch = self._response_coordinator.normalize_plan_text(
+            response_plan,
+            text,
         )
         response_plan = response_plan.model_copy(
             update={

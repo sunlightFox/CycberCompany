@@ -166,9 +166,17 @@ class ChatVisibleOutputFilter:
                 self.blocked_terms.add(label)
                 filtered = pattern.sub(replacement, filtered)
         for term, replacement in _JARGON_REPLACEMENTS.items():
+            if term in {"R3", "R4", "R5"}:
+                continue
             if re.search(re.escape(term), filtered, flags=re.IGNORECASE):
                 self.blocked_terms.add(term)
                 filtered = re.sub(re.escape(term), replacement, filtered, flags=re.IGNORECASE)
+        for term in ("R3", "R4", "R5"):
+            replacement = _JARGON_REPLACEMENTS[term]
+            pattern = re.compile(rf"(?<![A-Za-z0-9_-]){term}(?![A-Za-z0-9_-])", re.IGNORECASE)
+            if pattern.search(filtered):
+                self.blocked_terms.add(term)
+                filtered = pattern.sub(replacement, filtered)
         for category, pattern in _INTERNAL_ID_PATTERNS.items():
             if pattern.search(filtered):
                 self.blocked_terms.add(category)

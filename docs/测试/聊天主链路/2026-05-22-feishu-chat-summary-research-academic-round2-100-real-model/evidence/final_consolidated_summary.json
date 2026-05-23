@@ -1,0 +1,54 @@
+{
+  "run_label": "FCSR2-100-REAL-20260522-CONSOLIDATED",
+  "initial_full_run": {
+    "total": 100,
+    "pass": 70,
+    "warn": 26,
+    "fail": 4,
+    "score_avg": 94.99
+  },
+  "focused_reruns": [
+    {
+      "scope": "initial non-pass cases",
+      "total": 30,
+      "passed": 12,
+      "warned": 17,
+      "failed": 1,
+      "source": "console output from first --only-problematic rerun"
+    },
+    {
+      "scope": "remaining non-pass cases",
+      "total": 18,
+      "passed": 16,
+      "warned": 2,
+      "failed": 0,
+      "summary": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\����\\��������·\\2026-05-22-feishu-chat-summary-research-academic-round2-100-real-model\\evidence\\summary.json",
+      "report": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\����\\��������·\\2026-05-22-feishu-chat-summary-research-academic-round2-100-real-model\\02-����100�����Ĺ����ܽ��о�ѧ��֪ʶround2��ʵģ�Ͳ��Ա���.md",
+      "gap_queue": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\����\\��������·\\2026-05-22-feishu-chat-summary-research-academic-round2-100-real-model\\03-ȱ�����޸�����.md",
+      "source": "docs\\测试\\聊天主链路\\2026-05-22-feishu-chat-summary-research-academic-round2-100-real-model\\evidence\\problematic_rerun2_stdout.json"
+    },
+    {
+      "scope": "final remaining non-pass cases",
+      "total": 2,
+      "passed": 2,
+      "warned": 0,
+      "failed": 0,
+      "summary": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\����\\��������·\\2026-05-22-feishu-chat-summary-research-academic-round2-100-real-model\\evidence\\summary.json",
+      "report": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\����\\��������·\\2026-05-22-feishu-chat-summary-research-academic-round2-100-real-model\\02-����100�����Ĺ����ܽ��о�ѧ��֪ʶround2��ʵģ�Ͳ��Ա���.md",
+      "gap_queue": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\����\\��������·\\2026-05-22-feishu-chat-summary-research-academic-round2-100-real-model\\03-ȱ�����޸�����.md",
+      "source": "docs\\测试\\聊天主链路\\2026-05-22-feishu-chat-summary-research-academic-round2-100-real-model\\evidence\\problematic_rerun3_stdout.json"
+    }
+  ],
+  "final_effective_result": {
+    "total": 100,
+    "pass": 100,
+    "warn": 0,
+    "fail": 0,
+    "basis": "initial full 100 run plus focused reruns of every warn/fail case until no remaining warnings or failures"
+  },
+  "verification": {
+    "real_model_endpoint": "http://127.0.0.1:8317/v1",
+    "unit_tests": "apps/local-api/tests/test_feishu_broad_repairs.py: 67 passed",
+    "rerun_policy": "only warn/fail cases were rerun after generic fixes"
+  }
+}

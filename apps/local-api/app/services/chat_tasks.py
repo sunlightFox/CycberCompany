@@ -23,6 +23,13 @@ class ScheduledTaskIntent:
         return {"title": self.title, "goal": self.goal, "schedule": self.schedule}
 
 
+@dataclass(frozen=True)
+class ScheduledTaskCancelIntent:
+    target_text: str = ""
+    scheduled_task_id: str | None = None
+    refers_latest: bool = False
+
+
 class ScheduledTaskIntentCoordinator:
     """Parses conservative scheduled-task requests from ordinary chat text."""
 
@@ -53,7 +60,13 @@ class ScheduledTaskIntentCoordinator:
             "只解释",
             "只给方案",
         ]
-        if any(marker in clean for marker in direct_only_markers):
+        if any(marker in clean for marker in direct_only_markers) and not any(
+            marker in clean for marker in ("不要创建模糊任务", "不要创建模糊的任务", "不要创建含糊任务")
+        ):
+            return None
+        if _unsafe_scheduled_goal(clean):
+            return None
+        if _looks_like_text_generation_or_style_request(clean):
             return None
         if _looks_like_roleplay_chat_request(clean) and not _explicit_roleplay_schedule_request(clean):
             return None
@@ -68,14 +81,14 @@ class ScheduledTaskIntentCoordinator:
                 "run_at": _relative_run_at(relative_once[0], relative_once[1]),
                 "timezone": "Asia/Shanghai",
             }
-        elif any(marker in clean for marker in ["每天", "每日"]):
+        elif any(marker in clean for marker in ["每天", "每日"]) or _english_daily_schedule_request(lowered):
             schedule_kind = "daily"
             schedule = {
                 "type": "daily",
                 "time": _extract_clock_text(clean),
                 "timezone": "Asia/Shanghai",
             }
-        elif "每周" in clean:
+        elif "每周" in clean or _english_weekly_schedule_request(lowered):
             schedule_kind = "weekly"
             schedule = {
                 "type": "weekly",
@@ -107,14 +120,25 @@ class ScheduledTaskIntentCoordinator:
                 schedule = {"type": "interval", "every_seconds": amount * multiplier}
         if schedule is None:
             return None
-        scheduled_markers = ["帮我", "提醒", "定时", "创建定时任务", "新建定时任务"]
+        scheduled_markers = [
+            "帮我",
+            "提醒",
+            "定时",
+            "创建定时任务",
+            "新建定时任务",
+            "remind me",
+            "remind",
+            "set a reminder",
+            "create a reminder",
+        ]
         if schedule_kind == "once" and not _explicit_once_schedule_request(clean):
             return None
         if not any(marker in clean for marker in scheduled_markers):
             return None
         goal = clean
-        for marker in ["每天", "每日", "每周", "每隔"]:
+        for marker in ["每天", "每日", "每周", "每隔", "every day", "daily", "every week", "weekly", "remind me", "please remind me"]:
             goal = goal.replace(marker, "", 1).strip()
+        goal = _strip_schedule_words_from_goal(goal, schedule_kind)
         return ScheduledTaskIntent(
             title=_scheduled_title(goal),
             goal=goal or clean,
@@ -122,12 +146,131 @@ class ScheduledTaskIntentCoordinator:
         )
 
 
+class ScheduledTaskCancelIntentCoordinator:
+    """Parses conservative chat requests to cancel an existing reminder."""
+
+    def parse(self, text: str) -> ScheduledTaskCancelIntent | None:
+        clean = " ".join(str(text or "").strip().split())
+        if not clean:
+            return None
+        lowered = clean.lower()
+        if any(marker in clean for marker in ("取消这次回复", "停止输出", "别回答了", "取消回答")):
+            return None
+        if _looks_like_action_inside_reminder(clean):
+            return None
+        if not any(
+            marker in lowered or marker in clean
+            for marker in (
+                "取消",
+                "撤销",
+                "删掉",
+                "删除",
+                "停掉",
+                "关掉",
+                "停止提醒",
+                "不用提醒",
+                "别提醒",
+                "不要提醒",
+                "cancel",
+                "stop reminding",
+            )
+        ):
+            return None
+        reminder_context = any(
+            marker in lowered or marker in clean
+            for marker in (
+                "提醒",
+                "定时任务",
+                "定时",
+                "闹钟",
+                "刚才那个",
+                "刚刚那个",
+                "上一个",
+                "最新那个",
+                "那个任务",
+                "那个",
+                "reminder",
+                "scheduled task",
+            )
+        )
+        if not reminder_context:
+            return None
+        scheduled_task_id = _extract_scheduled_task_id(clean)
+        target_text = _extract_cancel_target_text(clean)
+        refers_latest = any(marker in clean for marker in ("刚才那个", "刚刚那个", "上一个", "最新那个", "上条"))
+        if not target_text and not scheduled_task_id and not refers_latest and clean in {"取消", "撤销", "删掉", "停掉"}:
+            return None
+        return ScheduledTaskCancelIntent(
+            target_text=target_text,
+            scheduled_task_id=scheduled_task_id,
+            refers_latest=refers_latest,
+        )
+
+
 def _explicit_once_schedule_request(text: str) -> bool:
     clean = " ".join(str(text or "").strip().split())
-    if any(marker in clean for marker in ["提醒", "定时", "创建定时任务", "新建定时任务"]):
-        return True
+    lowered = clean.lower()
     has_clock = bool(re.search(r"\d{1,2}\s*[:：点]\s*\d{0,2}", clean))
+    if not has_clock and any(marker in clean for marker in ("提醒我一句", "提醒我一声", "提醒我一下")):
+        return False
+    if any(
+        marker in clean or marker in lowered
+        for marker in ["提醒", "定时", "创建定时任务", "新建定时任务", "remind me", "set a reminder"]
+    ):
+        return True
     return has_clock and "帮我" in clean
+
+
+def _unsafe_scheduled_goal(text: str) -> bool:
+    clean = " ".join(str(text or "").strip().split())
+    lowered = clean.lower()
+    sensitive_markers = (
+        "token",
+        "secret",
+        "私钥",
+        "助记词",
+        "验证码",
+        "短信码",
+        "动态码",
+        "密码",
+        "cookie",
+    )
+    outbound_or_execution_markers = (
+        "发给外部",
+        "发到外部",
+        "外部供应商",
+        "外部群",
+        "转给",
+        "发送",
+        "外发",
+        "付款",
+        "打款",
+        "转账",
+        "删除",
+        "rm -rf",
+    )
+    return any(marker in lowered or marker in clean for marker in sensitive_markers) and any(
+        marker in lowered or marker in clean for marker in outbound_or_execution_markers
+    )
+
+
+def _strip_schedule_words_from_goal(goal: str, schedule_kind: str | None) -> str:
+    text = " ".join(str(goal or "").strip().split())
+    if schedule_kind == "weekly":
+        text = re.sub(r"^(?:周)?[一二三四五六日天]\s*", "", text)
+    text = re.sub(r"^(?:早上|上午|中午|下午|晚上)?\s*\d{1,2}\s*[:：]\s*\d{2}\s*", "", text)
+    text = re.sub(r"^(?:早上|上午|中午|下午|晚上)?\s*\d{1,2}\s*点\s*(?:半|[0-9]{1,2}\s*分?)?\s*", "", text)
+    text = re.sub(r"^提醒(?:我|你)?[，,：:\s]*", "", text)
+    text = re.sub(r"，?\s*不要创建(?:模糊|含糊)的?任务[。.!！?？]*$", "", text)
+    return text.strip("。！？!?.,，；;：: “”（）()[]【】'\" ")
+
+
+def _english_daily_schedule_request(lowered: str) -> bool:
+    return bool(re.search(r"\b(?:every\s+day|daily)\b", lowered))
+
+
+def _english_weekly_schedule_request(lowered: str) -> bool:
+    return bool(re.search(r"\b(?:every\s+week|weekly)\b", lowered))
 
 
 def _looks_like_roleplay_chat_request(text: str) -> bool:
@@ -146,6 +289,45 @@ def _looks_like_roleplay_chat_request(text: str) -> bool:
         "叫我",
     )
     return any(marker in raw for marker in roleplay_markers) or bool(re.search(r"像.{1,24}一样", raw))
+
+
+def _looks_like_text_generation_or_style_request(text: str) -> bool:
+    raw = " ".join(str(text or "").strip().split())
+    if not raw:
+        return False
+    if any(marker in raw for marker in ("提醒我一句", "提醒我一声", "提醒自己一句")):
+        return True
+    if any(
+        marker in raw
+        for marker in (
+            "提醒我",
+            "提醒你",
+            "提醒一下",
+            "设置提醒",
+            "设个提醒",
+            "创建提醒",
+            "新建提醒",
+            "定时提醒",
+            "到点提醒",
+        )
+    ):
+        return False
+    generation_markers = (
+        "写一句",
+        "写一段",
+        "写一个",
+        "给一句",
+        "给我一句",
+        "给我一个",
+        "文案",
+        "话术",
+        "口吻",
+        "语气",
+        "晚安",
+        "结构",
+        "段落感",
+    )
+    return any(marker in raw for marker in generation_markers)
 
 
 def _explicit_roleplay_schedule_request(text: str) -> bool:
@@ -175,6 +357,7 @@ class ChatTaskCoordinator:
 
     def __init__(self) -> None:
         self.scheduled_intents = ScheduledTaskIntentCoordinator()
+        self.scheduled_cancellations = ScheduledTaskCancelIntentCoordinator()
         self._status_presenter = ChatTaskStatusPresenter()
 
     def parse_media_task_request(self, text: str) -> dict[str, Any] | None:
@@ -322,14 +505,18 @@ def _extract_clock_text(text: str) -> str:
 
 def _extract_relative_once(text: str) -> tuple[int, str] | None:
     lowered = str(text or "").lower()
+    if any(marker in lowered for marker in ("每天", "每日", "每周", "每隔")):
+        return None
     match = re.search(
-        r"(?:再过|过|等|等到)?\s*(\d+)\s*(秒|分钟|小时|天|second|seconds|minute|minutes|hour|hours|day|days)\s*(?:后|later)?",
+        r"(再过|过|等|等到)?\s*(\d+)\s*(秒|分钟|小时|天|second|seconds|minute|minutes|hour|hours|day|days)\s*(后|later)?",
         lowered,
     )
     if not match:
         return None
-    amount = int(match.group(1))
-    unit = match.group(2)
+    if not (match.group(1) or match.group(4)):
+        return None
+    amount = int(match.group(2))
+    unit = match.group(3)
     return (amount, unit) if amount > 0 else None
 
 
@@ -380,6 +567,45 @@ def _extract_weekday(text: str) -> str:
 def _scheduled_title(goal: str) -> str:
     title = goal.strip(" ，。,.")[:40]
     return title or "聊天创建的定时任务"
+
+
+def _extract_scheduled_task_id(text: str) -> str | None:
+    match = re.search(r"\bscht_[a-zA-Z0-9]{8,}\b", text)
+    return match.group(0) if match else None
+
+
+def _looks_like_action_inside_reminder(text: str) -> bool:
+    reminder_action = re.search(
+        r"提醒(?:我|你)?[^，。！？,.!?]{0,40}(?:取消|撤销|删掉|删除|停掉|关掉|停止)",
+        text,
+    )
+    if not reminder_action:
+        return False
+    explicit_cancel_target = re.search(
+        r"(?:取消|撤销|删掉|删除|停掉|关掉|停止)[^，。！？,.!?]{0,24}(?:提醒|定时任务|闹钟|reminder|scheduled task)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return explicit_cancel_target is None
+
+
+def _extract_cancel_target_text(text: str) -> str:
+    target = str(text or "").strip()
+    target = re.sub(r"\bscht_[a-zA-Z0-9]{8,}\b", " ", target)
+    target = re.sub(
+        r"(帮我|麻烦你|请你|请|把|给我|这个|那个|刚才那个|刚刚那个|上一个|最新那个|上条)",
+        " ",
+        target,
+    )
+    target = re.sub(
+        r"(取消|撤销|删掉|删除|停掉|关掉|停止|不用|别|不要|cancel|stop reminding)",
+        " ",
+        target,
+        flags=re.IGNORECASE,
+    )
+    target = re.sub(r"(提醒我|提醒你|提醒|定时任务|定时|闹钟|任务|reminder|scheduled task)", " ", target, flags=re.IGNORECASE)
+    target = re.sub(r"[，。！？,.!?：:\s]+", " ", target).strip()
+    return target
 
 
 class ChatTurnOrchestrator:

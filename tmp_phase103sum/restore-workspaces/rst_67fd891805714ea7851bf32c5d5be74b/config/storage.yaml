@@ -1,6 +1,0 @@
-storage:
-  data_dir: ./data
-  sqlite_path: ./data/sqlite/app.db
-  trace_dir: ./data/traces
-  artifact_dir: ./data/artifacts
-

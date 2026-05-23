@@ -754,7 +754,11 @@ def _policy_decision(task: ScheduledTask, *, trigger_type: str) -> dict[str, Any
 
 def _risk_level(goal: str, constraints: dict[str, Any]) -> str:
     text = f"{goal} {constraints}".lower()
-    if _looks_like_manual_sensitive_prep_reminder(text):
+    if _looks_like_money_action(text):
+        return "R4"
+    if _looks_like_automatic_action(text):
+        return "R4"
+    if _looks_like_reminder_only(text) or _looks_like_manual_prep_reminder(text):
         return "R2"
     if any(
         word in text
@@ -782,15 +786,9 @@ def _risk_level(goal: str, constraints: dict[str, Any]) -> str:
             "发送",
             "外部邮箱",
             "发资料",
-            "支付",
-            "付款",
-            "转账",
             "汇款",
             "打款",
             "钱包",
-            "信用卡",
-            "还款",
-            "扣款",
             "发布",
             "外发",
             "改密码",
@@ -854,12 +852,68 @@ def _visible_scheduled_goal(goal: str) -> str:
     return text or "这件事"
 
 
-def _looks_like_manual_sensitive_prep_reminder(text: str) -> bool:
-    if not any(marker in text for marker in ("上传", "证件", "身份证", "照片")):
+def _looks_like_money_action(text: str) -> bool:
+    if any(
+        marker in text
+        for marker in (
+            "payment",
+            "transfer",
+            "支付",
+            "付款",
+            "转账",
+            "汇款",
+            "打款",
+            "银行卡",
+            "信用卡",
+            "还款",
+            "扣款",
+            "充值",
+        )
+    ):
+        return True
+    return "钱包" in text and not any(marker in text for marker in ("助记词", "私钥", "备份", "环境安全"))
+
+
+def _looks_like_automatic_action(text: str) -> bool:
+    return any(
+        marker in text
+        for marker in (
+            "自动上传",
+            "自动发送",
+            "自动发",
+            "自动外发",
+            "自动发布",
+            "自动提交",
+            "自动导出",
+            "自动删除",
+            "自动清空",
+            "自动运行",
+            "自动执行",
+        )
+    )
+
+
+def _looks_like_reminder_only(text: str) -> bool:
+    return any(marker in text for marker in ("提醒我", "提醒你", "提醒一下", "remind me"))
+
+
+def _looks_like_manual_prep_reminder(text: str) -> bool:
+    if "前" not in text:
         return False
-    if any(marker in text for marker in ("自动上传", "自动发送", "外发", "外部邮箱", "发资料")):
+    if any(
+        marker in text
+        for marker in (
+            "自动上传",
+            "自动发送",
+            "自动发",
+            "自动外发",
+            "帮我发送",
+            "帮我发",
+            "直接发送",
+        )
+    ):
         return False
-    return any(marker in text for marker in ("打码", "脱敏", "遮住", "确认", "核对", "检查", "带"))
+    return any(marker in text for marker in ("打码", "脱敏", "遮住", "确认", "核对", "检查", "通知", "让", "看审批", "复核", "带"))
 
 
 def _risk_order(value: str) -> int:

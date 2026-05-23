@@ -100,6 +100,7 @@ def _map_scheduled_task(
     related_capabilities: list[str],
 ) -> ActionDialogueDecision:
     schedule = dict(task_status.get("schedule") or facts.route_semantics.get("schedule") or {})
+    status = str(task_status.get("status") or facts.detail_status or "").strip().lower()
     visible_goal = _visible_scheduled_goal(
         facts.visible_goal
         or facts.target
@@ -107,7 +108,21 @@ def _map_scheduled_task(
         or facts.action_label
     )
     human_schedule = facts.human_schedule or _human_scheduled_task_schedule(schedule)
-    boundary = facts.sensitive_boundary_notice or _scheduled_sensitive_boundary(visible_goal)
+    if status in {"cancelled", "already_cancelled", "cancel_not_found", "cancel_ambiguous"}:
+        return _map_scheduled_task_cancel(
+            facts=facts,
+            status=status,
+            visible_goal=visible_goal,
+            human_schedule=human_schedule,
+            related_capabilities=related_capabilities,
+        )
+    raw_goal = (
+        facts.visible_goal
+        or facts.target
+        or str(task_status.get("goal") or "")
+        or facts.action_label
+    )
+    boundary = facts.sensitive_boundary_notice or _scheduled_sensitive_boundary(visible_goal, raw_goal=raw_goal)
     requires_confirmation = bool(facts.requires_user_confirmation or boundary)
     quality_flags = [
         *list(facts.quality_flags or []),
@@ -138,6 +153,66 @@ def _map_scheduled_task(
             boundary=boundary,
         ),
     )
+
+
+def _map_scheduled_task_cancel(
+    *,
+    facts: ActionDialogueFacts,
+    status: str,
+    visible_goal: str,
+    human_schedule: str,
+    related_capabilities: list[str],
+) -> ActionDialogueDecision:
+    reply_options = [str(item).strip() for item in facts.reply_options if str(item).strip()]
+    visible_text = _scheduled_cancel_visible_reply(
+        status=status,
+        visible_goal=visible_goal,
+        human_schedule=human_schedule,
+        reply_options=reply_options,
+    )
+    return ActionDialogueDecision(
+        domain="scheduled_task",
+        action_status=status,
+        narration_style="natural_confirmation" if status in {"cancelled", "already_cancelled"} else "clarify_minimally",
+        natural_transition="confirm_scheduled_task_cancel" if status == "cancelled" else "scheduled_task_cancel_resolution",
+        should_explain_pending=False,
+        should_claim_completion=status == "cancelled",
+        blocked_by_approval=False,
+        visible_failure_strategy="ask_clarify" if status == "cancel_ambiguous" else "partial_honest",
+        related_capabilities=related_capabilities or ["scheduled_task"],
+        reason_codes=[f"scheduled_task_{status}"],
+        visible_goal=visible_goal,
+        human_schedule=human_schedule,
+        quality_flags=[
+            *list(facts.quality_flags or []),
+            "deterministic_visible_reply",
+            "no_internal_schedule_terms",
+        ],
+        visible_text=visible_text,
+    )
+
+
+def _scheduled_cancel_visible_reply(
+    *,
+    status: str,
+    visible_goal: str,
+    human_schedule: str,
+    reply_options: list[str],
+) -> str:
+    goal = visible_goal or "这个提醒"
+    schedule = human_schedule or ""
+    if status == "cancelled":
+        prefix = f"{schedule}的" if schedule else ""
+        return f"好，已取消{prefix}{goal}提醒，之后不会再提醒你。"
+    if status == "already_cancelled":
+        prefix = f"{schedule}的" if schedule else ""
+        return f"这个{prefix}{goal}提醒之前已经取消了，之后不会再触发。"
+    if status == "cancel_ambiguous":
+        if reply_options:
+            options = "、".join(reply_options[:3])
+            return f"我找到了几个相近的提醒：{options}。你想取消哪一个？"
+        return "我找到了不止一个相近的提醒。你告诉我具体是哪一个，我再帮你取消。"
+    return "我没找到对应的提醒，先不乱取消。你可以把提醒内容或时间再说具体一点。"
 
 
 def _scheduled_visible_reply(*, visible_goal: str, human_schedule: str, boundary: str) -> str:
@@ -270,11 +345,16 @@ def _parse_iso_datetime(text: str) -> datetime | None:
         return None
 
 
-def _scheduled_sensitive_boundary(goal: str) -> str:
+def _scheduled_sensitive_boundary(goal: str, *, raw_goal: str | None = None) -> str:
     text = str(goal or "")
-    if any(marker in text for marker in ("付款", "转账", "打款", "支付", "银行卡", "钱包", "信用卡", "还款", "扣款")):
+    raw_text = str(raw_goal or goal or "")
+    if _looks_like_money_action(text):
         return "这个我只提醒，不会自动付款。"
-    if _looks_like_manual_sensitive_prep_reminder(text):
+    if _looks_like_automatic_action(raw_text):
+        return "到时候我会先提醒你，不会直接替你做高风险操作。"
+    if _looks_like_reminder_only(raw_text):
+        return ""
+    if _looks_like_manual_prep_reminder(text):
         return ""
     if any(
         marker in text
@@ -312,9 +392,56 @@ def _scheduled_sensitive_boundary(goal: str) -> str:
     return ""
 
 
-def _looks_like_manual_sensitive_prep_reminder(text: str) -> bool:
-    if not any(marker in text for marker in ("上传", "证件", "身份证", "照片")):
+def _looks_like_money_action(text: str) -> bool:
+    lowered = str(text or "").lower()
+    if any(marker in lowered for marker in ("payment", "transfer", "付款", "转账", "打款", "支付", "银行卡", "信用卡", "还款", "扣款", "充值")):
+        return True
+    return "钱包" in lowered and not any(marker in lowered for marker in ("助记词", "私钥", "备份", "环境安全"))
+
+
+def _looks_like_automatic_action(text: str) -> bool:
+    lowered = str(text or "").lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "自动上传",
+            "自动发送",
+            "自动发",
+            "自动外发",
+            "自动发布",
+            "自动提交",
+            "自动导出",
+            "自动删除",
+            "自动清空",
+            "自动运行",
+            "自动执行",
+            "auto send",
+            "auto-send",
+            "auto upload",
+            "auto-upload",
+        )
+    )
+
+
+def _looks_like_reminder_only(text: str) -> bool:
+    lowered = str(text or "").lower()
+    return any(marker in lowered for marker in ("提醒我", "提醒你", "提醒一下", "remind me"))
+
+
+def _looks_like_manual_prep_reminder(text: str) -> bool:
+    if "前" not in text:
         return False
-    if any(marker in text for marker in ("自动上传", "自动发送", "外发", "外部邮箱", "发资料")):
+    if any(
+        marker in text
+        for marker in (
+            "自动上传",
+            "自动发送",
+            "自动发",
+            "自动外发",
+            "帮我发送",
+            "帮我发",
+            "直接发送",
+        )
+    ):
         return False
-    return any(marker in text for marker in ("打码", "脱敏", "遮住", "确认", "核对", "检查", "带"))
+    return any(marker in text for marker in ("打码", "脱敏", "遮住", "确认", "核对", "检查", "通知", "让", "看审批", "复核"))

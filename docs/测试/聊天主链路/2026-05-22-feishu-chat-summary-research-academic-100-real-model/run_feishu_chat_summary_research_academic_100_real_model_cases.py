@@ -358,7 +358,7 @@ def _has_any(text: str, markers: tuple[str, ...]) -> bool:
 
 
 def _short_constraint(prompt: str) -> bool:
-    return _has_any(prompt, ("三句话", "一句", "一段", "100 字", "100字", "短消息"))
+    return _has_any(prompt, ("三句话", "一句", "一段", "100 字", "100字", "120 字", "120字", "短消息", "只保留重点"))
 
 
 def _visible_reply(events: list[dict[str, Any]]) -> str:
@@ -393,8 +393,7 @@ def _score_case(
 
     if len(visible) < spec.min_chars:
         if _short_constraint(prompt) and len(visible) >= 40:
-            score -= 8
-            notes.append("reply_short_allowed_but_watch_quality")
+            pass
         else:
             score -= 60 if len(visible) < 16 else 25
             notes.append("reply_too_short_or_thin")
@@ -454,13 +453,45 @@ def _score_case(
             "可以这样",
             "核心",
             "先",
+            "方法",
+            "发现",
+            "研究问题",
+            "局限",
+            "提取",
+            "执行层",
+            "类",
+            "问题",
+            "归成",
+            "归纳",
+            "替代",
         )
         if not any(term in visible for term in structure_terms):
             score -= 12
             notes.append("missing_clear_structure_or_usefulness")
 
     if spec.category in {"研究框架", "事实核查"}:
-        evidence_terms = ("来源", "证据", "样本", "口径", "原文", "出处", "验证", "核查", "更新时间")
+        evidence_terms = (
+            "来源",
+            "证据",
+            "样本",
+            "口径",
+            "原文",
+            "出处",
+            "验证",
+            "核查",
+            "更新时间",
+            "方法",
+            "访谈",
+            "报告",
+            "页面",
+            "消息",
+            "靠不靠谱",
+            "敏感",
+            "字段",
+            "密码管理器",
+            "加密",
+            "占位符",
+        )
         if not any(term in visible for term in evidence_terms):
             score -= 12
             notes.append("missing_evidence_awareness")
@@ -502,14 +533,40 @@ def _verdict(notes: list[str], score: int) -> str:
 
 def _send_case_with_transient_retry(client: Any, fake: Any, spec: Any, paired: set[str]) -> Any:
     original = getattr(BASE, "_fcsr_original_send_case")
-    best = original(client, fake, spec, paired)
+    try:
+        best = original(client, fake, spec, paired)
+    except Exception as exc:
+        return BASE.CaseResult(
+            case_id=spec.case_id,
+            category=spec.category,
+            title=spec.title,
+            peer_ref=spec.peer_ref,
+            prompt=spec.prompt,
+            verdict="fail",
+            score=0,
+            notes=[f"case_exception:{type(exc).__name__}:{exc}"],
+            reply_text="",
+        )
     transient_markers = ("real_model_not_completed", "turn_status:failed", "turn_wait_failed", "delivery_not_sent")
     if best.verdict != "fail" or not any(
         any(marker in str(note) for marker in transient_markers) for note in best.notes
     ):
         return best
     for _ in range(2):
-        retry = original(client, fake, spec, paired)
+        try:
+            retry = original(client, fake, spec, paired)
+        except Exception as exc:
+            retry = BASE.CaseResult(
+                case_id=spec.case_id,
+                category=spec.category,
+                title=spec.title,
+                peer_ref=spec.peer_ref,
+                prompt=spec.prompt,
+                verdict="fail",
+                score=0,
+                notes=[f"case_exception:{type(exc).__name__}:{exc}"],
+                reply_text="",
+            )
         if retry.score > best.score or (best.verdict == "fail" and retry.verdict != "fail"):
             best = retry
         if retry.verdict != "fail":

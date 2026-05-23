@@ -64,11 +64,19 @@ def test_phase45_scheduled_task_parser_accepts_real_schedule_and_rejects_plannin
 
     scheduled = coordinator.scheduled_intents.parse("每天上午 9 点帮我整理待办")
     planning = coordinator.scheduled_intents.parse("给我一周学习计划。每天只保留一个重点。")
+    bedtime_copy = coordinator.scheduled_intents.parse(
+        "给我一个有段落感的晚安：先接住，再收尾，再提醒明早。"
+    )
+    reminder_sentence = coordinator.scheduled_intents.parse(
+        "我又想把事情拖到明天，小耀你温和但坚定地提醒我一句。"
+    )
 
     assert scheduled is not None
     assert scheduled.schedule["type"] == "daily"
     assert scheduled.schedule["time"] == "09:00"
     assert planning is None
+    assert bedtime_copy is None
+    assert reminder_sentence is None
 
 
 def test_phase45_model_and_privacy_coordinators_keep_sensitive_context_out() -> None:

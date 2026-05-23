@@ -709,6 +709,10 @@ def _explicit_readonly_browser_inspection(clean: str, lowered: str) -> bool:
         "不要提交",
         "不要填写",
         "不要输入",
+        "不要代填或提交",
+        "不要填写或提交",
+        "不要代填",
+        "不代填",
         "read only",
         "readonly",
         "do not log in",
@@ -729,6 +733,10 @@ def _explicit_readonly_browser_inspection(clean: str, lowered: str) -> bool:
         "read this",
         "inspect",
         "what fields",
+        "需要什么信息",
+        "需要哪些信息",
+        "申请需要什么信息",
+        "申请需要哪些信息",
     )
     return any(marker in clean or marker in lowered for marker in readonly_markers) and any(
         marker in clean or marker in lowered for marker in inspection_markers
@@ -3051,6 +3059,12 @@ def _url_read_context_marker(clean: str, lowered: str) -> bool:
         "\u9875\u9762",
         "\u7f51\u9875",
         "\u94fe\u63a5",
+        "\u91cc",
+        "FAQ",
+        "\u66f4\u65b0",
+        "\u51b2\u7a81",
+        "\u5b9a\u7ed3\u8bba",
+        "\u7f3a\u4ec0\u4e48",
         "\u98ce\u9669",
         "\u539f\u5219",
         "\u786e\u8ba4",
@@ -3119,6 +3133,32 @@ def _browser_write_action_marker(clean: str, lowered: str) -> bool:
     return any(marker in scrubbed or marker in scrubbed_lowered for marker in write_markers)
 
 
+def _readonly_form_info_inspection(clean: str, lowered: str) -> bool:
+    readonly_markers = (
+        "\u53ea\u8bfb",
+        "\u4ec5\u8bfb",
+        "\u4e0d\u8981\u63d0\u4ea4",
+        "\u4e0d\u8981\u4ee3\u586b",
+        "\u4e0d\u4ee3\u586b",
+        "\u4e0d\u70b9\u51fb",
+        "readonly",
+        "read only",
+        "do not submit",
+    )
+    form_info_markers = (
+        "\u5b57\u6bb5",
+        "\u8868\u5355",
+        "\u7533\u8bf7\u9700\u8981\u4ec0\u4e48\u4fe1\u606f",
+        "\u9700\u8981\u4ec0\u4e48\u4fe1\u606f",
+        "\u9700\u8981\u54ea\u4e9b\u4fe1\u606f",
+        "\u6709\u54ea\u4e9b\u5b57\u6bb5",
+        "what fields",
+    )
+    return any(marker in clean or marker in lowered for marker in readonly_markers) and any(
+        marker in clean or marker in lowered for marker in form_info_markers
+    )
+
+
 def is_webpage_read_request(text: str) -> bool:
     clean = _clean(text)
     lowered = clean.lower()
@@ -3126,6 +3166,8 @@ def is_webpage_read_request(text: str) -> bool:
         return False
     if is_explicit_download_request(clean):
         return False
+    if _readonly_form_info_inspection(clean, lowered):
+        return True
     if _browser_write_action_marker(clean, lowered):
         return False
     return (
