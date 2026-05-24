@@ -1,0 +1,505 @@
+{
+  "run_label": "FBR15-100-VISIBLE-REAL-20260524",
+  "mode": "casewise",
+  "started_at": "2026-05-24T02:01:34",
+  "total_selected": 99,
+  "completed": 99,
+  "last_case_id": "FBR15-100-100",
+  "items": [
+    {
+      "case_id": "FBR15-100-002",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR15-100-003",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR15-100-004",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR15-100-005",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR15-100-006",
+      "ok": true,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FBR15-100-007",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR15-100-008",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR15-100-009",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR15-100-010",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR15-100-011",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR15-100-012",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR15-100-013",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-014",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-015",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-016",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-017",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-018",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-019",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-020",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-021",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-022",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-023",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-024",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-025",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-026",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-027",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-028",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-029",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-030",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-031",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-032",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-033",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-034",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-035",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-036",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-037",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-038",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-039",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-040",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-041",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-042",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-043",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-044",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-045",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-046",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-047",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-048",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-049",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-050",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-051",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-052",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-053",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-054",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-055",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-056",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-057",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-058",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-059",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-060",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-061",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-062",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-063",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-064",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-065",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-066",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-067",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-068",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-069",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-070",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-071",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-072",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-073",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-074",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-075",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-076",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-077",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-078",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-079",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-080",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-081",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-082",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-083",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-084",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-085",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-086",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-087",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-088",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-089",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-090",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-091",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-092",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-093",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-094",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-095",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-096",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-097",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-098",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-099",
+      "ok": false,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FBR15-100-100",
+      "ok": false,
+      "error": "case_process_failed:1"
+    }
+  ]
+}

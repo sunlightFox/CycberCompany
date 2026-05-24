@@ -1,0 +1,32 @@
+{
+  "run_label": "FBR15-100-VISIBLE-REAL-20260524",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "unhealthy",
+    "latency_ms": 4390,
+    "error_code": "MODEL_UNAVAILABLE",
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 02:41:57,491 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_structure_evidence_boundaries": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --only-problematic --merge-existing or exact --case-id.",
+  "total": 0,
+  "passed": 0,
+  "warned": 0,
+  "failed": 0,
+  "score_avg": null,
+  "model_started": 0,
+  "model_completed": 0,
+  "delivery_sent": 0,
+  "trace_count": 0,
+  "by_category": {},
+  "results": []
+}

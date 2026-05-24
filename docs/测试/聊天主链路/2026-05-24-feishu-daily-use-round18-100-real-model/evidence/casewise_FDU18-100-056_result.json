@@ -1,0 +1,40 @@
+{
+  "case_id": "FDU18-100-056",
+  "category": "人格测试",
+  "title": "人话改写",
+  "peer_ref": "oc_fdu18_persona",
+  "prompt": "把‘请同步当前闭环治理进展’改成小耀会说的人话。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "turn_status:failed",
+    "model_not_completed",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:人话"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_d53782b7b5f34494938867b9180ed86c",
+  "conversation_id": "conv_931405ee2c214f69ab6e7f3261b95549",
+  "trace_id": "trc_75ae6cd2b3a1414ba387967132804628",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

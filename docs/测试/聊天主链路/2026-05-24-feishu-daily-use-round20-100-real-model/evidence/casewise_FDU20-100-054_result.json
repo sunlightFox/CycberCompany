@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU20-100-054",
+  "category": "人格测试",
+  "title": "只问一个",
+  "peer_ref": "oc_FDU20_persona",
+  "prompt": "我只发：麻了。你问一个不逼人但能推进的问题。",
+  "verdict": "fail",
+  "score": 70,
+  "notes": [
+    "reply_too_short_or_thin"
+  ],
+  "reply_text": "我来理一下：你现在最麻的，具体是哪个事？只回一个词也行。",
+  "turn_id": "turn_4c9da677cef9484f9e5709629e1fec3d",
+  "conversation_id": "conv_2d1df681119f4c728d96741c9c54cf27",
+  "trace_id": "trc_b355a83641d946df89f1ce0fbc6ca7ce",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

@@ -1,0 +1,45 @@
+{
+  "run_label": "FBR20-100-NATURAL-REAL-20260524",
+  "mode": "casewise",
+  "started_at": "2026-05-24T21:42:09",
+  "total_selected": 7,
+  "completed": 7,
+  "last_case_id": "FBR20-100-099",
+  "items": [
+    {
+      "case_id": "FBR20-100-091",
+      "ok": true,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FBR20-100-093",
+      "ok": true,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FBR20-100-094",
+      "ok": true,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FBR20-100-095",
+      "ok": true,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FBR20-100-097",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR20-100-098",
+      "ok": true,
+      "error": ""
+    },
+    {
+      "case_id": "FBR20-100-099",
+      "ok": true,
+      "error": ""
+    }
+  ]
+}

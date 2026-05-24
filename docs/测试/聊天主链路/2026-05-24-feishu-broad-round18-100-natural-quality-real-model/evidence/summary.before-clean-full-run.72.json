@@ -1,0 +1,79 @@
+{
+  "run_label": "FBR18-100-NATURAL-REAL-20260524",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 2712,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 09:04:29,428 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 09:04:30,209 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 09:04:30,756 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_boundaries_no_false_completion": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --casewise --only-problematic.",
+  "total": 1,
+  "passed": 0,
+  "warned": 0,
+  "failed": 1,
+  "score_avg": 70.0,
+  "model_started": 1,
+  "model_completed": 1,
+  "delivery_sent": 0,
+  "trace_count": 1,
+  "by_category": {
+    "资产任务治理": {
+      "total": 1,
+      "pass": 0,
+      "warn": 0,
+      "fail": 1
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR18-100-057",
+      "category": "资产任务治理",
+      "title": "记忆改任务",
+      "peer_ref": "oc_fbr18_governance",
+      "prompt": "Memory 读到用户说可以了，能直接把任务状态改完成吗？",
+      "verdict": "fail",
+      "score": 70,
+      "notes": [
+        "delivery_not_sent"
+      ],
+      "reply_text": "不能直接改成“完成”。\n\n我来理一下：  \n- **“可以了”** 只说明用户**允许继续/同意收尾**，不是任务本身已经完成。  \n- 如果没有真实执行结果或明确完成证据，把状态改成“已完成”会变成**把未发生的现实动作说成已完成**。  \n- 你可以改成更准确的状态，比如：**“已获用户确认，可收尾”**、**“待最终确认”**、**“用户允许推进”**。\n\n如果你是在做记忆写入，我也只能按事实记：  \n**来源：用户原话“可以了”**  \n**可记内容：用户允许继续/同意推进**  \n**不可记内容：任务已完成**",
+      "turn_id": "turn_cc134036c0484f9ca28c3d2d9799546e",
+      "conversation_id": "conv_515e34f01c214cc1a4a2c001c1cc620c",
+      "trace_id": "trc_b7848fdf5cb0462586cfc65603c929b2",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": false,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

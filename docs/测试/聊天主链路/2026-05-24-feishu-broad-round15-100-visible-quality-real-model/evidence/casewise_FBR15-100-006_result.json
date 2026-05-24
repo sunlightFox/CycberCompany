@@ -1,0 +1,37 @@
+{
+  "case_id": "FBR15-100-006",
+  "category": "情绪陪伴",
+  "title": "被催发慌",
+  "peer_ref": "oc_fbr15_care",
+  "prompt": "别人催我，我有点慌，给一句先稳住再确认边界的话。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "turn_status:failed",
+    "missing_expected_terms:确认,边界",
+    "reply_too_short_or_thin"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_8603c72771374549b20161f832467603",
+  "conversation_id": "conv_d792edd4ad104973b72d7f51515a8e08",
+  "trace_id": "trc_78e57459b10545448ced2525594420f6",
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

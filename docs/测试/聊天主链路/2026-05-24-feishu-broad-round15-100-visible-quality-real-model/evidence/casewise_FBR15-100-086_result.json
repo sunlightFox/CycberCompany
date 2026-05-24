@@ -1,0 +1,24 @@
+{
+  "case_id": "FBR15-100-086",
+  "category": "办公文本",
+  "title": "对外口径",
+  "peer_ref": "oc_fbr15_office",
+  "prompt": "把“模型已完成但投递未确认”写成对外可读口径。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "case_process_failed:1"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

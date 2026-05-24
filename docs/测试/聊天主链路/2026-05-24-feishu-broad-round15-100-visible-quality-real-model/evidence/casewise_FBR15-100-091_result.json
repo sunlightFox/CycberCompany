@@ -1,0 +1,24 @@
+{
+  "case_id": "FBR15-100-091",
+  "category": "测试治理",
+  "title": "放行门槛",
+  "peer_ref": "oc_fbr15_eval",
+  "prompt": "第十五轮 release gate 怎么设，哪些情况不能放行？",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "case_process_failed:1"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

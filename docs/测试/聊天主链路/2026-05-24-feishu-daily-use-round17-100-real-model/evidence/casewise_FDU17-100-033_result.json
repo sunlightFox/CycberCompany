@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU17-100-033",
+  "category": "办公协作",
+  "title": "行动项",
+  "peer_ref": "oc_fdu17_office",
+  "prompt": "把这句转行动项：Qiao 查重试日志，阿沐写暂停公告，我 18:10 前给结论。",
+  "verdict": "fail",
+  "score": 70,
+  "notes": [
+    "reply_too_short_or_thin"
+  ],
+  "reply_text": "我来理一下，转成行动项就是：\n\n- Qiao：查重试日志  \n- 阿沐：写暂停公告  \n- 我：18:10 前给出结论",
+  "turn_id": "turn_286d33e3833f4ec5b1b2e540907c661e",
+  "conversation_id": "conv_9c21a24768af477187848ce1248adf43",
+  "trace_id": "trc_c4733bf2aa5d48ca8d849523be728bd3",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

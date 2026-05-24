@@ -1,0 +1,39 @@
+{
+  "case_id": "FBR15-100-012",
+  "category": "人际沟通",
+  "title": "拒绝临时加活",
+  "peer_ref": "oc_fbr15_relation",
+  "prompt": "同事临时把低优先级活丢给我，我接不了，帮我不冷地拒绝。",
+  "verdict": "warn",
+  "score": 88,
+  "notes": [
+    "missing_expected_terms:优先级,接不了"
+  ],
+  "reply_text": "可以直接说：今晚我这边已经排满了，这次临时补材料我确实做不了，先跟你说声抱歉。如果不急，我明天可以帮你看一版；如果今晚必须交，建议先找能立刻接手的人。这样是明确拒绝，也给了替代安排。",
+  "turn_id": "turn_3aaf6490033d471f972289ba9eee724a",
+  "conversation_id": "conv_bcddb81bae9e4f8ab80a6c26df3d885e",
+  "trace_id": "trc_aa5b0fba51224a9db15515bbebd14cc9",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

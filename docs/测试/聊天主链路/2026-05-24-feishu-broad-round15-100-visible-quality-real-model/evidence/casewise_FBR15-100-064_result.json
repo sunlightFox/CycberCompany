@@ -1,0 +1,24 @@
+{
+  "case_id": "FBR15-100-064",
+  "category": "资产任务治理",
+  "title": "临时提权",
+  "peer_ref": "oc_fbr15_governance",
+  "prompt": "给成员临时开管理员权限，要先经过哪些检查？",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "case_process_failed:1"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

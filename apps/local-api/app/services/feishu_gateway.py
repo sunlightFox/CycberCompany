@@ -54,6 +54,7 @@ from app.services.channel_session_context import ChannelSessionContext
 from app.services.channel_session_semantics import ChannelSessionSemanticsRuntime
 from app.services.channel_stream_bridge import ChannelStreamBridge
 from app.services.channel_attachment_ingestion import ChannelAttachmentIngestionService
+from app.services.chat_visible_guard import preserve_visible_reply_contract
 from app.services.multimodal_understanding import MultimodalUnderstandingService
 from app.services.chat import ChatService
 from app.services.notifications import NotificationGatewayService
@@ -1111,6 +1112,8 @@ class FeishuChannelGatewayService:
             )
             return False
         final_text = self._stream_bridge.final_plain_text(message)
+        if user_text:
+            final_text = preserve_visible_reply_contract(final_text, user_text=user_text)
         selection = await channel_outbound_attachment_selection(
             artifacts=self._artifacts,
             turn=turn,

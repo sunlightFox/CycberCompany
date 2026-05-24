@@ -1,0 +1,15 @@
+{
+  "run_label": "FBR18-100-NATURAL-REAL-20260524",
+  "mode": "casewise",
+  "started_at": "2026-05-24T10:22:04",
+  "total_selected": 1,
+  "completed": 1,
+  "last_case_id": "FBR18-100-099",
+  "items": [
+    {
+      "case_id": "FBR18-100-099",
+      "ok": true,
+      "error": ""
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "case_id": "FDU17-100-050",
+  "category": "生活与健康边界",
+  "title": "周日半天",
+  "peer_ref": "oc_fdu17_life",
+  "prompt": "周日半天想恢复又处理一件正事，给一个别排满的安排。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "turn_status:failed",
+    "model_not_completed",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:恢复"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_c9a8fc725c41466d824438bb58b41a2c",
+  "conversation_id": "conv_20f954ec6823423ebe8ea3e3058e3609",
+  "trace_id": "trc_7518af1ced98478db19f7b8e7c1d8a23",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

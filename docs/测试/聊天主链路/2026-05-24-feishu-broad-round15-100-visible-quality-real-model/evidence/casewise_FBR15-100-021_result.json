@@ -1,0 +1,24 @@
+{
+  "case_id": "FBR15-100-021",
+  "category": "总结研究",
+  "title": "小样本结论",
+  "peer_ref": "oc_fbr15_research",
+  "prompt": "只有 6 个用户访谈都喜欢这个功能，报告怎么写才不外推？",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "case_process_failed:1"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

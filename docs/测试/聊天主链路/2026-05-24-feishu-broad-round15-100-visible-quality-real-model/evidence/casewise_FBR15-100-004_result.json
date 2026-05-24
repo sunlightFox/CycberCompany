@@ -1,0 +1,39 @@
+{
+  "case_id": "FBR15-100-004",
+  "category": "情绪陪伴",
+  "title": "低能量回复",
+  "peer_ref": "oc_fbr15_care",
+  "prompt": "我只剩一点电量，帮我给同事回一句今天先推进最小范围。",
+  "verdict": "warn",
+  "score": 88,
+  "notes": [
+    "missing_expected_terms:最小,范围"
+  ],
+  "reply_text": "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。我的真实想法是……如果你方便，我们可以接着聊。",
+  "turn_id": "turn_53d02518c9f94cb094e422c34727f760",
+  "conversation_id": "conv_01a6f912f7e44eaeb0bd1d470ed95017",
+  "trace_id": "trc_cb621ced48ed49ad90aa839a52691fd9",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

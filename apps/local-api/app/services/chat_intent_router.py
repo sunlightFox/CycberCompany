@@ -77,6 +77,7 @@ class ChatIntentRouter:
                 document_type is not None
                 and not structured_summary_request
                 and not format_sensitive_request
+                and not _looks_like_reminder_time_clarification_request(clean)
                 and not _direct_only(clean)
                 and not _looks_like_non_office_advice_context(clean)
                 and not _negative_office_generation_constraint(clean)
@@ -295,6 +296,8 @@ def is_readonly_route_request(text: str) -> bool:
 
 def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
     clean = _clean(text)
+    if _looks_like_reminder_time_clarification_request(clean):
+        return None
     if _direct_only(clean):
         return None
     if _looks_like_non_office_advice_context(clean):
@@ -382,6 +385,40 @@ def office_document_type(text: str) -> str | None:
 
 def is_office_document_request(text: str) -> bool:
     return parse_office_chat_request(text) is not None
+
+
+def _looks_like_reminder_time_clarification_request(text: str) -> bool:
+    clean = _clean(text)
+    if not clean:
+        return False
+    reminder_markers = ("提醒", "定时任务", "到点叫", "到点喊")
+    clarification_markers = (
+        "没说时间",
+        "没给时间",
+        "没有说时间",
+        "没有给时间",
+        "缺时间",
+        "要问什么",
+        "应该问什么",
+        "怎么问",
+        "什么时候提醒",
+        "几点提醒",
+        "确认时间",
+    )
+    if not any(marker in clean for marker in reminder_markers):
+        return False
+    if not any(marker in clean for marker in clarification_markers):
+        return False
+    explicit_file_markers = (
+        "生成文件",
+        "创建文件",
+        "生成文档",
+        "创建文档",
+        "生成 word",
+        "生成word",
+        "导出",
+    )
+    return not any(marker in clean.lower() for marker in explicit_file_markers)
 
 
 def is_structured_summary_request(text: str) -> bool:
@@ -881,6 +918,8 @@ def is_file_mutation_request(text: str) -> bool:
     clean = _clean(text)
     if _direct_only(clean):
         return False
+    if _looks_like_action_safety_advice_question(clean):
+        return False
     if _negative_file_mutation_constraint(clean):
         return False
     if is_host_filesystem_list_request(clean):
@@ -889,6 +928,50 @@ def is_file_mutation_request(text: str) -> bool:
         return False
     return any(marker in clean for marker in ["删除", "删掉", "清空", "覆盖"]) and any(
         marker in clean for marker in ["文件", "CSV", "csv", "下载", "结果", "outputs", "artifact"]
+    )
+
+
+def _looks_like_action_safety_advice_question(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if "?" not in clean and "？" not in clean:
+        return False
+    advice_markers = (
+        "怎么处理",
+        "如何处理",
+        "怎么拦",
+        "先怎么",
+        "应该先",
+        "你先怎么",
+        "安全做法",
+        "安全处理",
+        "有什么风险",
+        "哪些必须",
+        "哪些需要",
+        "必须先确认",
+        "先确认哪些",
+    )
+    action_or_risk_markers = (
+        "删除",
+        "删掉",
+        "清空",
+        "覆盖",
+        "安装",
+        "运行",
+        "管理员",
+        "提交",
+        "登录",
+        "下载",
+        "转账",
+        "支付",
+        "验证码",
+        "外发",
+        "bat",
+        "cmd",
+        "exe",
+    )
+    return any(marker in clean for marker in advice_markers) and any(
+        marker in clean or marker in lowered for marker in action_or_risk_markers
     )
 
 
@@ -2361,12 +2444,21 @@ def _looks_like_daily_life_advice_request(text: str) -> bool:
         "边界",
         "群里",
         "聚会",
+        "发呆",
+        "卡在",
     )
     advice_markers = (
         "帮我排",
         "排个",
         "顺序",
         "先做哪",
+        "第一步",
+        "拆出来",
+        "拆成",
+        "拆小",
+        "切第一口",
+        "第一口",
+        "切一口",
         "不痛苦",
         "怎么说",
         "怎么回",

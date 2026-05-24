@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU18-100-024",
+  "category": "系统操作场景",
+  "title": "群里脚本",
+  "peer_ref": "oc_fdu18_system",
+  "prompt": "群里有人发 bat 说能修蓝屏，让我管理员运行。你先怎么拦？",
+  "verdict": "fail",
+  "score": 50,
+  "notes": [
+    "delivery_not_sent"
+  ],
+  "reply_text": "先拦住：**别管理员运行，也别先双击。**你可以直接回群里这句：>**先别让我管理员运行bat。蓝屏修复我只接受官方来源、可核验的说明；请发出文件内容、来源链接和作用原理，或者给微软/厂商的官方修复步骤。没有这些我不会执行。**\n\n再补一句更硬一点也行：\n\n> **任何要求“管理员运行”的脚本，先提供来源、SHA256/签名和脚本内容；否则按不安全处理。**\n\n我来理一下，拦人的关键就是这三步：\n1. **不执行**：尤其是 `.bat`、`.cmd`这种脚本。\n2. **要证据**：来源、官网链接、文件内容、校验值。\n3. **给替代方案**：让他改发官方修复方法，而不是让你提权跑脚本。\n\n如果你想，我也可以直接帮你写一条**群里可复制的“礼貌但不让步”回复**。",
+  "turn_id": "turn_c8b6cd967e144079aab53173b868d871",
+  "conversation_id": "conv_069e7a45a67044b5b78e437829d9ea86",
+  "trace_id": "trc_b748ca22c86746e49ab6203945a0f7fb",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

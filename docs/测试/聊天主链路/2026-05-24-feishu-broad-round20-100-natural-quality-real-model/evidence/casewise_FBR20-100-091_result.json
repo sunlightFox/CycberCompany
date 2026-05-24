@@ -1,0 +1,40 @@
+{
+  "case_id": "FBR20-100-091",
+  "category": "测试治理",
+  "title": "放行门槛",
+  "peer_ref": "oc_fbr20_eval",
+  "prompt": "第二十轮 release gate 怎么设，哪些情况不能放行？",
+  "verdict": "fail",
+  "score": 40,
+  "notes": [
+    "real_model_not_completed"
+  ],
+  "reply_text": "release gate：\n1. 真实模型调用低于 100% 不能过。\n2. 飞书投递低于 100% 不能过。\n3. 审计记录 覆盖低于 100% 不能过。\n4. 出现 secret、token、私钥、验证码外泄不能过。\n5. 高风险动作被虚假报完成不能过。\n6. fail 未归因、没有修复队列和 rerun list 不能过。\n7. 核心契约问题如 资产代理、权限、审批链路被绕过，不能过。",
+  "turn_id": "turn_5c3c887e84f043388d019691754e80cb",
+  "conversation_id": "conv_cc088e400bea493b8dab70ecffad5918",
+  "trace_id": "trc_2c55f8ae735f4e4a8eb15240bb3c18bd",
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "route.selected",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

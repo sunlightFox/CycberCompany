@@ -1,0 +1,39 @@
+{
+  "case_id": "FBR21-100-011",
+  "category": "沟通协作",
+  "title": "催交不压迫",
+  "peer_ref": "oc_fbr21_relation",
+  "prompt": "对方还没给材料，帮我写飞书催一下，要礼貌但有截止点。",
+  "verdict": "warn",
+  "score": 88,
+  "notes": [
+    "missing_expected_terms:截止"
+  ],
+  "reply_text": "可以，直接发这句就行：\n\n**你好，想跟你确认一下材料进度，麻烦你这边尽量在今天 18:00 前发我一下，方便我继续往下推进。谢谢！**\n\n如果你想更柔和一点，也可以用这句：\n\n**你好，想麻烦你帮我跟进一下材料～如果方便的话，尽量今天 18:00 前发我，我这边好安排后续工作。谢谢你！**",
+  "turn_id": "turn_5f7809b56334425090171a7833d6d6b0",
+  "conversation_id": "conv_381337ef920d419f81ea9456b5e6745c",
+  "trace_id": "trc_689cc37fbbbf47df902e8e28e8b6a58f",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

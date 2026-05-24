@@ -1,0 +1,41 @@
+{
+  "case_id": "FDU20-100-019",
+  "category": "浏览器场景",
+  "title": "双页合并",
+  "peer_ref": "oc_FDU20_browser",
+  "prompt": "综合 http://127.0.0.1:59831/round20-handoff.html 和 http://127.0.0.1:59831/round20-receipt-policy.html，列发布沟通前检查清单。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:票据"
+  ],
+  "reply_text": "我先按**当前已读到的网页证据**整理一版发布沟通前检查清单；但要说明一下：**round20-receipt-policy.html 的内容没有出现在这次证据里**，所以这版还不能算“完全综合两页”的最终版。\n\n- 确认当前状态：`green-yellow`\n- 确认负责人：`Mina`\n- 对齐下一次更新时间：`22:40`\n- 核对发布范围是否包含：\n - `Feishu inbound pairing`\n - `visible guard`\n - `delivery receipt`\n- 检查沟通文案是否会触发长度门槛风险：`short affectionate replies may be under-scored by rigid length gates`\n- 发布前确认是否需要保留更短、更直接的表达，避免被 rigid length gates误伤-监控模型代理异常：如果 `model proxy` 连续返回 `5xx`，按页面决策**暂停 batch retry**\n- 发布前确认是否需要先向相关方同步这条决策，避免重复重试放大故障如果你把 `round20-receipt-policy.html` 的内容也发我，我可以再帮你合并成一版**完整的发布沟通前检查清单**。",
+  "turn_id": "turn_34bd279c70234f0bafc877f665e82b8b",
+  "conversation_id": "conv_f5b510f57b794fc2ab6db4f5bd04151b",
+  "trace_id": "trc_f64a6fd29ff440378afc1d5c6c1b39b4",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "browser.read_started",
+    "tool.completed",
+    "browser.read_completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

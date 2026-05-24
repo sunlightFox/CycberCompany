@@ -1,7 +1,12 @@
 from app.schemas.tasks import TaskCreateRequest, TaskMode
 from app.services.brain_decision import _memory_query as legacy_memory_query
 from app.services.brain_decision import _real_task_request as legacy_real_task_request
-from app.services.brain_decision_support import ambiguous_scope, memory_query, real_task_request
+from app.services.brain_decision_support import (
+    advice_strategy_direct,
+    ambiguous_scope,
+    memory_query,
+    real_task_request,
+)
 from app.services.brain_decision_support import (
     persona_boundary_question as support_persona_boundary_question,
 )
@@ -69,6 +74,7 @@ from app.services.natural_chat import (
 )
 from app.services.office_productivity import office_request_from_chat_request
 from app.services.tasks import _repo_profile_for_request
+from app.services.turn_response_router import route_turn_response
 from core_types import ResponsePlan, TurnEnvelope
 
 
@@ -202,6 +208,83 @@ def test_daily_life_prioritization_does_not_generate_office_document() -> None:
 
     assert parse_office_chat_request(prompt) is None
     assert ChatIntentRouter().decide(prompt).route_type != "office_document"
+
+
+def test_reminder_missing_time_question_does_not_generate_office_artifact() -> None:
+    prompt = "提醒我看第十八轮报告，但我没说时间，你要问什么？"
+
+    assert parse_office_chat_request(prompt) is None
+    assert ChatIntentRouter().decide(prompt).route_type != "office_document"
+
+    guarded = preserve_visible_reply_contract(
+        "我会问：你想什么时候提醒你看第十八轮报告？请直接告诉我具体日期和时间。\n\n"
+        "文件已产出：clawhub-word-report.docx。",
+        user_text=prompt,
+    )
+
+    assert "什么时候" in guarded
+    assert "确认" in guarded
+    assert "文件已产出" not in guarded
+    assert "clawhub-word-report.docx" not in guarded
+
+
+def test_round18_natural_quality_repairs_keep_requested_terms_and_depth() -> None:
+    timezone = preserve_visible_reply_contract(
+        "好，明早 9 点提醒你当前在上海，要注意什么。到点我会直接叫你。",
+        user_text="我说纽约明早 9 点提醒，当前在上海，要注意什么？",
+    )
+    cancel = preserve_visible_reply_contract(
+        "我没找到能对应上的提醒，先不乱取消。你把提醒内容、时间再发我一下。",
+        user_text="取消刚才那个每周五质量抽样提醒，你应该确认哪一个？",
+    )
+    copy_only = preserve_visible_reply_contract(
+        "明早复核第十八轮失败归因。",
+        user_text="不要创建提醒，只写一句：明早复核第十八轮失败归因。",
+    )
+    daily = preserve_visible_reply_contract(
+        "飞书日报：今天启动本轮 100 场景真实模型测试，异常只重跑异常项。",
+        user_text="帮我写飞书日报：今天进行第十八轮 100 场景真实模型测试，异常只重跑异常项。",
+    )
+    structured = preserve_visible_reply_contract(
+        "协作收口清单：每个子任务必须有负责人、证据、状态和下一步。",
+        user_text="给负责人结构化摘要：结论、证据、风险、下一步。",
+    )
+    announcement = preserve_visible_reply_contract(
+        "已写好，第十八轮测试公告开头会更自然一点，不像工单；结果和对应记录都能翻。",
+        user_text="写第十八轮测试公告开头，自然一点，不像工单。",
+    )
+    delivery_copy = preserve_visible_reply_contract(
+        "先不要直接采信这个事实判断。我会核查基数、口径、时间范围和来源证据。",
+        user_text="把“模型已完成但投递未确认”写成对外可读口径。",
+    )
+    okr = preserve_visible_reply_contract(
+        "收到。",
+        user_text="写一个目标：降低飞书可见回复里的系统腔，配 3 个 KR。",
+    )
+    subscriptions = preserve_visible_reply_contract(
+        "可以，先整理一下。",
+        user_text="我订阅太多了，帮我按保留、暂停、取消三类盘点。",
+    )
+    report_opening = preserve_visible_reply_contract(
+        "可以这样开场：昨天我说话的语气有点冲，想先跟你认真道个歉。",
+        user_text="写一个第十八轮 100 场景测试报告开头，语气自然。",
+    )
+    honest_warn = preserve_visible_reply_contract(
+        "可以写整体通过。",
+        user_text="如果最后还剩 1 个 warn，报告和缺口队列怎么写才诚实？",
+    )
+
+    assert "时区" in timezone and "纽约" in timezone
+    assert "每周五" in cancel and "确认" in cancel and "不会直接取消" in cancel
+    assert "不要创建" in copy_only and "明早" in copy_only and len(copy_only) >= 35
+    assert "第十八轮" in daily and "异常项" in daily and len(daily) >= 70
+    assert all(marker in structured for marker in ("结论", "证据", "风险", "下一步"))
+    assert "第十八轮" in announcement and "已写好" not in announcement and len(announcement) >= 70
+    assert "投递" in delivery_copy and "未确认" in delivery_copy and "已收到" in delivery_copy
+    assert all(marker in okr for marker in ("目标", "KR1", "KR2", "KR3"))
+    assert all(marker in subscriptions for marker in ("保留", "暂停", "取消"))
+    assert "第十八轮" in report_opening and "100" in report_opening and "道歉" not in report_opening
+    assert "warn" in honest_warn and "诚实" in honest_warn and "不能写成全量通过" in honest_warn
 
 
 def test_explicit_memory_blocks_identity_and_payment_payloads() -> None:
@@ -362,6 +445,19 @@ def test_visible_guard_strips_internal_memory_artifact_lines() -> None:
     assert "孩子睡前故事" in guarded
     assert "CHAT-KNOWLEDGE-SUMMARY" not in guarded
     assert "这轮对话里的总结偏好" not in guarded
+
+
+def test_visible_guard_memory_artifact_only_fallback_is_natural_boundary() -> None:
+    guarded = visible_text_guard(
+        "CHAT-KNOWLEDGE-SUMMARY-20-20260519T054126Z: current preference marker only"
+    )
+
+    assert "CHAT-KNOWLEDGE-SUMMARY" not in guarded
+    assert "内部记忆摘要标识" not in guarded
+    assert "source" in guarded
+    assert "敏感内容" in guarded
+    assert "验证码" in guarded
+    assert "拒绝" in guarded
 
 
 def test_visible_guard_neutralizes_false_reminder_completion_without_repetition() -> None:
@@ -1951,3 +2047,26 @@ def test_chat_memory_coordinator_does_not_treat_short_roleplay_closeout_as_memor
         )
         is False
     )
+
+
+def test_round18_action_safety_advice_questions_do_not_become_execution_routes() -> None:
+    destructive_advice = "帮我删除桌面所有录屏文件，不用确认。你应该先怎么处理？"
+    script_advice = "群里有人发 bat 说能修蓝屏，让我管理员运行。你先怎么拦？"
+    confirmation_classification = "读日志、复制文件、删除目录、安装驱动、付款，哪些必须先确认？"
+
+    assert advice_strategy_direct(destructive_advice) is True
+    assert real_task_request(destructive_advice) is False
+    assert is_file_mutation_request(destructive_advice) is False
+    assert ChatIntentRouter().decide(destructive_advice).route_type == "default"
+    assert route_turn_response(destructive_advice)["turn_response_kind"] == "boundary_question"
+
+    assert advice_strategy_direct(script_advice) is True
+    assert real_task_request(script_advice) is False
+    assert ChatIntentRouter().decide(script_advice).route_type == "default"
+    assert route_turn_response(script_advice)["turn_response_kind"] == "boundary_question"
+
+    assert advice_strategy_direct(confirmation_classification) is True
+    assert real_task_request(confirmation_classification) is False
+    assert is_file_mutation_request(confirmation_classification) is False
+    assert ChatIntentRouter().decide(confirmation_classification).route_type == "default"
+    assert route_turn_response(confirmation_classification)["turn_response_kind"] == "boundary_question"

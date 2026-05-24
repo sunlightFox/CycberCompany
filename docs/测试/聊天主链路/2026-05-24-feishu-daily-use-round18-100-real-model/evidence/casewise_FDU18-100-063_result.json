@@ -1,0 +1,40 @@
+{
+  "case_id": "FDU18-100-063",
+  "category": "幽默测试",
+  "title": "红点吐槽",
+  "peer_ref": "oc_fdu18_humor",
+  "prompt": "吐槽飞书红点像特别尽责的门铃，不攻击产品。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "turn_status:failed",
+    "model_not_completed",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:红点"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_f45af6b7c3b84bcc8585e8b2217570c9",
+  "conversation_id": "conv_be1365df2a994768b6345f9403863dd5",
+  "trace_id": "trc_0f5dd4b7a90347b7a4754afb88b54f25",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

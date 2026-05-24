@@ -1,0 +1,39 @@
+{
+  "case_id": "FBR20-100-093",
+  "category": "测试治理",
+  "title": "短答复核",
+  "peer_ref": "oc_fbr20_eval",
+  "prompt": "一句自然回应被判太短，人工复核怎么避免误杀？",
+  "verdict": "fail",
+  "score": 70,
+  "notes": [
+    "delivery_not_sent"
+  ],
+  "reply_text": "先给结论：别把“字数短”当成直接判罚条件，人工复核要看上下文、语义和意图。一句很短的自然回应，如果是在正常对话里、能接上上一句、没有刷屏/引战/违规意图，就不该因为短而误杀。我来理一下，避免误判可以这样做：1.看上下文，不只看单句-这句话是不是在回应上一轮内容？-能不能明确表达同意、确认、拒绝、感谢、补充？-比如“好”“收到”“明白了”都很短，但通常是正常回复。2.把“短”改成“低信息”才复核-短不等于无效。-只有在既短、又不相关、又无法承接语境时，才更像噪声或刷屏。3.给人工复核一个简单rubric-是否与上一句。",
+  "turn_id": "turn_2df887d557f442899499d034b8b6f0fc",
+  "conversation_id": "conv_c2a671f261074111a067073fd7626734",
+  "trace_id": "trc_f27b603c64294038b4736c2c51ec3134",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

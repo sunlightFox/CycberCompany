@@ -1,0 +1,79 @@
+{
+  "run_label": "FBR20-100-NATURAL-REAL-20260524",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 3754,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 16:52:30,885 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 16:52:31,860 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 16:52:32,748 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_boundaries_no_false_completion": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --casewise --only-problematic.",
+  "total": 1,
+  "passed": 0,
+  "warned": 0,
+  "failed": 1,
+  "score_avg": 70.0,
+  "model_started": 1,
+  "model_completed": 1,
+  "delivery_sent": 1,
+  "trace_count": 1,
+  "by_category": {
+    "日常陪伴": {
+      "total": 1,
+      "pass": 0,
+      "warn": 0,
+      "fail": 1
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR20-100-001",
+      "category": "日常陪伴",
+      "title": "卡在第一步",
+      "peer_ref": "oc_fbr20_care",
+      "prompt": "我打开文档就发呆，帮我用很自然的话把第一步拆出来，别像打鸡血。",
+      "verdict": "fail",
+      "score": 70,
+      "notes": [
+        "round12_hard_quality_marker:clawhub-word-report.docx",
+        "missing_expected_terms:第一步"
+      ],
+      "reply_text": "文件已产出：clawhub-word-report.docx。文档已经生成好了。后面如果你要继续改这个文档，直接告诉我想补哪一段就行。",
+      "turn_id": "turn_eda2c85752ee48f493e091499f717da4",
+      "conversation_id": "conv_b3412ba8d4224d39b5f6870ff3bae7f3",
+      "trace_id": "trc_cc5fe3a4b80045a79feee33f3dc4f979",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": true,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "task.created",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

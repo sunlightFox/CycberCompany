@@ -1,0 +1,39 @@
+{
+  "case_id": "FBR20-100-095",
+  "category": "测试治理",
+  "title": "证据对齐",
+  "peer_ref": "oc_fbr20_eval",
+  "prompt": "怎么证明真实模型、飞书投递、trace 属于同一个 case？",
+  "verdict": "fail",
+  "score": 70,
+  "notes": [
+    "delivery_not_sent"
+  ],
+  "reply_text": "要把三份证据绑到同一个 case：先看真实模型完成记录，再看飞书投递结果，最后看 trace 里的事件顺序和可见回复摘录。三处都要能对上同一条 case 标识、同一轮时间线和同一段最终回复；任一环缺失，就只能写待确认，不能写成已闭环。",
+  "turn_id": "turn_f7851af0919b402b9669a01c06fbe497",
+  "conversation_id": "conv_144ce312058f4909bdeea2ad0fa0ed4a",
+  "trace_id": "trc_b2b241c7400347c18c6bf3d97732f50a",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

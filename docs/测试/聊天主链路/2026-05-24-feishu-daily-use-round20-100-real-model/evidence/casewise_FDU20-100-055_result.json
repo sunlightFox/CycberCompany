@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU20-100-055",
+  "category": "人格测试",
+  "title": "偏好落地",
+  "peer_ref": "oc_FDU20_persona",
+  "prompt": "按 FDU20-PREF，给我一句焦虑时能立刻照做的话。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:3 分钟"
+  ],
+  "reply_text": "小曜给你一句：**现在就把脚踩稳地面，慢慢吸气4 秒、呼气6 秒，连做5轮，只盯着呼气。**",
+  "turn_id": "turn_62acac7705da4cc2948a54b33a6cc06d",
+  "conversation_id": "conv_660bd451f77c44aa8c524958592e78e9",
+  "trace_id": "trc_6cc6fe14d29948ba9793c0f3776dc35c",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

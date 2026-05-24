@@ -1,0 +1,79 @@
+{
+  "run_label": "FBR18-100-NATURAL-REAL-20260524",
+  "entry": "feishu_mock_channel",
+  "real_model_required": true,
+  "model_endpoint": "http://127.0.0.1:8317/v1",
+  "model_verify": {
+    "brain_id": "brain_not_configured",
+    "status": "healthy",
+    "latency_ms": 3473,
+    "error_code": null,
+    "status_code": 200,
+    "stderr_tail": "2026-05-24 09:34:39,963 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 09:34:40,939 INFO httpx HTTP Request: POST http://127.0.0.1:8317/v1/responses \"HTTP/1.1 200 OK\"\n2026-05-24 09:34:41,315 INFO httpx HTTP Request: POST http://testserver/api/brains/brain_not_configured/verify \"HTTP/1.1 200 OK\""
+  },
+  "quality_rubric": {
+    "real_model_delivery_trace": 25,
+    "correctness_expected_terms_and_route": 25,
+    "natural_visible_reply_no_system_or_tech_tone": 25,
+    "richness_boundaries_no_false_completion": 25
+  },
+  "rerun_policy": "After fixes, rerun only fail/warn cases with --casewise --only-problematic.",
+  "total": 1,
+  "passed": 0,
+  "warned": 0,
+  "failed": 1,
+  "score_avg": 70.0,
+  "model_started": 1,
+  "model_completed": 1,
+  "delivery_sent": 0,
+  "trace_count": 1,
+  "by_category": {
+    "生活健康": {
+      "total": 1,
+      "pass": 0,
+      "warn": 0,
+      "fail": 1
+    }
+  },
+  "results": [
+    {
+      "case_id": "FBR18-100-082",
+      "category": "生活健康",
+      "title": "下班切换",
+      "peer_ref": "oc_fbr18_life",
+      "prompt": "下班后脑子还在回消息，给我一个 5 分钟切换办法。",
+      "verdict": "fail",
+      "score": 70,
+      "notes": [
+        "delivery_not_sent"
+      ],
+      "reply_text": "可以，**用一个5分钟“下班切换”就够了**。小曜给你一个最省脑子的版本：**0:00–1:00先收尾，不再继续聊**-把还在回的消息，统一停在这里。-如果必要，只发一句：**“我下班了，明天上午回你。”**-之后手机切到勿扰/静音。**1:00–2:00把脑子里的待办倒出来**-打开备忘录，写三行就行：1.还没处理的事2.明天第一件要做的事3.现在不用想的事-目标不是整理完，是让大脑知道“已经存档”。**2:00–3:00做一个明确的身体切换**-起身走1分钟，或者原地拉伸肩颈、手臂、背部。\n- 同时慢慢呼气，呼气比吸气长一点。\n\n**3:00–4:00 换场景**\n- 去洗手、洗脸，或者换衣服。\n-重点是给大脑一个信号：**工作场景结束了**。\n\n**4:00–5:00 给自己一个“下班动作”**\n- 放一首固定的歌，或者泡水/倒杯饮料。\n- 然后只做一件轻松的事：走路、吃饭、看短视频都行，别再碰工作消息。\n\n**一句话版口诀：**\n**停消息 → 倒待办 → 动身体 → 换场景 → 做个下班仪式。**\n\n如果你想要，我还能直接给你做一个**“手机上5 分钟照着做”的超短版清单**。",
+      "turn_id": "turn_5c35f086bdc0480aab8a6d535420ddc3",
+      "conversation_id": "conv_0f3f6c2aa40c4dc6b101d937fe13bbb5",
+      "trace_id": "trc_6b56a6887d0444c489b890fac80d53bc",
+      "route_brain_id": "brain_not_configured",
+      "model_started": true,
+      "model_completed": true,
+      "usage_total_tokens": null,
+      "delivery_sent": false,
+      "event_types": [
+        "turn.queued",
+        "turn.queue_started",
+        "content.normalized",
+        "turn.started",
+        "context.started",
+        "context.ready",
+        "intent.detected",
+        "mode.selected",
+        "route.selected",
+        "model.started",
+        "model.completed",
+        "response.delta",
+        "response.completed",
+        "turn.completed"
+      ],
+      "route_type": null,
+      "task_status": null
+    }
+  ]
+}

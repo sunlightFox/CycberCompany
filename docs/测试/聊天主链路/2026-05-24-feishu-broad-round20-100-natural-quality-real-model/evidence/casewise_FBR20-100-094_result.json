@@ -1,0 +1,39 @@
+{
+  "case_id": "FBR20-100-094",
+  "category": "测试治理",
+  "title": "自然抽样",
+  "peer_ref": "oc_fbr20_eval",
+  "prompt": "全过以后怎么抽样检查自然度、信息量和边界？",
+  "verdict": "fail",
+  "score": 70,
+  "notes": [
+    "delivery_not_sent"
+  ],
+  "reply_text": "抽样标准可以定成三条：自然度像正常飞书对话，不系统腔也不技术腔；信息量能回答用户真正要问的事；边界遇到未知、权限、安全或未完成状态时不乱承诺。抽样时随机看通过项，再加看安全拒绝、短答和工具失败这类高风险样本。",
+  "turn_id": "turn_cf80613af3ba4f2a9d34b502248dacdc",
+  "conversation_id": "conv_24e4496124384033909b9920ec07a835",
+  "trace_id": "trc_4da997cc9c154dfab2da6144f22f67da",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

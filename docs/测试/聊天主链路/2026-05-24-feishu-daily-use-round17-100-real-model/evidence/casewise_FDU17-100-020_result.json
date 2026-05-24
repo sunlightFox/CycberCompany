@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU17-100-020",
+  "category": "浏览器只读与证据",
+  "title": "官方来源规划",
+  "peer_ref": "oc_fdu17_browser",
+  "prompt": "我要查飞书开放平台机器人消息限频，先说会找哪些官方或一手来源。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "turn_status:failed",
+    "model_not_started",
+    "model_not_completed",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:官方,一手"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_ca75318f7adb47cb8ef329e7ee234413",
+  "conversation_id": "conv_99cab07fe60144f28647cf40b0ee2c37",
+  "trace_id": "trc_793d91db914045b9bdce4f154620a49d",
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

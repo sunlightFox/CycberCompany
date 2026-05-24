@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU17-100-007",
+  "category": "日常节奏与记忆",
+  "title": "被误解",
+  "peer_ref": "oc_fdu17_casual",
+  "prompt": "别人好像误会我了，我想解释但不想越描越黑，给一句开场。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:解释"
+  ],
+  "reply_text": "可以澄清成这样：刚才那句话让你感觉像被指责，我先道歉，这不是我的本意。我想说的是事情本身，不是否定你；我们把误会拆开对一下，看看是哪一句听起来不舒服。如果我表达得太冲，我愿意改说法，但不想让这个误会继续放大。",
+  "turn_id": "turn_e12fd068b2b2481baab073cc9c5772d1",
+  "conversation_id": "conv_346c6dc5743944e39e088ed539eead36",
+  "trace_id": "trc_d30370064c2343e18c66018ef4b148e2",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

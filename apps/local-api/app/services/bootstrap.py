@@ -331,11 +331,18 @@ class BootstrapService:
             and existing.get("model_name") == "not_configured"
             and existing.get("status") == "not_configured"
         )
+        is_default_codex_brain_record = (
+            existing.get("brain_id") == DEFAULT_BRAIN_ID
+            and existing.get("provider")
+            in {seed["provider"], "openai", "openai_compatible", "custom_openai_compatible"}
+            and str(existing.get("model_name") or "")
+            in {str(seed["model_name"]), DEFAULT_CODEX_MODEL, "not_configured"}
+        )
         is_managed_codex_default = (
             existing.get("provider") == seed["provider"]
             and existing.get("display_name")
             in {seed["display_name"], "Codex Default Brain", "Codex 默认大脑"}
-        )
+        ) or is_default_codex_brain_record
         if not (is_legacy_placeholder or is_managed_codex_default):
             return
 
@@ -371,12 +378,18 @@ class BootstrapService:
             "updated_at": utc_now_iso(),
         }
         existing_ref = existing.get("api_key_ref")
+        seed_ref = seed["api_key_ref"]
+        env_ref = f"env://{DEFAULT_CODEX_API_KEY_ENV}"
         if is_legacy_placeholder or existing_ref in {
             None,
             "",
-            f"env://{DEFAULT_CODEX_API_KEY_ENV}",
-        }:
-            fields["api_key_ref"] = seed["api_key_ref"]
+            env_ref,
+        } or (
+            is_managed_codex_default
+            and seed_ref == env_ref
+            and os.environ.get(DEFAULT_CODEX_API_KEY_ENV)
+        ):
+            fields["api_key_ref"] = seed_ref
         else:
             fields["status"] = (
                 "configured"
@@ -830,10 +843,11 @@ class BootstrapService:
 
 
 def _read_codex_runtime_config() -> dict[str, Any]:
+    endpoint_override = os.environ.get("CYCBER_REAL_MODEL_ENDPOINT")
     fallback = {
         "codex_provider": "openai",
         "provider": "openai",
-        "endpoint": "https://api.openai.com/v1",
+        "endpoint": endpoint_override or "https://api.openai.com/v1",
         "model": DEFAULT_CODEX_MODEL,
         "wire_api": "responses",
         "reasoning_effort": DEFAULT_CODEX_REASONING_EFFORT,
@@ -861,14 +875,14 @@ def _read_codex_runtime_config() -> dict[str, Any]:
         if isinstance(raw_provider, dict):
             provider_config = raw_provider
 
-    endpoint = str(provider_config.get("base_url") or fallback["endpoint"])
+    endpoint = str(endpoint_override or provider_config.get("base_url") or fallback["endpoint"])
     wire_api = _codex_wire_api(provider_config.get("wire_api") or fallback["wire_api"])
     requires_openai_auth = bool(provider_config.get("requires_openai_auth", False))
     api_key_ref = None
-    if requires_openai_auth and _codex_auth_has_openai_key():
-        api_key_ref = DEFAULT_CODEX_API_KEY_REF
-    elif os.environ.get(DEFAULT_CODEX_API_KEY_ENV):
+    if os.environ.get(DEFAULT_CODEX_API_KEY_ENV):
         api_key_ref = f"env://{DEFAULT_CODEX_API_KEY_ENV}"
+    elif requires_openai_auth and _codex_auth_has_openai_key():
+        api_key_ref = DEFAULT_CODEX_API_KEY_REF
 
     return {
         **fallback,

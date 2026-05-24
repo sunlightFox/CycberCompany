@@ -1,0 +1,39 @@
+{
+  "case_id": "FBR15-100-009",
+  "category": "情绪陪伴",
+  "title": "卡住求救",
+  "peer_ref": "oc_fbr15_care",
+  "prompt": "我卡住了但不好意思求助，给一句不丢人的求助话术。",
+  "verdict": "warn",
+  "score": 88,
+  "notes": [
+    "missing_expected_terms:求助"
+  ],
+  "reply_text": "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。我的真实想法是……如果你方便，我们可以接着聊。",
+  "turn_id": "turn_18ac9ffc337d4877858c478749fb4869",
+  "conversation_id": "conv_aeeb79e3777c4acea959b8cb6356fc3d",
+  "trace_id": "trc_c72796f9a99a49f1933934e901cdf1e3",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

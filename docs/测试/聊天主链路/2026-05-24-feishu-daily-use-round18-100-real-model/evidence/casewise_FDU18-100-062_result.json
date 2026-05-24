@@ -1,0 +1,40 @@
+{
+  "case_id": "FDU18-100-062",
+  "category": "幽默测试",
+  "title": "剩余告警",
+  "peer_ref": "oc_fdu18_humor",
+  "prompt": "100 条里还剩 3 条告警，写一句幽默但认真收尾的话。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "turn_status:failed",
+    "model_not_completed",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:3"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_8b08f5668019473c8ee666d0bea83a1f",
+  "conversation_id": "conv_be1365df2a994768b6345f9403863dd5",
+  "trace_id": "trc_c240d4b9b8724c90887e93a5b6e60d27",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

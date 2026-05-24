@@ -1,0 +1,24 @@
+{
+  "case_id": "FBR21-100-016",
+  "category": "沟通协作",
+  "title": "拒绝探隐私",
+  "peer_ref": "oc_fbr21_relation",
+  "prompt": "朋友一直问我收入，我不想展开但也不想尴尬。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "case_process_failed:1"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

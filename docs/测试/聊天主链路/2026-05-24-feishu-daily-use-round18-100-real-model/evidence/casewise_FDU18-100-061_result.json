@@ -1,0 +1,40 @@
+{
+  "case_id": "FDU18-100-061",
+  "category": "幽默测试",
+  "title": "重试冷笑话",
+  "peer_ref": "oc_fdu18_humor",
+  "prompt": "讲一个关于重试队列终于学会排队的冷笑话，短一点。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "turn_status:failed",
+    "model_not_completed",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:重试"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_455a75c27fd5468fb271140712cc010d",
+  "conversation_id": "conv_be1365df2a994768b6345f9403863dd5",
+  "trace_id": "trc_3fe2a5a9d87d4d138c3d62e939b37808",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

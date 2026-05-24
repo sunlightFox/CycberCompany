@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU17-100-032",
+  "category": "办公协作",
+  "title": "客户解释",
+  "peer_ref": "oc_fdu17_office",
+  "prompt": "客户问为什么移动端卡片推送暂停了，我们还在查重试风险。写一段稳住但诚实的回复。",
+  "verdict": "fail",
+  "score": 50,
+  "notes": [
+    "delivery_not_sent"
+  ],
+  "reply_text": "我来理一下，给你一段可以直接发的：\n\n>这边先跟您同步一下：移动端卡片推送目前是临时暂停状态，我们正在排查重试机制可能带来的重复触达风险，先确保后续投放稳定、不会影响用户体验。当前我们还在确认具体原因和恢复方案，确认后会第一时间同步您最新进展和预计恢复时间。抱歉给您带来不便，也感谢您的理解。\n\n如果你想要，我也可以再帮你压成更短的客服口吻。",
+  "turn_id": "turn_dbbcb669f588401c9b0c4ddd2fd71d7d",
+  "conversation_id": "conv_8d33d57b593142288c1c1702944babbb",
+  "trace_id": "trc_3b3cd0fa2fe1434481e2894a3928d21c",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

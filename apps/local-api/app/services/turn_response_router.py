@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.brain_decision_support import (
+    advice_strategy_direct,
     concept_explanation_request,
     no_clarification,
     persona_boundary_question,
@@ -84,6 +85,10 @@ def route_turn_response(
     if _looks_like_knowledge_explanation(raw):
         reason_codes.append("turn_response_knowledge_explanation")
         return {"turn_response_kind": "knowledge_explanation", "reason_codes": reason_codes}
+    if advice_strategy_direct(raw) and _contains_action_or_risk_marker(raw, lowered):
+        reason_codes.append("turn_response_boundary_question")
+        reason_codes.append("action_safety_advice_question")
+        return {"turn_response_kind": "boundary_question", "reason_codes": reason_codes}
     if _looks_like_action_request(raw, lowered, boundary=boundary):
         reason_codes.append("turn_response_action_request")
         return {"turn_response_kind": "action_request", "reason_codes": reason_codes}
@@ -192,4 +197,22 @@ def _looks_like_action_request(text: str, lowered: str, *, boundary: Any) -> boo
         return True
     return any(marker in text for marker in _ACTION_MARKERS) or any(
         marker in lowered for marker in ("download", "delete", "login", "publish", "install")
+    )
+
+
+def _contains_action_or_risk_marker(text: str, lowered: str) -> bool:
+    return any(marker in text for marker in _ACTION_MARKERS) or any(
+        marker in text or marker in lowered
+        for marker in (
+            "运行",
+            "管理员",
+            "提交",
+            "转账",
+            "支付",
+            "验证码",
+            "外发",
+            "bat",
+            "cmd",
+            "exe",
+        )
     )

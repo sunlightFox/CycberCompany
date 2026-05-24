@@ -1,0 +1,24 @@
+{
+  "case_id": "FBR15-100-038",
+  "category": "浏览器只读",
+  "title": "表单缺口",
+  "peer_ref": "oc_fbr15_browser",
+  "prompt": "基于 http://127.0.0.1:50494/round15-form.html 判断授权申请还缺什么，但不要代填。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "case_process_failed:1"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

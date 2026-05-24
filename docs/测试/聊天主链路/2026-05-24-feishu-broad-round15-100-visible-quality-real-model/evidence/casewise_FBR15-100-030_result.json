@@ -1,0 +1,24 @@
+{
+  "case_id": "FBR15-100-030",
+  "category": "总结研究",
+  "title": "反例补集",
+  "peer_ref": "oc_fbr15_research",
+  "prompt": "下一轮要补哪些反例，避免只测顺风题？",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "case_process_failed:1"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

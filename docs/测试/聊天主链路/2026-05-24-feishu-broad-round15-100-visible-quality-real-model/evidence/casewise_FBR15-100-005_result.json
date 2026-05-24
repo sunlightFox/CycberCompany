@@ -1,0 +1,39 @@
+{
+  "case_id": "FBR15-100-005",
+  "category": "情绪陪伴",
+  "title": "睡前反刍",
+  "peer_ref": "oc_fbr15_care",
+  "prompt": "睡前一直 replay 白天那句话，帮我收束，不要讲大道理。",
+  "verdict": "warn",
+  "score": 88,
+  "notes": [
+    "missing_expected_terms:收束"
+  ],
+  "reply_text": "先收住：**那句话先放到白天，今晚不处理。**\n\n你现在只要默念这一句：\n**“我已经听见了，但我先睡觉，明天再看。”**",
+  "turn_id": "turn_80e570e855d04689a6a0fccde8071af3",
+  "conversation_id": "conv_6e5f0a0398804d7b8d240541aa167579",
+  "trace_id": "trc_4534e9e96a954f91828233d5efbe457f",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

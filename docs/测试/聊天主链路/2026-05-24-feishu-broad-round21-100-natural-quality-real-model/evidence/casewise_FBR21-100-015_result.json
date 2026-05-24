@@ -1,0 +1,40 @@
+{
+  "case_id": "FBR21-100-015",
+  "category": "沟通协作",
+  "title": "承认发错",
+  "peer_ref": "oc_fbr21_relation",
+  "prompt": "客户指出我发错版本，帮我道歉、说明会补发正确版。",
+  "verdict": "fail",
+  "score": 70,
+  "notes": [
+    "reply_too_short_or_thin",
+    "missing_expected_terms:道歉,补发"
+  ],
+  "reply_text": "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。我的真实想法是……如果你方便，我们可以接着聊。",
+  "turn_id": "turn_dea16f8eda9b4d6582bc019e13534b1e",
+  "conversation_id": "conv_b298a8c5542c499fa37291f1fe2afda2",
+  "trace_id": "trc_d720489cf4c94119878a60d6dd8f2309",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

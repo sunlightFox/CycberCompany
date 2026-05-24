@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU21-100-007",
+  "category": "日常闲聊与记忆",
+  "title": "被打断",
+  "peer_ref": "oc_FDU21_casual",
+  "prompt": "我刚进入状态就被打断，现在火气上来了。只给一个不伤人的恢复动作。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:恢复"
+  ],
+  "reply_text": "被打断以后先别硬顶。对自己说一句：我回来了，现在只做眼前这一小步。然后把下一个动作写成 10 个字以内，比如“打开文档”或“补第一条”。先不追刚才丢掉的状态，回来就算重新接上了，慢慢来。",
+  "turn_id": "turn_72f2829bdc254502a0f33df0fef1d7ce",
+  "conversation_id": "conv_f53a74b666764ba68510a287ce8de517",
+  "trace_id": "trc_9e571e83896d463cbb11a0d2274957d9",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

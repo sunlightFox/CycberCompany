@@ -1,0 +1,24 @@
+{
+  "case_id": "FBR15-100-043",
+  "category": "记忆偏好",
+  "title": "按偏好写",
+  "peer_ref": "oc_fbr15_memory",
+  "prompt": "按 FBR15-PREF 写一句第十五轮报告开头。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "case_process_failed:1"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

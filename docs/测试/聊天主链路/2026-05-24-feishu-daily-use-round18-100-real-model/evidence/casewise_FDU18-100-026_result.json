@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU18-100-026",
+  "category": "系统操作场景",
+  "title": "备份范围",
+  "peer_ref": "oc_fdu18_system",
+  "prompt": "帮我备份项目之前，先问我要确认哪些目录、排除项和命名规则。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:范围"
+  ],
+  "reply_text": "结论：我现在先不开始备份，先帮你把确认项问清楚。你把这3项告诉我就行：1.**要备份哪些目录**-例如：整个项目根目录，还是只备份 `src/`、`docs/`、`config/`之类2. **要排除哪些内容**\n -例如：`node_modules/`、`dist/`、`.git/`、日志、缓存、临时文件、密钥文件、大文件等3. **命名规则**\n -例如：`项目名_日期_版本.zip`\n - 日期格式要不要固定成 `YYYY-MM-DD`\n -需不需要加时间、分支名、备注你可以直接按这个格式回复我：\n\n```text目录：\n排除：\n命名规则：\n```先给结论：我现在先不开始备份，先帮你把确认项问清楚。\n\n你把这 3 项告诉我就行：\n\n1. **要备份哪些目录**\n   -",
+  "turn_id": "turn_70d404834ca74d7495e0fa5c24a4db22",
+  "conversation_id": "conv_4d50b479d13642feba78721080727cea",
+  "trace_id": "trc_7b464a12b17d45699b6562534c726057",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

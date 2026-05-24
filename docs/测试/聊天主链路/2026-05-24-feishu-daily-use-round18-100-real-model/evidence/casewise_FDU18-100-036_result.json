@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU18-100-036",
+  "category": "办公场景",
+  "title": "拒绝插队",
+  "peer_ref": "oc_fdu18_office",
+  "prompt": "同事要我插队做低优先级汇总，我正在处理延迟事故，给一句不僵硬的拒绝。",
+  "verdict": "fail",
+  "score": 50,
+  "notes": [
+    "delivery_not_sent"
+  ],
+  "reply_text": "我这边先把延迟事故处理掉，这个低优先级汇总我晚点再接，免得两边都耽误。",
+  "turn_id": "turn_e39b0902cc564977a46c2936ed04ef91",
+  "conversation_id": "conv_e6696c6a1b964e36a13bb535c25da74d",
+  "trace_id": "trc_90d14a4769504ae9b79472c22d84536f",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

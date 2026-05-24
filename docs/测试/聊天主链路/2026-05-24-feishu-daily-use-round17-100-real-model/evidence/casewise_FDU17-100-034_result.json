@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU17-100-034",
+  "category": "办公协作",
+  "title": "样本提醒",
+  "peer_ref": "oc_fdu17_office",
+  "prompt": "同事说投诉下降 34%，但只看了一个群反馈。帮我温和提醒口径问题。",
+  "verdict": "fail",
+  "score": 50,
+  "notes": [
+    "delivery_not_sent"
+  ],
+  "reply_text": "可以这样温和提醒：\n\n“这个34% 的表述先稍微收一收会更稳妥，我看目前主要是一个群的反馈，样本可能还不够代表整体。要不先改成‘当前可见反馈有下降趋势’这类口径，等数据更完整再下结论？”\n\n如果你想更短一点，也可以发：\n\n“这个数字先别说得太满哈，现阶段看起来还是单个群反馈，可能不太够支撑‘投诉下降34%’这个结论。”\n\n我来理一下：核心不是否定同事，而是提醒“样本太小，结论别说死”。",
+  "turn_id": "turn_8b4e06db8f1b41cfa19e84a79be77add",
+  "conversation_id": "conv_423bace186334f9a8ac2cf9765f18bb0",
+  "trace_id": "trc_77734d474c514e8d9328781ffbf8b460",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

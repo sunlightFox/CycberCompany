@@ -1,0 +1,24 @@
+{
+  "case_id": "FBR15-100-092",
+  "category": "测试治理",
+  "title": "异常复跑",
+  "peer_ref": "oc_fbr15_eval",
+  "prompt": "100 个场景里 3 fail、4 warn，修完后应该怎么跑？",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "case_process_failed:1"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

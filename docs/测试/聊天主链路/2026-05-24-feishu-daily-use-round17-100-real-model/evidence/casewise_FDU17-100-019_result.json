@@ -1,0 +1,41 @@
+{
+  "case_id": "FDU17-100-019",
+  "category": "浏览器只读与证据",
+  "title": "双页检查",
+  "peer_ref": "oc_fdu17_browser",
+  "prompt": "综合 http://127.0.0.1:55401/round17-policy.html 和 http://127.0.0.1:55401/round17-form.html，列供应商外发前检查清单。",
+  "verdict": "fail",
+  "score": 30,
+  "notes": [
+    "real_model_not_completed",
+    "model_not_started",
+    "model_not_completed"
+  ],
+  "reply_text": "我看了这个页面，主要内容是：<html><body><h1>Vendor Sharing Policy</h1><p>Allowed: masked error code, timestamp, request id, screenshot with personal data hidden.</p><p>Needs 确认: full logs, account list, customer examples, export package.</p><p>Never send: bearer token, cookie, private key, invoice QR token, home address.</p></body></html>。只读网页能力正在工作。\n\n检查清单补充：每个流程末尾保留可勾选的检查清单，便于复核和交接。\n\n补充：没有明确授权和最小化范围前不外发。",
+  "turn_id": "turn_e41af4c9b2f441e78605ad74b27366c1",
+  "conversation_id": "conv_fee62a172a69428b98b017e27fd58cbf",
+  "trace_id": "trc_1b0d8af1e8b84736b78f3c0c03a4b9f8",
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "browser.read_started",
+    "tool.completed",
+    "browser.read_completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

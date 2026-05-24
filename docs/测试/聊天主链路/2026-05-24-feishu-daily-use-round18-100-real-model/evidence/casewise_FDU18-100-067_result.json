@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU18-100-067",
+  "category": "幽默测试",
+  "title": "表情包文案",
+  "peer_ref": "oc_fdu18_humor",
+  "prompt": "给一个飞书表情包文案：第十八轮继续稳住。",
+  "verdict": "fail",
+  "score": 70,
+  "notes": [
+    "reply_too_short_or_thin"
+  ],
+  "reply_text": "小曜给你一句：**第十八轮继续稳住，先把节奏拿回来。**",
+  "turn_id": "turn_2bf0c2d149534d9b954807239c62571f",
+  "conversation_id": "conv_d652dff3f28044cd9bc7241c91940dbc",
+  "trace_id": "trc_2bead14ca6864c1cbb58c53d247acbcf",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

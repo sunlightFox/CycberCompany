@@ -1,0 +1,42 @@
+{
+  "case_id": "FDU17-100-018",
+  "category": "浏览器只读与证据",
+  "title": "来源边界",
+  "peer_ref": "oc_fdu17_browser",
+  "prompt": "只基于 http://127.0.0.1:55348/round17-release.html 写一句结论，并说清来源边界。",
+  "verdict": "fail",
+  "score": 42,
+  "notes": [
+    "delivery_not_sent",
+    "missing_expected_terms:页面"
+  ],
+  "reply_text": "先不要直接采信“这个事实判断”。我会核查四件事：\n1. 基数：从多少增长到多少，小基数会把百分比放得很夸张。\n2. 口径：分子、分母、去重规则、样本范围和是否只截取了有利人群。\n3. 时间范围：是日、周、月还是活动期，是否和对照期长度一致。\n4. 来源证据：原始数据、官方公告、计算过程和更新时间；缺任何一项，都只能写成待核查。",
+  "turn_id": "turn_2363fcf9fa1a48ff9258ec489cf7f650",
+  "conversation_id": "conv_6764e277c3004b57a562c10f0a6ded63",
+  "trace_id": "trc_9ab0419dc11f4d3f9f403c8ae758131e",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "browser.read_started",
+    "tool.completed",
+    "browser.read_completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

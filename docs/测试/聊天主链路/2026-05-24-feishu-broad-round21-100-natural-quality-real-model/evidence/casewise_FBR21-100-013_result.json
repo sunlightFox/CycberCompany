@@ -1,0 +1,39 @@
+{
+  "case_id": "FBR21-100-013",
+  "category": "沟通协作",
+  "title": "补充遗漏",
+  "peer_ref": "oc_fbr21_relation",
+  "prompt": "我刚才漏说一个风险条件，想补一句，不要显得推翻前面。",
+  "verdict": "warn",
+  "score": 88,
+  "notes": [
+    "missing_expected_terms:风险"
+  ],
+  "reply_text": "可以，别用“我前面说错了”这种开头，直接用补充/追加的方式接上就行。这样听起来是补信息，不是推翻前面。",
+  "turn_id": "turn_7dd9ddd4bf2a4032b641b7b9a24908aa",
+  "conversation_id": "conv_000288b50a104452ae5e55c3bda9ae83",
+  "trace_id": "trc_5f4262923f4d4bf6bdd0bc2007b516a5",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

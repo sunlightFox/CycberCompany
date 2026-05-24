@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import cast
 
 import anyio
@@ -120,6 +121,26 @@ def test_boot_003_startup_repairs_missing_welcome_message(client: TestClient) ->
     )
 
 
+def test_boot_004_managed_codex_default_prefers_current_env_api_key(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from app.main import create_app
+
+    root_dir = Path(__file__).resolve().parents[3]
+    monkeypatch.setenv("CYCBER_ROOT", str(root_dir))
+    monkeypatch.setenv("CYCBER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-current-env")
+    with TestClient(create_app()) as test_client:
+        registry = cast(FastAPI, test_client.app).state.registry
+        anyio.run(_set_default_brain_api_key_ref, registry, "sec_stale_local")
+        anyio.run(registry.bootstrap_service.ensure_defaults)
+        brain = anyio.run(_default_brain_row, registry)
+
+    assert brain["api_key_ref"] == "env://OPENAI_API_KEY"
+    assert brain["status"] == "configured"
+
+
 def test_boot_004_bootstrap_does_not_overwrite_existing_organization(
     client: TestClient,
 ) -> None:
@@ -170,6 +191,25 @@ def test_boot_005_bootstrap_does_not_overwrite_member_voice_binding(
 
 async def _delete_welcome_message(registry) -> None:
     await registry.db.execute("DELETE FROM messages WHERE message_id = 'msg_welcome_xiaoyao'")
+
+
+async def _set_default_brain_api_key_ref(registry, api_key_ref: str) -> None:
+    await registry.db.execute(
+        """
+        UPDATE brains
+        SET api_key_ref = ?, status = 'healthy', display_name = 'User Renamed Default'
+        WHERE brain_id = ?
+        """,
+        (api_key_ref, DEFAULT_BRAIN_ID),
+    )
+
+
+async def _default_brain_row(registry) -> dict:
+    row = await registry.db.fetch_one(
+        "SELECT api_key_ref, status FROM brains WHERE brain_id = ?",
+        (DEFAULT_BRAIN_ID,),
+    )
+    return dict(row)
 
 
 async def _rename_default_organization(registry) -> None:

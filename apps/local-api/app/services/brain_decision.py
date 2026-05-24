@@ -1002,6 +1002,8 @@ def _tool_request(text: str) -> bool:
 def _advice_strategy_direct(text: str) -> bool:
     if _explicit_task_creation(text):
         return False
+    if _looks_like_action_safety_advice_question(text):
+        return True
     hard_execution = [
         "运行命令",
         "执行命令",
@@ -1041,8 +1043,62 @@ def _advice_strategy_direct(text: str) -> bool:
         "怎么选",
         "医疗建议",
         "金融建议",
+        "安全做法",
+        "怎么处理",
+        "怎么拦",
+        "应该先",
+        "先怎么",
+        "你先怎么",
+        "哪些必须",
+        "哪些需要",
+        "必须先确认",
+        "先确认哪些",
     ]
     return any(marker in text for marker in advice_markers)
+
+
+def _looks_like_action_safety_advice_question(text: str) -> bool:
+    raw = str(text or "")
+    lowered = raw.lower()
+    if "?" not in raw and "？" not in raw:
+        return False
+    advice_markers = (
+        "怎么处理",
+        "如何处理",
+        "怎么拦",
+        "先怎么",
+        "应该先",
+        "你先怎么",
+        "安全做法",
+        "安全处理",
+        "有什么风险",
+        "哪些必须",
+        "哪些需要",
+        "必须先确认",
+        "先确认哪些",
+    )
+    action_or_risk_markers = (
+        "删除",
+        "删掉",
+        "清空",
+        "覆盖",
+        "安装",
+        "运行",
+        "管理员",
+        "提交",
+        "登录",
+        "下载",
+        "转账",
+        "支付",
+        "验证码",
+        "外发",
+        "bat",
+        "cmd",
+        "exe",
+    )
+    return any(marker in raw for marker in advice_markers) and any(
+        marker in raw or marker in lowered for marker in action_or_risk_markers
+    )
 
 
 def _filesystem_scope_action(text: str) -> bool:

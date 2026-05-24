@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU17-100-047",
+  "category": "生活与健康边界",
+  "title": "礼物边界",
+  "peer_ref": "oc_fdu17_life",
+  "prompt": "给帮忙同事买 120 元以内小礼物，体面但不过界，给思路。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "turn_status:failed",
+    "model_not_started",
+    "model_not_completed",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:120"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_fad04cd4056a4c47a0a10825472b69b0",
+  "conversation_id": "conv_1b57e9e313fb4c09b554207e7a20a4a8",
+  "trace_id": "trc_934d6d173f214f4aa3f5654106a105de",
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

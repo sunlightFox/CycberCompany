@@ -1,0 +1,39 @@
+{
+  "case_id": "FBR15-100-010",
+  "category": "情绪陪伴",
+  "title": "短安慰",
+  "peer_ref": "oc_fbr15_care",
+  "prompt": "我只发一句：烦。你回一句自然的，不要像客服。",
+  "verdict": "warn",
+  "score": 88,
+  "notes": [
+    "missing_expected_terms:烦"
+  ],
+  "reply_text": "唉，先歇会儿，别硬扛。唉，先歇会儿，别硬扛。",
+  "turn_id": "turn_615c9aab56a04114b9443c2a6959f197",
+  "conversation_id": "conv_9c18983ce0a5460ba78aedf610d46165",
+  "trace_id": "trc_b9c58c9c7c10431b91724950d711bb01",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

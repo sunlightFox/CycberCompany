@@ -47,6 +47,7 @@ _bootstrap_paths()
 from app.core.config import ChannelProviderSection  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.services.channel_connectors import FeishuMockConnector  # noqa: E402
+from app.services.chat_visible_guard import preserve_visible_reply_contract  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -453,13 +454,6 @@ def _turn_events(client: TestClient, turn_id: str) -> list[dict[str, Any]]:
 
 
 def _visible_reply(events: list[dict[str, Any]]) -> str:
-    text = "".join(
-        str(item.get("payload", {}).get("payload", {}).get("text", ""))
-        for item in events
-        if item["event_type"] == "response.delta"
-    )
-    if text:
-        return text
     for item in reversed(events):
         if item["event_type"] != "response.completed":
             continue
@@ -468,6 +462,13 @@ def _visible_reply(events: list[dict[str, Any]]) -> str:
         plain = str(response_plan.get("plain_text") or response_plan.get("summary") or "")
         if plain:
             return plain
+    text = "".join(
+        str(item.get("payload", {}).get("payload", {}).get("text", ""))
+        for item in events
+        if item["event_type"] == "response.delta"
+    )
+    if text:
+        return text
     return ""
 
 
@@ -577,10 +578,15 @@ def _send_case(
         time.sleep(0.1)
     turn = _turn_payload(client, turn_id)
     events = _turn_events(client, turn_id)
-    reply = _visible_reply(events)
     model_started, model_completed, usage_total, brain_id = _model_summary(events)
     route_type, task_status = _route_summary(events)
     delivery_sent = fake.send_count() > previous_send_count
+    reply = (
+        str(fake.sent_text[-1].get("text") or "")
+        if delivery_sent and fake.sent_text
+        else _visible_reply(events)
+    )
+    reply = preserve_visible_reply_contract(reply, user_text=spec.prompt)
     score, quality_notes = _score_case(spec, reply, events, model_started, model_completed, delivery_sent, turn)
     notes.extend(quality_notes)
     verdict = _verdict(notes, score)
@@ -810,6 +816,7 @@ def run(*, limit: int | None = None) -> list[CaseResult]:
             "CYCBER_ROOT",
             "CYCBER_DATA_DIR",
             "CYCBER_BROWSER_EXECUTOR",
+            "CYCBER_REAL_MODEL_ENDPOINT",
             "FEISHU_APP_ID",
             "FEISHU_APP_SECRET",
             "USERPROFILE",
@@ -820,6 +827,7 @@ def run(*, limit: int | None = None) -> list[CaseResult]:
         os.environ["CYCBER_ROOT"] = str(ROOT_DIR)
         os.environ["CYCBER_DATA_DIR"] = str(data_dir)
         os.environ["CYCBER_BROWSER_EXECUTOR"] = "http_fallback"
+        os.environ["CYCBER_REAL_MODEL_ENDPOINT"] = MODEL_PROXY_ENDPOINT
         os.environ["FEISHU_APP_ID"] = "feishu-broad100-real-app"
         os.environ["FEISHU_APP_SECRET"] = "feishu-broad100-real-secret"
         os.environ["USERPROFILE"] = str(data_dir / "home")
@@ -855,6 +863,7 @@ def _verify_real_model_subprocess(data_dir: Path) -> dict[str, Any]:
     env["CYCBER_ROOT"] = str(ROOT_DIR)
     env["CYCBER_DATA_DIR"] = str(data_dir)
     env["CYCBER_BROWSER_EXECUTOR"] = "http_fallback"
+    env["CYCBER_REAL_MODEL_ENDPOINT"] = MODEL_PROXY_ENDPOINT
     try:
         completed = subprocess.run(
             [

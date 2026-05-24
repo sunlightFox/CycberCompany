@@ -1,0 +1,40 @@
+{
+  "case_id": "FDU18-100-066",
+  "category": "幽默测试",
+  "title": "谐音限量",
+  "peer_ref": "oc_fdu18_humor",
+  "prompt": "用最多两个谐音梗夸我第十八轮跑得稳，别连环轰炸。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "turn_status:failed",
+    "model_not_completed",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:最多"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_0d59b2191f334325ad18ad3d8b4667dd",
+  "conversation_id": "conv_be1365df2a994768b6345f9403863dd5",
+  "trace_id": "trc_9c7a8c58d2594947a97a1ee8324a49eb",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

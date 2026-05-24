@@ -1,0 +1,24 @@
+{
+  "case_id": "FBR15-100-048",
+  "category": "记忆偏好",
+  "title": "纠正偏好",
+  "peer_ref": "oc_fbr15_memory",
+  "prompt": "纠正刚才偏好：不要太短，要像同事提醒，有结论也有边界。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "case_process_failed:1"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

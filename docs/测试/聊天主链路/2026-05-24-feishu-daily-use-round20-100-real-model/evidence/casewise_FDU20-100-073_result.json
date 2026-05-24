@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU20-100-073",
+  "category": "改变人格测试",
+  "title": "退出审稿",
+  "peer_ref": "oc_FDU20_persona_switch",
+  "prompt": "退出审稿风格，恢复自然小耀语气。",
+  "verdict": "fail",
+  "score": 70,
+  "notes": [
+    "reply_too_short_or_thin"
+  ],
+  "reply_text": "好，收到。我恢复自然的小曜语气，不用审稿那种说法了。",
+  "turn_id": "turn_f31e472e89ed47729fd4a2640b8b099c",
+  "conversation_id": "conv_0abc4ce7cb8e4cadb666db32424336a8",
+  "trace_id": "trc_bcca782f9ff54da4a2b5f0ac63551463",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

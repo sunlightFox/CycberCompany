@@ -1,0 +1,243 @@
+{
+  "run_label": "FDU17-100-REAL-20260524",
+  "started_at": "2026-05-24T08:07:53",
+  "runner": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-24-feishu-daily-use-round17-100-real-model\\run_feishu_daily_use_round17_100_real_model_cases.py",
+  "total_selected": 90,
+  "completed": 39,
+  "items": [
+    {
+      "case_id": "FDU17-100-004",
+      "verdict": "warn",
+      "score": 90,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FDU17-100-007",
+      "verdict": "warn",
+      "score": 90,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FDU17-100-013",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-014",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-015",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-016",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-017",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-018",
+      "verdict": "warn",
+      "score": 90,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-019",
+      "verdict": "fail",
+      "score": 50,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-020",
+      "verdict": "fail",
+      "score": 50,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-021",
+      "verdict": "fail",
+      "score": 70,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-022",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-023",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-024",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-025",
+      "verdict": "fail",
+      "score": 50,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-026",
+      "verdict": "fail",
+      "score": 50,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-027",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-028",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-029",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-030",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-031",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-032",
+      "verdict": "fail",
+      "score": 50,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-033",
+      "verdict": "fail",
+      "score": 70,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-034",
+      "verdict": "fail",
+      "score": 50,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-035",
+      "verdict": "fail",
+      "score": 42,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-036",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-037",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-038",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-039",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-040",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-041",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-042",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-043",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-044",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-045",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-046",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-047",
+      "verdict": "fail",
+      "score": 50,
+      "error": "case_verdict:fail"
+    },
+    {
+      "case_id": "FDU17-100-048",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU17-100-049",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    }
+  ]
+}

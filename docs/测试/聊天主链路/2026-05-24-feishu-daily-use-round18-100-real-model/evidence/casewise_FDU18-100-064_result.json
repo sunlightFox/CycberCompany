@@ -1,0 +1,40 @@
+{
+  "case_id": "FDU18-100-064",
+  "category": "幽默测试",
+  "title": "共享救场",
+  "peer_ref": "oc_fdu18_humor",
+  "prompt": "我会议共享错窗口了，给一句救场再拉回主题。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "turn_status:failed",
+    "model_not_completed",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:主题"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_a654a541fa1c451cbd4b5855286a86d1",
+  "conversation_id": "conv_be1365df2a994768b6345f9403863dd5",
+  "trace_id": "trc_ec9d0628b37c409f841bb3bff29dbde2",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

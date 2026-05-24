@@ -1,0 +1,41 @@
+{
+  "case_id": "FDU17-100-040",
+  "category": "办公协作",
+  "title": "方案人话",
+  "peer_ref": "oc_fdu17_office",
+  "prompt": "把结论说成人话：方案 C 快但要人工复核，方案 D 慢但误发风险低。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "real_model_not_completed",
+    "delivery_not_sent",
+    "turn_status:failed",
+    "model_not_completed",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:C,D"
+  ],
+  "reply_text": "",
+  "turn_id": "turn_66d985b5488948d69aa4bee062affa0c",
+  "conversation_id": "conv_fadb3312544d499c82a33e06c402226e",
+  "trace_id": "trc_7c00ac79dc97420d83e31a8d4357568d",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "turn.failed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

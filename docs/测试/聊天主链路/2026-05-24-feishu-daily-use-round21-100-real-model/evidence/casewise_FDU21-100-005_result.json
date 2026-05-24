@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU21-100-005",
+  "category": "日常闲聊与记忆",
+  "title": "朋友已读不回",
+  "peer_ref": "oc_FDU21_casual",
+  "prompt": "朋友一天没回，我有点玻璃心。别替我脑补，帮我稳一下。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:脑补"
+  ],
+  "reply_text": "先给结论：**一天没回，不等于你被冷落了；现在最稳的是只认“没回”这个事实，别把空白自动翻译成“他不在乎我”。**\n\n我来理一下——你现在难受，更多是**不确定性在刺你**，不是你真的拿到了负面证据。所以先别急着给关系下判词，先把脑子拉回事实层面：\n\n-事实：朋友一天没回-还没事实：他故意无视你、关系变差、你做错了什么你可以先对自己说一句：**“我现在是有点慌，但我没有证据证明最坏的解释。”**\n\n然后先做个很小的动作：**暂停刷消息20 分钟，去喝水/走两分钟。**等情绪落一点，再决定要不要发一句轻轻的：“你先忙，回头再聊～”\n\n你不是玻璃，是今天刚好被“不确定”硌到了。",
+  "turn_id": "turn_efa02d39f0964d35ba39d93b00aac6ca",
+  "conversation_id": "conv_fd39093c08db4b06bde9f2e71dbc90d9",
+  "trace_id": "trc_70a0f420b0dc4314a67276bf402eeace",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}
