@@ -1867,6 +1867,34 @@ class RuntimeContractService:
                 details={"phase": "phase_36", "replay_ref": "/api/tasks/{task_id}/replay"},
             ),
             _contract(
+                "GoalSupportService",
+                "implemented",
+                "generic goal support creates plans, confirms goals, supervises check-ins and updates progress",
+                blocker_level="none",
+                details={
+                    "domain_specific": False,
+                    "api": "/api/goals",
+                    "migration": "064_goal_support.sql",
+                },
+            ),
+            _contract(
+                "GoalSupervisionScheduler",
+                "implemented",
+                "goal supervision uses ScheduledTaskService callbacks without creating normal tasks",
+                blocker_level="none",
+                details={
+                    "scheduled_task_constraint": "purpose=goal_checkin",
+                    "random_jitter_minutes": True,
+                },
+            ),
+            _contract(
+                "GoalProgressLoop",
+                "implemented",
+                "check-in replies redact user text, update progress snapshots and advance generic plan items",
+                blocker_level="none",
+                details={"trace_required": True, "scenario_specific_templates": False},
+            ),
+            _contract(
                 "BrowserProfileService",
                 "implemented",
                 "persistent browser profiles and session lifecycle are managed as backend state",

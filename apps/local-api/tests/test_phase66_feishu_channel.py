@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
+import anyio
 import pytest
 from app.core.config import ChannelProviderSection, load_app_config
 from app.main import create_app
@@ -156,6 +157,51 @@ def test_phase66_feishu_inbound_pairing_chat_delivery_and_operations(
         assert "phase66-secret" not in json.dumps(
             client.get("/api/channels/providers/feishu/gateway-health").json()
         )
+
+
+def test_phase66_feishu_deliver_due_retries_briefly_when_turn_is_not_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CYCBER_ROOT", str(ROOT_DIR))
+    monkeypatch.setenv("CYCBER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("FEISHU_APP_ID", "cli_phase66_retry")
+    monkeypatch.setenv("FEISHU_APP_SECRET", "phase66-retry-secret")
+    with TestClient(create_app()) as client:
+        registry = cast(Any, client.app).state.registry
+        service = registry.feishu_gateway_service
+        binding = {
+            "channel_delivery_binding_id": "chdel_phase66_retry",
+            "turn_id": "turn_phase66_retry",
+            "channel_peer_session_id": "chps_phase66_retry",
+            "status": "pending",
+        }
+        attempts = 0
+
+        async def fake_list_delivery_bindings(**_: Any) -> list[dict[str, Any]]:
+            return [binding]
+
+        async def fake_deliver_binding(
+            item: dict[str, Any],
+            *,
+            trace_id: str | None,
+        ) -> bool | None:
+            nonlocal attempts
+            assert item["channel_delivery_binding_id"] == "chdel_phase66_retry"
+            assert trace_id == "trc_phase66_retry"
+            attempts += 1
+            return True if attempts == 2 else None
+
+        monkeypatch.setattr(service._repo, "list_delivery_bindings", fake_list_delivery_bindings)
+        monkeypatch.setattr(service, "_deliver_binding", fake_deliver_binding)
+
+        async def run_delivery() -> Any:
+            return await service.deliver_due(trace_id="trc_phase66_retry")
+
+        response = anyio.run(run_delivery)
+        assert response.deliveries_sent == 1
+        assert response.failures == 0
+        assert attempts == 2
 
 
 def test_phase117_feishu_adjacent_file_events_are_coalesced_and_understood(

@@ -454,6 +454,19 @@ class ChatTurnExecutionOrchestrator:
                 ):
                     yield event
                 return
+        if getattr(facade, "_goals", None) is not None:
+            goal_handled = False
+            async for event in _complete_goal_chat_intent(
+                facade,
+                turn,
+                events,
+                root_span_id,
+                user_text,
+            ):
+                goal_handled = True
+                yield event
+            if goal_handled:
+                return
         scheduled_cancel_request = facade._task_coordinator.scheduled_cancellations.parse(user_text)
         if scheduled_cancel_request is not None and facade._scheduled_tasks is not None:
             async for event in _complete_scheduled_task_cancel(
@@ -592,6 +605,19 @@ class ChatTurnExecutionOrchestrator:
                     response_plan=facade._response_plan_for_status(turn, summary=memory_reply),
                 ):
                     yield event
+                return
+        if getattr(facade, "_goals", None) is not None:
+            goal_handled = False
+            async for event in _complete_goal_chat_intent(
+                facade,
+                turn,
+                events,
+                root_span_id,
+                user_text,
+            ):
+                goal_handled = True
+                yield event
+            if goal_handled:
                 return
         scheduled_cancel_request = facade._task_coordinator.scheduled_cancellations.parse(user_text)
         if scheduled_cancel_request is not None and facade._scheduled_tasks is not None:
@@ -1789,6 +1815,54 @@ async def _complete_scheduled_task_cancel(
         yield event
 
 
+async def _complete_goal_chat_intent(
+    facade: Any,
+    turn: dict[str, Any],
+    events: list[dict[str, Any]],
+    root_span_id: str | None,
+    user_text: str,
+) -> AsyncIterator[ChatEvent]:
+    trace_id = turn["trace_id"]
+    turn_id = turn["turn_id"]
+
+    outcome = await facade._goals.try_handle_chat_turn(
+        text=user_text,
+        conversation_id=turn["conversation_id"],
+        member_id=turn["member_id"],
+        turn_id=turn_id,
+        trace_id=trace_id,
+    )
+    if outcome is None:
+        return
+
+    async def emit(event_type: ChatEventType, payload: dict[str, Any] | None = None) -> ChatEvent:
+        return await facade._emit_and_record(turn_id, trace_id, events, event_type, payload)
+
+    response_plan = facade._response_plan_for_status(
+        turn,
+        summary=outcome.text,
+        task_status={
+            "status": "goal_support_handled",
+            "goal_support": outcome.payload,
+        },
+    )
+    yield await emit(
+        ChatEventType.INTENT_DETECTED,
+        {"intent": outcome.intent, "reason_codes": ["goal_support_chat"]},
+    )
+    yield await emit(ChatEventType.MODE_SELECTED, {"mode": TaskMode.DIRECT.value, "needs_tool": False})
+    async for event in facade._complete_without_model(
+        turn,
+        events,
+        outcome.text,
+        root_span_id,
+        intent=outcome.intent,
+        mode=TaskMode.DIRECT.value,
+        response_plan=response_plan,
+    ):
+        yield event
+
+
 async def _resolve_scheduled_task_cancel(
     facade: Any,
     turn: dict[str, Any],
@@ -1952,6 +2026,7 @@ def _scheduled_task_visible_text_guard(text: str, *, goal: str, schedule: dict[s
     visible = str(text or "").strip()
     raw_goal = str(goal or "")
     if "明早" in raw_goal and "明早" not in visible:
+        visible = re.sub(r"\d{1,2}\s*月\s*\d{1,2}\s*日早上", "明早", visible)
         visible = visible.replace("明天早上", "明早")
         visible = visible.replace("今天早上", "明早")
     visible = re.sub(r"10\s*点\s*半", "10点半", visible)

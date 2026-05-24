@@ -1,0 +1,9 @@
+{
+  "total": 90,
+  "passed": 85,
+  "warned": 4,
+  "failed": 1,
+  "summary": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-25-feishu-daily-use-round22-100-real-model\\evidence\\summary.json",
+  "report": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-25-feishu-daily-use-round22-100-real-model\\02-飞书日常使用100个场景第二十二轮真实模型测试报告.md",
+  "gap_queue": "C:\\Users\\Administrator\\Desktop\\CycberCompany\\docs\\测试\\聊天主链路\\2026-05-25-feishu-daily-use-round22-100-real-model\\03-缺口与修复队列.md"
+}

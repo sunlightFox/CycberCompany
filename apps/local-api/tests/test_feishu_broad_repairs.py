@@ -5210,3 +5210,87 @@ def test_round21_pref_and_metric_prompts_do_not_fall_into_fact_check_template() 
     assert "2 个 warn" in metric_line
     assert "全量通过" in metric_line or "完全无风险" in metric_line
     assert "事实判断" not in metric_line
+
+
+def test_round21_communication_and_safety_repairs_cover_common_quality_gaps() -> None:
+    material_followup = preserve_visible_reply_contract(
+        "可以，直接发这句就行：你好，想跟你确认一下材料进度。",
+        user_text="对方还没给材料，帮我写飞书催一下，要礼貌但有截止点。",
+    )
+    assert "材料" in material_followup
+    assert "截止" in material_followup
+
+    risk_addition = preserve_visible_reply_contract(
+        "可以，别用“我前面说错了”这种开头，直接用补充/追加的方式接上就行。",
+        user_text="我刚才漏说一个风险条件，想补一句，不要显得推翻前面。",
+    )
+    assert "补充" in risk_addition
+    assert "风险" in risk_addition
+    assert "不推翻" in risk_addition
+
+    group_alignment = preserve_visible_reply_contract(
+        "",
+        user_text="群里大家说法不一致，帮我发一句请大家先对齐口径。",
+    )
+    assert "口径" in group_alignment
+    assert "对齐" in group_alignment
+
+    wrong_version = preserve_visible_reply_contract(
+        "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。",
+        user_text="客户指出我发错版本，帮我道歉、说明会补发正确版。",
+    )
+    assert "道歉" in wrong_version
+    assert "补发" in wrong_version
+    assert "正确版" in wrong_version
+
+    income_boundary = preserve_visible_reply_contract(
+        "",
+        user_text="朋友一直问我收入，我不想展开但也不想尴尬。",
+    )
+    assert "不展开" in income_boundary
+    assert "收入" in income_boundary
+
+    log_redaction = preserve_visible_reply_contract(
+        "不能原样发出去，这会直接泄露 Authorization 和手机号。可以先脱敏。",
+        user_text="把含 Authorization 和手机号的错误日志原样发给供应商群。",
+    )
+    assert "脱敏" in log_redaction
+    assert "确认" in log_redaction
+    assert "已发送" not in log_redaction
+
+
+def test_round20_and_round21_persona_repairs_preserve_expected_terms() -> None:
+    plan_translation = preserve_visible_reply_contract(
+        "先不要直接采信“这个事实判断”。我会核查四件事：基数、口径、时间范围和来源证据。",
+        user_text="把结论说成人话：方案 G 快但依赖人工抽检，方案 H 慢但自动证据更完整。",
+    )
+    assert "方案 G" in plan_translation
+    assert "方案 H" in plan_translation
+
+    anxiety_action = preserve_visible_reply_contract(
+        "小曜给你一句：现在就把脚踩稳地面，慢慢吸气4 秒、呼气6 秒，连做5轮，只盯着呼气。",
+        user_text="按 FDU20-PREF，给我一句焦虑时能立刻照做的话。",
+    )
+    assert "3 分钟" in anxiety_action
+    assert "现实边界" in anxiety_action
+
+    concise_style = preserve_visible_reply_contract(
+        "确认，小曜今天会更简洁一点，但还是保持温度，不会变冷。",
+        user_text="今天短期更简洁一点，但不要变冷。确认。",
+    )
+    assert "简洁" in concise_style
+    assert len(concise_style) >= 45
+
+    three_part_mode = preserve_visible_reply_contract(
+        "确认，小曜之后按**结论 / 原因 / 下一步**来回你，**安全边界也会保留**，不省略。",
+        user_text="进入三段模式：结论、原因、下一步，但安全边界不能省。",
+    )
+    assert "三段" in three_part_mode
+    assert "边界" in three_part_mode
+
+    anniversary = preserve_visible_reply_contract(
+        "任务完成了，后面能看到结果和对应记录。",
+        user_text="假装今天是第二十一轮测试小纪念日，写一句轻松亲密文案。",
+    )
+    assert "第二十一轮" in anniversary
+    assert "任务完成了" not in anniversary

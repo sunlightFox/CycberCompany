@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -456,14 +457,23 @@ class FeishuChannelGatewayService:
             status="pending",
             limit=limit,
         )
-        for binding in pending:
-            delivered = await self._deliver_binding(binding, trace_id=trace_id)
-            if delivered is None:
-                continue
-            if delivered:
-                stats.deliveries_sent += 1
-            else:
-                stats.failures += 1
+        deferred = list(pending)
+        for attempt in range(3):
+            next_deferred: list[dict[str, Any]] = []
+            for binding in deferred:
+                delivered = await self._deliver_binding(binding, trace_id=trace_id)
+                if delivered is None:
+                    next_deferred.append(binding)
+                    continue
+                if delivered:
+                    stats.deliveries_sent += 1
+                else:
+                    stats.failures += 1
+            if not next_deferred:
+                break
+            if attempt < 2:
+                await asyncio.sleep(0.25)
+            deferred = next_deferred
         self._last_poll_result = stats.response().model_dump(mode="json")
         return stats.response()
 

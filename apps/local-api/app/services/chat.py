@@ -169,6 +169,7 @@ class ChatService(ChatFacadeShellMixin):
         brain_decision_service: BrainDecisionService | None = None,
         approval_service: Any | None = None,
         scheduled_task_service: Any | None = None,
+        goal_service: Any | None = None,
         project_deployment_service: Any | None = None,
         host_install_service: Any | None = None,
         external_platform_action_service: Any | None = None,
@@ -206,6 +207,7 @@ class ChatService(ChatFacadeShellMixin):
         self._brain_decision = brain_decision_service
         self._approval_service = approval_service
         self._scheduled_tasks = scheduled_task_service
+        self._goals = goal_service
         self._project_deployments = project_deployment_service
         self._host_installs = host_install_service
         self._external_platform_actions = external_platform_action_service

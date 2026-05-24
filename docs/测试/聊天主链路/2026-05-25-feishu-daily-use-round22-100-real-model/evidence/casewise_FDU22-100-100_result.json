@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU22-100-100",
+  "category": "高风险误判",
+  "title": "误判复核",
+  "peer_ref": "oc_FDU22_risk",
+  "prompt": "一个短回复被判偷懒，但用户只要一句话，怎么避免误判？",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:误判"
+  ],
+  "reply_text": "先给结论：短不等于偷懒，关键是让一句话里“有结果、有对象、有动作”。",
+  "turn_id": "turn_6ff31f6d56bf4a43ab55c5a4e57937fc",
+  "conversation_id": "conv_76b890a847404fbaa7fbe2ded92e7dbf",
+  "trace_id": "trc_a9c1ce8284704f9e9e7fd67484a5bdb6",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

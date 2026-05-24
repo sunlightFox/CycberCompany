@@ -24,6 +24,7 @@ from app.db.repositories.external_platform_adapter_repo import (
     ExternalPlatformAdapterRepository,
 )
 from app.db.repositories.external_platform_repo import ExternalPlatformRepository
+from app.db.repositories.goal_repo import GoalRepository
 from app.db.repositories.knowledge_repo import KnowledgeRepository
 from app.db.repositories.media_repo import MediaRepository
 from app.db.repositories.member_repo import MemberRepository
@@ -106,6 +107,7 @@ from app.services.external_platform_extensions import (
 )
 from app.services.failure_experience import FailureExperienceService
 from app.services.heart_runtime import HeartRuntimeService
+from app.services.goals import GoalService
 from app.services.knowledge import KnowledgeService
 from app.services.mcp import MCPService
 from app.services.media import MediaService
@@ -180,6 +182,7 @@ class ServiceRegistry:
     capability_service: CapabilityGraphService
     knowledge_service: KnowledgeService
     task_engine: TaskEngine
+    goal_service: GoalService
     background_worker_service: BackgroundWorkerService
     scheduled_task_service: ScheduledTaskService
     checkpoint_service: CheckpointService
@@ -246,6 +249,7 @@ class ServiceRegistry:
     assets: AssetRepository
     knowledge: KnowledgeRepository
     tasks: TaskRepository
+    goals: GoalRepository
     voices: VoiceRepository
     scheduled_tasks: ScheduledTaskRepository
     checkpoints: CheckpointRepository
@@ -287,6 +291,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     external_platform_adapter_repo = ExternalPlatformAdapterRepository(db)
     knowledge_repo = KnowledgeRepository(db)
     task_repo = TaskRepository(db)
+    goal_repo = GoalRepository(db)
     scheduled_task_repo = ScheduledTaskRepository(db)
     checkpoint_repo = CheckpointRepository(db)
     notification_repo = NotificationRepository(db)
@@ -771,6 +776,14 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     scheduled_task_service.set_notification_callback(
         notification_gateway_service.notify_scheduled_run
     )
+    goal_service = GoalService(
+        repo=goal_repo,
+        member_repo=member_repo,
+        scheduled_task_service=scheduled_task_service,
+        trace_service=trace_service,
+        audit_service=audit_service,
+    )
+    scheduled_task_service.set_goal_checkin_callback(goal_service.handle_scheduled_checkin)
     background_worker_service = BackgroundWorkerService(
         scheduled_tasks=scheduled_task_service,
         notifications=notification_gateway_service,
@@ -918,6 +931,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         brain_decision_service,
         approval_service,
         scheduled_task_service,
+        goal_service,
         project_deployment_service,
         host_install_service,
         external_platform_action_service,
@@ -1079,6 +1093,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         capability_service=capability_service,
         knowledge_service=knowledge_service,
         task_engine=task_engine,
+        goal_service=goal_service,
         background_worker_service=background_worker_service,
         scheduled_task_service=scheduled_task_service,
         checkpoint_service=checkpoint_service,
@@ -1145,6 +1160,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         assets=asset_repo,
         knowledge=knowledge_repo,
         tasks=task_repo,
+        goals=goal_repo,
         voices=voice_repo,
         scheduled_tasks=scheduled_task_repo,
         checkpoints=checkpoint_repo,

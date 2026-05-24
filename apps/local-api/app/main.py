@@ -25,6 +25,7 @@ from app.api import (
     routes_execution_boundary,
     routes_extensions,
     routes_external_platform,
+    routes_goals,
     routes_health,
     routes_knowledge,
     routes_mcp,
@@ -134,6 +135,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_capabilities.router)
     app.include_router(routes_channels.router)
     app.include_router(routes_knowledge.router)
+    app.include_router(routes_goals.router)
     app.include_router(routes_tasks.router)
     app.include_router(routes_checkpoints.router)
     app.include_router(routes_scheduled_tasks.router)

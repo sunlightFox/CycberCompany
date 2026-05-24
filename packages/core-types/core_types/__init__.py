@@ -135,6 +135,15 @@ from core_types.external_platform_adapter import (
     ExternalPlatformAdapterStep,
     ExternalPlatformAdapterVersion,
 )
+from core_types.goal import (
+    Goal,
+    GoalCheckin,
+    GoalEvent,
+    GoalPlan,
+    GoalPlanItem,
+    GoalProgressSnapshot,
+    GoalSupervisionPolicy,
+)
 from core_types.knowledge import (
     KnowledgeChunk,
     KnowledgeSearchHit,
@@ -488,6 +497,13 @@ __all__ = [
     "FailureExperienceRecord",
     "FinishReason",
     "FullHealthResponse",
+    "Goal",
+    "GoalCheckin",
+    "GoalEvent",
+    "GoalPlan",
+    "GoalPlanItem",
+    "GoalProgressSnapshot",
+    "GoalSupervisionPolicy",
     "HeartSummary",
     "HeartStateTransition",
     "HostInstallExecution",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -162,9 +163,16 @@ class ScheduledTaskService:
         self._audit = audit_service
         self._parser = ScheduleParser()
         self._notification_callback: Callable[..., Awaitable[Any]] | None = None
+        self._goal_checkin_callback: Callable[..., Awaitable[dict[str, Any]]] | None = None
 
     def set_notification_callback(self, callback: Callable[..., Awaitable[Any]]) -> None:
         self._notification_callback = callback
+
+    def set_goal_checkin_callback(
+        self,
+        callback: Callable[..., Awaitable[dict[str, Any]]],
+    ) -> None:
+        self._goal_checkin_callback = callback
 
     async def create(
         self,
@@ -179,6 +187,11 @@ class ScheduledTaskService:
         now = utc_now_iso()
         scheduled_task_id = new_id("scht")
         policy = _default_policy(request.execution_policy)
+        next_run_at = _apply_random_jitter(
+            computation.next_run_at,
+            constraints=request.constraints,
+            seed=f"{scheduled_task_id}:{now}",
+        )
         data = {
             "scheduled_task_id": scheduled_task_id,
             "organization_id": "org_default",
@@ -190,7 +203,7 @@ class ScheduledTaskService:
             "schedule": computation.schedule,
             "execution_policy": policy,
             "constraints": request.constraints,
-            "next_run_at": _iso(computation.next_run_at),
+            "next_run_at": _iso(next_run_at),
             "created_by_member_id": request.created_by_member_id,
             "trace_id": trace_id,
             "created_at": now,
@@ -200,7 +213,10 @@ class ScheduledTaskService:
         await self._event(
             scheduled_task_id,
             "scheduled_task.created",
-            {"next_run_at": data["next_run_at"], "schedule_type": computation.schedule["type"]},
+            {
+                "next_run_at": data["next_run_at"],
+                "schedule_type": computation.schedule["type"],
+            },
             trace_id=trace_id,
         )
         await self._audit.write_event(
@@ -399,6 +415,60 @@ class ScheduledTaskService:
             trace_id=trace_id,
         )
         try:
+            if (
+                task.constraints.get("purpose") == "goal_checkin"
+                and self._goal_checkin_callback is not None
+            ):
+                result = await self._goal_checkin_callback(
+                    scheduled_task=task,
+                    scheduled_run_id=run_id,
+                    trace_id=trace_id,
+                )
+                result = {
+                    "policy_action": policy["action"],
+                    "auto_start": policy["auto_start"],
+                    **dict(result or {}),
+                }
+                await self._repo.update_run(
+                    run_id,
+                    {
+                        "status": "completed",
+                        "result": result,
+                        "completed_at": utc_now_iso(),
+                        "updated_at": utc_now_iso(),
+                    },
+                )
+                await self._after_successful_trigger(
+                    task,
+                    trigger_type=trigger_type,
+                    run_for=run_for,
+                )
+                await self._event(
+                    scheduled_task_id,
+                    "scheduled_task.run_goal_checkin",
+                    result,
+                    run_id=run_id,
+                    trace_id=trace_id,
+                )
+                await self._notify_run_update(
+                    scheduled_task_id=scheduled_task_id,
+                    run_id=run_id,
+                    task_id=None,
+                    status="completed",
+                    summary=str(result.get("summary") or task.goal),
+                    trace_id=trace_id,
+                )
+                await self._trace.end_span(span_id, output_data=result)
+                if own_trace:
+                    await self._trace.end_trace(trace_id)
+                run = await self._repo.get_run(run_id)
+                if run is None:
+                    raise AppError(
+                        ErrorCode.NOT_FOUND,
+                        "Scheduled task run not found",
+                        status_code=404,
+                    )
+                return ScheduledTaskRun(**run)
             task_request = TaskCreateRequest(
                 conversation_id=task.conversation_id,
                 owner_member_id=task.owner_member_id,
@@ -647,6 +717,11 @@ class ScheduledTaskService:
         }
         if trigger_type == "due":
             next_run = self._parser.next_run_at(task.schedule, after=run_for)
+            next_run = _apply_random_jitter(
+                next_run,
+                constraints=task.constraints,
+                seed=f"{task.scheduled_task_id}:{run_for.isoformat()}",
+            )
             fields["next_run_at"] = _iso(next_run)
             if next_run is None and task.schedule.get("type") == "once":
                 fields["status"] = "completed"
@@ -752,6 +827,22 @@ def _policy_decision(task: ScheduledTask, *, trigger_type: str) -> dict[str, Any
     }
 
 
+def _apply_random_jitter(
+    next_run_at: datetime | None,
+    *,
+    constraints: dict[str, Any],
+    seed: str,
+) -> datetime | None:
+    if next_run_at is None:
+        return None
+    jitter_minutes = int(constraints.get("random_jitter_minutes") or 0)
+    if jitter_minutes <= 0:
+        return next_run_at
+    digest = hashlib.sha256(seed.encode("utf-8")).digest()
+    offset = int.from_bytes(digest[:2], "big") % (jitter_minutes + 1)
+    return next_run_at + timedelta(minutes=offset)
+
+
 def _risk_level(goal: str, constraints: dict[str, Any]) -> str:
     text = f"{goal} {constraints}".lower()
     if _looks_like_money_action(text):
@@ -819,37 +910,77 @@ def _scheduled_run_visible_summary(goal: str, run_status: str) -> str:
 
 def _visible_scheduled_goal(goal: str) -> str:
     text = " ".join(str(goal or "").strip().split())
-    text = text.strip("。！？!?.,，；;：: “”（）()[]【】'\" ")
+    text = _strip_visible_punctuation(text)
     text = re.sub(
-        r"^(?:please\s+)?(?:create|set(?:\s+up)?|add|make)\s+(?:a\s+)?(?:scheduled\s+)?reminder(?:\s+(?:for|to))?[，,：:\s]*",
+        r"^(?:please\s+)?(?:create|set(?:\s+up)?|add|make)\s+(?:a\s+)?"
+        r"(?:scheduled\s+)?reminder(?:\s+(?:for|to))?[，,：:\s]*",
         "",
         text,
         flags=re.IGNORECASE,
     )
-    text = re.sub(r"^(?:scheduled\s+reminder|reminder)[，,：:\s]*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"^(?:please\s+)?remind\s+me\s*(?:to|about)?[，,：:\s]*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"^(?:帮我)?(?:创建|新建|设置|设个|加个|建个)?(?:一个|个)?(?:定时任务|提醒)[，,：:\s“”'\"\[\]【】]*", "", text)
+    text = re.sub(
+        r"^(?:scheduled\s+reminder|reminder)[，,：:\s]*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"^(?:please\s+)?remind\s+me\s*(?:to|about)?[，,：:\s]*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"^(?:帮我)?(?:创建|新建|设置|设个|加个|建个)?(?:一个|个)?"
+        r"(?:定时任务|提醒)[，,：:\s“”'\"\[\]【】]*",
+        "",
+        text,
+    )
     text = re.sub(r"^(?:每天|每日|每周|每隔)[，,：:\s]*", "", text)
     text = re.sub(
-        r"^(?:再过|过|等|等到)?\s*\d+\s*(?:秒|分钟|小时|天|second|seconds|minute|minutes|hour|hours|day|days)\s*(?:后|later)?\s*",
+        r"^(?:再过|过|等|等到)?\s*\d+\s*"
+        r"(?:秒|分钟|小时|天|second|seconds|minute|minutes|hour|hours|day|days)"
+        r"\s*(?:后|later)?\s*",
         "",
         text,
         flags=re.IGNORECASE,
     )
-    text = re.sub(r"^(?:周一|周二|周三|周四|周五|周六|周日|周天|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"^[一二三四五六七八九十两0-9]+\s*(?:分钟|小时|天|minutes|minute|hours|hour|days|day)\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"^(?:周一|周二|周三|周四|周五|周六|周日|周天|monday|tuesday|"
+        r"wednesday|thursday|friday|saturday|sunday)\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"^[一二三四五六七八九十两0-9]+\s*"
+        r"(?:分钟|小时|天|minutes|minute|hours|hour|days|day)\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
     text = re.sub(r"^(?:明天|明早|明天早上|明天上午|明天下午|明天晚上)\s*", "", text)
     text = re.sub(r"^\d{1,2}\s*[:：点]\s*\d{0,2}\s*", "", text)
     text = re.sub(r"^(?:上午|早上|中午|下午|晚上)\s*\d{1,2}\s*[:：]\s*\d{2}\s*", "", text)
-    text = re.sub(r"^(?:上午|早上|中午|下午|晚上)\s*\d{1,2}\s*点\s*(?:半|[0-9]{1,2}\s*分?)?\s*", "", text)
+    text = re.sub(
+        r"^(?:上午|早上|中午|下午|晚上)\s*\d{1,2}\s*点"
+        r"\s*(?:半|[0-9]{1,2}\s*分?)?\s*",
+        "",
+        text,
+    )
     if re.search(r"提醒(?:我|你)?", text):
         text = re.split(r"提醒(?:我|你)?[，,：:\s]*", text)[-1]
     text = re.sub(r"^提醒(?:我|你)?[，,：:\s]*", "", text)
     text = re.sub(r"^帮我[，,：:\s]*", "", text)
-    text = text.strip("。！？!?.,，；;：: “”（）()[]【】'\" ")
+    text = _strip_visible_punctuation(text)
     if text.startswith("我"):
         text = text[1:].strip()
     return text or "这件事"
+
+
+def _strip_visible_punctuation(text: str) -> str:
+    punctuation = r"""[。！？!?.,，；;：:\s“”（）()\[\]【】'"]+"""
+    return re.sub(rf"^{punctuation}|{punctuation}$", "", text)
 
 
 def _looks_like_money_action(text: str) -> bool:
@@ -871,7 +1002,9 @@ def _looks_like_money_action(text: str) -> bool:
         )
     ):
         return True
-    return "钱包" in text and not any(marker in text for marker in ("助记词", "私钥", "备份", "环境安全"))
+    return "钱包" in text and not any(
+        marker in text for marker in ("助记词", "私钥", "备份", "环境安全")
+    )
 
 
 def _looks_like_automatic_action(text: str) -> bool:
@@ -913,7 +1046,22 @@ def _looks_like_manual_prep_reminder(text: str) -> bool:
         )
     ):
         return False
-    return any(marker in text for marker in ("打码", "脱敏", "遮住", "确认", "核对", "检查", "通知", "让", "看审批", "复核", "带"))
+    return any(
+        marker in text
+        for marker in (
+            "打码",
+            "脱敏",
+            "遮住",
+            "确认",
+            "核对",
+            "检查",
+            "通知",
+            "让",
+            "看审批",
+            "复核",
+            "带",
+        )
+    )
 
 
 def _risk_order(value: str) -> int:
