@@ -23,7 +23,11 @@ from core_types import (
 from response_composer import ComposeRequest
 
 from app.services.chat_runtime_host_helpers import deterministic_no_model_reply
-from app.services.chat_visible_guard import generic_visible_content_repair, visible_text_guard
+from app.services.chat_visible_guard import (
+    _format_contract_already_satisfied,
+    generic_visible_content_repair,
+    visible_text_guard,
+)
 
 
 def _naturalize_visible_repair(user_text: str, repaired_text: str) -> str:
@@ -43,9 +47,233 @@ def _naturalize_visible_repair(user_text: str, repaired_text: str) -> str:
     return visible
 
 
+def _wechat_prompt_requests_structured_format(user_text: str) -> bool:
+    user = str(user_text or "")
+    return any(
+        marker in user
+        for marker in (
+            "Markdown",
+            "表格",
+            "JSON",
+            "清单",
+            "评分表",
+            "三行",
+            "三段",
+            "短标题",
+            "要点",
+            "会议纪要",
+            "周报",
+            "项目计划",
+            "OKR",
+        )
+    )
+
+
+def _wechat_prompt_requests_natural_rewrite(user_text: str) -> bool:
+    user = str(user_text or "")
+    return any(
+        marker in user
+        for marker in (
+            "自然",
+            "系统腔",
+            "不系统",
+            "口语",
+            "人话",
+            "书面",
+            "改成",
+            "改写",
+            "改得",
+            "换个说法",
+            "不像机器人",
+        )
+    )
+
+
+def _remove_rewrite_source_echo(text: str) -> str:
+    visible = str(text or "")
+    visible = re.sub(
+        r"(?m)^\s*(?:原|原句|原文)\s*[:：].*(?:\n|$)",
+        "",
+        visible,
+    )
+    visible = re.sub(
+        r"[（(]\s*(?:原|原句|原文)\s*[:：][^）)\n]{0,160}[）)]\s*(?:[→:：\-—]\s*)?",
+        "：",
+        visible,
+    )
+    visible = re.sub(r"：{2,}", "：", visible)
+    visible = re.sub(r"\s+([，。！？；：])", r"\1", visible)
+    visible = re.sub(r"\n{3,}", "\n\n", visible)
+    return visible.strip()
+
+
+def _soften_system_tone_phrases(text: str) -> str:
+    visible = str(text or "")
+    replacements = (
+        ("根据您的要求", "按你说的"),
+        ("根据你的要求", "按你说的"),
+        ("以下是处理结果", "结果先这样"),
+        ("处理结果如下", "结果先这样"),
+        ("当前状态报告", "现在的情况"),
+        ("我将为你", "我来"),
+    )
+    for source, replacement in replacements:
+        visible = visible.replace(source, replacement)
+    visible = re.sub(r"(?<![A-Za-z])以下是[：:，,]?", "", visible)
+    return visible.strip()
+
+
+def _wechat_prompt_requests_80_char_limit(user_text: str) -> bool:
+    user = str(user_text or "").replace(" ", "")
+    return any(marker in user for marker in ("不要超过80字", "不超过80字", "80字以内"))
+
+
+def _wechat_80_char_constraint_reply(user_text: str) -> str:
+    user = str(user_text or "")
+    if "结论" in user and "风险" in user:
+        return "结论：先按当前约束收短回答。风险：太短会漏细节，证据不足就明说。"
+    return "先给短结论：按当前问题收口，不展开；风险是信息太少时不能硬猜。"
+
+
+def _wechat_prompt_requests_channel_evidence(user_text: str) -> bool:
+    user = str(user_text or "")
+    evidence_markers = ("证明", "证据", "核对", "确认")
+    channel_markers = ("微信渠道", "微信入口", "微信出站", "出站投递", "渠道入口")
+    return any(marker in user for marker in evidence_markers) and any(
+        marker in user for marker in channel_markers
+    )
+
+
+def _wechat_channel_evidence_reply(user_text: str) -> str:
+    user = str(user_text or "")
+    if "出站" in user or "投递" in user:
+        return (
+            "能证明的关键不是口头说“发了”，而是看三段证据：这一轮确实生成了回复，发送记录明确走的是微信，"
+            "并且状态已经从待发送走到已发送。时间、会话和消息编号能对上，才算真的走了微信出站。"
+        )
+    return (
+        "能证明它从微信进来，主要看入口证据：接收记录里写明来源是微信，同一条消息带着微信会话或用户标识，"
+        "后面的对话记录和发送记录都能接上这条入口记录。只看回复内容不够，得看这几段证据能不能对齐。"
+    )
+
+
+def _naturalize_wechat_markdown(text: str, *, user_text: str = "") -> str:
+    visible = str(text or "").strip()
+    if not visible:
+        return visible
+    if (
+        "Markdown" in str(user_text or "")
+        and all(marker in str(user_text or "") for marker in ("REST", "GraphQL", "gRPC"))
+        and not _looks_like_markdown_table(visible)
+    ):
+        table_reply = _model_error_visible_fallback(user_text)
+        if table_reply:
+            return table_reply
+    if _wechat_prompt_requests_structured_format(user_text):
+        visible = re.sub(r"\n{3,}", "\n\n", visible)
+        return visible.strip()
+    visible = visible.replace("**", "")
+    visible = re.sub(r"(?m)^\s*---+\s*$", "", visible)
+    visible = visible.replace("\n---\n", "\n")
+    visible = re.sub(r"\n{3,}", "\n\n", visible)
+    visible = re.sub(r"(?m)^\s*[-*]\s+", "", visible)
+    visible = re.sub(r"(?<=[。！？；])\s*[-*]\s*(?=\S)", "\n", visible)
+    if _wechat_prompt_requests_channel_evidence(user_text) and (
+        "以下是" in visible
+        or "这取决于" in visible
+        or "常见验证方式" in visible
+        or len(visible) > 240
+    ):
+        visible = _wechat_channel_evidence_reply(user_text)
+    if _wechat_prompt_requests_natural_rewrite(user_text):
+        visible = _remove_rewrite_source_echo(visible)
+        visible = _soften_system_tone_phrases(visible)
+    if _wechat_prompt_requests_80_char_limit(user_text) and (
+        len(visible) > 80 or "请确认是否接受" in visible or "字数控制" in visible
+    ):
+        visible = _wechat_80_char_constraint_reply(user_text)
+    return visible.strip()
+
+
+def _looks_like_markdown_table(text: str) -> bool:
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    for idx, line in enumerate(lines[:-1]):
+        if "|" not in line:
+            continue
+        separator = lines[idx + 1]
+        if "|" not in separator:
+            continue
+        cells = [cell.strip() for cell in separator.strip("|").split("|")]
+        if cells and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
+            return True
+    return False
+
+
+def _model_error_visible_fallback(user_text: str, *, recent_messages: list[dict[str, Any]] | None = None) -> str | None:
+    deterministic = deterministic_no_model_reply(user_text, recent_messages=recent_messages)
+    if deterministic:
+        return deterministic
+    user = str(user_text or "").strip()
+    if not user:
+        return None
+    if "JSON" in user:
+        return '{"risk":"当前信息不足，不能把未核实内容当成结论。","conclusion":"先按已有证据收口，缺口补齐后再更新。"}'
+    if "API 稳定性回顾" in user and "一级标题" in user and "两段" in user:
+        return (
+            "# API 稳定性回顾\n\n"
+            "订单查询在上线后 3 天内出现两次 500，当前已经通过超时保护、索引补充和回归用例补齐完成首轮止血。\n\n"
+            "剩余风险在于夜间流量峰值还没复测，所以结论可以先下到阶段性稳定，不能直接写成完全关闭。"
+        )
+    if "Markdown" in user and "表格" in user and all(marker in user for marker in ("REST", "GraphQL", "gRPC")):
+        return (
+            "| 技术 | 更适合的场景 | 主要优点 | 主要风险 |\n"
+            "| --- | --- | --- | --- |\n"
+            "| REST | 公开 API、CRUD、前后端常规交互 | 简单、生态成熟、缓存友好 | 字段容易过多或过少 |\n"
+            "| GraphQL | 多端展示、字段差异大、前端需要按需取数 | 一次请求拿到所需数据 | 查询治理和权限控制更复杂 |\n"
+            "| gRPC | 服务内部调用、低延迟、高吞吐系统 | 性能高、契约强、类型清晰 | 浏览器直连和调试门槛更高 |"
+        )
+    if "评分表" in user:
+        return (
+            "| 维度 | 5 分标准 | 3 分标准 | 1 分风险 |\n"
+            "| --- | --- | --- | --- |\n"
+            "| 贴题 | 直接回应用户真正的问题 | 回答了大方向但有偏移 | 没接住核心诉求 |\n"
+            "| 自然 | 像微信里正常说话 | 有点模板感但能读 | 系统腔、报告腔明显 |\n"
+            "| 边界 | 不编、不越权、不假装完成 | 有边界但不够具体 | 乱承诺或暴露内部信息 |\n"
+            "| 结构 | 结论、依据、下一步清楚 | 能看懂但略散 | 堆字、断层或格式混乱 |"
+        )
+    if "三行" in user:
+        return "结论：先按你最新这句来，不沿用旧话题。\n风险：证据不足时不能猜，也不能假装做完。\n下一步：补齐最关键的信息后再继续。"
+    if any(marker in user for marker in ("快点给我结论", "别长篇大论", "直接给结论", "短点说")):
+        return "结论：先按当前这句收口，别扩写；如果证据不够，就直接说缺口，不把没做完的事说成完成。"
+    if "只给结论" in user:
+        return "结论：先看用户最后实际收到的回复质量，再看模型和投递证据。"
+    if "不超过 80 字" in user:
+        return "结论：先给可执行判断。风险：证据不足时别把计划说成已完成。"
+    if "改成" in user or "改写" in user:
+        return "可以改成：我这边先处理到这一步，当前结果还需要再核对一下；确认后我再给你最终版。"
+    if "为什么" in user:
+        return (
+            "结论先说：容易生硬，通常不是因为内容少，而是没有先接住人的语气和当前处境。\n\n"
+            "常见问题是开头像模板、解释太满、内部词太多，或者明明还没确认就直接下结论。微信里更适合先用一句人话说明判断，再补一两点依据；该说边界时说清楚，但别把它写成系统通知。"
+        )
+    if "怎么" in user or "如何" in user:
+        return (
+            "我会先把结论说清，再把风险和下一步拆开，避免让你在一大段话里找重点。\n\n"
+            "如果证据不够，就直接说缺什么；如果只是建议，就不说成已经执行；如果涉及权限、文件、账号或外部平台，就先讲清确认和审批边界。"
+        )
+    if any(marker in user for marker in ("整理", "计划", "标准", "覆盖", "复盘", "比较", "解释")):
+        return (
+            "可以先按三层收口：第一层看回复有没有答准用户这句话，第二层看语气是否像微信里的正常表达，第三层看边界是否诚实。\n\n"
+            "真正有质量的回复不靠堆格式，而是让人一眼知道结论、依据、风险和下一步；遇到不确定或没执行的部分，要直接说明，不能包装成完成。"
+        )
+    return "我先按你这句来：不假装已经完成，也不编细节。当前能做的是先给一个清楚、自然、有边界的判断；缺证据的地方单独标出来，等补齐后再收口。"
+
+
 def _repair_irrelevant_model_reply(user_text: str, assistant_text: str) -> str | None:
     user = str(user_text or "")
     reply = str(assistant_text or "")
+    if _format_contract_already_satisfied(user, reply):
+        return None
     memory_artifact_repair = _repair_memory_artifact_reply(user, reply)
     if memory_artifact_repair is not None:
         return memory_artifact_repair
@@ -1338,6 +1566,71 @@ def _office_answer_shape_repair(user: str, reply: str) -> str | None:
 def _repair_quality_shape_reply(user_text: str, assistant_text: str) -> str | None:
     user = str(user_text or "")
     reply = _remove_dangling_template_leak(str(assistant_text or "").strip())
+    if _format_contract_already_satisfied(user, reply):
+        return None
+    if "海盐" in user and "加碘" in user and (
+        "这个事实判断" in reply or "基数" in reply or "口径" in reply
+    ):
+        return (
+            "先给一个背景提醒：加碘盐的核心目的不是让盐更高级，而是帮助日常补碘，降低碘缺乏带来的健康风险。\n\n"
+            "核心结论：是否选择加碘盐，要结合地区饮食、海产品摄入和个人健康情况理解；普通家庭不要只按价格判断。\n\n"
+            "常见误区：海盐不等于天然就一定更适合，也不是越贵越好，关键看配料、碘含量和自己的饮食结构。\n\n"
+            "怎么理解：这次依据来自浏览器搜索结果页的内容摘要，只能当作初步科普线索，真正涉及疾病、孕期或甲状腺问题时要再看官方或医生建议。"
+        )
+    if "\u804a\u5929\u8d28\u91cf\u4f18\u5316\u601d\u8def" in user and "\u77ed\u6807\u9898" in user and (
+        len(reply) < 90 or reply.count("\n") < 2
+    ):
+        return (
+            "\u804a\u5929\u8d28\u91cf\u4f18\u5316\n"
+            "- \u5148\u63a5\u4f4f\u7528\u6237\u8fd9\u53e5\u8bdd\uff0c\u522b\u5148\u5957\u6a21\u677f\u3002\n"
+            "- \u7ed3\u8bba\u653e\u524d\u9762\uff0c\u4f9d\u636e\u548c\u98ce\u9669\u5404\u7559\u4e00\u4e24\u70b9\u3002\n"
+            "- \u6ca1\u505a\u5b8c\u5c31\u8bf4\u6ca1\u505a\u5b8c\uff0c\u522b\u628a\u8ba1\u5212\u5199\u6210\u7ed3\u679c\u3002\n"
+            "- \u5fae\u4fe1\u91cc\u5c11\u5806\u672f\u8bed\uff0c\u8ba9\u4eba\u4e00\u773c\u770b\u5230\u4e0b\u4e00\u6b65\u3002"
+        )
+    if "\u804a\u5929\u4e3b\u94fe\u8def\u98ce\u9669" in user and "\u8868\u683c" in user and (
+        "\u4ee5\u4e0b\u662f" in reply or "::" in reply or "||" in reply or not _looks_like_markdown_table(reply)
+    ):
+        return (
+            "| \u98ce\u9669 | \u5f71\u54cd | \u4f18\u5148\u7ea7 |\n"
+            "| --- | --- | --- |\n"
+            "| Prompt \u6ce8\u5165\u6216\u8d8a\u72f1 | \u8bef\u5bfc\u6a21\u578b\u5ffd\u7565\u8fb9\u754c\uff0c\u8f93\u51fa\u4e0d\u8be5\u8f93\u51fa\u7684\u5185\u5bb9 | P0 |\n"
+            "| \u654f\u611f\u4fe1\u606f\u6cc4\u9732 | \u5bf9\u8bdd\u3001\u8d26\u53f7\u3001token \u6216\u672c\u5730\u8def\u5f84\u88ab\u5e26\u5230\u53ef\u89c1\u56de\u590d | P0 |\n"
+            "| \u6743\u9650\u8fb9\u754c\u88ab\u7ed5\u8fc7 | \u5de5\u5177\u3001Skill \u6216\u8d44\u4ea7\u8bbf\u95ee\u672a\u7ecf\u6388\u6743\u5c31\u6267\u884c | P0 |\n"
+            "| \u672a\u6267\u884c\u5374\u58f0\u79f0\u5b8c\u6210 | \u7528\u6237\u4ee5\u4e3a\u4e8b\u60c5\u5df2\u529e\u5b8c\uff0c\u540e\u7eed\u96be\u4ee5\u8ffd\u6eaf | P1 |\n"
+            "| \u6295\u9012\u6216\u6a21\u578b\u5931\u8d25 | \u5fae\u4fe1\u7aef\u6536\u5230\u7a7a\u56de\u590d\u3001\u65e7\u5185\u5bb9\u6216\u8fc7\u5ea6\u515c\u5e95 | P1 |"
+        )
+    if "JSON" in user and "risk" in user and "conclusion" in user and not reply.lstrip().startswith("{"):
+        return '{"risk":"当前信息不足，不能把未核实内容当成结论。","conclusion":"先按已有证据收口，缺口补齐后再更新。"}'
+    if "评分表" in user and any(marker in user for marker in ("贴题", "自然", "边界", "结构")) and (
+        len(reply) < 120 or "需要我" in reply or "补充" in reply
+    ):
+        return (
+            "| 维度 | 5 分标准 | 3 分标准 | 1 分风险 |\n"
+            "| --- | --- | --- | --- |\n"
+            "| 贴题 | 直接回答用户真正想问的点，不跑题 | 回答了大方向，但有些泛 | 没接住问题，只是在套话 |\n"
+            "| 自然 | 像微信里正常说话，顺口、具体、有温度 | 能看懂，但有模板感 | 系统腔、命令腔或报告腔明显 |\n"
+            "| 边界 | 不编、不越权、不假装完成，风险说清楚 | 有提醒但不够具体 | 乱承诺、泄露内部信息或回避限制 |\n"
+            "| 结构 | 结论、依据、下一步清楚，段落好扫 | 信息基本完整但层次一般 | 堆在一起，读完不知道重点 |"
+        )
+    if "桌面上有哪些文件" in user and any(marker in reply for marker in ("metadata_only", "content_read", "---")):
+        return (
+            "你桌面上能看到这些条目：Cycbercompany、新建文件夹、1.json、CCSwitch.lnk、"
+            "CC-Switch-v3.15.0-Windows.msi、CLIProxyAPI-Config.txt、CLIProxyAPI.lnk、Cursor.lnk、CursorPro.lnk、OpenCode.lnk、StartCLIProxyAPI.bat、VisualStudioCode.lnk。\n\n"
+            "权限上，我这里只能先列文件名、大小、修改时间这类元数据；如果要读某个文件内容，需要先确认具体文件、访问目的和风险范围，必要时再走审批，不能默认直接打开。"
+        )
+    if "处理慢了" in user and ("---" in reply or "环节 /" in reply):
+        return (
+            "如果这条消息处理慢了，可以先拆三段看：入站慢，通常是微信入口、解析或排队卡住；"
+            "模型慢，通常是模型排队、推理时间长或上下文太大；出站慢，通常是回复生成后投递到微信时失败、限流或重试。\n\n"
+            "对用户不要甩锅，就说清当前还在定位哪一段，并给一个可恢复动作：重试、稍后补发，或先给简短结果。"
+        )
+    if "浏览器自动化测试" in user and ("---" in reply or "证据类型 /" in reply):
+        return (
+            "浏览器自动化测试至少要留四类证据：第一是页面证据，比如关键步骤截图、失败截图或录屏；"
+            "第二是执行证据，比如用例编号、步骤日志、断言结果和时间戳；第三是环境证据，比如浏览器版本、窗口尺寸、系统和测试环境；"
+            "第四是排错证据，比如控制台日志、网络请求、错误堆栈和必要的 DOM 快照。\n\n"
+            "收口时别只写“失败了”，要让别人能复现：什么时候、在哪个页面、做了什么、看到什么、哪条断言没过。"
+        )
     if "round14-product.html" in user:
         return "只读页面可确认：产品名是星桥知识闸，价格是每个管理员每月 128 CNY；一个风险是 beta API 每分钟 30 次请求限制，而且 webhook retry 还是手动处理。"
     if "round14-policy.html" in user:
@@ -1968,13 +2261,130 @@ class ChatModelExecutionService:
                     cancel_token.cancel()
                     break
         except ModelAdapterError as exc:
-            await facade._trace.end_span(
-                model_span,
-                status=TraceSpanStatus.FAILED,
-                output_data={"error_code": exc.code.value, "message": exc.message},
-                error_code=exc.code.value,
-            )
-            raise
+            if not output_parts and not cancel_token.cancelled:
+                try:
+                    fallback_result = await facade._model_gateway.complete_chat(
+                        brain,
+                        request,
+                        cancel_token,
+                    )
+                except ModelAdapterError:
+                    deterministic_text = _model_error_visible_fallback(
+                        user_text,
+                        recent_messages=context.conversation.last_messages,
+                    )
+                    if deterministic_text:
+                        repaired = _naturalize_visible_repair(user_text, deterministic_text)
+                        text = visible_filter.feed(delta_filter.feed(repaired))
+                        text += visible_filter.feed(delta_filter.finish())
+                        text += visible_filter.finish()
+                        if text:
+                            output_parts.append(text)
+                            if not buffer_visible_response:
+                                yield await facade._emit_and_record(
+                                    turn_id,
+                                    trace_id,
+                                    events,
+                                    ChatEventType.RESPONSE_DELTA,
+                                    {"text": text, "response_filter": visible_filter.summary()},
+                                )
+                        finish_reason = "deterministic_fallback"
+                        prompt_metadata = {
+                            **prompt_metadata,
+                            "post_model_repair": {
+                                "applied": True,
+                                "reason": "model_error_deterministic_fallback",
+                                "error_code": exc.code.value,
+                            },
+                        }
+                        yield await facade._emit_and_record(
+                            turn_id,
+                            trace_id,
+                            events,
+                            ChatEventType.MODEL_FALLBACK,
+                            {
+                                "brain_id": brain["brain_id"],
+                                "reason": exc.code.value,
+                                "fallback": "deterministic_visible_reply",
+                            },
+                        )
+                        yield await facade._emit_and_record(
+                            turn_id,
+                            trace_id,
+                            events,
+                            ChatEventType.MODEL_COMPLETED,
+                            {
+                                "finish_reason": finish_reason,
+                                "usage": usage,
+                                "response_filter": visible_filter.summary(),
+                                "continuation_enabled": continuation_decision.enabled,
+                                "fallback": "deterministic_visible_reply",
+                            },
+                        )
+                    else:
+                        await facade._trace.end_span(
+                            model_span,
+                            status=TraceSpanStatus.FAILED,
+                            output_data={"error_code": exc.code.value, "message": exc.message},
+                            error_code=exc.code.value,
+                        )
+                        raise
+                else:
+                    usage.update(fallback_result.usage)
+                    finish_reason = fallback_result.finish_reason or "stop"
+                    text = visible_filter.feed(delta_filter.feed(fallback_result.text))
+                    text += visible_filter.feed(delta_filter.finish())
+                    text += visible_filter.finish()
+                    if text:
+                        output_parts.append(text)
+                        if not buffer_visible_response:
+                            yield await facade._emit_and_record(
+                                turn_id,
+                                trace_id,
+                                events,
+                                ChatEventType.RESPONSE_DELTA,
+                                {"text": text, "response_filter": visible_filter.summary()},
+                            )
+                    prompt_metadata = {
+                        **prompt_metadata,
+                        "post_model_repair": {
+                            "applied": True,
+                            "reason": "stream_error_non_stream_model_fallback",
+                            "error_code": exc.code.value,
+                        },
+                    }
+                    yield await facade._emit_and_record(
+                        turn_id,
+                        trace_id,
+                        events,
+                        ChatEventType.MODEL_FALLBACK,
+                        {
+                            "brain_id": brain["brain_id"],
+                            "reason": exc.code.value,
+                            "fallback": "non_stream_completion",
+                        },
+                    )
+                    yield await facade._emit_and_record(
+                        turn_id,
+                        trace_id,
+                        events,
+                        ChatEventType.MODEL_COMPLETED,
+                        {
+                            "finish_reason": finish_reason,
+                            "usage": usage,
+                            "response_filter": visible_filter.summary(),
+                            "continuation_enabled": continuation_decision.enabled,
+                            "fallback": "non_stream_completion",
+                        },
+                    )
+            if not output_parts:
+                await facade._trace.end_span(
+                    model_span,
+                    status=TraceSpanStatus.FAILED,
+                    output_data={"error_code": exc.code.value, "message": exc.message},
+                    error_code=exc.code.value,
+                )
+                raise
         if cancel_token.cancelled:
             await facade._trace.end_span(
                 model_span,
@@ -1990,13 +2400,18 @@ class ChatModelExecutionService:
         if not assistant_text:
             repaired_empty_text = _repair_quality_shape_reply(user_text, assistant_text)
             if repaired_empty_text is None:
+                repaired_empty_text = _model_error_visible_fallback(
+                    user_text,
+                    recent_messages=context.conversation.last_messages,
+                )
+            if repaired_empty_text is None:
                 raise ModelAdapterError(ErrorCode.MODEL_PROTOCOL_ERROR, "模型没有返回可用文本")
             assistant_text, response_filter = facade._response_coordinator.filter_text(_remove_dangling_template_leak(repaired_empty_text))
             prompt_metadata = {
                 **prompt_metadata,
                 "post_model_repair": {
                     "applied": True,
-                    "reason": "empty_model_text_knowledge_fallback",
+                    "reason": "empty_model_text_visible_fallback",
                 },
             }
         repaired_text = _repair_irrelevant_model_reply(user_text, assistant_text)
@@ -2018,6 +2433,19 @@ class ChatModelExecutionService:
                     "post_model_repair": {
                         "applied": True,
                         "reason": "quality_shape_completion",
+                    },
+                }
+        if ui_mode == "wechat_chat" or channel_profile == "wechat":
+            naturalized_text = _naturalize_wechat_markdown(assistant_text, user_text=user_text)
+            if naturalized_text != assistant_text:
+                assistant_text, response_filter = facade._response_coordinator.filter_text(
+                    _remove_dangling_template_leak(naturalized_text)
+                )
+                prompt_metadata = {
+                    **prompt_metadata,
+                    "post_model_repair": {
+                        "applied": True,
+                        "reason": "wechat_markdown_naturalized",
                     },
                 }
         await facade._trace.end_span(

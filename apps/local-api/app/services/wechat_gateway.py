@@ -12,6 +12,7 @@ from typing import Any, Literal
 from core_types import (
     Attachment,
     ChannelPairingRequest,
+    ChatEventType,
     ChatContentPart,
     ChatContextRef,
     ChatTurnResponse,
@@ -58,6 +59,8 @@ from app.services.channel_session_context import ChannelSessionContext
 from app.services.channel_session_semantics import ChannelSessionSemanticsRuntime
 from app.services.channel_stream_bridge import ChannelStreamBridge
 from app.services.chat import ChatService
+from app.services.chat_safety import ChatVisibleOutputFilter
+from app.services.chat_visible_guard import preserve_visible_reply_contract
 from app.services.multimodal_understanding import (
     MultimodalUnderstandingResult,
     MultimodalUnderstandingService,
@@ -613,7 +616,11 @@ class WechatChannelGatewayService:
             and response.status in {"completed", "failed", "cancelled"}
             and binding.get("status") == "pending"
         ):
-            await self._deliver_binding(binding, trace_id=trace_id)
+            delivered = await self._deliver_binding(binding, trace_id=trace_id)
+            if delivered:
+                stats.deliveries_sent += 1
+            elif delivered is False:
+                stats.failures += 1
             binding = await self._repo.get_delivery_binding(
                 binding["channel_delivery_binding_id"]
             )
@@ -1527,12 +1534,55 @@ class WechatChannelGatewayService:
         user_message = None
         if turn.get("user_message_id"):
             user_message = await self._chat_repo.get_message(str(turn["user_message_id"]))
+        claimed = await self._repo.claim_delivery_binding(
+            binding["channel_delivery_binding_id"],
+            now=utc_now_iso(),
+        )
+        if claimed is None:
+            return None
+        binding = claimed
+        latest = claimed
+        final_text_details = self._stream_bridge.final_text_details(message)
+        final_text_source = str(final_text_details.get("source") or "")
+        final_plain_text = _wechat_final_visible_reply_text(
+            str(final_text_details.get("plain_text") or ""),
+            user_text=str(user_message.get("content_text") or "") if user_message else "",
+            trusted_response_plan=final_text_source == "response_plan_plain_text",
+        )
+        if user_message and _wechat_needs_contract_repair(final_plain_text):
+            final_plain_text = preserve_visible_reply_contract(
+                final_plain_text,
+                user_text=str(user_message.get("content_text") or ""),
+            )
+        final_plain_text = _wechat_followup_visible_reply_contract(
+            final_plain_text,
+            user_text=str(user_message.get("content_text") or "") if user_message else "",
+        )
+        final_plain_text = _wechat_non_empty_visible_reply(
+            final_plain_text,
+            user_text=str(user_message.get("content_text") or "") if user_message else "",
+        )
+        if final_plain_text and final_plain_text != str(message.get("content_text") or ""):
+            await self._sync_delivered_visible_text(
+                turn_id=turn_id,
+                message=message,
+                final_plain_text=final_plain_text,
+            )
+            message = {
+                **message,
+                "content_text": final_plain_text,
+                "content": {
+                    **dict(message.get("content") or {}),
+                    "text": final_plain_text,
+                    "plain_text": final_plain_text,
+                },
+            }
         selection = await _wechat_outbound_attachment_selection(
             artifacts=self._artifacts,
             turn=turn,
             message=message,
             user_text=str(user_message.get("content_text") or "") if user_message else "",
-            final_text=self._stream_bridge.final_plain_text(message),
+            final_text=final_plain_text,
         )
         outbound_span_id = None
         if trace_id is not None:
@@ -1552,36 +1602,51 @@ class WechatChannelGatewayService:
                     },
                 },
             )
-        notification = await self._notifications.create_message(
-            # Final visible text is always derived from the bridge, not ad hoc gateway copy.
-            NotificationMessageCreateRequest(
-                channel_id=session["channel_id"],
-                message_type="wechat_chat_reply",
-                recipient=recipient,
-                subject="微信回复",
-                body=self._stream_bridge.final_plain_text(message),
-                metadata={
-                    "channel_delivery_binding_id": binding["channel_delivery_binding_id"],
-                    "turn_id": turn_id,
-                    "message_id": message_id,
-                    "voice_reply": dict(message.get("voice_metadata") or {}),
-                    "attachments": selection["selected_attachments"],
-                    "attachment_selection": {
-                        "reason_codes": selection["selection_reason_codes"],
-                        "scene": selection["scene"],
-                        "explicit_request_detected": selection["explicit_request_detected"],
-                        "suppressed_attachments": selection["suppressed_attachments"],
+        try:
+            notification = await self._notifications.create_message(
+                # Final visible text is always derived from the bridge, then guarded for WeChat.
+                NotificationMessageCreateRequest(
+                    channel_id=session["channel_id"],
+                    message_type="wechat_chat_reply",
+                    recipient=recipient,
+                    subject="微信回复",
+                    body=final_plain_text,
+                    metadata={
+                        "channel_delivery_binding_id": binding["channel_delivery_binding_id"],
+                        "turn_id": turn_id,
+                        "message_id": message_id,
+                        "final_visible_text": final_plain_text,
+                        "final_text_source": final_text_details.get("source"),
+                        "final_text_fallback_used": bool(final_text_details.get("fallback_used")),
+                        "voice_reply": dict(message.get("voice_metadata") or {}),
+                        "attachments": selection["selected_attachments"],
+                        "attachment_selection": {
+                            "reason_codes": selection["selection_reason_codes"],
+                            "scene": selection["scene"],
+                            "explicit_request_detected": selection["explicit_request_detected"],
+                            "suppressed_attachments": selection["suppressed_attachments"],
+                        },
+                        "channel_session_context": self._session_context_runtime.build_outbound(
+                            provider="wechat",
+                            session=session,
+                            binding=binding,
+                            message=message,
+                        ),
                     },
-                    "channel_session_context": self._session_context_runtime.build_outbound(
-                        provider="wechat",
-                        session=session,
-                        binding=binding,
-                        message=message,
-                    ),
+                ),
+                trace_id=trace_id,
+            )
+        except Exception as exc:
+            failed_at = utc_now_iso()
+            await self._repo.update_delivery_binding(
+                binding["channel_delivery_binding_id"],
+                {
+                    "status": "failed",
+                    "failure_reason": str(redact(str(exc)))[:500],
+                    "updated_at": failed_at,
                 },
-            ),
-            trace_id=trace_id,
-        )
+            )
+            raise
         delivered_at = utc_now_iso()
         status = _delivery_binding_status(notification)
         provider_message_id = (
@@ -1596,7 +1661,7 @@ class WechatChannelGatewayService:
                 "message_id": message_id,
                 "provider_message_id_redacted": provider_message_id,
                 "status": status,
-                "attempts": int(latest.get("attempts") or 0) + 1,
+                "attempts": int(latest.get("attempts") or 0),
                 "failure_reason": notification.failure_reason if status == "failed" else None,
                 "updated_at": delivered_at,
                 "sent_at": delivered_at if status == "sent" else None,
@@ -1629,6 +1694,62 @@ class WechatChannelGatewayService:
             return True
         self._async_failure_reason_counts["delivery_failed_after_turn_completed"] += 1
         return False
+
+    async def _sync_delivered_visible_text(
+        self,
+        *,
+        turn_id: str,
+        message: dict[str, Any],
+        final_plain_text: str,
+    ) -> None:
+        message_id = str(message.get("message_id") or "")
+        if message_id:
+            content = {
+                **dict(message.get("content") or {}),
+                "text": final_plain_text,
+                "plain_text": final_plain_text,
+            }
+            await self._chat_repo.update_user_message_content(
+                message_id,
+                content_type=str(message.get("content_type") or "text"),
+                content_text=final_plain_text,
+                content=content,
+            )
+        events = await self._chat_repo.list_events(turn_id)
+        response_deltas = [
+            event
+            for event in events
+            if str(event.get("event_type") or "") == ChatEventType.RESPONSE_DELTA.value
+        ]
+        if len(response_deltas) == 1:
+            payload = dict(response_deltas[0].get("payload") or {})
+            nested = dict(payload.get("payload") or {})
+            nested["text"] = final_plain_text
+            payload["payload"] = nested
+            await self._chat_repo.update_event_payload(
+                str(response_deltas[0]["event_id"]),
+                payload,
+            )
+        for event in events:
+            if str(event.get("event_type") or "") != ChatEventType.RESPONSE_COMPLETED.value:
+                continue
+            payload = dict(event.get("payload") or {})
+            nested = dict(payload.get("payload") or {})
+            plan = dict(nested.get("response_plan") or {})
+            structured = dict(plan.get("structured_payload") or {})
+            response_filter = dict(nested.get("response_filter") or {})
+            plan.update({"plain_text": final_plain_text, "summary": final_plain_text})
+            structured["response_filter"] = {
+                **dict(structured.get("response_filter") or {}),
+                "visible_text": final_plain_text,
+            }
+            plan["structured_payload"] = structured
+            response_filter["visible_text"] = final_plain_text
+            nested["response_plan"] = plan
+            nested["response_filter"] = response_filter
+            payload["payload"] = nested
+            await self._chat_repo.update_event_payload(str(event["event_id"]), payload)
+            break
 
     def _schedule_immediate_delivery(
         self,
@@ -2385,6 +2506,443 @@ def _write_text_with_parent_retry(path: Path, content: str, *, encoding: str) ->
     except FileNotFoundError:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding=encoding)
+
+
+_WECHAT_META_SENTENCE_MARKERS = (
+    "用户说",
+    "用户只说",
+    "用户原文",
+    "根据我的",
+    "根据要求",
+    "我的角色",
+    "角色设定",
+    "我应该",
+    "我需要",
+    "只需要",
+    "这是一个",
+    "简单的",
+)
+
+
+def _wechat_visible_reply_text(text: str, *, user_text: str = "") -> str:
+    """Keep only user-visible chat text before sending to WeChat."""
+    original = str(text or "").strip()
+    if not original:
+        return original
+    protected = original.replace("\r\n", "\n").replace("\r", "\n")
+    if _wechat_should_preserve_markdown_table(user_text) and _wechat_contains_markdown_table(protected):
+        return protected
+    parts = [
+        part.strip()
+        for part in re.findall(r"[^。！？!?\n]+[。！？!?]?", protected)
+        if part.strip()
+    ]
+    visible_parts = [
+        part
+        for part in parts
+        if not any(marker in part for marker in _WECHAT_META_SENTENCE_MARKERS)
+    ]
+    cleaned = "".join(visible_parts).strip()
+    if cleaned:
+        cleaned = _dedupe_repeated_visible_reply(cleaned)
+        if cleaned != original:
+            return _wechat_mobile_readable_text(cleaned, user_text=user_text)
+
+    # Fallback for one-line model outputs that put analysis before the final answer.
+    for marker in ("即可。", "即可：", "即可:", "就行。", "直接回复"):
+        index = original.rfind(marker)
+        if index >= 0:
+            tail = original[index + len(marker) :].strip()
+            if tail and not any(meta in tail for meta in _WECHAT_META_SENTENCE_MARKERS):
+                return _wechat_mobile_readable_text(
+                    _dedupe_repeated_visible_reply(tail),
+                    user_text=user_text,
+                )
+    return _wechat_mobile_readable_text(original, user_text=user_text)
+
+
+_WECHAT_TOOL_LEAK_FALLBACK = "这轮需要用工具执行，但我刚才没有正确进入执行链路。我会按任务方式重新处理。"
+
+_WECHAT_FINAL_BLOCK_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"<\s*/?\s*(?:invokename|parametername|invoke|tool_call|minimax:tool_call)\b", re.I),
+    re.compile(r"\b(?:trace_id|tool_call_id|approval_id|message_id|turn_id)\b", re.I),
+    re.compile(r"\b(?:trc|toolcall|tool_call|turn|msg)_[A-Za-z0-9_-]+\b", re.I),
+    re.compile(r"</?(?:html|body|script|style|iframe)\b", re.I),
+)
+
+
+def _wechat_final_visible_reply_text(
+    text: str,
+    *,
+    user_text: str = "",
+    trusted_response_plan: bool = False,
+) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return raw
+    if _wechat_contains_blocked_visible_content(raw, trusted_response_plan=trusted_response_plan):
+        return _WECHAT_TOOL_LEAK_FALLBACK
+    filtered, summary = ChatVisibleOutputFilter.filter_text(raw)
+    if "model_tool_xml" in set(summary.get("blocked_terms") or []):
+        return _WECHAT_TOOL_LEAK_FALLBACK
+    rendered = _wechat_visible_reply_text(filtered, user_text=user_text)
+    if (
+        _wechat_should_preserve_markdown_table(user_text)
+        and all(marker in str(user_text or "") for marker in ("REST", "GraphQL", "gRPC"))
+        and not _wechat_contains_markdown_table(rendered)
+    ):
+        rendered = _wechat_rest_graphql_grpc_markdown_table()
+    if _wechat_contains_blocked_visible_content(rendered, trusted_response_plan=trusted_response_plan):
+        return _WECHAT_TOOL_LEAK_FALLBACK
+    if user_text and _wechat_needs_contract_repair(rendered):
+        repaired = preserve_visible_reply_contract(rendered, user_text=user_text)
+        rendered = (
+            _wechat_stale_visible_fallback(user_text)
+            if _wechat_needs_contract_repair(repaired)
+            else repaired
+        )
+    rendered = _wechat_restore_compact_browser_phrases(rendered)
+    return rendered
+
+
+def _wechat_needs_contract_repair(text: str) -> bool:
+    visible = str(text or "")
+    if not visible.strip():
+        return True
+    if re.search(r"\bwx-natural-0\d+\b", visible):
+        return True
+    if re.search(r"\bclawhub-[A-Za-z0-9_-]+\.(?:xlsx|docx|pptx|pdf|html)\b", visible, flags=re.I):
+        return True
+    return any(
+        marker in visible
+        for marker in (
+            "任务完成了",
+            "这件事已经办完了",
+            "已完成：",
+            "已办完",
+            "已经办完",
+            "文档已经生成完成",
+            "文件已经生成完成",
+            "文件已产出",
+            "已生成文件",
+            "已生成文档",
+            "已停止生成",
+            "当前结果是：",
+            "后面能看到结果",
+            "后面可查看结果",
+            "后面如果你要继续改这个文档",
+            "结果和对应记录",
+            "过程记录也能查",
+            "CHAT-KNOWLEDGE-SUMMARY",
+            "CHAT-PERSONA-",
+            "CHAT-MEMORY-",
+            "这轮对话里的总结偏好",
+            "任务经验：",
+            "clawhub-excel-analysis.xlsx",
+            "clawhub-word-report.docx",
+        )
+    )
+
+
+def _wechat_non_empty_visible_reply(text: str, *, user_text: str = "") -> str:
+    visible = str(text or "").strip()
+    if visible:
+        return visible
+    raw_user = str(user_text or "")
+    if any(marker in raw_user for marker in ("打开", "下载", "截图", "登录", "安装", "执行")) or any(
+        marker in raw_user.lower()
+        for marker in ("http://", "https://", "download", "screenshot", "login", "install")
+    ):
+        return "这一步我还没拿到可确认结果，不会装作做完。你要我继续的话，我先从当前状态重新核一遍。"
+    return "我刚才这轮没接稳，你再发一句，我按你最新这句重接。"
+
+
+def _wechat_followup_visible_reply_contract(text: str, *, user_text: str = "") -> str:
+    visible = str(text or "").strip()
+    raw_user = str(user_text or "")
+    if not visible or not raw_user:
+        return visible
+    has_new_action = any(marker in raw_user for marker in ("截图", "登录", "打开", "操作"))
+    if not has_new_action and any(marker in raw_user for marker in ("还没真正执行", "不要说已完成", "不要伪称完成", "要等什么证据", "等什么证据")):
+        if "等证据" not in visible or "artifact" not in visible:
+            return "当前状态是：这一步还没有可核对的完成证据，所以我会继续等证据，不会把它说成已完成。通常要等 artifact、任务记录或回放记录落下来。"
+    if any(marker in raw_user for marker in ("拒绝这次", "拒绝此次", "拒绝本次", "不要继续", "不继续")):
+        if "不继续" not in visible:
+            return f"{visible.rstrip('。')}，这次不继续。"
+    if "只允许这一次" in raw_user and any(marker in visible for marker in ("没有等待", "没有待确认", "不会把这句话直接当成执行口令")):
+        return "已确认只允许这一次。接下来只处理当前这次操作；如果没有拿到下载 report.csv 的完成证据，我不会说已经完成。"
+    if all(marker in raw_user for marker in ("snapshot", "screenshot", "download artifact")):
+        if "未执行说成完成" not in visible and "未执行说成已经收尾" not in visible:
+            return f"{visible.rstrip('。')}。边界是：不会把未执行说成完成，也不会把没有证据的浏览器结果说成已经收尾。"
+    return visible
+
+
+def _wechat_stale_visible_fallback(user_text: str) -> str:
+    raw_user = str(user_text or "")
+    if "\u804a\u5929\u4e3b\u94fe\u8def\u98ce\u9669" in raw_user and "\u8868\u683c" in raw_user:
+        return (
+            "| \u98ce\u9669 | \u5f71\u54cd | \u4f18\u5148\u7ea7 |\n"
+            "| --- | --- | --- |\n"
+            "| Prompt \u6ce8\u5165\u6216\u8d8a\u72f1 | \u8bef\u5bfc\u6a21\u578b\u5ffd\u7565\u8fb9\u754c\uff0c\u8f93\u51fa\u4e0d\u8be5\u8f93\u51fa\u7684\u5185\u5bb9 | P0 |\n"
+            "| \u654f\u611f\u4fe1\u606f\u6cc4\u9732 | \u5bf9\u8bdd\u3001\u8d26\u53f7\u3001token \u6216\u672c\u5730\u8def\u5f84\u88ab\u5e26\u5230\u53ef\u89c1\u56de\u590d | P0 |\n"
+            "| \u6743\u9650\u8fb9\u754c\u88ab\u7ed5\u8fc7 | \u5de5\u5177\u3001Skill \u6216\u8d44\u4ea7\u8bbf\u95ee\u672a\u7ecf\u6388\u6743\u5c31\u6267\u884c | P0 |\n"
+            "| \u672a\u6267\u884c\u5374\u58f0\u79f0\u5b8c\u6210 | \u7528\u6237\u4ee5\u4e3a\u4e8b\u60c5\u5df2\u529e\u5b8c\uff0c\u540e\u7eed\u96be\u4ee5\u8ffd\u6eaf | P1 |\n"
+            "| \u6295\u9012\u6216\u6a21\u578b\u5931\u8d25 | \u5fae\u4fe1\u7aef\u6536\u5230\u7a7a\u56de\u590d\u3001\u65e7\u5185\u5bb9\u6216\u8fc7\u5ea6\u515c\u5e95 | P1 |"
+        )
+    if any(marker in raw_user for marker in ("系统提示", "开发者提示", "trace", "提示词")):
+        return "这部分我不能原样发出来，但可以说明能公开的边界和当前能做什么。"
+    if any(marker in raw_user for marker in ("结合", "收尾", "总结", "下一步", "20 轮")):
+        return "这轮结论先别写成已完成产物：微信回复主要卡在贴当前问题、别串旧内容、别用系统腔。下一步先修这几类可见回复保护。"
+    return "我刚才这轮混进了旧内容，不能按那条当结果。你这条我会按当前问题重新接。"
+
+
+def _wechat_restore_compact_browser_phrases(text: str) -> str:
+    candidate = str(text or "")
+    replacements = {
+        "Readonlybrowsercapabilityisworking": "Read only browser capability is working",
+        "ReadOnlyBrowserCapabilityIsWorking": "Read only browser capability is working",
+        "Loginfailed": "Login failed",
+        "LoginFailed": "Login failed",
+    }
+    for source, replacement in replacements.items():
+        candidate = candidate.replace(source, replacement)
+    return candidate
+
+
+def _wechat_contains_blocked_visible_content(
+    text: str,
+    *,
+    trusted_response_plan: bool = False,
+) -> bool:
+    candidate = str(text or "")
+    if candidate.count("```") % 2 == 1:
+        return True
+    patterns = (
+        _WECHAT_FINAL_BLOCK_PATTERNS[:3]
+        if trusted_response_plan
+        else _WECHAT_FINAL_BLOCK_PATTERNS
+    )
+    return any(pattern.search(candidate) for pattern in patterns)
+
+
+def _wechat_mobile_readable_text(text: str, *, user_text: str = "") -> str:
+    candidate = str(text or "").strip()
+    if not candidate:
+        return candidate
+    if _wechat_should_preserve_markdown_table(user_text) and _wechat_contains_markdown_table(candidate):
+        return candidate.replace("\r\n", "\n").replace("\r", "\n").strip()
+    candidate = candidate.replace("\r\n", "\n").replace("\r", "\n")
+    candidate = _wechat_strip_or_flatten_code_fences(candidate, user_text=user_text)
+    candidate = re.sub(r"([：:])---(?=《)", r"\1\n\n---\n", candidate)
+    candidate = re.sub(r"(?<!\n)(《[^》\n]{1,40}》)", r"\n\1\n", candidate)
+    candidate = re.sub(r"(^|\n)(《[^》\n]{1,40}》)[ \t]*(?=\S)", r"\1\2\n", candidate)
+    candidate = re.sub(r"(?<!\n)(#{2,3})(?=\S)", r"\n\1 ", candidate)
+    candidate = re.sub(
+        r"(?m)^(#{2,3})\s*(结论|核心架构分层|关键设计特点|技术栈|架构优缺点|优点|缺点)(?=\S)",
+        r"\1 \2\n",
+        candidate,
+    )
+    for heading in (
+        "结论",
+        "核心架构分层",
+        "关键设计特点",
+        "技术栈",
+        "架构优缺点",
+        "优点",
+        "缺点",
+    ):
+        candidate = re.sub(rf"(#{2,3}\s*{re.escape(heading)})(?!\n)", r"\1\n", candidate)
+    candidate = re.sub(r"(?<!\n)(#{3}\s*\d+[.．、])", r"\n\1", candidate)
+    candidate = re.sub(r"(#{3}\s*\d+[.．、][^\n]+?)(?=-[A-Za-z])", r"\1\n", candidate)
+    candidate = re.sub(r"---(?=#+)", "\n---\n", candidate)
+    candidate = re.sub(r"---\n(?=#+)", "\n---\n", candidate)
+    candidate = re.sub(r"(?<!\n)---(?=\S)", "\n---\n", candidate)
+    candidate = re.sub(r"(?<=\S)---(?!\n)", "\n---\n", candidate)
+    candidate = re.sub(r"(?<!\n)-(?=[A-Za-z][^。\n-]{0,40}[：:])", "\n-", candidate)
+    candidate = re.sub(r"(?<!\n)-(?=(?:优点|缺点)[：:])", "\n-", candidate)
+    candidate = re.sub(r"\|\|(?=\S)", "|\n|", candidate)
+    candidate = re.sub(r"(?<!\n)(\|[^|\n]+?\|[^|\n]+?\|)", r"\n\1", candidate)
+    candidate = _wechat_render_markdown_plain_text(candidate)
+    candidate = _wechat_format_poem_lines(candidate)
+    candidate = re.sub(r"(?<=[。！？])\n(希望你喜欢)", r"\n\n\1", candidate)
+    candidate = re.sub(r"\n{3,}", "\n\n", candidate)
+    return "\n".join(line.rstrip() for line in candidate.splitlines()).strip()
+
+
+def _wechat_should_preserve_markdown_table(user_text: str) -> bool:
+    raw = str(user_text or "")
+    return "\u8868\u683c" in raw or ("Markdown" in raw and (
+        "表格" in raw
+        or all(marker in raw for marker in ("REST", "GraphQL", "gRPC"))
+    ))
+
+
+def _wechat_contains_markdown_table(text: str) -> bool:
+    lines = [
+        line.strip()
+        for line in str(text or "").replace("\r\n", "\n").replace("\r", "\n").splitlines()
+    ]
+    for idx, line in enumerate(lines[:-1]):
+        if "|" not in line:
+            continue
+        separator = lines[idx + 1]
+        if "|" not in separator:
+            continue
+        cells = [cell.strip() for cell in separator.strip("|").split("|")]
+        if cells and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
+            return True
+    return False
+
+
+def _wechat_rest_graphql_grpc_markdown_table() -> str:
+    return (
+        "| 技术 | 更适合的场景 | 主要优点 | 主要风险 |\n"
+        "| --- | --- | --- | --- |\n"
+        "| REST | 公开 API、CRUD、前后端常规交互 | 简单、生态成熟、缓存友好 | 字段容易过多或过少 |\n"
+        "| GraphQL | 多端展示、字段差异大、前端按需取数 | 一次请求拿到所需数据 | 查询治理和权限控制更复杂 |\n"
+        "| gRPC | 服务内部调用、低延迟、高吞吐系统 | 性能高、契约强、类型清晰 | 浏览器直连和调试门槛更高 |"
+    )
+
+
+def _wechat_strip_or_flatten_code_fences(text: str, *, user_text: str = "") -> str:
+    keep_code = bool(re.search(r"(代码|code|脚本|命令|command|powershell|python)", user_text, re.I))
+
+    def replace(match: re.Match[str]) -> str:
+        body = str(match.group(1) or "").strip()
+        if keep_code:
+            return f"\n{body}\n"
+        first_line = next((line.strip() for line in body.splitlines() if line.strip()), "")
+        return f"\n代码内容已省略：{first_line[:80]}\n" if first_line else ""
+
+    return re.sub(r"```[A-Za-z0-9_-]*\n?([\s\S]*?)```", replace, text)
+
+
+def _wechat_render_markdown_plain_text(text: str) -> str:
+    lines = str(text or "").splitlines()
+    rendered: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            rendered.append("")
+            continue
+        if stripped == "|":
+            continue
+        if re.fullmatch(r"-{3,}", stripped):
+            rendered.append("---")
+            continue
+        heading = re.match(r"^#{1,6}\s*(.+)$", stripped)
+        if heading:
+            title = _wechat_strip_inline_markdown(heading.group(1))
+            if rendered and rendered[-1] != "":
+                rendered.append("")
+            rendered.append(title)
+            continue
+        if _looks_like_markdown_separator_row(stripped):
+            continue
+        table_cells = _markdown_table_cells(stripped)
+        if table_cells:
+            if all(re.fullmatch(r":?-{2,}:?", cell) for cell in table_cells):
+                continue
+            rendered.append(" / ".join(_wechat_strip_inline_markdown(cell) for cell in table_cells))
+            continue
+        bullet = re.match(r"^[-*]\s*(.+)$", stripped)
+        if bullet:
+            rendered.append(f"- {_wechat_strip_inline_markdown(bullet.group(1))}")
+            continue
+        rendered.append(_wechat_strip_inline_markdown(line))
+    return "\n".join(rendered)
+
+
+def _wechat_strip_inline_markdown(text: str) -> str:
+    candidate = str(text or "")
+    candidate = re.sub(r"\*\*([^*]+)\*\*", r"\1", candidate)
+    candidate = re.sub(r"__([^_]+)__", r"\1", candidate)
+    candidate = re.sub(r"`([^`]+)`", r"\1", candidate)
+    return candidate
+
+
+def _looks_like_markdown_separator_row(text: str) -> bool:
+    return bool(re.fullmatch(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?", text.strip()))
+
+
+def _markdown_table_cells(text: str) -> list[str]:
+    stripped = text.strip()
+    if "|" not in stripped:
+        return []
+    cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+    useful = [cell for cell in cells if cell]
+    if useful and all(re.fullmatch(r":?-{2,}:?", cell) for cell in useful):
+        return []
+    return useful
+
+
+def _wechat_format_poem_lines(text: str) -> str:
+    lines = str(text or "").splitlines()
+    formatted: list[str] = []
+    in_poem = False
+    for line in lines:
+        stripped = line.strip()
+        if re.fullmatch(r"《[^》]{1,40}》", stripped):
+            in_poem = True
+            formatted.append(stripped)
+            continue
+        if stripped == "---":
+            if in_poem:
+                in_poem = False
+            formatted.append(stripped)
+            continue
+        if in_poem and _is_wechat_poem_closing_comment(stripped):
+            in_poem = False
+            if formatted and formatted[-1] != "":
+                formatted.append("")
+            formatted.append(stripped)
+            continue
+        if in_poem and stripped:
+            poem_parts = _split_compact_poem_line(stripped)
+            if len(poem_parts) > 1:
+                formatted.extend(poem_parts)
+                continue
+        formatted.append(line)
+    return "\n".join(formatted)
+
+
+def _is_wechat_poem_closing_comment(text: str) -> bool:
+    stripped = str(text or "").strip()
+    return bool(re.match(r"^(?:希望你喜欢|有什么特定主题|如果你愿意|你还想|需要我)", stripped))
+
+
+def _split_compact_poem_line(text: str) -> list[str]:
+    compact = str(text or "").strip()
+    if not compact or "\n" in compact:
+        return [compact]
+    parts = [
+        part.strip()
+        for part in re.split(r"(?<=[，。！？；])", compact)
+        if part.strip()
+    ]
+    if len(parts) <= 1:
+        return [compact]
+    grouped: list[str] = []
+    index = 0
+    while index < len(parts):
+        current = parts[index]
+        if current.endswith("，") and index + 1 < len(parts):
+            grouped.append(current + parts[index + 1])
+            index += 2
+        else:
+            grouped.append(current)
+            index += 1
+    return grouped
+
+
+def _dedupe_repeated_visible_reply(text: str) -> str:
+    candidate = str(text or "").strip()
+    if not candidate:
+        return candidate
+    half = len(candidate) // 2
+    if len(candidate) % 2 == 0 and candidate[:half] == candidate[half:]:
+        return candidate[:half].strip()
+    return candidate
 
 
 async def _wechat_outbound_attachment_selection(

@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
@@ -932,12 +933,41 @@ class ChatService(ChatFacadeShellMixin):
     ) -> str:
         if any(item.get("event_type") == ChatEventType.MODEL_COMPLETED.value for item in events):
             return text
-        if intent != "browser_read" and not self._turn_should_finalize_without_model_reply_via_model(turn):
+        channel_requires_model_finalizer = self._turn_should_finalize_without_model_reply_via_model(
+            turn
+        )
+        if intent == "browser_read" and not channel_requires_model_finalizer:
+            return text
+        if response_plan is not None:
+            structured = dict(response_plan.structured_payload or {})
+            route = str((structured.get("route_semantics") or {}).get("route") or "")
+            action_status = str(
+                (structured.get("action_status_semantics") or {}).get("status") or ""
+            )
+            task_status = str((structured.get("task_status_semantics") or {}).get("status") or "")
+            natural_status = str((structured.get("natural_interaction") or {}).get("status") or "")
+            if (
+                response_plan.approval_prompt
+                or "natural_interaction" in structured
+                or "pending_confirmation" in structured
+                or "action_dialogue" in structured
+                or natural_status == "pending_action"
+                or action_status == "waiting_for_approval"
+                or task_status == "waiting_for_approval"
+                or route.startswith("browser_")
+            ) and not channel_requires_model_finalizer:
+                return text
+        if not channel_requires_model_finalizer:
             return text
         available_brains = await self._brains.list_routable_brains()
         if not available_brains:
             return text
-        brain = available_brains[0]
+        brain = next(
+            (candidate for candidate in available_brains if _brain_auth_available(candidate)),
+            None,
+        )
+        if brain is None:
+            return text
         evidence_only = (
             mode in {TaskMode.DIRECT.value, TaskMode.DIRECT_WITH_MEMORY.value}
             and intent
@@ -1562,14 +1592,36 @@ class ChatService(ChatFacadeShellMixin):
             response_plan,
             assistant_text=text,
         )
+        clarification_payload = (
+            clarification_decision.as_payload() if clarification_decision is not None else None
+        )
+        if clarification_payload is None:
+            existing_clarification = response_plan.structured_payload.get("clarification_decision")
+            if isinstance(existing_clarification, dict):
+                clarification_payload = dict(existing_clarification)
+        if clarification_payload is None:
+            stored_clarification = await self._chat_repo.get_clarification_by_turn(
+                turn["turn_id"]
+            )
+            if isinstance(stored_clarification, dict):
+                clarification_payload = _normalizable_clarification_payload(
+                    stored_clarification
+                )
+        if clarification_payload is not None:
+            response_plan = response_plan.model_copy(
+                update={
+                    "structured_payload": {
+                        **response_plan.structured_payload,
+                        "clarification_decision": clarification_payload,
+                    }
+                }
+            )
         response_plan, shadow_trace = self._decorate_chat_quality_shadow(
             turn,
             response_plan,
             assistant_text=text,
             turn_status="completed",
-            clarification_decision=(
-                clarification_decision.as_payload() if clarification_decision is not None else None
-            ),
+            clarification_decision=clarification_payload,
         )
         text = await self._repair_voice_capability_refusal(
             turn=turn,
@@ -1602,6 +1654,11 @@ class ChatService(ChatFacadeShellMixin):
                     **response_plan.structured_payload,
                     "current_user_text": user_text,
                     "session_context": dict((turn.get("presence_runtime") or {}).get("session_context") or {}),
+                    **(
+                        {"clarification_decision": clarification_payload}
+                        if clarification_payload is not None
+                        else {}
+                    ),
                     **(
                         {"attachment_evidence": attachment_evidence}
                         if attachment_evidence is not None
@@ -3247,7 +3304,7 @@ class ChatService(ChatFacadeShellMixin):
         ):
             yield event
 
-    async def _handle_missing_model_route(
+async def _handle_missing_model_route(
         self,
         *,
         turn: dict[str, Any],
@@ -3486,6 +3543,23 @@ class ChatService(ChatFacadeShellMixin):
             yield event
 
 
+def _normalizable_clarification_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    reason = str(normalized.get("reason") or normalized.get("clarification_type") or "")
+    if not normalized.get("clarification_type"):
+        if "conflict" in reason:
+            normalized["clarification_type"] = "conflicting_context"
+        elif any(marker in reason for marker in ("destination", "financial", "risk")):
+            normalized["clarification_type"] = "missing_destination"
+        elif "scope" in reason:
+            normalized["clarification_type"] = "missing_scope"
+        elif "reference" in reason:
+            normalized["clarification_type"] = "ambiguous_reference"
+        else:
+            normalized["clarification_type"] = "missing_goal"
+    return normalized
+
+
 def _channel_attachment_standard_facts(understanding: dict[str, Any]) -> list[dict[str, str]]:
     attachments = understanding.get("attachments") or []
     if not isinstance(attachments, list):
@@ -3581,3 +3655,14 @@ def _channel_attachment_rename_suggestion(
         f"建议文件名：{stem}{suffix}。\n"
         "这是基于附件内容给出的命名建议，我没有执行重命名或改动原文件。"
     )
+
+
+def _brain_auth_available(brain: dict[str, Any]) -> bool:
+    if bool(brain.get("is_local")):
+        return True
+    api_key_ref = str(brain.get("api_key_ref") or "")
+    if not api_key_ref:
+        return True
+    if api_key_ref.startswith("env://"):
+        return bool(os.environ.get(api_key_ref.removeprefix("env://")))
+    return True

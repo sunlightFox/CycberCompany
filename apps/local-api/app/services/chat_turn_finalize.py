@@ -54,6 +54,11 @@ class ChatTurnFinalizeService:
                 response_plan=response_plan,
             )
         text = facade._style_visible_text(turn, text, response_plan=response_plan)
+        if intent == "browser_read" and hasattr(facade, "_restore_browser_read_visible_evidence"):
+            text = facade._restore_browser_read_visible_evidence(
+                text,
+                response_plan=response_plan,
+            )
         text, response_filter = facade._response_coordinator.filter_text(text)
         yield await facade._emit_and_record(
             turn["turn_id"],

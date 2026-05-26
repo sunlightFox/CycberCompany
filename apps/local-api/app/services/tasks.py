@@ -265,12 +265,33 @@ class TaskEngine:
             )
         plan = await self._plan(task_id, request, trace_id=trace_id)
         plan.steps = _normalize_plan_steps(plan.steps)
-        phase19_evidence = await self._model_planner.build_evidence(
-            task_id=task_id,
-            request=request,
-            plan=plan,
-            trace_id=trace_id,
+        skip_model_planner = bool(
+            request.planner_context.get("skip_model_planner")
+            or request.planner_context.get("deterministic_tool_route")
         )
+        phase19_evidence = None
+        if not skip_model_planner:
+            phase19_evidence = await self._model_planner.build_evidence(
+                task_id=task_id,
+                request=request,
+                plan=plan,
+                trace_id=trace_id,
+            )
+        else:
+            plan.preflight["phase19"] = {
+                "model_assist_enabled": False,
+                "fallback_used": False,
+                "skipped": True,
+                "skip_reason": str(
+                    request.planner_context.get("route") or "deterministic_tool_route"
+                ),
+            }
+            plan.preflight["phase25"] = {
+                "model_assist_attempted": False,
+                "fallback_used": False,
+                "candidate_only": False,
+                "skipped": True,
+            }
         if phase19_evidence is not None:
             plan.steps = _normalize_plan_steps(phase19_evidence.final_steps)
             plan.required_capabilities = _required_capabilities_for_steps(plan.steps)

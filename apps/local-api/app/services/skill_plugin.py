@@ -472,6 +472,7 @@ class SkillPluginService:
                 trust_level=str(bundle.get("trust_level") or ""),
                 preview=preview,
                 manifest=manifest,
+                explicit_requested_by_member=("requested_by_member_id" in request.model_fields_set),
             ):
                 enabled_bundle = await self.enable_bundle(
                     bundle_id,
@@ -1634,14 +1635,22 @@ class SkillPluginService:
         trust_level: str,
         preview: PermissionPreview,
         manifest: dict[str, Any],
+        explicit_requested_by_member: bool = True,
     ) -> bool:
         if not await self._smooth_governance_enabled():
+            return False
+        if source_type == "local_directory" and explicit_requested_by_member:
             return False
         trusted_sources = {"candidate", "local_directory", "local_archive"}
         trusted_levels = {"local", "trusted", "official"}
         if source_type not in trusted_sources:
             return False
-        if trust_level not in trusted_levels:
+        smooth_local_directory_install = (
+            source_type == "local_directory"
+            and not explicit_requested_by_member
+            and trust_level == "restricted"
+        )
+        if trust_level not in trusted_levels and not smooth_local_directory_install:
             return False
         if preview.high_risk_actions:
             return False

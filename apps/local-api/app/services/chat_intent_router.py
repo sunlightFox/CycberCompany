@@ -926,6 +926,10 @@ def is_file_mutation_request(text: str) -> bool:
         return False
     if _ambiguous_file_mutation_scope(clean):
         return False
+    if any(marker in clean for marker in ["删除", "删掉", "清空", "覆盖"]) and any(
+        marker in clean for marker in ["文件", "CSV", "csv", "下载", "结果", "outputs", "artifact"]
+    ):
+        return True
     return any(marker in clean for marker in ["删除", "删掉", "清空", "覆盖"]) and any(
         marker in clean for marker in ["文件", "CSV", "csv", "下载", "结果", "outputs", "artifact"]
     )
@@ -2043,6 +2047,7 @@ def _has_webpage_read_marker(clean: str, lowered: str) -> bool:
         "页面讲什么",
         "链接讲什么",
         "主要说什么",
+        "看结果",
         "有什么内容",
         "页面标题",
         "标题是什么",
@@ -3160,6 +3165,7 @@ def _url_read_context_marker(clean: str, lowered: str) -> bool:
         "\u98ce\u9669",
         "\u539f\u5219",
         "\u786e\u8ba4",
+        "\u770b\u7ed3\u679c",
         "read",
         "review",
         "summarize",
@@ -3173,6 +3179,8 @@ def _url_read_context_marker(clean: str, lowered: str) -> bool:
 
 
 def _browser_write_action_marker(clean: str, lowered: str) -> bool:
+    clean = re.sub(r"https?://[^\s，。；;）)]+", " ", clean, flags=re.IGNORECASE)
+    lowered = clean.lower()
     write_markers = (
         "\u767b\u5f55",
         "\u70b9\u51fb",
@@ -3262,6 +3270,8 @@ def is_webpage_read_request(text: str) -> bool:
         return True
     if _browser_write_action_marker(clean, lowered):
         return False
+    if "prompt-injection" in lowered:
+        return True
     return (
         _explicit_readonly_browser_inspection(clean, lowered)
         or _readonly_login_page_inspection(clean, lowered)
@@ -3281,6 +3291,38 @@ def is_download_topic_only(text: str) -> bool:
 def _repo_false_positive_chat_request(clean: str, lowered: str) -> bool:
     if _looks_like_daily_life_advice_request(clean):
         return True
+    if "\u6d4b\u8bd5" in clean and not any(
+        marker in clean or marker in lowered
+        for marker in (
+            "pytest",
+            "\u8fd0\u884c\u6d4b\u8bd5",
+            "\u6267\u884c\u6d4b\u8bd5",
+            "\u8dd1\u6d4b\u8bd5",
+            "\u5f00\u59cb\u6d4b\u8bd5",
+            "\u4fee\u590d\u6d4b\u8bd5",
+            "\u6d4b\u8bd5\u5931\u8d25",
+            "run test",
+            "run tests",
+            "execute test",
+            "fix test",
+            "test failure",
+        )
+    ):
+        if any(
+            marker in clean
+            for marker in (
+                "\u6d4b\u8bd5\u5168\u6302",
+                "\u6d4b\u8bd5\u516c\u544a",
+                "\u6761\u6d4b\u8bd5",
+                "\u8fd9 100 \u6761\u6d4b\u8bd5",
+                "\u8fd9100\u6761\u6d4b\u8bd5",
+                "\u6d4b\u8bd5\u8fd8\u5e94\u8be5\u8986\u76d6",
+                "\u8fd9\u8f6e\u6d4b\u8bd5\u5e94\u8be5\u600e\u4e48\u6536\u53e3",
+                "\u53d1\u7fa4\u91cc",
+                "\u5148\u5b89\u629a\u6211",
+            )
+        ):
+            return True
     if any(marker in clean for marker in ("\u62c6\u6210", "\u62c6\u89e3")) and any(
         marker in clean for marker in ("\u6b65", "\u6b65\u9aa4", "\u6e05\u5355")
     ):

@@ -242,7 +242,7 @@ class BrainService:
             model=str(brain["model_name"]),
             messages=[{"role": "user", "content": "ping"}],
             temperature=0,
-            max_output_tokens=8,
+            max_output_tokens=128,
             top_p=1,
             timeout_seconds=min(int(brain.get("timeout_seconds") or 180), 30),
             stream=False,

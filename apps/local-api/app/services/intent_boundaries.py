@@ -99,6 +99,13 @@ _EXECUTION_MARKERS = (
 _MEMORY_QUERY_MARKERS = (
     "记得",
     "还记得",
+    "之前",
+    "我之前",
+    "我说过",
+    "记住了什么",
+    "让你记住",
+    "记得",
+    "还记得",
     "memory",
     "历史记忆",
     "长期记忆",
@@ -108,6 +115,14 @@ _MEMORY_QUERY_MARKERS = (
 )
 
 _REAL_TASK_MARKERS = (
+    "创建任务",
+    "建个任务",
+    "新建任务",
+    "去执行",
+    "帮我处理",
+    "删除",
+    "删掉",
+    "转账",
     "创建任务",
     "建个任务",
     "排个任务",
@@ -123,6 +138,57 @@ _TOOL_REQUEST_MARKERS = (
     "打开网页",
     "下载",
     "安装",
+    "删除",
+    "删掉",
+    "转账",
+    "发布",
+    "调用工具",
+    "打开网页",
+    "下载",
+    "安装",
+    "联网搜",
+    "联网检索",
+    "抓取",
+)
+
+_OPERATIONAL_TASK_MARKERS = (
+    "扫描",
+    "检索",
+    "联网搜",
+    "联网检索",
+    "搜索",
+    "搜近",
+    "抓取",
+    "读取",
+    "生成",
+    "输出为",
+    "做一次",
+    "体检",
+    "列出来",
+    "找到我",
+)
+
+_OPERATIONAL_TASK_OBJECT_MARKERS = (
+    "github",
+    "trending",
+    "html",
+    "markdown",
+    "网页",
+    "页面",
+    "报告",
+    "论文",
+    "arxiv",
+    "电影",
+    "电脑",
+    "应用",
+    "文件",
+    "ppt",
+    "pdf",
+    "注册表",
+    "磁盘",
+    "浏览器",
+    "最近",
+    "本周",
 )
 
 
@@ -163,6 +229,8 @@ class IntentBoundaryService:
 
     def _should_treat_as_memory_query(self, text: str) -> bool:
         raw = str(text or "")
+        if _looks_like_operational_task_request(raw):
+            return False
         if structured_summary_chat_request(raw) or preference_application_request(raw):
             return False
         if "今天刚更新" in raw and any(marker in raw for marker in ("不要联网", "不联网", "不能联网", "时效边界", "最新边界")):
@@ -188,7 +256,7 @@ class IntentBoundaryService:
             return False
         if _looks_like_action_policy_question(raw):
             return False
-        return any(marker in raw for marker in _REAL_TASK_MARKERS)
+        return any(marker in raw for marker in _REAL_TASK_MARKERS) or _looks_like_operational_task_request(raw)
 
     def _should_treat_as_tool_request(
         self,
@@ -204,11 +272,29 @@ class IntentBoundaryService:
             return False
         if _looks_like_described_action_risk_context(raw):
             return False
-        return any(marker in raw for marker in _TOOL_REQUEST_MARKERS) or _looks_like_screenshot_action(raw)
+        return (
+            any(marker in raw for marker in _TOOL_REQUEST_MARKERS)
+            or _looks_like_screenshot_action(raw)
+            or _looks_like_operational_task_request(raw)
+        )
 
 
 def looks_like_safe_plan_only(text: str) -> bool:
-    return any(marker in str(text or "") for marker in _SAFE_PLAN_ONLY_MARKERS)
+    raw = str(text or "")
+    if (
+        any(marker in raw for marker in ("\u4e0d\u8981\u6267\u884c", "\u5148\u522b\u6267\u884c", "\u4e0d\u6267\u884c"))
+        and any(marker in raw for marker in ("\u6253\u62db\u547c", "\u95f2\u804a", "\u804a\u4e24\u53e5", "\u56de\u6d88\u606f", "\u8bf4\u4e00\u53e5", "\u5fae\u4fe1\u91cc\u4e00\u6837\u81ea\u7136"))
+        and not any(marker in raw for marker in ("\u5b89\u88c5", "\u5378\u8f7d", "\u5220\u9664", "\u4e0b\u8f7d", "\u767b\u5f55", "\u53d1\u5e03", "\u8f6c\u8d26", "\u652f\u4ed8", "\u8c03\u7528\u5de5\u5177"))
+    ):
+        return False
+    direct_action_markers = tuple(marker for marker in _EXECUTION_MARKERS if marker not in {"去执行", "调用工具"})
+    if (
+        any(marker in raw for marker in ("不要执行", "先别执行"))
+        and any(marker in raw for marker in ("打招呼", "闲聊", "聊两句", "回消息", "说一句"))
+        and not any(marker in raw for marker in direct_action_markers)
+    ):
+        return False
+    return any(marker in raw for marker in _SAFE_PLAN_ONLY_MARKERS)
 
 
 def looks_like_chatty_delivery(text: str) -> bool:
@@ -217,6 +303,16 @@ def looks_like_chatty_delivery(text: str) -> bool:
         return True
     return any(marker in raw for marker in _OUTPUT_MARKERS) and not any(
         marker in raw for marker in _EXECUTION_MARKERS
+    )
+
+
+def _looks_like_operational_task_request(text: str) -> bool:
+    raw = str(text or "")
+    if not raw:
+        return False
+    lowered = raw.lower()
+    return any(marker in raw for marker in _OPERATIONAL_TASK_MARKERS) and any(
+        marker in lowered or marker in raw for marker in _OPERATIONAL_TASK_OBJECT_MARKERS
     )
 
 

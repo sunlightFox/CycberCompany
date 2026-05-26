@@ -153,6 +153,10 @@ class ScheduledTaskCancelIntentCoordinator:
         clean = " ".join(str(text or "").strip().split())
         if not clean:
             return None
+        if _looks_like_file_delete_without_reminder_context(clean):
+            return None
+        if _looks_like_high_risk_action_not_reminder_cancel(clean):
+            return None
         lowered = clean.lower()
         if any(marker in clean for marker in ("取消这次回复", "停止输出", "别回答了", "取消回答")):
             return None
@@ -205,6 +209,74 @@ class ScheduledTaskCancelIntentCoordinator:
             scheduled_task_id=scheduled_task_id,
             refers_latest=refers_latest,
         )
+
+
+def _looks_like_file_delete_without_reminder_context(text: str) -> bool:
+    clean = " ".join(str(text or "").strip().split())
+    lowered = clean.lower()
+    has_delete = any(
+        marker in clean or marker in lowered
+        for marker in (
+            "\u5220\u9664",
+            "\u5220\u6389",
+            "\u5220\u4e86",
+            "delete",
+            "remove",
+        )
+    )
+    if not has_delete:
+        return False
+    has_file_context = any(
+        marker in clean or marker in lowered
+        for marker in (
+            "\u6587\u4ef6",
+            "\u76ee\u5f55",
+            "\u6587\u4ef6\u5939",
+            "\u8def\u5f84",
+            "\u90a3\u4e2a\u6587\u4ef6",
+            "\u90a3\u4e2a\u76ee\u5f55",
+            ".txt",
+            ".md",
+            ".json",
+            ".csv",
+            ".log",
+            "file",
+            "folder",
+            "directory",
+            "path",
+        )
+    )
+    if not has_file_context:
+        return False
+    reminder_context = any(
+        marker in clean or marker in lowered
+        for marker in (
+            "\u63d0\u9192",
+            "\u5b9a\u65f6\u4efb\u52a1",
+            "\u5b9a\u65f6",
+            "\u95f9\u949f",
+            "reminder",
+            "scheduled task",
+        )
+    )
+    return not reminder_context
+
+
+def _looks_like_high_risk_action_not_reminder_cancel(text: str) -> bool:
+    clean = " ".join(str(text or "").strip().split())
+    lowered = clean.lower()
+    return any(marker in clean for marker in ("\u9ad8\u98ce\u9669", "\u4e0d\u7528\u63d0\u9192\u6211", "\u4e0d\u8981\u63d0\u9192\u6211")) and any(
+        marker in clean or marker in lowered
+        for marker in (
+            "\u76f4\u63a5\u5e2e\u6211\u505a",
+            "\u5e2e\u6211\u505a",
+            "\u76f4\u63a5\u6267\u884c",
+            "\u4e0d\u7528\u786e\u8ba4",
+            "high risk",
+            "do it",
+            "execute",
+        )
+    )
 
 
 def _explicit_once_schedule_request(text: str) -> bool:

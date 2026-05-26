@@ -13,6 +13,8 @@ class ModelAdapterError(RuntimeError):
 def map_http_status(status_code: int, message: str) -> ModelAdapterError:
     if status_code in {401, 403}:
         return ModelAdapterError(ErrorCode.MODEL_AUTH_FAILED, "模型认证失败")
+    if status_code == 429:
+        return ModelAdapterError(ErrorCode.MODEL_UNAVAILABLE, message or "模型服务限流")
     if status_code == 404:
         return ModelAdapterError(
             ErrorCode.MODEL_ENDPOINT_MISMATCH,

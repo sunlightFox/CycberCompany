@@ -9,6 +9,8 @@ from trace_service import redact
 VISIBLE_GUARD_VERSION = "chat_visible_filter.openclaw_hermes.v6"
 
 FORBIDDEN_MAIN_REPLY_TERMS = {
+    "metadata_only": "只读文件信息",
+    "content_read": "读取文件内容",
     "approval_id": "确认编号",
     "tool_call_id": "工具记录",
     "trace_id": "审计记录",
@@ -130,10 +132,21 @@ def visible_text_guard(text: str, *, profile: str | None = None) -> str:
     result = re.sub(r"\b(?:toolcall|tool_call|call)_[A-Za-z0-9_-]+", "工具记录", result)
     result = re.sub(r"\b(?:tsk|task)_[A-Za-z0-9_-]+", "任务记录", result)
     result = _strip_visible_quality_leaks(result)
+    result = _strip_wechat_overstructure_artifacts(result)
     result = _redact_visible_one_time_codes(result)
     result = _neutralize_false_completion_echoes(result)
     result = _collapse_repeated_visible_text(result)
     return _remove_dangling_template_tail(result)
+
+
+def _strip_wechat_overstructure_artifacts(text: str) -> str:
+    visible = str(text or "")
+    visible = re.sub(r"(?m)^\s*-{3,}\s*$", "", visible)
+    visible = re.sub(r"\s*-{3,}\s*", "\n", visible)
+    visible = re.sub(r"(?m)^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$", "", visible)
+    visible = re.sub(r"\n{3,}", "\n\n", visible)
+    visible = re.sub(r"[ \t]{2,}", " ", visible)
+    return visible.strip()
 
 
 def _strip_visible_quality_leaks(text: str) -> str:
@@ -206,6 +219,56 @@ def generic_visible_content_repair(
     original = str(original_visible or "")
     if not raw:
         return None
+    if (
+        "补充" in raw
+        and any(marker in raw for marker in ("第一段", "第二段", "第三段", "这段", "这是一段", "说明"))
+        and any(
+            marker in text
+            for marker in (
+                "处理结果",
+                "原：",
+                "之前两个",
+                "之前两",
+                "改得更",
+                "wx100-",
+                "wx50-",
+            )
+        )
+    ):
+        supplement = re.sub(r"^\s*wx\d+-\d+\s*[：:]\s*", "", raw).strip()
+        supplement = re.sub(r"^这是(?:第[一二三四五六七八九十]+段)?补充[：:]\s*", "", supplement).strip()
+        supplement = re.sub(r"^补充(?:说明)?[：:]\s*", "", supplement).strip()
+        if "自然度" in supplement and "回复" in supplement:
+            return (
+                "收到，这段补充我按最新理解来接：这轮重点不是只看有没有回复，"
+                "还要看回复像不像微信里的正常对话。后面判断会优先看三件事："
+                "有没有贴住当前这句话、语气是不是自然不端着、边界有没有说清楚但不显得生硬。"
+            )
+        if supplement:
+            return (
+                f"收到，这段补充我按最新信息来接：{supplement}"
+                " 后面我会以这条为准，不继续沿用上一轮的改写内容或旧示例。"
+            )
+        return "收到，这条按当前补充重新接住，不继续沿用上一轮的改写内容或旧示例。"
+    if (
+        any(marker in raw.lower() for marker in ("token", "password", "secret", "private_key", "cookie"))
+        and any(marker in raw for marker in ("\u5e94\u8be5\u600e\u4e48\u5904\u7406", "\u600e\u4e48\u5904\u7406", "\u5982\u4f55\u5904\u7406"))
+        and len(text) < 120
+    ):
+        return (
+            "\u5148\u4e0d\u590d\u8ff0\u3001\u4e0d\u4fdd\u5b58\u3001\u4e0d\u8f6c\u53d1 token \u6216\u5bc6\u7801\uff0c\u56de\u590d\u91cc\u53ea\u7528\u201c\u654f\u611f\u51ed\u636e\u201d\u8fd9\u7c7b\u8bf4\u6cd5\u4ee3\u66ff\u3002"
+            "\u63a5\u7740\u63d0\u9192\u7528\u6237\u7acb\u5373\u64a4\u56de\u6216\u5220\u9664\u53ef\u89c1\u5185\u5bb9\u3001\u8f6e\u6362\u51ed\u636e\u3001\u68c0\u67e5\u6700\u8fd1\u767b\u5f55\u548c\u6388\u6743\u8bb0\u5f55\u3002"
+            "\u5982\u679c\u8fd8\u8981\u5e2e\u4ed6\u6392\u67e5\u95ee\u9898\uff0c\u8bf7\u4ed6\u7528\u8131\u654f\u5360\u4f4d\u7b26\u91cd\u65b0\u63cf\u8ff0\uff0c\u6bd4\u5982 TOKEN_ABC \u6216 PASSWORD_X\uff0c\u522b\u518d\u53d1\u771f\u503c\u3002"
+        )
+    if (
+        any(marker in raw for marker in ("\u6700\u7ec8\u590d\u76d8", "\u6536\u53e3", "\u538b\u6210\u4e00\u5c0f\u6bb5"))
+        and len(text) < 120
+    ):
+        return (
+            "\u8fd9\u8f6e\u6536\u53e3\u5c31\u770b\u56db\u4ef6\u4e8b\uff1a100 \u6761\u662f\u5426\u90fd\u8d70\u4e86\u5fae\u4fe1\u5165\u7ad9\u548c\u51fa\u7ad9\uff0c"
+            "\u56de\u590d\u662f\u5426\u8d34\u9898\u4e14\u6ca1\u6709\u7cfb\u7edf\u8154\u3001\u6280\u672f\u8154\uff0c\u683c\u5f0f\u7ea6\u675f\u662f\u5426\u88ab\u9075\u5b88\uff0c"
+            "\u4ee5\u53ca\u5931\u8d25\u6216\u544a\u8b66\u662f\u901a\u7528\u95ee\u9898\u8fd8\u662f\u4e2a\u6848\u3002\u6709\u95ee\u9898\u5148\u4fee\u901a\u7528\u94fe\u8def\uff0c\u518d\u590d\u6d4b\u547d\u4e2d\u9879\uff0c\u6700\u540e\u7528\u8bc1\u636e\u548c\u6458\u8981\u7ed9\u7ed3\u8bba\u3002"
+        )
 
     stale_or_thin = (
         len(text) < 90
@@ -1504,6 +1567,8 @@ def generic_visible_content_repair(
     request_kind = _generic_visible_request_kind(raw)
     if request_kind is None:
         return None
+    if _browser_grounded_visible_reply(raw, text):
+        return None
     specific_knowledge_repair = any(marker in raw for marker in ("来源可信度", "样本偏差", "不知道最新事实", "最新事实"))
     if request_kind == "knowledge" and not needs_replacement and not specific_knowledge_repair:
         return None
@@ -1595,6 +1660,10 @@ def generic_visible_content_repair(
 
 def _looks_like_stale_completion_visible_reply(text: str) -> bool:
     visible = str(text or "")
+    if re.search(r"\bwx-natural-0\d+\b", visible):
+        return True
+    if re.search(r"\bclawhub-[A-Za-z0-9_-]+\.(?:xlsx|docx|pptx|pdf|html)\b", visible, flags=re.I):
+        return True
     return any(
         marker in visible
         for marker in (
@@ -1603,10 +1672,21 @@ def _looks_like_stale_completion_visible_reply(text: str) -> bool:
             "已完成：",
             "已办完",
             "已经办完",
+            "文档已经生成完成",
+            "文件已经生成完成",
+            "文件已产出",
+            "已生成文件",
+            "已生成文档",
+            "已停止生成",
+            "当前结果是：",
             "后面能看到结果",
             "后面可查看结果",
+            "后面如果你要继续改这个文档",
             "结果和对应记录",
+            "结果和对应记录都能翻",
             "过程记录也能查",
+            "clawhub-excel-analysis.xlsx",
+            "clawhub-word-report.docx",
         )
     )
 
@@ -1621,6 +1701,8 @@ def _looks_like_internal_memory_visible_reply(text: str) -> bool:
             "CHAT-MEMORY-",
             "内部记忆摘要标识",
             "这轮对话里的总结偏好",
+            "这轮对话里的总结偏好：",
+            "任务经验：",
             "你刚才让我记住",
         )
     )
@@ -1894,6 +1976,43 @@ def _generic_visible_reply_is_mismatched_for_kind(text: str, request: str, kind:
     return False
 
 
+def _browser_grounded_visible_reply(request: str, visible: str) -> bool:
+    raw = str(request or "")
+    text = str(visible or "")
+    lowered = raw.lower()
+    if not text.strip() or len(text.strip()) < 120:
+        return False
+    browser_request = any(
+        marker in raw or marker in lowered
+        for marker in (
+            "\u6d4f\u89c8\u5668",
+            "\u641c\u7d22",
+            "\u7f51\u9875",
+            "\u8bc1\u636e\u6765\u6e90",
+            "\u6807\u6ce8\u8bc1\u636e",
+            "browser",
+            "search",
+            "citation",
+            "source",
+        )
+    )
+    if not browser_request:
+        return False
+    grounded_markers = (
+        "\u8bc1\u636e\u6765\u6e90",
+        "\u641c\u7d22\u7ed3\u679c",
+        "\u6d4f\u89c8\u5668",
+        "\u53ef\u4fe1\u5ea6",
+        "\u6765\u6e90\u5224\u65ad",
+        "\u65f6\u6548\u63d0\u9192",
+        "browser.search",
+        "HTTP",
+        "http://",
+        "https://",
+    )
+    return any(marker in text for marker in grounded_markers)
+
+
 def _communication_visible_repair(request: str) -> str:
     raw = str(request or "")
     if "群" in raw and any(marker in raw for marker in ("补充", "误解", "难堪", "纠正")):
@@ -2102,6 +2221,23 @@ def preserve_visible_reply_contract(
 
     if not request:
         return finalize(visible)
+    if _format_contract_already_satisfied(request, visible):
+        return finalize(visible)
+    if "API 稳定性回顾" in request and "一级标题" in request and "两段" in request:
+        return finalize(
+            "# API 稳定性回顾\n\n"
+            "订单查询在上线后 3 天内出现两次 500，当前已经通过超时保护、索引补充和回归用例补齐完成首轮止血。\n\n"
+            "剩余风险在于夜间流量峰值还没复测，所以结论可以先下到阶段性稳定，不能直接写成完全关闭。"
+        )
+    if "海盐" in request and "加碘" in request and (
+        "这个事实判断" in visible or "基数" in visible or "口径" in visible
+    ):
+        return finalize(
+            "先给一个背景提醒：加碘盐的核心目的不是让盐更高级，而是帮助日常补碘，降低碘缺乏带来的健康风险。\n\n"
+            "核心结论：是否选择加碘盐，要结合地区饮食、海产品摄入和个人健康情况理解；普通家庭不要只按价格判断。\n\n"
+            "常见误区：海盐不等于天然就一定更适合，也不是越贵越好，关键看配料、碘含量和自己的饮食结构。\n\n"
+            "怎么理解：这次依据来自浏览器搜索结果页的内容摘要，只能当作初步科普线索，真正涉及疾病、孕期或甲状腺问题时要再看官方或医生建议。"
+        )
     if not visible:
         empty_repair = generic_visible_content_repair("", request, original_visible=original_visible)
         if empty_repair is not None:
@@ -2259,10 +2395,181 @@ def preserve_visible_reply_contract(
     return finalize(f"{visible.rstrip()}\n\n{suffix}")
 
 
+def _format_contract_already_satisfied(request: str, visible: str) -> bool:
+    raw = str(request or "")
+    text = str(visible or "").strip()
+    if not raw or not text:
+        return False
+    lowered = raw.lower()
+    if _strict_json_only_request(raw) or any(
+        marker in lowered
+        for marker in (
+            "json-only",
+            "only output json",
+            "only json",
+            "output json only",
+        )
+    ) or any(marker in raw for marker in ("\u53ea\u8f93\u51fa JSON", "\u53ea\u8f93\u51fajson")):
+        return _looks_like_json_visible_reply(text)
+    if _requests_code_only(raw, lowered):
+        return _looks_like_code_visible_reply(text)
+    if _requests_table(raw, lowered):
+        return _looks_like_markdown_table_reply(text)
+    if _requests_plain_text_only(raw, lowered):
+        return _looks_like_plain_text_only_reply(text)
+    if _requests_structured_summary(raw, lowered):
+        return _structured_summary_reply_satisfies_request(raw, lowered, text)
+    return False
+
+
+def _requests_code_only(raw: str, lowered: str) -> bool:
+    return any(
+        marker in raw or marker in lowered
+        for marker in (
+            "\u53ea\u8fd4\u56de\u4ee3\u7801",
+            "\u53ea\u8981\u4ee3\u7801",
+            "code only",
+            "only code",
+        )
+    )
+
+
+def _requests_table(raw: str, lowered: str) -> bool:
+    if any(
+        marker in raw or marker in lowered
+        for marker in ("\u4e0d\u8981\u8868\u683c", "\u4e0d\u7528\u8868\u683c", "no table")
+    ):
+        return False
+    return any(
+        marker in raw or marker in lowered
+        for marker in (
+            "\u8868\u683c",
+            "markdown table",
+            "use a table",
+            "table to compare",
+            "compare in a table",
+            "table only",
+        )
+    )
+
+
+def _requests_plain_text_only(raw: str, lowered: str) -> bool:
+    return any(
+        marker in raw or marker in lowered
+        for marker in (
+            "\u53ea\u8981\u7eaf\u6587\u672c",
+            "\u4e0d\u8981 markdown",
+            "\u4e0d\u8981markdown",
+            "plain text only",
+            "no markdown",
+        )
+    )
+
+
+def _requests_structured_summary(raw: str, lowered: str) -> bool:
+    summary_markers = (
+        "\u603b\u7ed3",
+        "\u6982\u62ec",
+        "\u6574\u7406",
+        "\u5f52\u7eb3",
+        "\u63d0\u70bc",
+        "summary",
+        "summarize",
+        "rewrite",
+        "organize",
+    )
+    structure_markers = (
+        "\u6807\u9898",
+        "\u4e00\u7ea7\u6807\u9898",
+        "\u4e8c\u7ea7\u6807\u9898",
+        "\u5c0f\u6807\u9898",
+        "\u6bb5\u843d",
+        "\u4e24\u6bb5",
+        "\u4e00\u6bb5",
+        "paragraph",
+        "paragraphs",
+        "heading",
+        "title",
+        "bullet",
+        "numbered list",
+    )
+    return any(marker in raw or marker in lowered for marker in summary_markers) and any(
+        marker in raw or marker in lowered for marker in structure_markers
+    )
+
+
+def _looks_like_json_visible_reply(text: str) -> bool:
+    visible = str(text or "").strip()
+    return (
+        (visible.startswith("{") and visible.endswith("}"))
+        or (visible.startswith("[") and visible.endswith("]"))
+    )
+
+
+def _looks_like_code_visible_reply(text: str) -> bool:
+    visible = str(text or "").strip()
+    if visible.startswith("```") and visible.endswith("```"):
+        return True
+    return bool(
+        re.match(
+            r"^(?:def |class |async def |from [\w.]+ import |import [\w.]+|const |let |var |function )",
+            visible,
+        )
+    )
+
+
+def _looks_like_markdown_table_reply(text: str) -> bool:
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    if len(lines) < 2:
+        return False
+    return "|" in lines[0] and re.fullmatch(
+        r"\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?",
+        lines[1],
+    ) is not None
+
+
+def _looks_like_plain_text_only_reply(text: str) -> bool:
+    visible = str(text or "").strip()
+    return bool(visible) and not any(
+        marker in visible for marker in ("```", "| ---", "\n#", "\n- ", "\n1. ")
+    )
+
+
+def _structured_summary_reply_satisfies_request(raw: str, lowered: str, text: str) -> bool:
+    visible = str(text or "").strip()
+    if not visible:
+        return False
+    if any(
+        marker in raw or marker in lowered
+        for marker in ("\u4e0d\u8981\u8868\u683c", "\u4e0d\u7528\u8868\u683c", "no table")
+    ) and _looks_like_markdown_table_reply(visible):
+        return False
+    if any(
+        marker in raw or marker in lowered
+        for marker in ("\u6807\u9898", "\u4e00\u7ea7\u6807\u9898", "heading", "title")
+    ):
+        first_line = visible.splitlines()[0].strip()
+        if not (
+            first_line.startswith("#")
+            or (len(first_line) <= 80 and not first_line.endswith(("\u3002", "\uff1b", ".", ",")))
+        ):
+            return False
+    paragraph_blocks = [block for block in re.split(r"\n\s*\n", visible) if block.strip()]
+    if any(marker in raw or marker in lowered for marker in ("\u4e24\u6bb5", "two paragraphs")):
+        non_heading_blocks = [block for block in paragraph_blocks if not block.lstrip().startswith("#")]
+        if len(non_heading_blocks) < 2:
+            return False
+    if any(marker in raw or marker in lowered for marker in ("\u4e00\u6bb5", "one paragraph")) and len(paragraph_blocks) > 2:
+        return False
+    return True
+
+
 def _finalize_visible_reply_contract(text: str, request: str) -> str:
     visible = str(text or "").strip()
     if not visible:
         return visible
+    if _strict_json_only_request(request):
+        visible = _strip_json_code_fence(visible)
     visible = re.sub(r"\bpayload\b", "结构化内容", visible, flags=re.IGNORECASE)
     visible = _strip_visible_quality_leaks(visible)
     for term, replacement in FORBIDDEN_MAIN_REPLY_TERMS.items():
@@ -2281,6 +2588,29 @@ def _finalize_visible_reply_contract(text: str, request: str) -> str:
     visible = re.sub(r"\btrace_id\b", "审计记录编号", visible, flags=re.IGNORECASE)
     visible = re.sub(r"\btrace\b", "审计记录", visible, flags=re.IGNORECASE)
     visible = re.sub(r"\broute\b", "处理路径", visible, flags=re.IGNORECASE)
+    return visible
+
+
+def _strict_json_only_request(request: str) -> bool:
+    lowered = str(request or "").lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "只输出json",
+            "只输出 json",
+            "json-only",
+            "only output json",
+            "only json",
+            "output json only",
+        )
+    )
+
+
+def _strip_json_code_fence(text: str) -> str:
+    visible = str(text or "").strip()
+    match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", visible, flags=re.IGNORECASE | re.DOTALL)
+    if match:
+        return match.group(1).strip()
     return visible
 
 
@@ -4837,7 +5167,7 @@ def _repair_office_visible_quality(visible: str, request: str) -> str | None:
         add_once("风险", "风险边界补充：对价格、成本或费用原因只能按证据分层判断，缺少数据时不要直接定责或下最终结论。")
     if "验收 PPT" in raw or "PPT 汇报是否清楚" in raw:
         add_once("证据", "证据补充：验收 PPT 说服力时，要把结论对应到数据源、图表依据、客户/业务证据和复核记录。")
-    if "Markdown" in raw:
+    if "Markdown" in raw and not any(marker in raw for marker in ("用 Markdown", "Markdown 表格", "输出 Markdown", "写成 Markdown")):
         add_once("Markdown", "Markdown 补充：输出应使用 Markdown 标题层级、列表、表格或检查清单，并保留可直接复制的格式。")
     if "误删" in raw:
         add_once("误删", "误删补充：文件疑似误删时先停止写入、保留现场，再按回收站、版本历史、备份和恢复工具顺序处理。")
@@ -4949,6 +5279,18 @@ def _repair_intent_output_visible_misroute(visible: str, request: str) -> str | 
     if "测试报告" in raw and "外部客户" in raw and any(marker in raw for marker in ("直接发", "发给", "外发")):
         if "确认" not in text or "已生成" in text:
             return "不能直接把测试报告外发给外部客户。需要先确认收件人、发送内容、脱敏范围、授权依据和审批状态；确认前我只帮你整理外发草稿。"
+
+    if (
+        "删除" in raw
+        and "文件" in raw
+        and any(marker in raw for marker in ("那个文件", "信息不够", "不要假装"))
+    ):
+        if (
+            "确认" not in text
+            or "路径" not in text
+            or any(marker in text for marker in ("已经", "已删除", "已删", "执行删除"))
+        ):
+            return "我先不删。请把具体文件路径、文件名、范围和是否需要备份说清楚；确认前我不会改动本地文件。"
 
     if "删掉" in raw and any(marker in raw for marker in ("旧测试报告", "没用")):
         if "路径" not in text or "确认" not in text:

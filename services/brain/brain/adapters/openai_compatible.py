@@ -415,7 +415,7 @@ def _extract_chat_message_text(message: dict[str, Any]) -> str:
                     candidates.append(text)
                 if isinstance(item.get("content"), str):
                     candidates.append(str(item["content"]))
-    for key in ("reasoning_content", "reasoning", "output_text", "text"):
+    for key in ("output_text", "text"):
         value = message.get(key)
         if isinstance(value, str):
             candidates.append(value)
@@ -502,7 +502,7 @@ def _extract_chat_delta_text(delta: dict[str, Any]) -> str:
                 text = item.get("text")
                 if isinstance(text, str):
                     candidates.append(text)
-    for key in ("reasoning_content", "reasoning", "text"):
+    for key in ("text",):
         value = delta.get(key)
         if isinstance(value, str):
             candidates.append(value)

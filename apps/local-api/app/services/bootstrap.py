@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import tomllib
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from core_types import MemberStatus
@@ -16,11 +14,13 @@ from app.db.session import Database
 DEFAULT_ORGANIZATION_ID = "org_default"
 DEFAULT_USER_ID = "user_local_owner"
 DEFAULT_BRAIN_ID = "brain_not_configured"
-DEFAULT_CODEX_API_KEY_ENV = "OPENAI_API_KEY"
-DEFAULT_CODEX_API_KEY_REF = "codex-auth://OPENAI_API_KEY"
-DEFAULT_CODEX_DISPLAY_NAME = "Codex Default Brain"
-DEFAULT_CODEX_MODEL = "gpt-5.4-mini"
-DEFAULT_CODEX_REASONING_EFFORT = "medium"
+DEFAULT_CODEX_API_KEY_ENV = "EDGEFN_API_KEY"
+DEFAULT_CODEX_API_KEY_REF = "env://EDGEFN_API_KEY"
+DEFAULT_CODEX_DISPLAY_NAME = "EdgeFn Default Brain"
+DEFAULT_CODEX_ENDPOINT = "https://api.edgefn.net/v1"
+DEFAULT_CODEX_MODEL = "MiniMax-M2.5"
+DEFAULT_CODEX_CONTEXT_WINDOW = 1000000
+DEFAULT_CODEX_REASONING_EFFORT = "high"
 DEFAULT_CODEX_TEXT_VERBOSITY = "medium"
 DEFAULT_VOICE_PROFILE_ID = "vpr_default_edge"
 DEFAULT_MEMBER_VOICE_IDS = {
@@ -384,10 +384,10 @@ class BootstrapService:
             None,
             "",
             env_ref,
+            DEFAULT_CODEX_API_KEY_REF,
         } or (
             is_managed_codex_default
-            and seed_ref == env_ref
-            and os.environ.get(DEFAULT_CODEX_API_KEY_ENV)
+            and seed_ref in {env_ref, DEFAULT_CODEX_API_KEY_REF}
         ):
             fields["api_key_ref"] = seed_ref
         else:
@@ -419,13 +419,13 @@ class BootstrapService:
             "supports_audio": False,
             "cost_policy": {
                 "mode": "cloud",
-                "profile": "codex_current_default",
+                "profile": "edgefn_minimax_m25",
             },
             "privacy_policy": {
                 "allow_cloud": True,
-                "provider_display_name": "OpenAI",
+                "provider_display_name": "EdgeFn",
                 "adapter_family": "openai_compatible",
-                "codex_profile": "current_codex",
+                "codex_profile": "edgefn_minimax_m25",
                 "codex_wire_api": runtime["wire_api"],
                 "codex_provider": runtime["codex_provider"],
                 "requires_openai_auth": runtime["requires_openai_auth"],
@@ -844,79 +844,14 @@ class BootstrapService:
 
 def _read_codex_runtime_config() -> dict[str, Any]:
     endpoint_override = os.environ.get("CYCBER_REAL_MODEL_ENDPOINT")
-    fallback = {
-        "codex_provider": "openai",
-        "provider": "openai",
-        "endpoint": endpoint_override or "https://api.openai.com/v1",
+    return {
+        "codex_provider": "edgefn",
+        "provider": "openai_compatible",
+        "endpoint": endpoint_override or DEFAULT_CODEX_ENDPOINT,
         "model": DEFAULT_CODEX_MODEL,
-        "wire_api": "responses",
+        "wire_api": "chat_completions",
         "reasoning_effort": DEFAULT_CODEX_REASONING_EFFORT,
         "requires_openai_auth": False,
-        "api_key_ref": (
-            f"env://{DEFAULT_CODEX_API_KEY_ENV}"
-            if os.environ.get(DEFAULT_CODEX_API_KEY_ENV)
-            else None
-        ),
-        "context_window": 400000,
+        "api_key_ref": DEFAULT_CODEX_API_KEY_REF,
+        "context_window": DEFAULT_CODEX_CONTEXT_WINDOW,
     }
-    config_path = Path.home() / ".codex" / "config.toml"
-    if not config_path.exists():
-        return fallback
-    try:
-        data = tomllib.loads(config_path.read_text(encoding="utf-8"))
-    except Exception:
-        return fallback
-
-    provider_id = str(data.get("model_provider") or fallback["codex_provider"])
-    provider_config = {}
-    providers = data.get("model_providers")
-    if isinstance(providers, dict):
-        raw_provider = providers.get(provider_id)
-        if isinstance(raw_provider, dict):
-            provider_config = raw_provider
-
-    endpoint = str(endpoint_override or provider_config.get("base_url") or fallback["endpoint"])
-    wire_api = _codex_wire_api(provider_config.get("wire_api") or fallback["wire_api"])
-    requires_openai_auth = bool(provider_config.get("requires_openai_auth", False))
-    api_key_ref = None
-    if os.environ.get(DEFAULT_CODEX_API_KEY_ENV):
-        api_key_ref = f"env://{DEFAULT_CODEX_API_KEY_ENV}"
-    elif requires_openai_auth and _codex_auth_has_openai_key():
-        api_key_ref = DEFAULT_CODEX_API_KEY_REF
-
-    return {
-        **fallback,
-        "codex_provider": provider_id,
-        "provider": "openai_compatible",
-        "endpoint": endpoint,
-        "model": DEFAULT_CODEX_MODEL,
-        "wire_api": wire_api,
-        "reasoning_effort": DEFAULT_CODEX_REASONING_EFFORT,
-        "requires_openai_auth": requires_openai_auth,
-        "api_key_ref": api_key_ref,
-    }
-
-
-def _codex_auth_has_openai_key() -> bool:
-    auth_path = Path.home() / ".codex" / "auth.json"
-    if not auth_path.exists():
-        return False
-    try:
-        data = json.loads(auth_path.read_text(encoding="utf-8"))
-    except Exception:
-        return False
-    return isinstance(data, dict) and bool(data.get(DEFAULT_CODEX_API_KEY_ENV))
-
-
-def _codex_wire_api(value: Any) -> str:
-    candidate = str(value or "").strip().lower()
-    return candidate if candidate in {"responses", "chat_completions"} else "responses"
-
-
-def _codex_reasoning_effort(value: Any) -> str:
-    candidate = str(value or "").strip().lower()
-    return (
-        candidate
-        if candidate in {"minimal", "low", "medium", "high"}
-        else DEFAULT_CODEX_REASONING_EFFORT
-    )

@@ -765,6 +765,12 @@ class ChatRepository:
                 (content_text, message_id),
             )
 
+    async def update_event_payload(self, event_id: str, payload: dict[str, Any]) -> None:
+        await self._db.execute(
+            "UPDATE chat_events SET payload_json = ? WHERE event_id = ?",
+            (json.dumps(payload, ensure_ascii=False), event_id),
+        )
+
     async def insert_queue_item(self, data: dict[str, Any]) -> None:
         await self._db.execute(
             """

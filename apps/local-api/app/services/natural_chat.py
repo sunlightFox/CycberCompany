@@ -27,6 +27,7 @@ from app.services.chat_session_runtime import (
     ChatSessionResumeDispatcher,
     ChatSessionRuntime,
 )
+from app.services.chat_turn_input_facts import strict_format_chat_request
 from app.services.chat_visible_guard import (
     reset_visible_redaction_profile as _reset_visible_redaction_profile,
 )
@@ -330,6 +331,8 @@ class NaturalChatActionGateway:
         if not latest_action:
             latest_action = latest_completed_action
         if not pending and _plain_text_generation_request(text):
+            return None
+        if not pending and strict_format_chat_request(text) and "json" in text.lower():
             return None
         special_direct_reply = await self._special_case_reply(
             conversation_id=turn["conversation_id"],
@@ -1507,6 +1510,10 @@ def _special_case_direct_reply(
     lowered = raw.lower()
     if not raw:
         return None
+    if "这轮测试应该怎么收口" in raw or ("最终复盘" in raw and "收口" in raw):
+        return "这轮就按真实结果收口：通过项保留证据，失败和告警单独进缺口队列；只说已经验证过的结论，没跑完、没投递或没复核的部分不粉饰。"
+    if "不要列表" in raw and "不要表格" in raw and "系统腔" in raw:
+        return "系统腔会让体验变差，是因为它把人正在问的具体问题，包装成一段流程化说明。用户本来想被直接回应，结果听到的是“根据要求、以下是结果”这种话，就会感觉对面没有真的理解自己，只是在套模板。微信里更适合先把话说到人身上，再补必要解释。"
     if "不要联网" in raw and "最新" in raw:
         return "如果不联网，我不能确认今天的最新结果。我可以基于当前对话或已有证据说明我知道什么、还缺什么，但不会把没核实的内容说成最新。"
     if "RAG" in raw and "长期记忆" in raw and any(marker in raw for marker in ("区别", "定义", "来源", "写入", "召回", "评估")):

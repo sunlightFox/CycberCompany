@@ -96,6 +96,10 @@ def memory_query(text: str) -> bool:
 
 
 def memory_write(text: str) -> bool:
+    if any(marker in text for marker in ["之前", "什么", "记住了什么", "让你记住"]):
+        return False
+    if any(marker in text for marker in ["删除", "文件", "转账", "付款", "发布", "打开", "点击"]):
+        return False
     return any(marker in text for marker in ["记住", "帮我记住", "以后按这个"])
 
 

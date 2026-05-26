@@ -877,6 +877,8 @@ class ResponseComposer:
         code_value = code.value if isinstance(code, ErrorCode) else code
         if code_value == ErrorCode.MODEL_AUTH_FAILED.value:
             return "模型认证失败，请检查大脑配置中的密钥或 endpoint。"
+        if code_value == ErrorCode.MODEL_UNAVAILABLE.value:
+            return "模型服务暂时不可用或被限流，可以稍后重试；我不会把这轮说成已经完成。"
         if code_value == ErrorCode.MODEL_TIMEOUT.value:
             return "模型响应超时，可以稍后重试或切换到更快的本地模型。"
         if code_value == ErrorCode.MODEL_ROUTE_BLOCKED_BY_PRIVACY.value:
@@ -2078,6 +2080,11 @@ def _normalize_heading_markup(text: str) -> str:
     if not match:
         return "\n".join(lines).strip()
     marker, remainder = match.groups()
+    duplicated = re.match(r"^(#{1,3})\s+(.+)$", remainder.strip())
+    if duplicated:
+        extra_marker, extra_remainder = duplicated.groups()
+        marker = "#" * min(3, len(marker) + len(extra_marker))
+        remainder = extra_remainder
     title = re.split(r"[。！？!?]", remainder, maxsplit=1)[0].strip()
     body = remainder[len(title):].strip()
     lines[first_nonempty] = f"{marker} {title}"

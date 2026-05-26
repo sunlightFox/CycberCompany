@@ -6,6 +6,8 @@ from typing import Any
 
 import pytest
 from brain.adapters import CancelToken, ModelChatRequest, OpenAICompatibleClient
+from brain.adapters.errors import map_http_status
+from core_types import ErrorCode
 
 
 def _request(*, stream: bool) -> ModelChatRequest:
@@ -23,6 +25,13 @@ def _request(*, stream: bool) -> ModelChatRequest:
         privacy_level="low",
         retry_count=0,
     )
+
+
+def test_openai_compatible_maps_429_to_model_unavailable() -> None:
+    error = map_http_status(429, "qpm limit exceeded")
+
+    assert error.code == ErrorCode.MODEL_UNAVAILABLE
+    assert "qpm limit exceeded" in error.message
 
 
 class _MockResponse:
@@ -87,6 +96,7 @@ class _MockAsyncClient:
                         {
                             "message": {
                                 "role": "assistant",
+                                "content": "pong-from-content",
                                 "reasoning_content": "pong-from-reasoning",
                             },
                             "finish_reason": "stop",
@@ -123,6 +133,7 @@ class _MockAsyncClient:
             return _MockResponse(
                 lines=[
                     'data: {"choices":[{"delta":{"reasoning_content":"pong"}}]}',
+                    'data: {"choices":[{"delta":{"content":"visible-pong"}}]}',
                     'data: {"choices":[{"finish_reason":"stop"}],"usage":{"completion_tokens":1}}',
                 ],
                 content_type="text/event-stream",
@@ -206,7 +217,7 @@ class _PayloadCaptureAsyncClient(_MockAsyncClient):
 
 
 @pytest.mark.anyio
-async def test_openai_compatible_chat_completion_accepts_reasoning_content(
+async def test_openai_compatible_chat_completion_ignores_reasoning_content(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("brain.adapters.openai_compatible.httpx.AsyncClient", _MockAsyncClient)
@@ -218,12 +229,12 @@ async def test_openai_compatible_chat_completion_accepts_reasoning_content(
 
     result = await client.complete_chat(_request(stream=False), CancelToken())
 
-    assert result.text == "pong-from-reasoning"
+    assert result.text == "pong-from-content"
     assert result.finish_reason == "stop"
 
 
 @pytest.mark.anyio
-async def test_openai_compatible_chat_stream_accepts_reasoning_content(
+async def test_openai_compatible_chat_stream_ignores_reasoning_content(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("brain.adapters.openai_compatible.httpx.AsyncClient", _MockAsyncClient)
@@ -238,7 +249,8 @@ async def test_openai_compatible_chat_stream_accepts_reasoning_content(
         async for event in client.stream_chat(_request(stream=True), CancelToken())
     ]
 
-    assert any(event.event == "delta" and event.text == "pong" for event in events)
+    assert not any(event.event == "delta" and event.text == "pong" for event in events)
+    assert any(event.event == "delta" and event.text == "visible-pong" for event in events)
     assert any(event.event == "completed" for event in events)
 
 

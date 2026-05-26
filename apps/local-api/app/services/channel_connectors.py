@@ -1273,7 +1273,7 @@ class WechatClawbotConnector:
         client = session["client"]
         qrcode = session.get("qrcode")
         try:
-            login_result = await _maybe_await(client.wait_for_login(qrcode, timeout=0))
+            login_result = await _maybe_await(client.wait_for_login(qrcode, timeout_seconds=1))
         except TypeError:
             if qrcode is not None:
                 login_result = await _maybe_await(client.wait_for_login(qrcode))

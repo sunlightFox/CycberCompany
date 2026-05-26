@@ -777,6 +777,27 @@ class ChannelRepository:
             (*fields.values(), channel_delivery_binding_id),
         )
 
+    async def claim_delivery_binding(
+        self,
+        channel_delivery_binding_id: str,
+        *,
+        now: str,
+    ) -> dict[str, Any] | None:
+        rowcount = await self._db.execute(
+            """
+            UPDATE channel_delivery_bindings
+            SET status = 'sending',
+                attempts = attempts + 1,
+                updated_at = ?
+            WHERE channel_delivery_binding_id = ?
+              AND status = 'pending'
+            """,
+            (now, channel_delivery_binding_id),
+        )
+        if rowcount != 1:
+            return None
+        return await self.get_delivery_binding(channel_delivery_binding_id)
+
     async def upsert_feishu_connection(self, data: dict[str, Any]) -> dict[str, Any]:
         existing = await self._db.fetch_one(
             """

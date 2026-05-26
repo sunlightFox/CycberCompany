@@ -1515,6 +1515,15 @@ class MemoryService:
         if recent_named_reply is not None:
             return recent_named_reply
         preference_only = explicit_preference_recall_query(text)
+        if preference_only:
+            recent_preference_reply = await self._recent_reply_preference_reply(
+                text=text,
+                conversation_id=conversation_id,
+            )
+            if recent_preference_reply is not None:
+                return recent_preference_reply
+            if any(marker in str(text or "") for marker in ("现在", "这轮", "刚才", "当前")):
+                return "这轮当前还没有可确认的回复偏好；如果你想让我按某个顺序来，可以直接说“先给结论，再看风险”之类的口径。"
         search_response = await self.search(
             MemorySearchApiRequest(
                 query=text,
@@ -1574,6 +1583,29 @@ class MemoryService:
                     summary = _named_memory_summary_from_text(body, target)
                     if summary:
                         return summary
+        return None
+
+    async def _recent_reply_preference_reply(
+        self,
+        *,
+        text: str,
+        conversation_id: str,
+    ) -> str | None:
+        if not any(marker in str(text or "") for marker in ("回复偏好", "回复顺序", "先说风险", "先给结论")):
+            return None
+        recent_messages = await self._chat.list_recent_messages(conversation_id, limit=40)
+        for message in reversed(recent_messages):
+            body = _recent_message_text(message)
+            if not body or body == str(text or "").strip():
+                continue
+            if any(marker in body for marker in ("先给结论", "先结论")) and any(
+                marker in body for marker in ("再看风险", "再说风险", "再解释", "再看原因")
+            ):
+                return "你这轮当前的回复偏好是：先给结论，再看风险。"
+            if any(marker in body for marker in ("先说风险", "先讲风险", "先看风险")) and any(
+                marker in body for marker in ("再说结论", "再给结论", "再看结论")
+            ):
+                return "你这轮当前的回复偏好是：先说风险，再给结论。"
         return None
 
     async def approve_candidate(

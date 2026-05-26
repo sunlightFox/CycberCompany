@@ -6,6 +6,8 @@ from typing import cast
 import anyio
 from app.services.bootstrap import (
     DEFAULT_BRAIN_ID,
+    DEFAULT_CODEX_API_KEY_REF,
+    DEFAULT_CODEX_CONTEXT_WINDOW,
     DEFAULT_CODEX_DISPLAY_NAME,
     DEFAULT_CODEX_MODEL,
     DEFAULT_CODEX_TEXT_VERBOSITY,
@@ -40,10 +42,10 @@ def test_boot_001_first_start_creates_default_foundation(client: TestClient) -> 
     assert default_brain["status"] in {"configured", "needs_configuration"}
     assert default_brain["is_local"] is False
     assert default_brain["allow_cloud"] is True
-    assert default_brain["protocol_family"] == "responses"
-    assert default_brain["request_format"] == "responses"
-    assert default_brain["response_format"] == "openai_responses"
-    assert default_brain["context_window"] == 400000
+    assert default_brain["protocol_family"] == "chat_completions"
+    assert default_brain["request_format"] == "chat_completions"
+    assert default_brain["response_format"] == "auto"
+    assert default_brain["context_window"] == DEFAULT_CODEX_CONTEXT_WINDOW
     assert default_brain["privacy_policy"]["reasoning_effort"] in {
         "minimal",
         "low",
@@ -121,7 +123,7 @@ def test_boot_003_startup_repairs_missing_welcome_message(client: TestClient) ->
     )
 
 
-def test_boot_004_managed_codex_default_prefers_current_env_api_key(
+def test_boot_004_managed_default_brain_prefers_edgefn_env_key_ref(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -130,14 +132,14 @@ def test_boot_004_managed_codex_default_prefers_current_env_api_key(
     root_dir = Path(__file__).resolve().parents[3]
     monkeypatch.setenv("CYCBER_ROOT", str(root_dir))
     monkeypatch.setenv("CYCBER_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-current-env")
+    monkeypatch.setenv("EDGEFN_API_KEY", "sk-current-env")
     with TestClient(create_app()) as test_client:
         registry = cast(FastAPI, test_client.app).state.registry
         anyio.run(_set_default_brain_api_key_ref, registry, "sec_stale_local")
         anyio.run(registry.bootstrap_service.ensure_defaults)
         brain = anyio.run(_default_brain_row, registry)
 
-    assert brain["api_key_ref"] == "env://OPENAI_API_KEY"
+    assert brain["api_key_ref"] == DEFAULT_CODEX_API_KEY_REF
     assert brain["status"] == "configured"
 
 

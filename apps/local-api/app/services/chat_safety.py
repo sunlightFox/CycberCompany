@@ -57,13 +57,15 @@ _SAFETY_PHRASE_REPLACEMENTS: tuple[tuple[re.Pattern[str], str, str], ...] = (
 )
 
 _INTERNAL_TOOL_LEAK_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"<\s*/?\s*invokename\b[^>]*>", re.IGNORECASE), "model_tool_xml"),
+    (re.compile(r"<\s*/?\s*parametername\b[^>]*>", re.IGNORECASE), "model_tool_xml"),
     (re.compile(r"<\s*/?\s*minimax:tool_call\b[^>]*>", re.IGNORECASE), "model_tool_xml"),
     (re.compile(r"<\s*/?\s*invoke\b[^>]*>", re.IGNORECASE), "model_tool_xml"),
     (re.compile(r"<\s*/?\s*tool_call\b[^>]*>", re.IGNORECASE), "model_tool_xml"),
     (
         re.compile(
             r"```(?:json|python|javascript|ts|typescript)?\s*"
-            r"<\s*(?:invoke|minimax:tool_call|tool_call)\b.*?```",
+            r"<\s*(?:invokename|parametername|invoke|minimax:tool_call|tool_call)\b.*?```",
             re.IGNORECASE | re.DOTALL,
         ),
         "model_tool_code_fence",

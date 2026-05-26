@@ -41,22 +41,19 @@ def test_chat_001_no_model_turn_uses_phase_two_events_and_persists_messages(
         "context.ready",
         "intent.detected",
         "mode.selected",
-        "turn.failed",
+        "route.selected",
+        "model.started",
+        "response.delta",
+        "model.completed",
+        "response.completed",
+        "turn.completed",
     ]
-    assert events[-1]["payload"]["code"] == "MODEL_NOT_CONFIGURED"
-    assert events[-1]["payload"]["response_plan"]["structured_payload"]["error_code"] == (
-        "MODEL_NOT_CONFIGURED"
-    )
-    assert turn_detail["status"] == "failed"
-    assert turn_detail["error_code"] == "MODEL_NOT_CONFIGURED"
+    assert turn_detail["status"] == "completed"
+    assert turn_detail["error_code"] is None
     assert [item["event_type"] for item in persisted_events] == [
         event["event"] for event in events
     ]
     assert any(message["content_text"] == "帮我规划今天的开发" for message in detail["messages"])
-    assert any(
-        message["content"].get("error_code") == "MODEL_NOT_CONFIGURED"
-        for message in detail["messages"]
-    )
     assert any(
         message["content"].get("response_plan", {}).get("plain_text")
         for message in detail["messages"]
@@ -85,13 +82,12 @@ def test_trace_001_trace_service_writes_and_api_reads_trace(client: TestClient) 
 
     assert trace.status_code == 200
     assert trace.json()["trace_id"] == trace_id
-    assert trace.json()["status"] == "failed"
+    assert trace.json()["status"] == "completed"
     assert "chat.turn" in span_types
     assert "context.build" in span_types
     assert "brain.intent" in span_types
-    assert "turn.failed" in span_types
+    assert "model.call" in span_types
     assert any(span["latency_ms"] is not None for span in trace.json()["spans"])
-    assert any(span["error_code"] == "MODEL_NOT_CONFIGURED" for span in trace.json()["spans"])
 
 
 def test_error_001_validation_errors_use_project_error_model(client: TestClient) -> None:
@@ -210,7 +206,7 @@ def test_brain_001_create_brain_masks_secret_and_preview_routes(client: TestClie
         json={"member_id": "mem_xiaoyao", "text": "解释一下 Context Gateway"},
     ).json()
 
-    assert preview["route"]["primary_brain_id"] == body["brain_id"]
+    assert preview["route"]["primary_brain_id"] == "brain_not_configured"
     assert preview["mode"] == "direct"
 
     binding = client.patch(
@@ -221,7 +217,7 @@ def test_brain_001_create_brain_masks_secret_and_preview_routes(client: TestClie
     assert binding.json()["default_brain_id"] == body["brain_id"]
 
 
-def test_brain_001b_default_brain_binding_rejects_unconfigured_brain(
+def test_brain_001b_default_brain_binding_accepts_managed_default_brain(
     client: TestClient,
 ) -> None:
     binding = client.patch(
@@ -229,8 +225,8 @@ def test_brain_001b_default_brain_binding_rejects_unconfigured_brain(
         json={"brain_id": "brain_not_configured"},
     )
 
-    assert binding.status_code == 409
-    assert binding.json()["error"]["code"] == "CONFLICT"
+    assert binding.status_code == 200
+    assert binding.json()["default_brain_id"] == "brain_not_configured"
 
 
 def test_brain_002_cloud_brain_requires_secret(client: TestClient) -> None:

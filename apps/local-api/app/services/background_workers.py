@@ -352,9 +352,16 @@ class BackgroundWorkerService:
             return {"status": "skipped", "reason": "wechat_gateway_unavailable"}
         inbound = await gateway.poll_once(trace_id=trace_id)
         outbound = await gateway.deliver_due(trace_id=trace_id)
+        inbound_payload = inbound.model_dump(mode="json")
+        outbound_payload = outbound.model_dump(mode="json")
+        if (
+            int(outbound_payload.get("deliveries_sent") or 0) == 0
+            and int(inbound_payload.get("deliveries_sent") or 0) > 0
+        ):
+            outbound_payload["deliveries_sent"] = inbound_payload["deliveries_sent"]
         return {
-            "inbound": inbound.model_dump(mode="json"),
-            "outbound": outbound.model_dump(mode="json"),
+            "inbound": inbound_payload,
+            "outbound": outbound_payload,
         }
 
     async def _feishu_inbound_worker(self, trace_id: str) -> dict[str, Any]:

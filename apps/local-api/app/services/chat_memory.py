@@ -94,6 +94,8 @@ class ChatMemoryCoordinator:
         text = user_text.strip()
         if not text:
             return False
+        if any(marker in text for marker in ("之前", "什么", "记住了什么", "让你记住")):
+            return False
         if self.explicit_memory_query(text):
             return False
         remember_markers = EXPLICIT_COMMAND_MARKERS[:-4]

@@ -4,6 +4,7 @@ import html
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from html.parser import HTMLParser
 from typing import Any
 
 from brain.adapters import ModelAdapterError
@@ -350,7 +351,7 @@ def direct_route_reply(route_type: str, user_text: str) -> tuple[str, str, dict[
         )
     if route_type == "skill_mcp_concept":
         return (
-            "Skill 更像平台内已经接好的能力封装；MCP 更像把外部工具或服务按协议接进来。前者偏产品化能力，后者偏连接标准。",
+            "Skill 更像平台内已经接好的能力封装；MCP 更像把外部工具或服务按协议接进来。它们都不能绕过资产权限：涉及账号、钱包、密钥或文件时，仍然要走 Asset Broker、权限判断和安全审批。",
             "skill_mcp_concept",
             {"concept_reply": {"kind": "skill_mcp_difference"}},
         )
@@ -416,9 +417,11 @@ def browser_read_page_reply(result: dict[str, Any]) -> str:
 
 
 def browser_read_page_error_reply(exc: AppError) -> str:
-    if exc.error_code == "browser_file_url_denied":
+    error_code = str(getattr(exc, "error_code", None) or getattr(exc, "code", ""))
+    reason_codes = set((getattr(exc, "details", {}) or {}).get("reason_codes") or [])
+    if error_code == "browser_file_url_denied" or "browser_file_url_denied" in reason_codes:
         return "不能直接打开本机 file:// 路径；这会越过受控边界。"
-    if exc.error_code in {"browser_metadata_url_denied", "browser_private_network_denied", "browser_url_denied"}:
+    if error_code in {"browser_metadata_url_denied", "browser_private_network_denied", "browser_url_denied"} or reason_codes.intersection({"browser_metadata_url_denied", "browser_private_network_denied", "browser_url_denied"}):
         return "不能访问 metadata 或私网敏感地址；安全策略已拒绝访问，也已经拦下来了。"
     return "这次没能顺利读到页面内容，你可以换个地址或稍后再试。"
 
@@ -491,7 +494,106 @@ def browser_visible_text(raw: str) -> str:
 
 
 def clean_browser_text(value: str) -> str:
-    return html.unescape(str(value or "")).replace("\u00a0", " ").strip()
+    text = html.unescape(str(value or "")).replace("\u00a0", " ").strip()
+    if _looks_like_html_document(text):
+        text = _html_to_visible_text(text)
+    text = _restore_compact_browser_phrases(text)
+    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _looks_like_html_document(text: str) -> bool:
+    candidate = str(text or "")
+    return bool(re.search(r"(?is)<\s*(?:!doctype|html|head|body|title|main|p|div|h[1-6]|a)\b", candidate))
+
+
+class _VisibleHtmlTextParser(HTMLParser):
+    _BLOCK_TAGS = {
+        "address",
+        "article",
+        "aside",
+        "br",
+        "div",
+        "footer",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "header",
+        "li",
+        "main",
+        "nav",
+        "p",
+        "section",
+        "td",
+        "th",
+        "tr",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        normalized = tag.lower()
+        if normalized in {"script", "style", "noscript", "svg"}:
+            self._skip_depth += 1
+            return
+        if normalized in self._BLOCK_TAGS:
+            self._append_break()
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized = tag.lower()
+        if normalized in {"script", "style", "noscript", "svg"} and self._skip_depth:
+            self._skip_depth -= 1
+            return
+        if normalized in self._BLOCK_TAGS:
+            self._append_break()
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth:
+            return
+        text = " ".join(str(data or "").split())
+        if text:
+            self._parts.append(text)
+
+    def visible_text(self) -> str:
+        raw = " ".join(self._parts)
+        return re.sub(r"\s+([.,;:!?，。；：！？])", r"\1", raw).strip()
+
+    def _append_break(self) -> None:
+        if self._parts and self._parts[-1] != "\n":
+            self._parts.append("\n")
+
+
+def _html_to_visible_text(value: str) -> str:
+    parser = _VisibleHtmlTextParser()
+    try:
+        parser.feed(value)
+        parser.close()
+    except Exception:
+        text = re.sub(r"(?is)<(script|style|noscript|svg)\b.*?</\1>", " ", value)
+        text = re.sub(r"(?s)<[^>]+>", " ", text)
+        return " ".join(html.unescape(text).split())
+    return parser.visible_text()
+
+
+def _restore_compact_browser_phrases(text: str) -> str:
+    candidate = str(text or "")
+    replacements = {
+        "Readonlybrowsercapabilityisworking": "Read only browser capability is working",
+        "ReadOnlyBrowserCapabilityIsWorking": "Read only browser capability is working",
+        "Loginfailed": "Login failed",
+        "LoginFailed": "Login failed",
+    }
+    for source, replacement in replacements.items():
+        candidate = candidate.replace(source, replacement)
+    return candidate
 
 
 def truncate_browser_text(value: str, limit: int) -> str:
@@ -518,6 +620,11 @@ def _browser_primary_evidence_text(result: dict[str, Any], *, limit: int) -> str
         text = truncate_browser_text(clean_browser_text(str(candidate or "")), limit)
         if not text:
             continue
+        if title:
+            while text.startswith(title):
+                text = text[len(title) :].strip(" \n\r\t:：-")
+            if not text:
+                continue
         if title and text == title:
             continue
         return text

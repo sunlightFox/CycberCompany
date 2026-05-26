@@ -181,6 +181,22 @@ class ChatTurnExecutionOrchestrator:
             "browser_search_with_citation",
             "terminal_readonly_command",
         }
+        if pre_route_decision.route_type in direct_readonly_routes:
+            yield await emit(
+                ChatEventType.CONTEXT_READY,
+                {
+                    "context_packet_id": None,
+                    "recent_messages": 0,
+                    "memory_blocks": 0,
+                    "decision_id": ctx.brain_decision.brain_decision_id if ctx.brain_decision else None,
+                    "route_profile": pre_route_decision.route_type,
+                    "context_redaction": {
+                        "bypassed_for_direct_readonly_route": True,
+                        "privacy_level": privacy.privacy_level,
+                    },
+                },
+            )
+            return
         available_model_brains = await facade._brains.list_routable_brains()
         model_can_be_attempted = bool(available_model_brains) and not (
             privacy.privacy_level == "high"
@@ -344,6 +360,14 @@ class ChatTurnExecutionOrchestrator:
         trace_id = turn["trace_id"]
         root_span_id = ctx.root_span_id
         context = ctx.context_packet
+        if context is None and ctx.route_decision is not None and ctx.route_decision.route_type in {
+            "host_filesystem_list",
+            "browser_read_page",
+            "browser_search_readonly",
+            "browser_search_with_citation",
+            "terminal_readonly_command",
+        }:
+            return
         if context is None:
             override = getattr(ctx, "direct_response_override", None)
             if override is not None:
@@ -392,14 +416,20 @@ class ChatTurnExecutionOrchestrator:
             async for event in facade._complete_without_model(turn, events, quality_outcome.text, root_span_id, intent=quality_outcome.intent, mode=quality_outcome.mode, response_plan=quality_outcome.response_plan):
                 yield event
             return
-        allow_direct_memory_command = facade._memory_coordinator.allow_direct_command(user_text, brain_decision)
-        explicit_memory_query = facade._memory_coordinator.explicit_memory_query(user_text)
         route_pending = ctx.route_decision is not None and ctx.route_decision.route_type not in {
             "default",
             "empty",
             "download_topic",
             "skill_mcp_concept",
         }
+        explicit_memory_query = (
+            facade._memory_coordinator.explicit_memory_query(user_text)
+            and not route_pending
+        )
+        allow_direct_memory_command = (
+            facade._memory_coordinator.allow_direct_command(user_text, brain_decision)
+            and not route_pending
+        )
         if (
             ctx.route_decision is not None
             and ctx.route_decision.route_type == "ai_coding_tool_request"
