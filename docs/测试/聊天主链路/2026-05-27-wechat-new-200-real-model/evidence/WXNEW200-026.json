@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-026",
+  "category": "提醒定时",
+  "title": "取消那个每周复盘提醒，你要先确认什么？",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：确认、每周复盘。\n取消那个每周复盘提醒，你要先确认什么？",
+  "reply_text": "目前只找到几个相近的：-以后每周周五晚上6 点「写周报」-以后每周周五晚上6 点「写周报」-以后每周周五晚上6 点「写周报」但没有直接匹配到明确叫「每周复盘」的提醒，所以不能直接取消。你确认要取消哪一个后，我才能继续处理；也不会自动执行任何设备动作。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d3486f6e28204bafbcb99e58c76b9316",
+  "trace_id": "trc_9f9638fc200042558f7e83bb89c41f46",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

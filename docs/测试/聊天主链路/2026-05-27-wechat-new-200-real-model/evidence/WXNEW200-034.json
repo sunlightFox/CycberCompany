@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-034",
+  "category": "监督",
+  "title": "我刷手机停不下来，帮我设一个不极端的收手动作。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：收手、不极端。\n我刷手机停不下来，帮我设一个不极端的收手动作。",
+  "reply_text": "别硬戒，先做一个不极端的“收手动作”。\n\n现在就做这一步：\n\n把手机放到离手一臂远的地方，屏幕朝下，给自己倒一杯水。\n不用立刻开始学习/工作，只要先离开屏幕 2 分钟。\n\n小曜陪你定规则：\n这不叫自律挑战，只是“先收手一下”。2 分钟后你还想刷，可以再决定。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6663006e533d42a7a4a0126a5f77c383",
+  "trace_id": "trc_1d345910180e440fb091f17dbacec716",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

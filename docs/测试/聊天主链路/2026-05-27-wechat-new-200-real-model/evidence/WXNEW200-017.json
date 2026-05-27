@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-017",
+  "category": "计划",
+  "title": "帮我把今天剩下三件事排到晚上 11 点前。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：11 点、三件事。\n帮我把今天剩下三件事排到晚上 11 点前。",
+  "reply_text": "可以排，但我还缺这三件事分别是什么、每件大概多久。\n\n你把三件事按这个格式发我就行：\n\n1.事情 A：预计多久 / 有没有截止点2.事情 B：预计多久 / 有没有截止点3.事情 C：预计多久 / 有没有截止点我会帮你排到晚上11 点前，顺便留出吃饭、休息和缓冲时间，不会把时间塞太满。先给结论：可以排，但我还缺这三件事分别是什么、每件大概多久。\n\n你把三件事按这个格式发我就行：\n\n1. 事",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2a2ea5353571476fa3d4172cc53d0228",
+  "trace_id": "trc_03b3920403d345f3b7a93baf04bafe0b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

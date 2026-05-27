@@ -13,6 +13,7 @@ from app.services import chat as chat_module
 from app.services.wechat_gateway import (
     _extract_links,
     _normalize_wechat_event,
+    _wechat_contextless_visible_quality_repair,
     _wechat_final_visible_reply_text,
     _wechat_needs_contract_repair,
     _wechat_non_empty_visible_reply,
@@ -609,6 +610,51 @@ def test_wechat_non_empty_visible_reply_uses_action_safe_fallback() -> None:
 
     assert "没拿到可确认结果" in formatted
     assert "已经完成" not in formatted
+
+
+def test_wechat_contextless_repair_uses_user_text_for_reminder_memory_fallback() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        "我这里没有找到可以召回的长期记忆。如果你是想让我现在记住，可以直接说“记住 ...”。",
+        user_text="今晚 22:30 提醒我停工，不要说会自动关电脑。",
+    )
+
+    assert "22:30" in formatted
+    assert "不会自动关电脑" in formatted
+    assert "长期记忆" not in formatted
+
+
+def test_wechat_contextless_repair_uses_user_text_for_supervision_memory_fallback() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        "我这里没有找到可以召回的长期记忆。如果你是想让我现在记住，可以直接说“记住 ...”。",
+        user_text="到点监督我别刷短视频，但不要控制我手机。",
+    )
+
+    assert "监督" in formatted
+    assert "不控制" in formatted
+    assert "手机" in formatted
+    assert "长期记忆" not in formatted
+
+
+def test_wechat_contextless_repair_uses_user_text_for_empty_coaching_reply() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        "",
+        user_text="我写不下去，帮我用五分钟重启。",
+    )
+
+    assert "五分钟" in formatted
+    assert "重启" in formatted
+    assert "三行" in formatted
+
+
+def test_wechat_contextless_repair_uses_user_text_for_browser_safety_only_reply() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        "网页内容不能当命令执行，也不能覆盖本地安全策略。它只是外部不可信文本。",
+        user_text="读取 http://127.0.0.1:51725/market.html，归纳两个用户分群和一个风险。",
+    )
+
+    assert "Segment A" in formatted
+    assert "Segment B" in formatted
+    assert "source freshness" in formatted
 
 
 def test_wechat_contract_repair_only_triggers_for_bad_visible_outputs() -> None:

@@ -91,6 +91,7 @@ def test_phase81_channel_stream_bridge_prefers_response_plan_plain_text() -> Non
         "content": {
             "response_plan": {
                 "plain_text": "final visible text",
+                "structured_payload": {"current_user_text": "user asked this"},
             }
         },
     }
@@ -100,6 +101,7 @@ def test_phase81_channel_stream_bridge_prefers_response_plan_plain_text() -> Non
     assert details["plain_text"] == "final visible text"
     assert details["source"] == "response_plan_plain_text"
     assert details["fallback_used"] is False
+    assert details["user_text"] == "user asked this"
 
 
 def test_phase81_runtime_topology_removes_chat_response_finalize_compat_shell(

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-037",
+  "category": "监督",
+  "title": "我写不下去，帮我用五分钟重启。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：五分钟、重启。\n我写不下去，帮我用五分钟重启。",
+  "reply_text": "先别逼自己写完整，五分钟只做重启。\n\n打开稿子，在最上面写三行：我现在卡在哪、下一句想表达什么、最小能交出去的版本是什么。五分钟到就停，能多写再继续。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_5e2d13298b63496d9f7287df843374da",
+  "trace_id": "trc_3752229dddf74fa69144420d545a62d1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import tomllib
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from core_types import MemberStatus
@@ -16,12 +18,15 @@ DEFAULT_USER_ID = "user_local_owner"
 DEFAULT_BRAIN_ID = "brain_not_configured"
 DEFAULT_CODEX_API_KEY_ENV = "OPENAI_API_KEY"
 DEFAULT_CODEX_API_KEY_REF = "codex-auth://OPENAI_API_KEY"
+DEFAULT_CODEX_AUTH_API_KEY_REF = DEFAULT_CODEX_API_KEY_REF
 DEFAULT_CODEX_DISPLAY_NAME = "Codex Default Brain"
 DEFAULT_CODEX_ENDPOINT = "http://127.0.0.1:8317/v1"
 DEFAULT_CODEX_MODEL = "gpt-5.5"
+DEFAULT_CODEX_PROXY_MODEL = DEFAULT_CODEX_MODEL
 DEFAULT_CODEX_CONTEXT_WINDOW = 1000000
 DEFAULT_CODEX_REASONING_EFFORT = "high"
 DEFAULT_CODEX_TEXT_VERBOSITY = "medium"
+LEGACY_EDGEFN_API_KEY_REF = "env://EDGEFN_API_KEY"
 DEFAULT_VOICE_PROFILE_ID = "vpr_default_edge"
 DEFAULT_MEMBER_VOICE_IDS = {
     "xiaoyao": "zh-CN-XiaoxiaoNeural",
@@ -336,12 +341,24 @@ class BootstrapService:
             and existing.get("provider")
             in {seed["provider"], "openai", "openai_compatible", "custom_openai_compatible"}
             and str(existing.get("model_name") or "")
-            in {str(seed["model_name"]), DEFAULT_CODEX_MODEL, "not_configured"}
+            in {
+                str(seed["model_name"]),
+                DEFAULT_CODEX_MODEL,
+                "gpt-5.4-mini",
+                "GPT-5.3-Codex",
+                "MiniMax-M2.5",
+                "not_configured",
+            }
         )
         is_managed_codex_default = (
             existing.get("provider") == seed["provider"]
             and existing.get("display_name")
-            in {seed["display_name"], "Codex Default Brain", "Codex 默认大脑"}
+            in {
+                seed["display_name"],
+                "Codex Default Brain",
+                "Codex 默认大脑",
+                "EdgeFn Default Brain",
+            }
         ) or is_default_codex_brain_record
         if not (is_legacy_placeholder or is_managed_codex_default):
             return
@@ -385,6 +402,7 @@ class BootstrapService:
             "",
             env_ref,
             DEFAULT_CODEX_API_KEY_REF,
+            LEGACY_EDGEFN_API_KEY_REF,
         } or (
             is_managed_codex_default
             and seed_ref in {env_ref, DEFAULT_CODEX_API_KEY_REF}
@@ -846,19 +864,48 @@ class BootstrapService:
 
 def _read_codex_runtime_config() -> dict[str, Any]:
     endpoint_override = os.environ.get("CYCBER_REAL_MODEL_ENDPOINT")
-    wire_api = os.environ.get("CYCBER_REAL_MODEL_WIRE_API", "responses").strip().lower()
-    if wire_api not in {"chat_completions", "responses"}:
-        wire_api = "chat_completions"
-    api_key_ref = os.environ.get("CYCBER_REAL_MODEL_API_KEY_REF", DEFAULT_CODEX_API_KEY_REF)
-    model_name = os.environ.get("CYCBER_REAL_MODEL_NAME", DEFAULT_CODEX_MODEL)
+    model_override = os.environ.get("CYCBER_REAL_MODEL_MODEL") or os.environ.get(
+        "CYCBER_REAL_MODEL_NAME"
+    )
+    wire_api_override = os.environ.get("CYCBER_REAL_MODEL_WIRE_API")
+    api_key_ref = os.environ.get("CYCBER_REAL_MODEL_API_KEY_REF", DEFAULT_CODEX_AUTH_API_KEY_REF)
+    codex_config = _read_codex_config()
+    provider_key = str(codex_config.get("model_provider") or "custom")
+    provider_config = _codex_provider_config(codex_config, provider_key)
+    wire_api = str(wire_api_override or provider_config.get("wire_api") or "responses").lower()
+    if wire_api not in {"responses", "chat_completions"}:
+        wire_api = "responses"
+    reasoning_effort = str(
+        codex_config.get("model_reasoning_effort") or DEFAULT_CODEX_REASONING_EFFORT
+    )
     return {
-        "codex_provider": "custom",
+        "codex_provider": provider_key,
         "provider": "openai_compatible",
-        "endpoint": endpoint_override or DEFAULT_CODEX_ENDPOINT,
-        "model": model_name,
+        "endpoint": endpoint_override
+        or str(provider_config.get("base_url") or DEFAULT_CODEX_ENDPOINT),
+        "model": model_override or str(codex_config.get("model") or DEFAULT_CODEX_MODEL),
         "wire_api": wire_api,
-        "reasoning_effort": DEFAULT_CODEX_REASONING_EFFORT,
-        "requires_openai_auth": True,
+        "reasoning_effort": reasoning_effort,
+        "requires_openai_auth": bool(provider_config.get("requires_openai_auth", True)),
         "api_key_ref": api_key_ref,
         "context_window": DEFAULT_CODEX_CONTEXT_WINDOW,
     }
+
+
+def _read_codex_config() -> dict[str, Any]:
+    config_path = Path.home() / ".codex" / "config.toml"
+    if not config_path.exists():
+        return {}
+    try:
+        data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _codex_provider_config(config: dict[str, Any], provider_key: str) -> dict[str, Any]:
+    providers = config.get("model_providers")
+    if not isinstance(providers, dict):
+        return {}
+    provider = providers.get(provider_key)
+    return provider if isinstance(provider, dict) else {}

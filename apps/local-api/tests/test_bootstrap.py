@@ -14,6 +14,7 @@ from app.services.bootstrap import (
     DEFAULT_MEMBER_VOICE_IDS,
     DEFAULT_ORGANIZATION_ID,
     DIRECT_MEMBER_SEEDS,
+    _read_codex_runtime_config,
 )
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -36,11 +37,11 @@ def test_boot_001_first_start_creates_default_foundation(client: TestClient) -> 
     brain_by_id = {item["brain_id"]: item for item in brains.json()["items"]}
     default_brain = brain_by_id[DEFAULT_BRAIN_ID]
     assert default_brain["display_name"] == DEFAULT_CODEX_DISPLAY_NAME
-    assert default_brain["provider"] in {"openai", "openai_compatible"}
+    assert default_brain["provider"] == "openai_compatible"
     assert default_brain["endpoint"] == "http://127.0.0.1:8317/v1"
     assert default_brain["model_name"] == DEFAULT_CODEX_MODEL
     assert default_brain["api_key_ref"] == DEFAULT_CODEX_API_KEY_REF
-    assert default_brain["status"] in {"configured", "needs_configuration"}
+    assert default_brain["status"] == "configured"
     assert default_brain["is_local"] is False
     assert default_brain["allow_cloud"] is True
     assert default_brain["protocol_family"] == "responses"
@@ -138,6 +139,7 @@ def test_boot_004_managed_default_brain_prefers_codex_auth_key_ref(
     root_dir = Path(__file__).resolve().parents[3]
     monkeypatch.setenv("CYCBER_ROOT", str(root_dir))
     monkeypatch.setenv("CYCBER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-current-env")
     with TestClient(create_app()) as test_client:
         registry = cast(FastAPI, test_client.app).state.registry
         anyio.run(_set_default_brain_api_key_ref, registry, "sec_stale_local")
@@ -170,6 +172,54 @@ def test_boot_004_real_model_wire_api_env_can_select_responses(
     assert brain["response_format"] == "openai_responses"
     assert brain["api_key_ref"] == "codex-auth://OPENAI_API_KEY"
     assert brain["privacy_policy"]["codex_wire_api"] == "responses"
+
+
+def test_boot_004_managed_default_brain_allows_model_override(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from app.main import create_app
+
+    root_dir = Path(__file__).resolve().parents[3]
+    monkeypatch.setenv("CYCBER_ROOT", str(root_dir))
+    monkeypatch.setenv("CYCBER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CYCBER_REAL_MODEL_MODEL", "gpt-5.4-mini")
+    with TestClient(create_app()) as test_client:
+        registry = cast(FastAPI, test_client.app).state.registry
+        brain = anyio.run(_default_brain_row, registry)
+
+    assert brain["model_name"] == "gpt-5.4-mini"
+
+
+def test_boot_004_managed_default_brain_reads_codex_config(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "config.toml").write_text(
+        """
+model_provider = "custom"
+model = "gpt-5.5"
+model_reasoning_effort = "high"
+
+[model_providers.custom]
+wire_api = "responses"
+requires_openai_auth = true
+base_url = "http://127.0.0.1:8317/v1"
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("app.services.bootstrap.Path.home", lambda: tmp_path)
+
+    runtime = _read_codex_runtime_config()
+
+    assert runtime["codex_provider"] == "custom"
+    assert runtime["endpoint"] == "http://127.0.0.1:8317/v1"
+    assert runtime["model"] == "gpt-5.5"
+    assert runtime["wire_api"] == "responses"
+    assert runtime["requires_openai_auth"] is True
+    assert runtime["api_key_ref"] == DEFAULT_CODEX_API_KEY_REF
 
 
 def test_boot_004_bootstrap_does_not_overwrite_existing_organization(
@@ -237,7 +287,7 @@ async def _set_default_brain_api_key_ref(registry, api_key_ref: str) -> None:
 
 async def _default_brain_row(registry) -> dict:
     row = await registry.db.fetch_one(
-        "SELECT api_key_ref, status FROM brains WHERE brain_id = ?",
+        "SELECT api_key_ref, model_name, status FROM brains WHERE brain_id = ?",
         (DEFAULT_BRAIN_ID,),
     )
     return dict(row)

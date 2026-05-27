@@ -128,6 +128,11 @@ def _variant_text(value: str) -> str:
     result = str(value)
     for old, new in _TEXT_REPLACEMENTS:
         result = result.replace(old, new)
+    # Keep inherited local test URLs reachable. Some round-to-round content
+    # replacements intentionally change numeric facts, but they must not rewrite
+    # the loopback host used by the scenario HTTP server.
+    result = result.replace("http://124.0.0.1:", "http://127.0.0.1:")
+    result = result.replace("https://124.0.0.1:", "https://127.0.0.1:")
     return result
 
 
@@ -170,6 +175,8 @@ def _term_satisfied(term: str, reply: str) -> bool:
         "24": ("24", "二十四"),
         "Review owner": ("Review owner", "review owner", "Reviewowner", "评审负责人"),
         "Data scope": ("Data scope", "data scope", "DataScope", "数据范围"),
+        "Expire at": ("Expire at", "expire at", "Expireat", "ExpireAt", "过期时间", "到期时间"),
+        "责任人": ("责任人", "负责人", "owner"),
         "青禾": ("青禾", "当前对话", "当前聊天"),
         "小周": ("小周", "周"),
         "阿宁": ("阿宁", "小林", "trace", "审计记录"),

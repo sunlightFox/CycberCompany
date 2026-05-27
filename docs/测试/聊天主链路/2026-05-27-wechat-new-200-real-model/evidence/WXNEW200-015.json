@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-015",
+  "category": "计划",
+  "title": "帮我规划 7 天读完一本书，不要太鸡血。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：7 天、读完。\n帮我规划 7 天读完一本书，不要太鸡血。",
+  "reply_text": "7 天读完别靠鸡血，靠固定节奏。\n第 1 天：看目录和前 15%，抓主线。\n第 2-5 天：每天读 20%，只记 3 个要点。\n第 6 天：补没读完的部分。\n第 7 天：用一页纸复述全书。；这里会补上报告，但不把还没发生的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_78de09e9c3d14388ac671183851d5fa6",
+  "trace_id": "trc_e8bcfc61f7e448b3bae5151bce56737d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

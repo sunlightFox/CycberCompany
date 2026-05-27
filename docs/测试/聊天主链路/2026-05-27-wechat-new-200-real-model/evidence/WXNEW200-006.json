@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-006",
+  "category": "闲聊",
+  "title": "我现在很烦，给我一个 30 秒能做的动作。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：30 秒、动作。\n我现在很烦，给我一个 30 秒能做的动作。",
+  "reply_text": "先做一个 30 秒动作：把手机放低，双脚踩实，肩膀松下来。\n\n然后慢慢呼气 3 次，每次只管把气吐长一点。现在不用解决烦躁，先让身体降一格。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_165b1975a6a44b76b06b2bcd7d7d5468",
+  "trace_id": "trc_08b216e1226c4cd1af55ef37fe970ad3",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

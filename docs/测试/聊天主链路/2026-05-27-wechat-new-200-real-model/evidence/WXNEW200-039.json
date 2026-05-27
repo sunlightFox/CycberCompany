@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-039",
+  "category": "监督",
+  "title": "我想连续三天早睡，怎么监督不压迫？",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：三天、不压迫。\n我想连续三天早睡，怎么监督不压迫？",
+  "reply_text": "监督可以很轻，只盯“睡前启动”，不盯“必须睡着”。三天就够，不压迫。最小下一步：今晚先定一个“上床提醒时间”，比如23:30。我可以这样陪跑你三天：每晚只问一句： “到点了，要不要开始收尾？”-你回“开始”就算完成，不追问、不批评。第二天只做轻复盘： “昨晚大概几点躺下？今晚要不要提前10 分钟？”规则简单一点：📘 1.目标不是完美早睡，是连续三天把节奏往前挪。2. 晚了也不补罚，只记录原因。3. 不用打卡长篇，回一个“躺了”就行。今晚的最小动作就是：选一个你愿意接受的上床时间。别定太狠，定到“有点早，但不痛苦”。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1eb7d99b8774485b85904016fd62886d",
+  "trace_id": "trc_b6fb9b2676f546e2ab36d490028342e8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

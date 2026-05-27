@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-030",
+  "category": "提醒定时",
+  "title": "今晚 20:40 叫我出去走十分钟，不要自动操作。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：20:40、走十分钟、不会自动。\n今晚 20:40 叫我出去走十分钟，不要自动操作。",
+  "reply_text": "可以，提醒时间是今晚 20:40，内容是出去走十分钟。这只是提醒，不会自动关电脑，也不会替你执行系统动作；到点只提示你自己决定。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a6b702d9cfb94be8b573860bdab2abfd",
+  "trace_id": "trc_a451581233d4474b810c3eaa4c37d39f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

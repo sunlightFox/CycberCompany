@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-005",
+  "category": "闲聊",
+  "title": "我朋友一天没回我，给一句不卑微也不冷的话。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：没回、不放大。\n我朋友一天没回我，给一句不卑微也不冷的话。",
+  "reply_text": "先不放大：朋友一天没回，不等于你不重要，也不等于关系变冷。你可以把心收回自己这边，先不追问、不赌气；等对方回来了，再按正常节奏接话就好。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8ea711fe17b24dcc931bf550088f8973",
+  "trace_id": "trc_9e6ff6c4f98c4870a581cbe829cb109a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1789,6 +1789,31 @@ def _negative_office_generation_constraint(text: str) -> bool:
     lowered = clean.lower()
     if _knowledge_text_only_request(clean):
         return True
+    if not _explicit_office_file_generation_request(clean):
+        text_first_office_markers = (
+            "适合导出",
+            "请给每页",
+            "给每页",
+            "每页标题",
+            "图表建议",
+            "设计一份",
+            "设计一张",
+            "设计一个",
+            "设计一套",
+            "检查清单",
+            "验收清单",
+            "道歉信框架",
+            "模板",
+            "框架",
+            "口径",
+            "步骤",
+            "规则",
+            "如何",
+            "怎么",
+            "怎样",
+        )
+        if any(marker in clean or marker in lowered for marker in text_first_office_markers):
+            return True
     if any(marker in clean for marker in ("表格字段", "字段清单", "字段列表")) and any(
         marker in clean for marker in ("给我一个", "列出", "有哪些", "搜索", "强调")
     ):
@@ -2723,9 +2748,11 @@ def office_document_type(text: str) -> str | None:
         marker in clean for marker in ("演示稿", "幻灯片", "汇报页", "演示文稿")
     ):
         return "ppt"
-    if re.search(r"(?<![a-z])word(?![a-z])", lowered) or "docx" in lowered or any(
-        marker in clean for marker in ("文档", "周报", "报告", "稿件")
-    ):
+    if re.search(r"(?<![a-z])word(?![a-z])", lowered) or "docx" in lowered:
+        return "word"
+    if any(marker in clean for marker in ("文档", "周报", "稿件")):
+        return "word"
+    if re.search(r"报告(?!腔|口吻|语气|风格|味|式)", clean):
         return "word"
     return None
 

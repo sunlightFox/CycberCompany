@@ -1250,6 +1250,16 @@ class WechatClawbotConnector:
             "client": client,
             "qrcode": raw_qrcode,
         }
+        self._write_bind_state(
+            bind_session_id,
+            {
+                "qrcode": str(raw_qrcode or ""),
+                "qr_payload": str(qr_payload or ""),
+                "status": str(status),
+                "expires_at": str(expires_at),
+                "current_poll_base_url": self._wechat_login_base_url(client),
+            },
+        )
         return ChannelBindChallenge(
             provider_session_id=bind_session_id,
             status=str(status),
@@ -1261,6 +1271,7 @@ class WechatClawbotConnector:
 
     async def poll_bind(self, bind_session_id: str) -> ChannelProviderStatus:
         session = self._sessions.get(bind_session_id)
+        bind_state = self._read_bind_state(bind_session_id) or {}
         if session is None:
             if not self._config.enabled:
                 return ChannelProviderStatus(
@@ -1268,17 +1279,26 @@ class WechatClawbotConnector:
                     failure_reason="provider_unavailable",
                 )
             client = await self._create_client(bind_session_id)
-            session = {"client": client, "qrcode": None}
+            session = {"client": client, "qrcode": bind_state.get("qrcode")}
             self._sessions[bind_session_id] = session
         client = session["client"]
-        qrcode = session.get("qrcode")
+        qrcode = session.get("qrcode") or bind_state.get("qrcode")
+        if qrcode:
+            session["qrcode"] = str(qrcode)
         try:
-            login_result = await _maybe_await(client.wait_for_login(qrcode, timeout_seconds=1))
-        except TypeError:
-            if qrcode is not None:
-                login_result = await _maybe_await(client.wait_for_login(qrcode))
-            else:
-                login_result = await _maybe_await(client.wait_for_login())
+            login_result = await self._wait_for_login_once(client, qrcode)
+        except Exception as exc:
+            if not (
+                self._is_unknown_qrcode_session_error(exc)
+                or self._is_wait_for_login_timeout_error(exc)
+            ):
+                raise
+            login_result = await self._poll_bind_without_active_session(
+                client,
+                bind_session_id=bind_session_id,
+                qrcode=str(qrcode or ""),
+                bind_state=bind_state,
+            )
         status = _pick_attr(login_result, "status") or "confirmed"
         account_ref = _pick_attr(
             login_result,
@@ -1287,14 +1307,30 @@ class WechatClawbotConnector:
             "wxid",
             "uin",
             "account_ref",
+            "ilink_bot_id",
         )
-        display_name = _pick_attr(login_result, "display_name", "nickname", "name") or "微信账号"
+        display_name = (
+            _pick_attr(login_result, "display_name", "nickname", "name")
+            or bind_state.get("display_name")
+            or str(account_ref or "WeChat Account")
+        )
         if account_ref:
             session["account_id"] = str(account_ref)
             session["display_name"] = str(display_name)
             session["login_status"] = str(status)
+        self._write_bind_state(
+            bind_session_id,
+            {
+                **bind_state,
+                "qrcode": str(qrcode or bind_state.get("qrcode") or ""),
+                "status": str(status),
+                "display_name": str(display_name),
+                "account_id": str(account_ref or bind_state.get("account_id") or ""),
+                "login_status": str(status),
+            },
+        )
         return ChannelProviderStatus(
-            status=str(status),
+            status=self._normalize_bind_status(str(status)),
             provider_account_ref=str(account_ref or bind_session_id),
             display_name=str(display_name),
             provider_state=redact(
@@ -1313,6 +1349,7 @@ class WechatClawbotConnector:
 
     async def finalize_bind(self, bind_session_id: str) -> ChannelBoundAccount:
         session = self._sessions.get(bind_session_id)
+        bind_state = self._read_bind_state(bind_session_id) or {}
         if session is not None and session.get("account_id"):
             provider_account_ref = str(session["account_id"])
             display_name = str(session.get("display_name") or "微信账号")
@@ -1324,6 +1361,20 @@ class WechatClawbotConnector:
                     "account_ref_redacted": _hash_value(provider_account_ref),
                     "display_name": display_name,
                     "login_status": str(session.get("login_status") or "confirmed"),
+                },
+                confirmed_at=utc_now_iso(),
+            )
+        elif bind_state.get("account_id"):
+            provider_account_ref = str(bind_state["account_id"])
+            display_name = str(bind_state.get("display_name") or "微信账号")
+            status = ChannelProviderStatus(
+                status="confirmed",
+                provider_account_ref=provider_account_ref,
+                display_name=display_name,
+                provider_state={
+                    "account_ref_redacted": _hash_value(provider_account_ref),
+                    "display_name": display_name,
+                    "login_status": str(bind_state.get("login_status") or "confirmed"),
                 },
                 confirmed_at=utc_now_iso(),
             )
@@ -1357,6 +1408,141 @@ class WechatClawbotConnector:
     async def revoke(self, provider_state_ref: str | None) -> ChannelSendResult:
         del provider_state_ref
         return ChannelSendResult(status="sent", response_summary={"revoked": True})
+
+    async def _wait_for_login_once(self, client: Any, qrcode: str | None) -> Any:
+        try:
+            return await _maybe_await(client.wait_for_login(qrcode, timeout_seconds=1))
+        except TypeError:
+            if qrcode is not None:
+                return await _maybe_await(client.wait_for_login(qrcode))
+            return await _maybe_await(client.wait_for_login())
+
+    async def _poll_bind_without_active_session(
+        self,
+        client: Any,
+        *,
+        bind_session_id: str,
+        qrcode: str,
+        bind_state: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not qrcode:
+            raise ProviderUnavailable("wechat bind session is missing qrcode state")
+        api_client = getattr(client, "_api_client", None)
+        if api_client is None:
+            raise ProviderUnavailable("wechat bind session api client is unavailable")
+        poll_base_url = str(
+            bind_state.get("current_poll_base_url")
+            or self._wechat_login_base_url(client)
+        )
+        payload = await _maybe_await(
+            api_client.poll_qrcode_status(
+                qrcode,
+                base_url=poll_base_url,
+                timeout_seconds=1,
+            )
+        )
+        status = str(payload.get("status") or "wait")
+        if status == "scaned_but_redirect":
+            redirect_host = payload.get("redirect_host")
+            if isinstance(redirect_host, str) and redirect_host:
+                self._write_bind_state(
+                    bind_session_id,
+                    {
+                        **bind_state,
+                        "qrcode": qrcode,
+                        "status": status,
+                        "current_poll_base_url": f"https://{redirect_host}",
+                    },
+                )
+        if status == "confirmed":
+            try:
+                from wechat_clawbot_sdk.models import AccountSession  # type: ignore
+            except Exception as exc:
+                raise ProviderUnavailable("wechat-clawbot-sdk account model is unavailable") from exc
+            account_id = str(payload.get("ilink_bot_id") or "")
+            bot_token = str(payload.get("bot_token") or "")
+            base_url = str(payload.get("baseurl") or "")
+            user_id = payload.get("ilink_user_id")
+            if account_id and bot_token and base_url:
+                state_store = getattr(client, "_state_store", None)
+                if state_store is not None:
+                    await _maybe_await(
+                        state_store.save_account_session(
+                            AccountSession(
+                                account_id=account_id,
+                                bot_id=account_id,
+                                base_url=base_url,
+                                bot_token=bot_token,
+                                route_tag=None,
+                                user_id=str(user_id) if user_id else None,
+                            )
+                        )
+                    )
+                self._write_bind_state(
+                    bind_session_id,
+                    {
+                        **bind_state,
+                        "qrcode": qrcode,
+                        "status": status,
+                        "account_id": account_id,
+                        "display_name": str(bind_state.get("display_name") or account_id),
+                        "login_status": status,
+                    },
+                )
+        return payload if isinstance(payload, dict) else {"status": status}
+
+    def _is_unknown_qrcode_session_error(self, exc: Exception) -> bool:
+        message = str(exc).lower()
+        return "unknown qrcode session" in message or "call start_login first" in message
+
+    def _is_wait_for_login_timeout_error(self, exc: Exception) -> bool:
+        return "login timed out waiting for qrcode confirmation" in str(exc).lower()
+
+    def _normalize_bind_status(self, status: str) -> str:
+        normalized = status.strip().lower()
+        return {
+            "wait": "qr_ready",
+            "scaned": "scanned",
+            "scaned_but_redirect": "scanned",
+        }.get(normalized, status)
+
+    def _read_bind_state(self, bind_session_id: str) -> dict[str, Any] | None:
+        path = self._bind_state_path()
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        item = data.get(bind_session_id)
+        return item if isinstance(item, dict) else None
+
+    def _write_bind_state(self, bind_session_id: str, state: dict[str, Any]) -> None:
+        path = self._bind_state_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        data[bind_session_id] = state
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    def _bind_state_path(self) -> Path:
+        return self._state_dir / "bind-sessions.json"
+
+    def _wechat_login_base_url(self, client: Any) -> str:
+        login_service = getattr(client, "_login_service", None)
+        base_url = getattr(login_service, "_base_url", None)
+        if isinstance(base_url, str) and base_url:
+            return base_url
+        return "https://ilinkai.weixin.qq.com"
 
     async def send_text(
         self,

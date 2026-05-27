@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-020",
+  "category": "计划",
+  "title": "我想学 Python，每天只有 25 分钟，怎么排？",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：25 分钟、Python。\n我想学 Python，每天只有 25 分钟，怎么排？",
+  "reply_text": "每天 25 分钟学 Python，别排成大课。\n5 分钟：复习昨天写过的代码。\n15 分钟：只学一个小概念，比如变量、循环、函数。\n5 分钟：自己敲一个例子，保存下来。\n\n一周只求不断档，不求一次学很多。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2d7a344e49564c43aa8a6efd5ddf78c4",
+  "trace_id": "trc_48edaebfd60b4c62bdecb0a90d2a3106",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

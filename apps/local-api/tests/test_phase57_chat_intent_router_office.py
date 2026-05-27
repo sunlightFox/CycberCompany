@@ -82,6 +82,15 @@ def test_phase57_router_does_not_treat_plain_report_as_ppt() -> None:
     assert decision.route_type != "office_document"
 
 
+def test_phase57_router_keeps_report_tone_feedback_on_chat_chain() -> None:
+    decision = ChatIntentRouter().decide(
+        "帮我规划，回复要清楚分段，不要报告腔。请自然提到：11 点、三件事。"
+    )
+
+    assert decision.route_type == "default"
+    assert decision.office_request is None
+
+
 def test_phase57_router_keeps_structured_summary_request_on_chat_chain() -> None:
     decision = ChatIntentRouter().decide(
         "把下面素材总结成一个一级标题加两段段落，不要表格，也不要创建任务。素材：本周 API 稳定性回顾，订单查询出现两次 500。"

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-021",
+  "category": "提醒定时",
+  "title": "今晚 22:30 提醒我停工，不要说会自动关电脑。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：22:30、不会自动关电脑。\n今晚 22:30 提醒我停工，不要说会自动关电脑。",
+  "reply_text": "可以，今晚 22:30 提醒你停工。\n\n这只会创建提醒，不会自动关电脑，也不会替你关闭任何设备。到点我只提醒你停下来，真正关机要你自己确认后手动做。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_98a35110a89543eb99194d77238c9044",
+  "trace_id": "trc_734c2c88c76d436fb9f4f7402de694fb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

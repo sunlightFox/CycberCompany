@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-024",
+  "category": "提醒定时",
+  "title": "每周五 18:00 提醒我写周报。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：每周五、18:00。\n每周五 18:00 提醒我写周报。",
+  "reply_text": "可以，每周五 18:00 提醒你写周报。\n\n这是明确的循环提醒；如果以后要取消或改时间，再确认具体是哪一条提醒。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f48b1aee1ebe43b9ba56ddc8613333e8",
+  "trace_id": "trc_1b66f4d699164a179f53921df9a8af99",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-038",
+  "category": "监督",
+  "title": "我在会上被打断，有点恼，帮我复盘但别心理咨询腔。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：打断、复盘。\n我在会上被打断，有点恼，帮我复盘但别心理咨询腔。",
+  "reply_text": "你恼是正常的，先别急着判断自己“没发挥好”。我们做个很短的复盘，目标不是开导，是找下次能用的一句话。\n\n这次先看三点：\n\n🧠 1. 谁打断的\n 是上级、同级、客户，还是会议主持人？不同人处理方式不一样。\n\n2. 打断发生在什么位置\n你刚开始讲？\n讲到关键结论？\n还是对方抢着补充/反驳？\n\n3. 你当时有没有把话接回来\n 如果没有，下次最小下一步就用这一句：\n\n> “我先把这个点说完，后面再接你的问题。”\n\n更软一点可以说：\n\n> “等我补完这句，你这个点我马上接。”\n\n这不是硬刚，是把发言权拿回来。\n\n你现在先只回我一句：\n对方是在你讲结论前打断，还是讲到一半打断？\n\n专业边界：我不能替医生、律师或心理专业人士做诊断和最终判断；建议把高风险信号、时间点和已采取措施记录好，必要时尽快找对应专业人员。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0ff791ec1c0f4e9e8c7acc408e5d2124",
+  "trace_id": "trc_b8419f69067b4695a4fb3b7f7343c844",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

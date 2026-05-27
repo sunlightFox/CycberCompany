@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-013",
+  "category": "计划",
+  "title": "帮我做一个今晚两小时的复盘安排。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：两小时、复盘。\n帮我做一个今晚两小时的复盘安排。",
+  "reply_text": "今晚两小时复盘可以这样排：\n1. 20 分钟：只列事实，今天发生了什么、完成了什么。\n2. 40 分钟：看一个做得好的点和一个卡住的点。\n3. 40 分钟：整理下一步，不超过三条。\n4. 20 分钟：收尾，写明明天第一步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_590a1531023d492380ed5860e7aadde1",
+  "trace_id": "trc_d7abcb0510e44289b88c61a051d4ef9e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

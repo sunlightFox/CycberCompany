@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-031",
+  "category": "监督",
+  "title": "我想拖到晚上，你温柔但别放纵地拉我一下。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：温柔、不放纵。\n我想拖到晚上，你温柔但别放纵地拉我一下。",
+  "reply_text": "先别拖到晚上，小曜温柔、不放纵地拉你一下：现在只做 5分钟。\n\n最小下一步：把要做的东西打开，定个5 分钟计时器，只完成第一小块。不用进入状态，不用做完，先别让它继续滚到晚上。\n\n你现在就开始，我在这儿陪跑。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8e49723f5de840d0bcfb71b0a9225d9c",
+  "trace_id": "trc_37cbfa046a1a4d9bb558328373202b8b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

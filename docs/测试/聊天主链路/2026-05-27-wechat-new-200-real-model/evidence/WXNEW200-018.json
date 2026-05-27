@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-018",
+  "category": "计划",
+  "title": "我想整理订阅，分保留、暂停、取消。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：保留、暂停、取消。\n我想整理订阅，分保留、暂停、取消。",
+  "reply_text": "整理订阅就分三类：\n保留：最近 30 天常用、能省时间或确实带来价值的。\n暂停：偶尔有用，但最近用得少，可以先停一个月观察。\n取消：功能重复、只是怕错过、花钱但几乎不用的。\n\n先别纠结，按账单从贵到便宜扫一遍。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_308c3b73047e41199b2de2dd35ddbf39",
+  "trace_id": "trc_6d33874452ce474b8aa4e2edbe2553ad",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

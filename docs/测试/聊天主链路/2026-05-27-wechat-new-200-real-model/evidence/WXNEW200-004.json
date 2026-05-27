@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-004",
+  "category": "闲聊",
+  "title": "我想下线休息了，给我一句不客服的收尾。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：休息、明天。\n我想下线休息了，给我一句不客服的收尾。",
+  "reply_text": "那就先下线休息。今天到这儿就够了，剩下的明天再接，不用把自己一直挂在线上。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_7bae0716407e4f159a046c0032c648b4",
+  "trace_id": "trc_7517c4aba2044c2cab1aca25015756ee",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

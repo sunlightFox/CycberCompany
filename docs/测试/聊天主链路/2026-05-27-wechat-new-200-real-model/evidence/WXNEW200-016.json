@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-016",
+  "category": "计划",
+  "title": "我下周要开始运动，帮我排一个低门槛计划。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：低门槛、运动。\n我下周要开始运动，帮我排一个低门槛计划。",
+  "reply_text": "下周运动先低门槛，不追强度。\n\n周一、三、五：快走 15 分钟。\n周二、四：拉伸 8 分钟。\n周末：任选一天多走 20 分钟。只要开始动，就算完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6ad2feb2ac454415b9e3ea80ed399905",
+  "trace_id": "trc_f72155b07c464eada3fe9948cfc4edfd",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

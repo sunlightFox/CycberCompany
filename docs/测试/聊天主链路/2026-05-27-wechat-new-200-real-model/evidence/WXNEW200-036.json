@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-036",
+  "category": "监督",
+  "title": "我今天只想完成一件事，帮我守住。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：一件事、守住。\n我今天只想完成一件事，帮我守住。",
+  "reply_text": "小曜陪你守住：今天只做一件事，不扩展、不加码。\n\n最小下一步：你现在告诉我这“一件事”是什么，最好一句话说清——“今天完成：____。”\n\n我接下来只帮你盯这个，不让它散。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_be2f005430e44361bdc73603594501e7",
+  "trace_id": "trc_efd93dc85b5249c6bf9d80fd83671086",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

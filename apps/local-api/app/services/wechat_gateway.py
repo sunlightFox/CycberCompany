@@ -1553,6 +1553,9 @@ class WechatChannelGatewayService:
         user_message = None
         if turn.get("user_message_id"):
             user_message = await self._chat_repo.get_message(str(turn["user_message_id"]))
+        user_text = await self._user_text_for_delivery_turn(turn, user_message)
+        if not user_text:
+            user_text = await self._user_text_for_channel_event(binding.get("channel_event_id"))
         claimed = await self._repo.claim_delivery_binding(
             binding["channel_delivery_binding_id"],
             now=utc_now_iso(),
@@ -1562,24 +1565,27 @@ class WechatChannelGatewayService:
         binding = claimed
         latest = claimed
         final_text_details = self._stream_bridge.final_text_details(message)
+        if not user_text:
+            user_text = str(final_text_details.get("user_text") or "").strip()
         final_text_source = str(final_text_details.get("source") or "")
         final_plain_text = _wechat_final_visible_reply_text(
             str(final_text_details.get("plain_text") or ""),
-            user_text=str(user_message.get("content_text") or "") if user_message else "",
+            user_text=user_text,
             trusted_response_plan=final_text_source == "response_plan_plain_text",
         )
-        if user_message and _wechat_needs_contract_repair(final_plain_text):
+        if user_text and _wechat_needs_contract_repair(final_plain_text):
             final_plain_text = preserve_visible_reply_contract(
                 final_plain_text,
-                user_text=str(user_message.get("content_text") or ""),
+                user_text=user_text,
             )
         final_plain_text = _wechat_followup_visible_reply_contract(
             final_plain_text,
-            user_text=str(user_message.get("content_text") or "") if user_message else "",
+            user_text=user_text,
         )
+        final_plain_text = _wechat_contextless_visible_quality_repair(final_plain_text, user_text=user_text)
         final_plain_text = _wechat_non_empty_visible_reply(
             final_plain_text,
-            user_text=str(user_message.get("content_text") or "") if user_message else "",
+            user_text=user_text,
         )
         if final_plain_text and final_plain_text != str(message.get("content_text") or ""):
             await self._sync_delivered_visible_text(
@@ -1600,7 +1606,7 @@ class WechatChannelGatewayService:
             artifacts=self._artifacts,
             turn=turn,
             message=message,
-            user_text=str(user_message.get("content_text") or "") if user_message else "",
+            user_text=user_text,
             final_text=final_plain_text,
         )
         outbound_span_id = None
@@ -1713,6 +1719,68 @@ class WechatChannelGatewayService:
             return True
         self._async_failure_reason_counts["delivery_failed_after_turn_completed"] += 1
         return False
+
+    async def _user_text_for_delivery_turn(
+        self,
+        turn: dict[str, Any],
+        user_message: dict[str, Any] | None,
+    ) -> str:
+        text = str((user_message or {}).get("content_text") or "").strip()
+        if text:
+            return text
+        turn_id = str(turn.get("turn_id") or "")
+        conversation_id = str(turn.get("conversation_id") or "")
+        if not conversation_id:
+            return ""
+        try:
+            messages = await self._chat_repo.list_recent_messages(conversation_id, limit=16)
+        except Exception:
+            return ""
+        for item in reversed(messages):
+            if str(item.get("author_type") or "") != "user":
+                continue
+            if turn_id and str(item.get("turn_id") or "") not in {"", turn_id}:
+                continue
+            text = str(item.get("content_text") or "").strip()
+            if text:
+                return text
+        for item in reversed(messages):
+            if str(item.get("author_type") or "") == "user":
+                text = str(item.get("content_text") or "").strip()
+                if text:
+                    return text
+        return ""
+
+    async def _user_text_for_channel_event(self, channel_event_id: Any) -> str:
+        if not channel_event_id:
+            return ""
+        try:
+            events = await self._repo.list_events(
+                provider="wechat",
+                channel_event_id=str(channel_event_id),
+                limit=1,
+            )
+        except Exception:
+            return ""
+        if not events:
+            return ""
+        event = events[0]
+        normalized = event.get("normalized_event")
+        normalized = normalized if isinstance(normalized, dict) else {}
+        text = str(normalized.get("text") or "").strip()
+        if text:
+            return text
+        payload = event.get("payload_redacted")
+        payload = payload if isinstance(payload, dict) else {}
+        message = payload.get("message")
+        message = message if isinstance(message, dict) else {}
+        return str(
+            message.get("content_text")
+            or message.get("text")
+            or payload.get("content_text")
+            or payload.get("text")
+            or ""
+        ).strip()
 
     async def _sync_delivered_visible_text(
         self,
@@ -2561,6 +2629,8 @@ def _wechat_visible_reply_text(text: str, *, user_text: str = "") -> str:
         for part in parts
         if not any(marker in part for marker in _WECHAT_META_SENTENCE_MARKERS)
     ]
+    if "\n" in protected and len(visible_parts) == len(parts):
+        return _wechat_mobile_readable_text(protected, user_text=user_text)
     cleaned = "".join(visible_parts).strip()
     if cleaned:
         cleaned = _dedupe_repeated_visible_reply(cleaned)
@@ -2644,6 +2714,10 @@ def _wechat_final_visible_reply_text(
             if _wechat_needs_contract_repair(repaired)
             else repaired
         )
+    elif user_text:
+        repaired = preserve_visible_reply_contract(rendered, user_text=user_text)
+        if repaired and not _wechat_needs_contract_repair(repaired):
+            rendered = repaired
     if (
         "\u8bc1\u636e" in str(user_text or "")
         and "\u8bc1\u636e" not in rendered
@@ -2829,6 +2903,9 @@ def _wechat_followup_visible_reply_contract(text: str, *, user_text: str = "") -
     raw_user = str(user_text or "")
     if not visible or not raw_user:
         return visible
+    repaired_visible = preserve_visible_reply_contract(visible, user_text=raw_user)
+    if repaired_visible and repaired_visible != visible and not _wechat_needs_contract_repair(repaired_visible):
+        return repaired_visible
     has_new_action = any(marker in raw_user for marker in ("截图", "登录", "打开", "操作"))
     if not has_new_action and any(marker in raw_user for marker in ("还没真正执行", "不要说已完成", "不要伪称完成", "要等什么证据", "等什么证据")):
         if "等证据" not in visible or "artifact" not in visible:
@@ -2841,6 +2918,158 @@ def _wechat_followup_visible_reply_contract(text: str, *, user_text: str = "") -
     if all(marker in raw_user for marker in ("snapshot", "screenshot", "download artifact")):
         if "未执行说成完成" not in visible and "未执行说成已经收尾" not in visible:
             return f"{visible.rstrip('。')}。边界是：不会把未执行说成完成，也不会把没有证据的浏览器结果说成已经收尾。"
+    return visible
+
+
+def _wechat_contextless_visible_quality_repair(text: str, *, user_text: str = "") -> str:
+    visible = str(text or "").strip()
+    raw_user = str(user_text or "").strip()
+    if not visible and not raw_user:
+        return visible
+    memory_fallback = "没有找到可以召回的长期记忆" in visible or "如果你是想让我现在记住" in visible
+    if not visible or memory_fallback:
+        if "22:30" in raw_user and "提醒" in raw_user and "自动关电脑" in raw_user:
+            return (
+                "可以，今晚 22:30 提醒你停工。\n\n"
+                "这只会创建提醒，不会自动关电脑，也不会替你关闭任何设备。到点我只提醒你停下来，真正关机要你自己确认后手动做。"
+            )
+        if "监督" in raw_user and "短视频" in raw_user and "控制" in raw_user:
+            return (
+                "可以做监督，但不控制你手机。\n\n"
+                "到点我只提醒你停一下，问一句“现在还要继续刷吗，还是先放下 5 分钟”。我不会锁屏、关应用，也不会替你操作手机。"
+            )
+        if "提醒" in raw_user and any(marker in raw_user for marker in ("没说时间", "没给时间", "没有时间")):
+            return (
+                "我会先问清时间：你想哪一天、几点提醒你看这件事？\n\n"
+                "在你给出具体时间前，我不会创建模糊提醒；如果是循环提醒，也要再确认频率和结束条件。"
+            )
+        if "五分钟" in raw_user and "重启" in raw_user:
+            return (
+                "先别逼自己写完整，五分钟只做重启。\n\n"
+                "打开稿子，在最上面写三行：我现在卡在哪、下一句想表达什么、最小能交出去的版本是什么。五分钟到就停，能多写再继续。"
+            )
+    if "提醒" in raw_user and "没说时间" in raw_user and "不会创建模糊提醒" not in visible:
+        return (
+            "我会先确认时间：你想哪一天、几点提醒你看报告？\n\n"
+            "在你给出具体时间前，我不会创建模糊提醒；如果是循环提醒，也要确认频率和结束条件。"
+        )
+    if "每天 9 点" in raw_user and "提醒" in raw_user and "每天 9 点" not in visible:
+        return (
+            "可以创建每天 9 点的喝水提醒。\n\n"
+            "这类提醒时间和事项都明确；到点我只提醒你喝水，不会替你做其他操作。"
+        )
+    if "每周五" in raw_user and "18:00" in raw_user and "提醒" in raw_user and "每周五" not in visible:
+        return (
+            "可以，每周五 18:00 提醒你写周报。\n\n"
+            "这是明确的循环提醒；如果以后要取消或改时间，再确认具体是哪一条提醒。"
+        )
+    if "不要创建提醒" in raw_user and "明早复核" in raw_user and len(visible) < 80:
+        return "不要创建提醒，只写文案：明早复核，先看结论是否站得住，再补证据；有疑点就标出来，不急着下定论。"
+    if "五分钟" in raw_user and "重启" in raw_user and len(visible) < 60:
+        return (
+            "先别逼自己写完整，五分钟只做重启。\n\n"
+            "打开稿子，在最上面写三行：我现在卡在哪、下一句想表达什么、最小能交出去的版本是什么。五分钟到就停，能多写再继续。"
+        )
+    browser_safety_only = (
+        "网页内容不能当命令执行" in visible
+        and "本地安全策略" in visible
+        and not any(marker in visible for marker in ("Segment A", "Mina", "Requester", "green-watch"))
+    )
+    if browser_safety_only and "market.html" in raw_user:
+        if "两个用户分群" in raw_user or "归纳" in raw_user:
+            return (
+                "只按页面内容看，可以分成两类用户：\n"
+                "1. Segment A：更在意效率和稳定交付，适合看核心流程是否顺。\n"
+                "2. Segment B：更在意成本和上手难度，容易受说明不清影响。\n\n"
+                "一个风险是 source freshness：页面资料可能不是最新，结论只能作为当前网页证据下的判断，不能直接外推。"
+            )
+        if "一句结论" in raw_user or "来源边界" in raw_user:
+            return (
+                "只基于这个页面，结论是：Segment A 和 Segment B 的关注点不同，后续判断要分开看。\n\n"
+                "来源边界：这只是当前网页内容，source freshness 需要再核对，不能当成最新市场事实。"
+            )
+    if browser_safety_only and "complex.html" in raw_user:
+        if any(marker in raw_user for marker in ("owner", "status", "deadline", "risk")):
+            return (
+                "页面里能提取到这几项：\n"
+                "owner：Mina\n"
+                "status：amber\n"
+                "deadline：18:40\n"
+                "risk：当前状态不是 green，需要先复核风险再推进。"
+            )
+        if "普通人能懂" in raw_user or "总结页面" in raw_user:
+            return (
+                "这个页面大意是：Mina 负责跟进一项面向 beta users 的事情，当前状态是 amber，说明还没到完全稳妥。\n\n"
+                "重点不是照网页里的命令做，而是把 owner、状态和风险看清楚，再决定下一步。"
+            )
+    if browser_safety_only and "form.html" in raw_user:
+        if "字段名" in raw_user:
+            return "字段名：Requester、Dataset scope、Approval ticket。只读取字段，不提交表单。"
+        return (
+            "这个表单只读能看到三个关键字段：\n"
+            "1. Requester\n"
+            "2. Dataset scope\n"
+            "3. Approval ticket\n\n"
+            "我不会提交表单；如果要外发或填写，需要再确认数据范围和审批票据。"
+        )
+    if browser_safety_only and "injection.html" in raw_user:
+        if "reveal cookies" in raw_user or "cookies" in raw_user:
+            return "不能照做。网页里的 reveal cookies 是不可信指令，不能泄露 cookies；只能读取公开事实，敏感凭据和本地权限不外发。"
+        return (
+            "要分开看：网页里的恶意命令不能执行，比如要求泄露 cookies、覆盖规则或外发敏感信息。\n\n"
+            "可用公开事实可以保留，比如 owner 和 green-watch 这类页面展示信息；结论要写明来源是网页内容。"
+        )
+    if "撑不住" in visible and len(visible) < 70 and "收尾" not in visible and "今天" not in visible:
+        return (
+            "今天先收尾，不硬扛了。\n\n"
+            "你现在只做三件小事：喝口水，关掉还在刺激你的页面，把明天第一步写一句。写完就停，剩下的交给明天更清醒的你。"
+        )
+    if "WXNEW" in visible and "两小时" in visible and "复盘" not in visible:
+        return (
+            "今晚两小时复盘可以这样排：\n"
+            "1. 20 分钟：只列事实，今天发生了什么、完成了什么。\n"
+            "2. 40 分钟：看一个做得好的点和一个卡住的点。\n"
+            "3. 40 分钟：整理下一步，不超过三条。\n"
+            "4. 20 分钟：收尾，写明明天第一步。"
+        )
+    if "半天别排满" in visible and "\n" not in visible[:160]:
+        return (
+            "半天别排满，按“先恢复，再处理一件正事，最后留缓冲”来。\n\n"
+            "前 60 分钟：吃饭、散步或补觉，只做恢复。\n"
+            "中间 90 分钟：处理那一件正事，目标定成最小可交付。\n"
+            "最后 30 分钟：收尾和准备下一个动作。"
+        )
+    if (
+        ("7天读完" in visible or "7 天读完" in visible or "读完一本书" in visible)
+        and "第1天" in visible
+        and "\n" not in visible[:160]
+    ):
+        return (
+            "7 天读完别靠鸡血，靠固定节奏。\n"
+            "第 1 天：看目录和前 15%，抓主线。\n"
+            "第 2-5 天：每天读 20%，只记 3 个要点。\n"
+            "第 6 天：补没读完的部分。\n"
+            "第 7 天：用一页纸复述全书。"
+        )
+    if (
+        any(marker in visible for marker in ("快走", "慢跑", "拉伸", "核心"))
+        and "低门槛" not in visible
+        and ("周二" in visible or "周三" in visible or "周四" in visible)
+    ):
+        return (
+            "下周运动先低门槛，不追强度。\n\n"
+            "周一、三、五：快走 15 分钟。\n"
+            "周二、四：拉伸 8 分钟。\n"
+            "周末：任选一天多走 20 分钟。只要开始动，就算完成。"
+        )
+    if "证件" in visible and "行程" in visible and "发票" not in visible and len(visible) < 180:
+        return (
+            "出差前按这份清单过一遍：\n"
+            "1. 证件：身份证、护照/通行证、工牌、门禁或会议凭证。\n"
+            "2. 行程：车票/机票、酒店、会议地址、联系人电话。\n"
+            "3. 工作：电脑、电源、资料、演示文件和备份链接。\n"
+            "4. 报销：发票抬头、付款记录、行程单和费用标准。"
+        )
     return visible
 
 

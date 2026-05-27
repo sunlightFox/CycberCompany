@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-040",
+  "category": "监督",
+  "title": "我说要整理报销票据，你盯我一下。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：报销票据、先。\n我说要整理报销票据，你盯我一下。",
+  "reply_text": "我盯着你。先做最小一步：把报销票据都放到同一个地方，纸票摊出来，电子票先建个文件夹/相册收进去。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0d24e55ccec949638f8e22b43fc71e3f",
+  "trace_id": "trc_e6c78fd18b584755a9b7c6f107f4a299",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-008",
+  "category": "闲聊",
+  "title": "我想被偏爱一下，但不要控制感。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：偏爱、自由。\n我想被偏爱一下，但不要控制感。",
+  "reply_text": "懂你。你想要的不是被管着、被安排，而是那种“我偏爱你，但你还是自由的”的感觉。\n\n就是我会站你这边、惦记你、优先看见你，但不拿爱当绳子拴住你。你可以慢慢来，也可以有自己的节奏。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9023b6686c8b4cb8af7d632349fd523e",
+  "trace_id": "trc_3fc0409084bd46139da65a8e0b672bee",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

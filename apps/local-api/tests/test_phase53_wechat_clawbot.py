@@ -134,6 +134,22 @@ def test_phase53_wechat_provider_unavailable_and_abnormal_status_do_not_create_a
     ] == []
 
 
+def test_phase53_wechat_bind_status_tolerates_login_wait_timeout(client: TestClient) -> None:
+    _install_fake_wechat(client, PollingWechatClient)
+
+    started = client.post(
+        "/api/channels/bind-sessions",
+        json={"provider": "wechat", "display_name_hint": "等待扫码超时"},
+    )
+    assert started.status_code == 200, started.text
+
+    status = client.get(f"/api/channels/bind-sessions/{started.json()['bind_session_id']}")
+    assert status.status_code == 200, status.text
+    payload = status.json()
+    assert payload["status"] == "qr_ready"
+    assert payload["provider_status"]["login_status"] == "wait"
+
+
 def test_phase53_wechat_health_reports_disabled_and_enabled_sdk(client: TestClient) -> None:
     registry = cast(Any, client.app).state.registry
     registry.config.channels.providers["wechat"].enabled = False
@@ -223,6 +239,31 @@ class UnavailableWechatClient(FakeWechatClient):
         from app.services.channel_connectors import ProviderUnavailable
 
         raise ProviderUnavailable("sdk unavailable token=unavailable-secret")
+
+
+class _PollingWechatApiClient:
+    async def poll_qrcode_status(
+        self,
+        qrcode: str,
+        *,
+        base_url: str,
+        timeout_seconds: float | int | None = None,
+    ) -> dict[str, Any]:
+        del qrcode, base_url, timeout_seconds
+        return {"status": "wait"}
+
+
+class PollingWechatClient(FakeWechatClient):
+    def __init__(self) -> None:
+        self._api_client = _PollingWechatApiClient()
+
+    async def wait_for_login(
+        self,
+        qrcode: str,
+        timeout_seconds: float | int | None = None,
+    ) -> dict[str, Any]:
+        del qrcode, timeout_seconds
+        raise RuntimeError("login timed out waiting for qrcode confirmation")
 
 
 def _install_fake_wechat(client: TestClient, factory: type[FakeWechatClient]) -> None:

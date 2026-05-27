@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
+import subprocess
 import sys
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -415,8 +418,277 @@ def _send_case_with_transient_retry(client: Any, fake: Any, spec: Any, paired: A
 base._send_case = _send_case_with_transient_retry
 
 
+def _case_from_payload(payload: dict[str, Any]) -> Any:
+    fields = set(getattr(base.CaseResult, "__dataclass_fields__", {}) or {})
+    return base.CaseResult(**{key: value for key, value in payload.items() if key in fields})
+
+
+def _read_summary_results() -> list[Any]:
+    if not SUMMARY_PATH.exists():
+        return []
+    try:
+        payload = json.loads(SUMMARY_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    rows = payload.get("results")
+    if not isinstance(rows, list):
+        return []
+    results: list[Any] = []
+    for item in rows:
+        if isinstance(item, dict):
+            try:
+                results.append(_case_from_payload(item))
+            except TypeError:
+                continue
+    return results
+
+
+def _read_model_verify() -> dict[str, Any]:
+    if not SUMMARY_PATH.exists():
+        return {"status": "unknown"}
+    try:
+        payload = json.loads(SUMMARY_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"status": "unknown"}
+    verify = payload.get("model_verify")
+    return dict(verify) if isinstance(verify, dict) else {"status": "unknown"}
+
+
+def _read_casewise_results() -> list[Any]:
+    results: list[Any] = []
+    for path in sorted(EVIDENCE_DIR.glob("casewise_FOFFICE100-*_result.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                results.append(_case_from_payload(payload))
+        except (OSError, json.JSONDecodeError, TypeError):
+            continue
+    return results
+
+
+def _write_casewise_result(result: Any) -> None:
+    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+    path = EVIDENCE_DIR / f"casewise_{result.case_id}_result.json"
+    path.write_text(json.dumps(asdict(result), ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _all_cases_for_selection() -> list[Any]:
+    return _office_cases("http://127.0.0.1:0")
+
+
+def _selected_case_ids(
+    *,
+    case_ids: set[str] | None = None,
+    only_problematic: bool = False,
+) -> set[str]:
+    all_ids = {case.case_id for case in _all_cases_for_selection()}
+    if case_ids:
+        return set(case_ids)
+    if only_problematic:
+        problematic = {
+            item.case_id
+            for item in [*_read_summary_results(), *_read_casewise_results()]
+            if item.verdict != "pass"
+        }
+        return problematic or all_ids
+    return all_ids
+
+
+def _ordered_results(results_by_id: dict[str, Any]) -> list[Any]:
+    return [
+        results_by_id[case.case_id]
+        for case in _all_cases_for_selection()
+        if case.case_id in results_by_id
+    ]
+
+
+def _is_better_result(candidate: Any, current: Any) -> bool:
+    verdict_rank = {"fail": 0, "warn": 1, "pass": 2}
+    return (
+        verdict_rank.get(candidate.verdict, 0),
+        candidate.model_completed,
+        candidate.delivery_sent,
+        candidate.score,
+        len(candidate.reply_text or ""),
+    ) > (
+        verdict_rank.get(current.verdict, 0),
+        current.model_completed,
+        current.delivery_sent,
+        current.score,
+        len(current.reply_text or ""),
+    )
+
+
+def run_selected(
+    *,
+    limit: int | None = None,
+    case_ids: set[str] | None = None,
+    only_problematic: bool = False,
+    merge_existing: bool = False,
+) -> list[Any]:
+    if not case_ids and not only_problematic:
+        return base.run(limit=limit)
+
+    selected_ids = _selected_case_ids(case_ids=case_ids, only_problematic=only_problematic)
+    previous_results: dict[str, Any] = {}
+    if merge_existing:
+        previous_results.update({item.case_id: item for item in _read_summary_results()})
+        previous_results.update({item.case_id: item for item in _read_casewise_results()})
+
+    original_cases = base._cases
+
+    def selected_cases(site_url: str) -> list[Any]:
+        cases = [case for case in _office_cases(site_url) if case.case_id in selected_ids]
+        if limit is not None:
+            return cases[:limit]
+        return cases
+
+    base._cases = selected_cases
+    try:
+        current_results = base.run(limit=None)
+    finally:
+        base._cases = original_cases
+
+    if not merge_existing:
+        return current_results
+
+    for item in current_results:
+        previous = previous_results.get(item.case_id)
+        previous_results[item.case_id] = item if previous is None or _is_better_result(item, previous) else previous
+        _write_casewise_result(previous_results[item.case_id])
+    ordered = _ordered_results(previous_results)
+    _write_outputs(ordered, model_verify=_read_model_verify(), cases=_all_cases_for_selection())
+    return ordered
+
+
+def _run_casewise(
+    *,
+    case_ids: set[str] | None = None,
+    only_problematic: bool = False,
+    timeout_seconds: int = 180,
+    retries: int = 1,
+    case_pause_seconds: float = 0,
+    infra_backoff_seconds: float = 0,
+) -> list[Any]:
+    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+    selected_ids = _selected_case_ids(case_ids=case_ids, only_problematic=only_problematic)
+    cases = [case for case in _all_cases_for_selection() if case.case_id in selected_ids]
+    if not cases:
+        raise RuntimeError(f"case ids not found: {sorted(selected_ids)}")
+
+    previous_results = {item.case_id: item for item in _read_summary_results()}
+    previous_results.update({item.case_id: item for item in _read_casewise_results()})
+    for case in cases:
+        best = previous_results.get(case.case_id)
+        last_error = ""
+        for attempt in range(1, retries + 2):
+            stdout_path = EVIDENCE_DIR / f"casewise_{case.case_id}_attempt{attempt}.stdout.txt"
+            stderr_path = EVIDENCE_DIR / f"casewise_{case.case_id}_attempt{attempt}.stderr.txt"
+            command = [
+                sys.executable,
+                "-X",
+                "utf8",
+                str(Path(__file__).resolve()),
+                "--case-id",
+                case.case_id,
+                "--merge-existing",
+            ]
+            try:
+                completed = subprocess.run(
+                    command,
+                    cwd=str(ROOT_DIR),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=timeout_seconds,
+                )
+                stdout_path.write_text(completed.stdout or "", encoding="utf-8")
+                stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+                current = {item.case_id: item for item in _read_summary_results()}.get(case.case_id)
+                if current is not None:
+                    best = current if best is None or _is_better_result(current, best) else best
+                    _write_casewise_result(best)
+                    if current.verdict == "pass":
+                        break
+                last_error = f"case_process_failed:{completed.returncode}"
+                if completed.returncode != 0 and infra_backoff_seconds > 0:
+                    time.sleep(infra_backoff_seconds)
+            except subprocess.TimeoutExpired as exc:
+                stdout = exc.stdout if isinstance(exc.stdout, str) else (exc.stdout or b"").decode("utf-8", errors="replace")
+                stderr = exc.stderr if isinstance(exc.stderr, str) else (exc.stderr or b"").decode("utf-8", errors="replace")
+                stdout_path.write_text(stdout, encoding="utf-8")
+                stderr_path.write_text(stderr, encoding="utf-8")
+                last_error = f"case_process_timeout:{timeout_seconds}s"
+                if infra_backoff_seconds > 0:
+                    time.sleep(infra_backoff_seconds)
+        if best is None:
+            best = base.CaseResult(
+                case_id=case.case_id,
+                category=case.category,
+                title=case.title,
+                peer_ref=case.peer_ref,
+                prompt=case.prompt,
+                verdict="fail",
+                score=0,
+                notes=[last_error or "casewise_no_result"],
+                reply_text="",
+            )
+            _write_casewise_result(best)
+        previous_results[case.case_id] = best
+        if case_pause_seconds > 0:
+            time.sleep(case_pause_seconds)
+
+    ordered = _ordered_results(previous_results)
+    _write_outputs(ordered, model_verify=_read_model_verify(), cases=_all_cases_for_selection())
+    return ordered
+
+
 def main() -> None:
-    base.main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--case-id", action="append", default=[])
+    parser.add_argument("--only-problematic", action="store_true")
+    parser.add_argument("--merge-existing", action="store_true")
+    parser.add_argument("--casewise", action="store_true")
+    parser.add_argument("--case-timeout", type=int, default=180)
+    parser.add_argument("--case-retries", type=int, default=1)
+    parser.add_argument("--case-pause", type=float, default=0)
+    parser.add_argument("--infra-backoff", type=float, default=0)
+    args = parser.parse_args()
+    if args.casewise:
+        results = _run_casewise(
+            case_ids=set(args.case_id or []),
+            only_problematic=args.only_problematic,
+            timeout_seconds=args.case_timeout,
+            retries=args.case_retries,
+            case_pause_seconds=args.case_pause,
+            infra_backoff_seconds=args.infra_backoff,
+        )
+    else:
+        results = run_selected(
+            limit=args.limit,
+            case_ids=set(args.case_id or []),
+            only_problematic=args.only_problematic,
+            merge_existing=args.merge_existing,
+        )
+    failed = [item for item in results if item.verdict == "fail"]
+    print(
+        json.dumps(
+            {
+                "total": len(results),
+                "passed": sum(1 for item in results if item.verdict == "pass"),
+                "warned": sum(1 for item in results if item.verdict == "warn"),
+                "failed": len(failed),
+                "summary": str(SUMMARY_PATH),
+                "report": str(REPORT_PATH),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    if failed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

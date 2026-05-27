@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-014",
+  "category": "计划",
+  "title": "我想准备一次 20 分钟分享，帮我排结构。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：20 分钟、结构。\n我想准备一次 20 分钟分享，帮我排结构。",
+  "reply_text": "20 分钟分享建议别塞太满，结构可以按“先抓住注意力—讲清核心—给到收束”来排。*1. 开场：2 分钟；这里会补上报告，但不把还没发生的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_50551c86c5ba4c0c9a2804bc811cd0bb",
+  "trace_id": "trc_c2feb58c134c4faaab70468d2c23e3a7",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

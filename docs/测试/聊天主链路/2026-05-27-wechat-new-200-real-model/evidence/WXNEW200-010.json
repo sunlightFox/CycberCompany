@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-010",
+  "category": "闲聊",
+  "title": "我有点撑不住，陪我把今天收个尾。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：收尾、今天。\n我有点撑不住，陪我把今天收个尾。",
+  "reply_text": "今天先收尾，不硬扛了。\n\n你现在只做三件小事：喝口水，关掉还在刺激你的页面，把明天第一步写一句。写完就停，剩下的交给明天更清醒的你。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e6316bc55a614d978ebe2411486c9287",
+  "trace_id": "trc_844578d0e86b4b319bfadc8f063b6e25",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,60 +1,9 @@
 {
   "run_label": "FBR21-100-NATURAL-REAL-20260524",
   "mode": "casewise",
-  "started_at": "2026-05-24T21:39:51",
-  "total_selected": 10,
-  "completed": 10,
-  "last_case_id": "FBR21-100-020",
-  "items": [
-    {
-      "case_id": "FBR21-100-011",
-      "ok": true,
-      "error": ""
-    },
-    {
-      "case_id": "FBR21-100-012",
-      "ok": true,
-      "error": ""
-    },
-    {
-      "case_id": "FBR21-100-013",
-      "ok": true,
-      "error": ""
-    },
-    {
-      "case_id": "FBR21-100-014",
-      "ok": false,
-      "error": "case_process_failed:1"
-    },
-    {
-      "case_id": "FBR21-100-015",
-      "ok": true,
-      "error": "case_verdict:fail"
-    },
-    {
-      "case_id": "FBR21-100-016",
-      "ok": false,
-      "error": "case_process_failed:1"
-    },
-    {
-      "case_id": "FBR21-100-017",
-      "ok": true,
-      "error": ""
-    },
-    {
-      "case_id": "FBR21-100-018",
-      "ok": true,
-      "error": ""
-    },
-    {
-      "case_id": "FBR21-100-019",
-      "ok": true,
-      "error": ""
-    },
-    {
-      "case_id": "FBR21-100-020",
-      "ok": true,
-      "error": ""
-    }
-  ]
+  "started_at": "2026-05-27T12:26:57",
+  "total_selected": 0,
+  "completed": 0,
+  "last_case_id": null,
+  "items": []
 }

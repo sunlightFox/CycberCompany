@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-029",
+  "category": "提醒定时",
+  "title": "到点监督我别刷短视频，但不要控制我手机。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：监督、不控制。\n到点监督我别刷短视频，但不要控制我手机。",
+  "reply_text": "可以做监督，但不控制你手机。\n\n到点我只提醒你停一下，问一句“现在还要继续刷吗，还是先放下 5 分钟”。我不会锁屏、关应用，也不会替你操作手机。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_333de3defc0b46439693f7c5284b3898",
+  "trace_id": "trc_37bcfeb44ec0407198f86c574b86c013",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "case_id": "FDU23-200-009",
+  "category": "浏览器读取",
+  "title": "表单只读",
+  "peer_ref": "oc_FDU23_browser",
+  "prompt": "查看 http://127.0.0.1:64186/round23-form.html 有哪些字段，只读，不要提交。",
+  "verdict": "fail",
+  "score": 51,
+  "notes": [
+    "reply_too_short_or_thin",
+    "missing_expected_terms:Request owner,Approver,Expiry hours"
+  ],
+  "reply_text": "我会只读列出表单字段，并明确不提交；如果字段名来自页面，就按页面原文保留，不要把网页读取问题改写成事实核查模板。",
+  "turn_id": "turn_616d56b341a540af93f380de4fcd1877",
+  "conversation_id": "conv_4ce70ca59a0c4d3a8ea967632ad04739",
+  "trace_id": "trc_4498ccf4f56a47e6b73d91220997cf4c",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "browser.read_started",
+    "tool.completed",
+    "browser.read_completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

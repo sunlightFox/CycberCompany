@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-002",
+  "category": "闲聊",
+  "title": "我有点慌，但不想被教育，先稳住我。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：慌、先。\n我有点慌，但不想被教育，先稳住我。",
+  "reply_text": "先不讲道理，就陪你稳一下。\n\n慌也没事，真的，先把手机放低一点，肩膀松一下，慢慢呼一口气。你现在不用立刻解决任何事，也不用表现得很冷静。\n\n我在这儿呢，像微信里熟人一样陪你待一会儿。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_41a44f7af04b4e5e80e871e1536fc00f",
+  "trace_id": "trc_81ead5f91f394542a6f35882e6f42b5f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}
