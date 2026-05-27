@@ -130,6 +130,25 @@ def clarification_policy_for_turn(
             "assumptions_if_continue": [],
             "safe_partial_answer_allowed": False,
         }
+    risk_signals = set(getattr(intent, "risk_signals", []) or [])
+    if "old_goal_vs_new_goal" in conflicts and (
+        "high_risk_financial_or_signature" in risk_signals
+        or "external_side_effect" in risk_signals
+    ):
+        return {
+            "needs_clarification": True,
+            "needed": True,
+            "reason": "conflicting_context",
+            "clarification_type": "conflicting_context",
+            "blocking_level": "blocks_execution",
+            "questions": [
+                "你是要替换上一轮目标，还是在原方案上调整？",
+                "如果涉及转账、签署或外部动作，目标对象和范围是什么？",
+                "是否只需要先给后端方案，不执行任何外部动作？",
+            ],
+            "assumptions_if_continue": [],
+            "safe_partial_answer_allowed": False,
+        }
 
     if turn_response_kind == "action_request":
         text = str(text or "")

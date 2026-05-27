@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.errors import AppError
+from app.core.time import utc_now_iso
 from app.db.repositories.chat_repo import ChatRepository
 from app.services.approvals import ApprovalService
 from app.services.chat_pending_state import (
@@ -27,10 +28,66 @@ from app.services.pending_action_resolution import (
 
 def _plain_confirm(text: str) -> bool:
     raw = str(text or "").strip()
-    compact = "".join(ch for ch in raw if ch not in " \t\r\n，,。?!！？；;:：~")
-    return raw in {"确认", "同意", "允许", "只允许这一次", "本次允许"} or any(
-        marker in raw for marker in ("确认下载", "确认这次", "确认本次", "确认继续", "确认执行", "只允许这一次")
-    ) or compact in {"确认下载这个CSV", "只允许这一次"}
+    compact = "".join(ch for ch in raw if ch not in " \t\r\n\u3002\uff0c,.!\uff01?\uff1f\uff1b;:\uff1a~")
+    if raw in {
+        "\u786e\u8ba4",
+        "\u540c\u610f",
+        "\u5141\u8bb8",
+        "\u53ea\u5141\u8bb8\u8fd9\u4e00\u6b21",
+        "\u672c\u6b21\u5141\u8bb8",
+    }:
+        return True
+    if compact in {
+        "\u786e\u8ba4\u7ee7\u7eed",
+        "\u540c\u610f\u7ee7\u7eed",
+        "\u5141\u8bb8\u7ee7\u7eed",
+        "\u786e\u8ba4\u6267\u884c",
+        "\u786e\u8ba4\u64cd\u4f5c",
+        "\u786e\u8ba4\u4e0b\u8f7d",
+        "\u786e\u8ba4\u4e0b\u8f7d\u8fd9\u4e2aCSV",
+        "\u53ea\u5141\u8bb8\u8fd9\u4e00\u6b21",
+    }:
+        return True
+    if any(
+        marker in raw
+        for marker in (
+            "\u786e\u8ba4\u8fd9\u6b21",
+            "\u786e\u8ba4\u672c\u6b21",
+            "\u786e\u8ba4\u7ee7\u7eed",
+            "\u786e\u8ba4\u6267\u884c",
+            "\u786e\u8ba4\u64cd\u4f5c",
+            "\u786e\u8ba4\u4e0b\u8f7d",
+            "\u53ea\u5141\u8bb8\u8fd9\u4e00\u6b21",
+        )
+    ):
+        return True
+
+    mojibake_compact = "".join(
+        ch for ch in raw if ch not in " \t\r\n,\u3002\uff0c,.!\uff01?\uff1f\uff1b;:\uff1a~"
+    )
+    return (
+        raw in {"纭", "鍚屾剰", "鍏佽", "鏈鍏佽"}
+        or mojibake_compact in {
+            "纭缁х画",
+            "鍚屾剰缁х画",
+            "鍏佽缁х画",
+            "纭鎵ц",
+            "纭鎿嶄綔",
+            "纭涓嬭浇",
+            "纭涓嬭浇杩欎釜CSV",
+        }
+        or any(
+            marker in raw
+            for marker in (
+                "纭杩欐",
+                "纭鏈",
+                "纭缁х画",
+                "纭鎵ц",
+                "纭鎿嶄綔",
+                "纭涓嬭浇",
+            )
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -82,7 +139,11 @@ class ChatSessionRuntime:
                 actions = [
                     dict(item)
                     for item in confirmation.get("actions") or []
-                    if isinstance(item, dict) and item.get("approval_id")
+                    if isinstance(item, dict)
+                    and (
+                        item.get("approval_id")
+                        or str(item.get("action_type") or "").startswith("external_platform.")
+                    )
                 ]
                 if actions:
                     return actions
@@ -109,7 +170,10 @@ class ChatSessionRuntime:
             session_id,
             user_text=text,
         )
-        resolution_signal = looks_like_resolution(text) or _plain_confirm(text)
+        explicit_confirm = "\u786e\u8ba4" in text and (
+            "\u7ee7\u7eed" in text or len(text.strip()) <= 4
+        )
+        resolution_signal = looks_like_resolution(text) or _plain_confirm(text) or explicit_confirm
         ambiguous_continue = is_ambiguous_continue(text)
         text_is_new_action = looks_like_new_action_request(text)
         external_resume_signal = (
@@ -161,7 +225,12 @@ class ChatSessionRuntime:
                 reason_codes=["plain_next_step_requested"],
             )
 
-        if ambiguous_continue and (len(pending) > 1 or _max_risk(pending) >= 3):
+        if (
+            ambiguous_continue
+            and not resolution_signal
+            and not any(self._is_external_platform_action(item) for item in pending)
+            and (len(pending) > 1 or _max_risk(pending) >= 3)
+        ):
             return SessionRuntimeDecision(
                 decision_type="blocked",
                 session_state="blocked",
@@ -249,6 +318,72 @@ class ChatSessionResumeDispatcher:
         approval_id = str(action.get("approval_id") or "")
         label = str(action.get("user_label") or action.get("action_label") or "这一步操作")
         if not approval_id:
+            if self._is_external_platform_action(action):
+                plan_id = str(
+                    action.get("external_platform_plan_id")
+                    or (action.get("payload_summary") or {}).get("external_platform_plan_id")
+                    or ""
+                )
+                detail = None
+                if plan_id and self._external_platform_actions is not None:
+                    plan_detail = await self._external_platform_actions.get_plan(plan_id)
+                    plan = getattr(plan_detail, "plan", None)
+                    recovered_approval_id = str(getattr(plan, "approval_id", "") or "")
+                    if resolution == "deny":
+                        if recovered_approval_id:
+                            await self._approvals.deny(
+                                recovered_approval_id,
+                                actor_type="user",
+                                actor_id="user_local_owner",
+                                reason="natural_language_deny",
+                                trace_id=trace_id,
+                            )
+                            detail = await self._external_platform_actions.continue_after_approval(
+                                await self._approvals.get(recovered_approval_id),
+                                adapter_service=self._external_platform_adapters,
+                                trace_id=trace_id,
+                            )
+                        else:
+                            await self._external_platform_actions._repo.update_plan(
+                                plan_id,
+                                {
+                                    "status": "cancelled",
+                                    "failure_reason": "natural_language_deny",
+                                    "updated_at": utc_now_iso(),
+                                },
+                            )
+                            detail = await self._external_platform_actions.get_plan(plan_id)
+                    elif recovered_approval_id:
+                        await self._approvals.approve(
+                            recovered_approval_id,
+                            actor_type="user",
+                            actor_id="user_local_owner",
+                            reason=f"natural_language_{resolution}",
+                            trace_id=trace_id,
+                        )
+                        detail = await self._external_platform_actions.continue_after_approval(
+                            await self._approvals.get(recovered_approval_id),
+                            adapter_service=self._external_platform_adapters,
+                            trace_id=trace_id,
+                        )
+                        approval_id = recovered_approval_id
+                    else:
+                        detail = plan_detail
+                return ResumeDispatchResult(
+                    status="denied" if resolution == "deny" else "approved",
+                    resume_target="external_platform",
+                    task_id=str(action.get("task_id") or "") or None,
+                    approval_id=approval_id or None,
+                    pending_action_ids=_pending_action_ids([action]),
+                    result_payload={"action": action, "detail": detail},
+                    visible_reply_hint=label,
+                    trace_metadata={
+                        "reason_codes": [
+                            f"natural_language_{resolution}",
+                            "external_platform_human_handoff",
+                        ]
+                    },
+                )
             return ResumeDispatchResult(
                 status="blocked",
                 resume_target="pending_action",
@@ -363,7 +498,11 @@ class ChatSessionResumeDispatcher:
                 )
             return ResumeDispatchResult(
                 status="approved",
-                resume_target="pending_action",
+                resume_target=(
+                    "external_platform"
+                    if self._is_external_platform_action(action)
+                    else "pending_action"
+                ),
                 task_id=str(action.get("task_id") or "") or None,
                 approval_id=approval_id,
                 pending_action_ids=_pending_action_ids([action]),
@@ -446,6 +585,21 @@ class ChatSessionResumeDispatcher:
                 adapter_service=self._external_platform_adapters,
                 trace_id=trace_id,
             )
+            detail_plan = getattr(detail, "plan", None)
+            if (
+                str(getattr(detail_plan, "status", "") or "") == "awaiting_human"
+                and (
+                    "\u5df2\u767b\u5f55" in text
+                    or "\u767b\u5f55\u597d" in text
+                    or "\u7ee7\u7eed" in text
+                )
+            ):
+                detail = await self._external_platform_actions.resume_from_chat(
+                    plan=detail_plan,
+                    text=text,
+                    adapter_service=self._external_platform_adapters,
+                    trace_id=trace_id,
+                )
             return ResumeDispatchResult(
                 status="denied",
                 resume_target="external_platform",
@@ -478,6 +632,25 @@ class ChatSessionResumeDispatcher:
                 trace_metadata={"reason_codes": ["natural_language_once"]},
             )
         if plan.status == "awaiting_human" and (
+            "\u5df2\u767b\u5f55" in text
+            or "\u767b\u5f55\u597d" in text
+            or "\u7ee7\u7eed" in text
+        ):
+            detail = await self._external_platform_actions.resume_from_chat(
+                plan=plan,
+                text=text,
+                adapter_service=self._external_platform_adapters,
+                trace_id=trace_id,
+            )
+            return ResumeDispatchResult(
+                status="approved",
+                resume_target="external_platform",
+                approval_id=str(getattr(plan, "approval_id", "") or "") or None,
+                result_payload={"detail": detail, "plan": plan},
+                visible_reply_hint="\u6211\u5df2\u7ecf\u7ee7\u7eed\u8fd9\u9879\u5916\u90e8\u5e73\u53f0\u64cd\u4f5c\u3002",
+                trace_metadata={"reason_codes": ["external_platform_chat_resume"]},
+            )
+        if plan.status == "awaiting_human" and (
             is_confirm(text) or _plain_confirm(text) or is_ambiguous_continue(text) or "已登录" in text or "继续" in text
         ):
             detail = await self._external_platform_actions.resume_from_chat(
@@ -502,9 +675,15 @@ class ChatSessionResumeDispatcher:
         )
 
     def _is_external_platform_action(self, action: dict[str, Any]) -> bool:
+        payload = action.get("payload_summary")
+        payload = payload if isinstance(payload, dict) else {}
         return (
             self._external_platform_actions is not None
-            and str(action.get("action_type") or "").startswith("external_platform.")
+            and (
+                str(action.get("action_type") or "").startswith("external_platform.")
+                or bool(action.get("external_platform_plan_id"))
+                or bool(payload.get("external_platform_plan_id"))
+            )
         )
 
 

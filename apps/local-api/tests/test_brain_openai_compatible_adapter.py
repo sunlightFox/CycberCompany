@@ -291,6 +291,7 @@ async def test_openai_compatible_responses_payload_includes_codex_reasoning_conf
         protocol_family="responses",
         reasoning_effort="medium",
         text_verbosity="medium",
+        disable_response_storage=True,
     )
 
     await client.complete_chat(_request(stream=False), CancelToken())
@@ -298,6 +299,7 @@ async def test_openai_compatible_responses_payload_includes_codex_reasoning_conf
     payload = _PayloadCaptureAsyncClient.payloads[-1]
     assert payload["reasoning"] == {"effort": "medium"}
     assert payload["text"] == {"verbosity": "medium"}
+    assert payload["store"] is False
 
 
 @pytest.mark.anyio

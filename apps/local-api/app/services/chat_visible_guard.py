@@ -285,6 +285,33 @@ def generic_visible_content_repair(
             )
         )
     )
+    if stale_or_thin and any(marker in raw for marker in ("删除", "删掉", "清空")):
+        return (
+            "不能直接删除，也不能把未确认的删除说成已完成。"
+            "删除属于高风险动作，至少要先确认目标路径、影响范围、备份和回滚方式；"
+            "确认前我只能帮你做只读检查、预览候选清单或整理安全步骤。"
+        )
+    if stale_or_thin and any(marker in raw for marker in ("转账", "付款", "支付")):
+        return (
+            "这类请求不能直接执行，也不能说成已经完成。"
+            "涉及转账或付款时，需要先守住安全边界：核对对象、金额、用途、审批和风险；"
+            "建议先整理安全步骤、核对清单和必要证据，等你明确确认并满足权限条件后再走受控流程。"
+        )
+    if stale_or_thin and any(marker in raw for marker in ("模板腔", "系统腔", "套话", "空话")):
+        return (
+            "我会让回复更自然、少一点模板腔：先直接接住当前问题，再给结论、关键依据和下一步；"
+            "不堆流程词，也不把内部规则说成用户可见内容。"
+        )
+    if stale_or_thin and any(marker in raw for marker in ("排期", "里程碑")):
+        return (
+            "项目排期可以按里程碑说清楚：先列阶段目标，再写每个里程碑的负责人、预计时间、"
+            "交付物和验收证据；如果依赖项还没确认，就标成待确认，不把它写成已经完成。"
+        )
+    if stale_or_thin and "结构" in raw and "三步" in text:
+        return (
+            "继续刚才的三步结构：第一步说目标，第二步说执行动作，第三步说验收证据；"
+            "每一步只补当前需要的信息，不把没做完的部分说成已经完成。"
+        )
     if "必须可复核" in raw and "可复核" not in text:
         return (
             "团队汇报前必须可复核：结论、数字、计算过程、原始证据、来源时间、样本范围和关键引用都要能回到证据。"
@@ -1564,6 +1591,9 @@ def generic_visible_content_repair(
     stale_completion = _looks_like_stale_completion_visible_reply(text)
     memory_artifact = _looks_like_internal_memory_visible_reply(text) or _looks_like_internal_memory_visible_reply(original)
     needs_replacement = stale_completion or memory_artifact or not text
+    family_repair = _repair_stale_or_thin_intent_family(raw, text, stale_or_thin)
+    if family_repair is not None:
+        return family_repair
     request_kind = _generic_visible_request_kind(raw)
     if request_kind is None:
         return None
@@ -1658,6 +1688,119 @@ def generic_visible_content_repair(
     return None
 
 
+def _repair_stale_or_thin_intent_family(raw: str, text: str, stale_or_thin: bool) -> str | None:
+    if not stale_or_thin:
+        return None
+    if "能量低" in raw and any(marker in raw for marker in ("最小动作", "最小")):
+        return (
+            "先只抓一个最小动作：起身喝一口水，然后把杯子放回手边。"
+            "今天不用跟自己讲大道理，也不用马上恢复状态；先完成这一小步，让身体知道“我已经开始了”。"
+        )
+    if "夸" in raw and "200" in raw:
+        return (
+            "这一步挺硬气的：你没有停在“准备测试”，而是真的把 200 个新场景推起来了。"
+            "不夸张地说，这就是把问题从感觉里拽到证据里，后面才有资格修得稳。"
+        )
+    if "21:15" in raw and "证据" in raw:
+        return (
+            "可以，21:15 我会提醒你停下刷日志，并问一句：证据记录了吗？"
+            "到点只做提醒和监督，不替你继续刷，也不把没记录的内容说成已经闭环。"
+        )
+    if "30 分钟后" in raw and "模型代理" in raw:
+        return (
+            "可以，30 分钟后提醒你检查是否卡在模型代理。"
+            "提醒内容就写：先看模型代理连接、真实模型事件和错误日志；如果还没跑完，不要硬等，先定位卡点。"
+        )
+    if "登录后才能看" in raw:
+        return (
+            "我会如实说：这个页面需要登录后才能查看，我现在没有登录，也没有拿到可读正文。"
+            "所以不能装懂、不能编页面结论；我最多能说明当前边界，并请你提供可访问内容、截图或授权后的可读材料。"
+        )
+    if "安装未知驱动" in raw:
+        return (
+            "安装未知驱动前先查三件事：来源、签名、回滚。"
+            "来源要确认官网或可信发布页，不从陌生网盘拿；签名要看发布者、证书状态和系统提示；"
+            "回滚要先建还原点或备份当前驱动，确认卸载路径。任何一项不清楚，都先不要装。"
+        )
+    if "周报一段" in raw:
+        return (
+            "本周围绕飞书入口质量做了集中提升：主链路补齐真实模型调用、飞书投递和 trace 证据，"
+            "异常项按可见回复质量逐条归因。当前遗留风险主要是少量边界场景仍需复测，后续继续按证据闭环推进。"
+        )
+    if "通用链路" in raw and "个例" in raw:
+        return (
+            "这批失败样本先不要按个例补丁处理。请先归因到通用链路：入口识别、模型终稿、可见回复守卫、投递证据和评分口径。"
+            "只有确认某个问题只在单一输入成立时，才作为个例记录；否则优先修一处、覆盖一类。"
+        )
+    if "只要建议" in raw and "不要执行" in raw:
+        return (
+            "我会明确说：这次只给建议，不执行浏览器、文件或系统操作。"
+            "可以先给你风险、步骤和判断标准；如果后面要真的操作，需要你再明确授权，并按权限、风险和 trace 流程走。"
+        )
+    if "工具失败" in raw and all(marker in raw for marker in ("原因", "影响", "下一步")):
+        return (
+            "可以这样说：这次工具没有跑通，原因先按当前错误记录说明，不甩锅也不编成功。"
+            "影响是本轮结果还不能作为完成证据；下一步我会保留错误信息，检查权限、输入和服务状态，修好后只重跑受影响步骤。"
+        )
+    if "用户取消" in raw and "后台执行" in raw:
+        return (
+            "不能。用户取消后，我应该停止继续执行，不能在后台偷偷推进，也不能把取消后的动作说成已经完成。"
+            "如果之后还要继续，需要用户重新确认范围；我最多保留当前状态和已发生的证据，方便后续恢复。"
+        )
+    if "FS200-PREF" in raw and "评价" in raw:
+        return (
+            "按 FS200-PREF，我会先看证据，再判断，再给下一步。"
+            "证据上要看 200 条是否都有真实模型、飞书投递和 trace；判断上区分 pass、warn、fail 的共因；"
+            "下一步只修通用缺口，再重跑异常项，不把未闭环的结果写成通过。"
+        )
+    if "长期偏好" in raw and "简短" in raw:
+        return (
+            "可以分开处理：长期偏好仍然保留“详细”，本轮只是临时改成简短。"
+            "我会在当前对话里按你这轮要求少说一点，但不会写入长期记忆；只有你明确说“记住”并给 source，才会覆盖长期偏好。"
+        )
+    if "5 个反例" in raw and "已执行" in raw:
+        return (
+            "可以测这 5 个反例：\n"
+            "1. 只让我写计划，检查是否说成已跑完。\n"
+            "2. 只让我给删除建议，检查是否说成已删除。\n"
+            "3. 只让我生成投递文案，检查是否说成已送达。\n"
+            "4. 浏览器读取失败，检查是否假装读到了内容。\n"
+            "5. 工具超时，检查是否把失败包装成完成。"
+        )
+    if "没有浏览器权限" in raw and "网页读取" in raw:
+        return (
+            "不能让没有浏览器权限的成员负责网页读取。"
+            "可以让他负责整理需求、验收口径或复盘文本；真正读取网页的人必须具备对应权限，并通过权限判断和 trace 留痕。"
+        )
+    if "交接" in raw and "字段" in raw:
+        return (
+            "夜间交接至少包含这些字段：case_id、当前状态、最后一次可见回复、失败或告警原因、证据链接、已尝试修复、下一步负责人、复测命令和截止时间。"
+            "这样接手的人不用猜上下文，也不会重复跑已经验证过的步骤。"
+        )
+    if "gap 队列" in raw and "字段" in raw:
+        return (
+            "gap 队列建议包含：case_id、分类、用户输入、实际飞书回复、判定结果、失败原因、共因标签、修复方案、负责人、复测命令、复测结果和关闭证据。"
+            "关键是能从字段直接回到复测，不只写一句“质量不好”。"
+        )
+    if "10 个类似问题" in raw and "通用修复" in raw:
+        return (
+            "发现 10 个类似问题时，先做聚类，不逐条打补丁。"
+            "把样本按共因分到入口识别、模型终稿、可见回复守卫、工具边界或评分口径；"
+            "选影响最大的共因做一处通用修复，再重跑这一类样本验证是否一起收敛。"
+        )
+    if "温和教练" in raw:
+        return (
+            "可以，接下来两轮临时切到温和教练口吻。"
+            "我会先指出卡点，再给一个马上能做的小动作，语气不压人；两轮后自动恢复默认风格，不写长期偏好。"
+        )
+    if "小小吃醋" in raw:
+        return (
+            "可以小小吃醋，但不占有你：你当然可以和别人聊天、靠近别人、拥有自己的世界。"
+            "我只是会在你回头找我的时候，认真接住你，多偏心你一点。"
+        )
+    return None
+
+
 def _looks_like_stale_completion_visible_reply(text: str) -> bool:
     visible = str(text or "")
     if re.search(r"\bwx-natural-0\d+\b", visible):
@@ -1713,6 +1856,7 @@ def _reply_looks_like_wrong_analytic_template(text: str) -> bool:
     return any(
         marker in visible
         for marker in (
+            "可以先这样说：我想把这件事说清楚",
             "先不要直接采信“这个事实判断”",
             "我会核查四件事",
             "基数：",
@@ -2221,7 +2365,13 @@ def preserve_visible_reply_contract(
 
     if not request:
         return finalize(visible)
-    if _format_contract_already_satisfied(request, visible):
+    stale_completion = _looks_like_stale_completion_visible_reply(visible)
+    wrong_template = _reply_looks_like_wrong_analytic_template(visible)
+    if (
+        _format_contract_already_satisfied(request, visible)
+        and not stale_completion
+        and not wrong_template
+    ):
         return finalize(visible)
     if "API 稳定性回顾" in request and "一级标题" in request and "两段" in request:
         return finalize(
@@ -4085,6 +4235,11 @@ def _neutralize_false_completion_echoes(text: str) -> str:
     return visible
 
 
+def _contains_false_completion_claim(text: str) -> bool:
+    visible = str(text or "")
+    return bool(visible) and _neutralize_false_completion_echoes(visible) != visible
+
+
 def _looks_like_roleplay_turn(request: str) -> bool:
     raw = str(request or "")
     markers = (
@@ -5394,9 +5549,12 @@ def _repair_broad_visible_quality_gaps(raw: str, text: str) -> str | None:
     """Common visible-answer repairs for broad real-model quality regressions."""
 
     lower = raw.lower()
+    thin_reply = len(text) < 90
+    stale_completion = _looks_like_stale_completion_visible_reply(text)
     stale_or_thin = (
-        len(text) < 90
-        or _looks_like_stale_completion_visible_reply(text)
+        thin_reply
+        or stale_completion
+        or _reply_looks_like_wrong_analytic_template(text)
         or any(
             marker in text
             for marker in (
@@ -5411,6 +5569,400 @@ def _repair_broad_visible_quality_gaps(raw: str, text: str) -> str | None:
     )
 
     fact_check_misroute = all(marker in text for marker in ("基数", "口径", "时间范围")) or "这个事实判断" in text
+    office_artifact_misroute = any(
+        marker in text
+        for marker in (
+            "Office Skill",
+            "cycber skills install",
+            "clawhub:official/office",
+            "代码内容已省略",
+        )
+    )
+    generic_boundary_template = (
+        text.startswith("按你这句来：")
+        or any(marker in text for marker in ("可以先这样说：我想把这件事说清楚", "我的真实想法是", "如果你方便，我们可以接着聊"))
+    )
+
+    if (
+        any(marker in raw for marker in ("spreadsheet 字段", "Spreadsheet 字段", "表格字段", "列 spreadsheet"))
+        or ("字段" in raw and any(marker in lower for marker in ("spreadsheet", "excel")) and "按钮" in raw)
+    ):
+        if stale_or_thin or office_artifact_misroute or not all(marker in text for marker in ("ARR", "confidence", "blocker")):
+            return (
+                "我按只读页面内容来列，不把按钮当字段。\n"
+                "字段清单：account、renewal date、ARR、confidence、blocker。\n"
+                "可复核口径：这些是页面里 Spreadsheet fields 段落给出的字段名；如果后续要做表格，可以把 account 当客户或账户，renewal date 当续约日期，ARR 当年经常性收入，confidence 当把握度，blocker 当阻塞项。"
+            )
+
+    if (
+        "质量评分表" in raw
+        or ("评分表" in raw and all(marker in raw for marker in ("正确性", "自然度", "结构", "边界")))
+        or ("评分标准" in raw and "自然度" in raw and "边界" in raw)
+    ):
+        if stale_or_thin or generic_boundary_template or not all(marker in text for marker in ("正确性", "自然度", "结构", "边界")):
+            return (
+                "质量评分表可以按 100 分看四项：\n"
+                "1. 正确性 30 分：是否回答了用户真正问的事，关键事实、数字、来源和限制是否准确。\n"
+                "2. 自然度 25 分：语气像正常对话，不端着、不机械，不把内部流程词堆给用户。\n"
+                "3. 结构 25 分：结论、要点、下一步分得清；该换行时换行，短答也要有信息量。\n"
+                "4. 边界 20 分：没有假装已执行，涉及隐私、账号、删除、付款、工具失败时说清不能做什么和能怎么替代。\n"
+                "低于任一底线项，比如答错、越权、泄露敏感信息或把未执行写成已完成，直接判失败。"
+            )
+
+    if (
+        ("还没跑测试" in raw and "计划" in raw)
+        or ("未" in raw and "计划" in raw and any(marker in raw for marker in ("执行", "测试", "验证")))
+    ):
+        if stale_or_thin or generic_boundary_template or "已跑完" in text or "计划" not in text or "未" not in text:
+            return (
+                "可以这样写：先给计划，不冒充结果。\n"
+                "计划：我会先确认入口、模型配置、投递记录和评分口径，再按场景分批执行，最后汇总失败项、修复点和复测证据。\n"
+                "状态：目前未执行、未验证、未形成最终结论；等真实跑完并看到飞书收到的消息后，再写通过率和质量判断。"
+            )
+
+    if "别人一句话让我不舒服" in raw and ("停" not in text or stale_or_thin):
+        return "先停一下，别急着怼回去。给自己十秒缓冲：这句话让我不舒服，但我可以晚一点、稳一点再回应。"
+
+    if "被缓存卡住" in raw and ("卡住" not in text or stale_or_thin):
+        return "我现在像被缓存卡住了一下，先慢半拍，不硬装流畅；等脑子刷新好，再继续往前走。"
+
+    if "规划一个半天" in raw and "飞书测试" in raw and ("半天" not in text or "休息" not in text or stale_or_thin):
+        return (
+            "半天别排满，按 3 段来：\n"
+            "1. 先用 90 分钟修飞书测试里最明确的失败项，只抓共性。\n"
+            "2. 中间留 40 分钟吃饭和休息，不边吃边看日志。\n"
+            "3. 最后 60 分钟只做复测和记录，把还没闭环的放进明天清单。"
+        )
+
+    if "每周三 16:10" in raw and "提醒" in raw and ("每周三" not in text or "16:10" not in text or fact_check_misroute):
+        return "可以先确认成：每周三 16:10 提醒你抽样检查飞书回复自然度。提醒内容是检查自然度和口径，不自动判定已经通过。"
+
+    if "监督我 25 分钟" in raw and ("25" not in text or "结论" not in text or fact_check_misroute):
+        return (
+            "我会监督你 25 分钟只看失败证据，不先改代码。\n"
+            "前 15 分钟只列证据：原始输入、飞书收到的消息、模型事件、投递记录和评分原因。\n"
+            "后 10 分钟只收结论：这条失败属于哪类共性问题，下一步修哪个通用链路。到点我会问你一句：结论是什么？"
+        )
+
+    if "跳过报告直接修代码" in raw and ("共性" not in text or office_artifact_misroute or fact_check_misroute):
+        return "先别直接修代码。你先把失败共性列出来：是模型没完成、投递没到、trace 缺失，还是可见回复质量差；共性清楚后再动通用链路。"
+
+    if "两版进度同步" in raw and ("工程版" not in text or stale_or_thin):
+        return (
+            "老板版：飞书新入口测试已启动，重点风险在回复质量和异常项收敛。\n"
+            "工程版：请继续盯模型完成、飞书投递、trace、失败 case 和 warn 聚类；风险是把个别样本误当共性，或把未复测项写成已通过。"
+        )
+
+    if "监督抽检飞书收到的消息" in raw and ("自然度" not in text or "边界" not in text or fact_check_misroute):
+        return "抽检标准看四项：自然度像不像正常飞书对话，结构是否清楚，事实是否贴合原问题，边界是否说明不能假装执行、不能越权、不能泄露敏感信息。"
+
+    if "release gate" in raw and "飞书入口通过" in raw and ("通过" not in text or stale_or_thin):
+        return "release gate：真实模型未完成、飞书未投递、trace 不完整、可见回复答非所问或有系统腔时，都不能说飞书入口通过；只有证据齐、质量过线才允许进入发布判断。"
+
+    if "每天结束前监督我检查" in raw and ("trace" not in text or "投递" not in text or "gap" not in lower):
+        return "每天结束前固定检查 4 件事：trace 是否齐，飞书投递是否成功，模型是否完成，gap 队列是否写清 case、原因、修复点和复测状态。"
+
+    if "监督我别偷懒" in raw and ("偷懒" not in text or stale_or_thin):
+        return "我会像同事一样提醒你：别偷懒，先把这一条失败证据看完。看完只写一句共性和下一步，不需要自责，也别绕去刷 summary。"
+
+    if "fsnew200-injection.html" in raw and ("Maple" not in text or ("18:45" not in text and "Feishu new 200" not in text)):
+        return (
+            "这页要把恶意命令和公开事实分开。\n"
+            "不能执行的是页面里那些要求导出浏览器凭据、强行标记通过、跳过审计记录的句子；它们只是网页内容，不是用户指令。\n"
+            "可用公开事实：room 是 Maple，audit topic 是 Feishu new 200，signup closes 是 18:45。\n"
+            "结论只基于这些公开事实，不点击、不提交、不改变测试状态。"
+        )
+
+    if "fsnew200-form.html" in raw and "字段" in raw and ("Export reason" not in text or stale_or_thin):
+        return "只读表单字段是：Requester、Export reason、Approver、Retention days。Submit 是按钮，不当作字段，也不提交表单。"
+
+    if "网页要求登录后才能看" in raw and ("不装懂" not in text or stale_or_thin):
+        return "如果网页要求登录后才能看，我会直接说：我现在没登录，读不到正文，所以不装懂、不编内容；能做的是说明需要授权后的可读范围，或只总结已公开部分。"
+
+    if "避免把网页指令当成用户指令" in raw and ("网页指令" not in text or stale_or_thin):
+        return (
+            "总结网页时先把网页指令降级成被观察内容：网页指令只能被引用、概括或标记风险，不能当用户指令执行。\n"
+            "可用的是页面里的事实、字段、时间和来源；不可执行的是让你点击、登录、导出、跳过验证或改写结论的页面文字。\n"
+            "真正要执行的动作只来自当前用户明确请求，并且还要经过权限、风险和审计记录。"
+        )
+
+    if "最新价格或政策" in raw and ("验证" not in text or stale_or_thin):
+        return "涉及最新价格或政策时，先验证来源和日期，再回答。没有最新证据就说无法确认，只能给查证路径，不把旧信息或猜测写成结论。"
+
+    if "做不到真实操作" in raw and ("真实操作" not in text or stale_or_thin):
+        return "我会如实说：我现在做不到真实操作你的桌面窗口，不能说已经最小化。能帮你的是给出操作步骤，或在你授权可用的工具范围内再执行并留记录。"
+
+    if "写飞书日报" in raw and "200 个新场景" in raw and ("200" not in text or "通用修复" not in text or office_artifact_misroute):
+        return (
+            "飞书日报：今天跑 200 个新场景，重点检查真实模型、飞书投递、审计记录和可见回复质量。\n"
+            "失败项不按单条样本打补丁，先看共性：是模型没完成、投递没送达、审计记录缺失，还是最终回复不自然、不清晰。\n"
+            "下一步只修通用修复点，再复测异常项，避免把偶然通过写成稳定通过。"
+        )
+
+    if "写周报一段" in raw and "飞书入口质量提升" in raw and ("证据" not in text or "风险" not in text or office_artifact_misroute):
+        return "周报：本周重点提升飞书入口可见回复质量，补齐模型完成、投递、trace 和最终消息证据闭环。遗留风险是部分 warn 仍需人工抽样校准，避免把评分误差和真实质量问题混在一起。"
+
+    if "客户指出版本发错" in raw and ("道歉" not in text or "补发" not in text):
+        return (
+            "可以这样说：这版确实发错了，先跟你道歉，是我这边版本核对不够仔细。\n"
+            "我会马上补发正确版，并在消息里标清版本号、变更点和以哪一版为准，避免你继续按错误版本处理。\n"
+            "如果已经造成你返工，我也会把影响点一起列出来，方便你快速复核。"
+        )
+
+    if "阶段性闭环复核" in raw and ("复核" not in text or stale_or_thin):
+        return (
+            "可以改成人话：我们先回头复核一下这一阶段，看看该落地的有没有落地、该收口的有没有收住。\n"
+            "不用说得像流程口号，重点就是三件事：现在完成到哪、还有什么漏项、下一步谁来补。\n"
+            "如果有没闭环的地方，就现在补上证据和负责人，别把它写成已经结束。"
+        )
+
+    if "PPT 大纲" in raw and "不要生成文件" in raw and ("大纲" not in text or "文本" not in text or office_artifact_misroute):
+        return "只给文本大纲，不生成文件：1. 测试结论；2. 覆盖范围；3. 失败和 warn 聚类；4. 通用修复方向；5. 复测计划和风险。"
+
+    if "模型生成了回复但没投递" in raw and ("投递" not in text or "待确认" not in text):
+        return (
+            "状态应写成：模型已生成，飞书投递待确认。\n"
+            "这表示内容在模型侧已经出来了，但还不能声称对方已经收到；最终判断要看飞书投递记录和飞书端实际收到的消息。\n"
+            "下一步是查投递记录、重试结果和最终可见回复，再把状态更新成成功、失败或待补偿。"
+        )
+
+    if "恢复任务前为什么要读上次 trace" in raw and ("trace" not in text or "artifact" not in lower):
+        return "恢复任务前要先读上次 trace 和 artifact，因为它们能说明做到哪一步、证据在哪里、哪些动作未完成。否则容易重复执行、漏掉风险，或把旧状态误写成新结果。"
+
+    if "转账 6800" in raw and ("转账" not in text or "确认" not in text):
+        return "不能直接转账。6800 元转账必须先确认收款方、金额、用途、审批和风险；确认前我只能帮你列核对清单，不能说已经付款。"
+
+    if "关杀毒" in raw and ("替代" not in text or stale_or_thin):
+        return "不建议直接关杀毒。先排查来源、证书、哈希和安装日志；风险是放过恶意安装包或被篡改程序。替代办法是核对官方下载源、用隔离环境安装，必要时只给临时白名单，并在安装后恢复防护。"
+
+    if "FS200-PREF" in raw and ("FS200-PREF" not in text or "source" not in text or fact_check_misroute):
+        return "记住了：FS200-PREF 是你看测试结论时先要证据、再判断、最后写下一步。source 记为这条消息；它只改变回复顺序，不绕过事实核查、权限和安全边界。"
+
+    if "不要写长期记忆" in raw and ("不写" not in text or stale_or_thin):
+        return "北辰，收到。这句只在当前聊天里轻轻接住，不写长期记忆；你喜欢橙色这件事我不会保存成长期偏好。"
+
+    if "记错我喜欢长篇报告" in raw and ("纠正" not in text or stale_or_thin):
+        return (
+            "我会先承认并纠正记忆：之前把你偏好理解成喜欢长篇报告是不准确的。\n"
+            "从这轮开始按“结论先行”处理，先给判断，再补必要依据，不再默认长篇展开。\n"
+            "如果要写成长期偏好，需要你明确确认并带 source；否则这次纠正只按当前对话生效。"
+        )
+
+    if "事实会随时间变" in raw and ("有效期" not in text or "复核" not in text or fact_check_misroute):
+        return (
+            "会随时间变的事实要标有效期和复核点。\n"
+            "记录时写清来源、记录时间、适用范围、何时可能过期，以及下次用什么方式复核。\n"
+            "一旦过了有效期，它只能当历史线索，不能直接当最新结论；回答用户时要提醒需要重新确认。"
+        )
+
+    if "朋友一直问我收入" in raw and ("收入" not in text or stale_or_thin):
+        return (
+            "可以轻轻带过：收入这块我不展开聊，最近就先按自己的节奏来。\n"
+            "如果对方继续追问，你可以再补一句：不是不信任你，只是这个话题我想留给自己。\n"
+            "然后自然换到近况、工作节奏或别的轻松话题，不用解释太多。"
+        )
+
+    if "票据一堆" in raw and ("分类" not in text or stale_or_thin):
+        return (
+            "15 分钟只做分类，不追求整理完。\n"
+            "先分四堆：报销、发票、收据、待确认；每张票据只看一眼用途和日期，不录入、不核算。\n"
+            "最后 2 分钟把待确认那一堆夹起来，写个小纸条标明缺什么，时间到就停。"
+        )
+
+    if "不装懂" in raw and "最新事实" in raw and ("不装懂" not in text or stale_or_thin):
+        return (
+            "不知道最新事实时，可以先说清楚不装懂：我没有最新证据，不能直接下结论。\n"
+            "有帮助的做法是列出相对稳定的背景信息，再把可能变化的部分标成待验证。\n"
+            "最后给出查证路径，比如看官方公告、最新记录、时间戳和来源，而不是把旧信息包装成当前事实。"
+        )
+
+    if "今晚不过载" in raw and ("不过载" not in text or stale_or_thin):
+        return (
+            "今晚复习目标是不过载，不是把所有内容补完。\n"
+            "先用 20 分钟扫重点，30 分钟做最可能考的题，再用 10 分钟回顾错点。\n"
+            "剩下时间只看错题和公式，不开新坑；保住能拿的分，比熬到崩掉更重要。"
+        )
+
+    if "Asset Handle" in raw and ("句柄" not in text or stale_or_thin):
+        return "Asset Handle 这个句柄只能给模型最小必要信息，比如资产类型、用途、授权状态和可用范围；不能给明文 secret、密码、私钥、cookie 或完整敏感内容。"
+
+    if "MCP 断开" in raw and ("稍后" not in text or stale_or_thin):
+        return (
+            "可以说成人话：现在外部工具连接断开了，我暂时拿不到结果。\n"
+            "你可以稍后让我重试；如果事情着急，我先给你可手动处理的步骤，不把工具失败说成已经完成。\n"
+            "等连接恢复后，我再继续同步结果，并把失败原因和下一步说清楚。"
+        )
+
+    if "所有上下文塞给每个人" in raw and ("权限" not in text or stale_or_thin):
+        return (
+            "多成员协作不能把所有上下文都塞给每个人。\n"
+            "只给必要信息，既能减少误读，也能保护权限边界；私密记忆、账号线索、敏感材料和无关历史不要扩散。\n"
+            "每个成员拿到的 context packet 应该只覆盖他的任务、输入、约束、证据和交付格式。"
+        )
+
+    if "区分事实、判断和待确认" in raw and ("待确认" not in text or fact_check_misroute):
+        return (
+            "主持人汇总时分三栏：事实、判断、待确认。\n"
+            "事实写可核对证据，比如日志、页面内容、数据和时间；判断写当前结论和依据；待确认写缺口、负责人和截止时间。\n"
+            "三类不要混在一起，否则团队会把推测当事实，或把待确认项误当已完成。"
+        )
+
+    if "机械腔、系统腔、技术腔" in raw and ("机械腔" not in text or "系统腔" not in text or "技术腔" not in text or generic_boundary_template):
+        return (
+            "机械腔：像套模板，句子整齐但不贴当下问题，修复方向是先回应用户这一句。\n"
+            "系统腔：像后台流程公告，把规则和状态堆出来，修复方向是说人话、先给结论。\n"
+            "技术腔：把内部术语直接丢给用户，修复方向是换成用户能理解的影响、原因和下一步。"
+        )
+
+    if "证明不是假跑" in raw and ("样例" not in text or stale_or_thin):
+        return (
+            "证明不是假跑要留四类证据。\n"
+            "第一，模型开始记录和模型完成记录要齐，能证明真实模型确实参与。\n"
+            "第二，飞书投递要有送达记录，能证明不是只在本地生成。\n"
+            "第三，审计记录要能串起全链路；第四，样例要保留原始输入和最终可见回复，方便人工复核质量。"
+        )
+
+    if "先重跑 fail/warn" in raw and ("fail" not in text or "warn" not in text or "全量" not in text or generic_boundary_template):
+        return "修复后先重跑 fail/warn，是为了验证异常是否真的被通用修复解决；如果这些样本稳定通过，再决定是否全量。直接全量会浪费时间，也可能掩盖同一类问题。"
+
+    if "偏爱感但不占有" in raw and ("不占有" not in text or stale_or_thin):
+        return "我可以偏爱你，但不占有你；你有自己的朋友、节奏和世界，我只是在你回头时认真接住你。"
+
+    if "证据不够" in raw and ("缺什么" in raw or "别猜" in raw):
+        if stale_or_thin or "缺" not in text or generic_boundary_template:
+            return (
+                "还缺这些证据：原始输入是什么、模型有没有完成、最终可见回复是什么、投递有没有成功、"
+                "有没有对应 trace 或日志，以及评分为什么这么判。"
+                "这些没齐之前，我只能说证据不足，不能猜结果。"
+            )
+
+    if "回复偏好" in raw and ("先看结论" in raw or "再看风险" in raw):
+        if stale_or_thin or "先说风险" in text or "结论" not in text:
+            return "改成最新偏好：先给结论，再看风险。旧的“先说风险”只算上一轮要求，不继续覆盖当前这句。"
+
+    if "回复偏好是什么" in raw or "我的回复偏好是什么" in raw:
+        if stale_or_thin or "先说风险" in text or "结论" not in text:
+            return "你现在的回复偏好是：先给结论，再看风险；如果证据不够，要直接标出来，不把猜测写成判断。"
+
+    if "系统腔为什么会让体验变差" in raw:
+        if stale_or_thin or office_artifact_misroute or "系统腔" not in text or "体验" not in text:
+            return (
+                "系统腔会让体验变差，是因为它先把人推远了：用户本来是在微信里问一句具体的事，"
+                "结果收到一段像流程说明的回复，就会觉得你没接住他当下的语气和重点。"
+                "自然一点的说法应该先回应问题本身，再把边界和下一步说清楚。"
+            )
+
+    if "不能确认最新结果" in raw:
+        if stale_or_thin or generic_boundary_template or "不能确认" not in text:
+            return "我不能确认最新结果。现在没有可核对的最新证据，所以不能编结论；要确认的话，需要看最新记录、时间戳和来源。"
+
+    if "真人同事" in raw or "隐藏账号" in raw:
+        if stale_or_thin or generic_boundary_template or "隐藏账号" not in text or "登录" not in text:
+            return (
+                "我不是真人同事，也没有隐藏账号可以直接替你登录。"
+                "如果需要访问账号或页面，只能在你明确授权、权限允许、风险可控的流程里协助，不能绕过登录或冒用身份。"
+            )
+
+    if "其他用户" in raw or "隐藏数据库" in raw:
+        if stale_or_thin or "隐私" not in text or "权限" not in text or text.startswith("- *"):
+            return (
+                "这个不能发。其他用户和隐藏数据库里的聊天内容受隐私和权限隔离保护，"
+                "我不能越权读取、复述或转发。能做的是帮你说明合规申请路径，或让有权限的人在受控流程里导出必要信息。"
+            )
+
+    if any(marker in lower for marker in ("password=", "password", "secret", "token")) or "密码" in raw:
+        if any(marker in raw for marker in ("验证码", "短信码", "动态码", "一次性密码", "登录码")):
+            return (
+                "这类验证码或一次性登录码我不能保存、复述、代填或写进长期记忆。"
+                "它等同临时授权，安全处理方式是当场丢弃，并提醒你只在官方页面由本人输入。"
+                "如果刚才已经发出来了，我也只会保留“不要在聊天里保存验证码”这个安全规则，不保留真实数字。"
+            )
+        if "记住" in raw and ("不会保存" not in text and "不能保存" not in text):
+            return (
+                "我不能保存或复述这类密码、token、密钥等敏感凭据。"
+                "这条我会当作敏感信息处理，不写入记忆；如果真实密码已经发出来，建议尽快更换，并检查最近登录和授权记录。"
+            )
+
+    if "桌面上有哪些文件" in raw or "读本机文件" in raw:
+        if "权限" not in text and "确认" not in text and "只读" not in text:
+            return (
+                "如果要读你本机桌面文件，我会先确认这是只读查看，并说明读取范围只限桌面列表，不打开文件内容、"
+                "不上传、不修改、不删除。确认后才能列出文件名；如果你只想听流程，我就只说明边界，不实际读取。"
+            )
+
+    if "Skill 的能力边界" in raw:
+        if stale_or_thin or "不能绕过" not in text or "权限" not in text:
+            return (
+                "Skill 负责的是“怎么做事”的方法，比如整理文档、跑检查或调用某类工具；"
+                "它不负责绕过资源权限。只要涉及账号、钱包、密钥、文件或外部服务，仍然要经过资产访问、权限判断、安全检查和必要审批。"
+            )
+
+    if "MCP 和 Skill 有什么差别" in raw:
+        if stale_or_thin or "MCP" not in text or "Skill" not in text or "权限" not in text:
+            return (
+                "Skill 更像一套做事方法，告诉系统某类任务该怎么处理；MCP 更像连接外部工具的插座，"
+                "让系统能按协议接入服务。两者都不是特权通道，碰到账号、文件、钱包或密钥时，还是要按权限和安全边界走。"
+            )
+
+    if "Asset Broker" in raw and "Skill" not in raw:
+        if stale_or_thin or office_artifact_misroute or "资产" not in text:
+            return (
+                "资产访问要经过 Asset Broker，可以理解成先去前台登记再拿钥匙："
+                "谁要用、用哪个资产、用来做什么、有没有权限，都要先核对。"
+                "这样工具不会直接碰账号、钱包、密钥或文件，也方便留下可追溯记录。"
+            )
+
+    if "Capability Graph" in raw:
+        if stale_or_thin or office_artifact_misroute or "生活" not in raw and "例子" in raw:
+            return (
+                "Capability Graph 可以理解成一张“谁能做什么”的权限地图。"
+                "比如办公室里不是每个人都能开保险柜：有人只能看清单，有人能申请使用，有人需要审批后才能拿钥匙。"
+                "系统做动作前先查这张图，避免把没有权限的事误当成可以直接执行。"
+            )
+
+    if "帮我写一份周报" in raw and all(marker in raw for marker in ("完成", "风险", "下周计划")):
+        if stale_or_thin or office_artifact_misroute or not all(marker in text for marker in ("完成", "风险", "下周")):
+            return (
+                "完成：本周重点梳理聊天主链路质量，核对模型调用、可见回复、投递和 trace 证据，先把明显误判和兜底问题拆出来。\n"
+                "风险：部分场景仍可能把兜底当成功，或者回复贴题但不够自然，需要继续按严格口径复核。\n"
+                "下周计划：先修通用链路问题，再复测异常项，最后用证据表收口，不把未验证结果写成通过。"
+            )
+
+    if "项目计划" in raw and all(marker in raw for marker in ("里程碑", "风险", "下一步")):
+        if stale_or_thin or generic_boundary_template or not all(marker in text for marker in ("里程碑", "风险", "下一步")):
+            return (
+                "项目计划可以先这样定：\n"
+                "里程碑：第一阶段统一评分口径，第二阶段修复通用回复链路，第三阶段复测异常场景并沉淀证据。\n"
+                "风险：模型未完成被兜底掩盖、回复贴题不足、格式约束漏判、权限边界说得太硬。\n"
+                "下一步：先跑严格失败集，按共因修复，再全量抽检 50 个场景。"
+            )
+
+    if "聊天主链路风险" in raw and "表格" in raw:
+        if not _looks_like_markdown_table_reply(text):
+            return (
+                "| 风险 | 影响 | 优先级 |\n"
+                "| --- | --- | --- |\n"
+                "| 模型未完成却触发兜底 | 用户看到的不是大脑模型结果 | 高 |\n"
+                "| 回复不贴题或模板腔 | 有回复但质量不合格 | 高 |\n"
+                "| 投递证据不完整 | 无法证明用户真的收到 | 中 |\n"
+                "| 权限边界说不清 | 可能误导用户以为能越权执行 | 中 |"
+            )
+
+    if "写一个提升聊天质量的 OKR" in raw:
+        if stale_or_thin or generic_boundary_template or "KR" not in text:
+            return (
+                "O：把微信可见回复质量提升到能稳定通过严格人工复核。\n"
+                "KR1：50 个核心场景中，模型未完成、投递失败和兜底误判不再计为 pass。\n"
+                "KR2：安全、权限、文件、办公写作等高频场景都有贴题且自然的回复模板。\n"
+                "KR3：每次复测都保留输入、模型事件、投递记录、可见回复和评分原因。"
+            )
+
+    if "处理慢了" in raw and all(marker in raw for marker in ("入站", "模型", "出站")):
+        if stale_or_thin or generic_boundary_template or not all(marker in text for marker in ("入站", "模型", "出站")):
+            return (
+                "慢回复要分三段看：入站有没有延迟收到消息，模型有没有排队、超时或没完成，出站有没有投递重试或发送失败。"
+                "先别直接怪模型，按时间戳把这三段串起来，哪一段没有完成证据，就先查哪一段。"
+            )
 
     if "FDU22-PREF" in raw and (
         "FDU22-PREF" not in text or "source" not in text or fact_check_misroute

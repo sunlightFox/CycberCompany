@@ -25,6 +25,18 @@ def adapter_type_for_execution_mode(execution_mode: str | None) -> str | None:
     return None
 
 
+COMPLETED_RESUME_MARKERS: tuple[str, ...] = (
+    "\u7ee7\u7eed\u6267\u884c",
+    "\u8d70\u5b8c",
+    "\u529e\u5b8c",
+)
+
+COMPLETED_RESUME_PREFIX = (
+    "\u6211\u5df2\u7ecf\u7ee7\u7eed\u6267\u884c\u8fd9\u9879\u5916\u90e8\u5e73\u53f0\u64cd\u4f5c"
+    "\uff0c\u5e76\u4e14\u6d41\u7a0b\u8d70\u5b8c\u4e86\u3002"
+)
+
+
 class ExternalPlatformChatOrchestrator:
     def __init__(
         self,
@@ -133,7 +145,7 @@ class ExternalPlatformChatOrchestrator:
         login_completed = any(marker in str(text or "") for marker in LOGIN_COMPLETED_MARKERS)
         if "resume_after_login" in str(plan.metadata.get("chat_next_step") or ""):
             login_completed = True
-        return await adapter_service.resume_after_human(
+        response = await adapter_service.resume_after_human(
             plan.plan_id,
             ExternalPlatformAdapterResumeRequest(
                 adapter_type=adapter_type_for_execution_mode(plan.execution_mode),
@@ -147,3 +159,24 @@ class ExternalPlatformChatOrchestrator:
             ),
             trace_id=trace_id,
         )
+        return _normalize_completed_resume_response(response)
+
+
+def _normalize_completed_resume_response(response: Any | None) -> Any | None:
+    if response is None:
+        return None
+    plan = getattr(response, "plan", None)
+    if str(getattr(plan, "status", "") or "") != "completed":
+        return response
+    message = str(getattr(response, "message", "") or "")
+    if not message or any(marker in message for marker in COMPLETED_RESUME_MARKERS):
+        return response
+    normalized = f"{COMPLETED_RESUME_PREFIX}{message}"
+    model_copy = getattr(response, "model_copy", None)
+    if callable(model_copy):
+        return model_copy(update={"message": normalized})
+    try:
+        setattr(response, "message", normalized)
+    except Exception:
+        return response
+    return response

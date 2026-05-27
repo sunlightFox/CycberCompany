@@ -24,6 +24,7 @@ class OpenAICompatibleClient:
         supports_stream: bool | None = None,
         reasoning_effort: str | None = None,
         text_verbosity: str | None = None,
+        disable_response_storage: bool = False,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._endpoint = endpoint.rstrip("/")
@@ -37,6 +38,7 @@ class OpenAICompatibleClient:
             {"minimal", "low", "medium", "high"},
         )
         self._text_verbosity = _safe_choice(text_verbosity, {"low", "medium", "high"})
+        self._disable_response_storage = bool(disable_response_storage)
         self._transport = transport
 
     async def stream_chat(
@@ -114,30 +116,35 @@ class OpenAICompatibleClient:
             except httpx.TimeoutException as exc:
                 if emitted_payload or attempt >= request.retry_count:
                     raise ModelAdapterError(ErrorCode.MODEL_TIMEOUT, "模型响应超时") from exc
+                await _sleep_before_retry(attempt, cancel_token)
             except httpx.ConnectError as exc:
                 if emitted_payload or attempt >= request.retry_count:
                     raise ModelAdapterError(
                         ErrorCode.MODEL_UNAVAILABLE,
                         "无法连接模型服务",
                     ) from exc
+                await _sleep_before_retry(attempt, cancel_token)
             except httpx.RemoteProtocolError as exc:
                 if emitted_payload or attempt >= request.retry_count:
                     raise ModelAdapterError(
                         ErrorCode.MODEL_PROTOCOL_ERROR,
                         "模型流式连接提前断开",
                     ) from exc
+                await _sleep_before_retry(attempt, cancel_token)
             except httpx.HTTPError as exc:
                 if emitted_payload or attempt >= request.retry_count:
                     raise ModelAdapterError(
                         ErrorCode.MODEL_STREAM_INTERRUPTED,
                         "模型流式响应中断",
                     ) from exc
+                await _sleep_before_retry(attempt, cancel_token)
             except ModelAdapterError as exc:
                 if exc.code not in {
                     ErrorCode.MODEL_UNAVAILABLE,
                     ErrorCode.MODEL_STREAM_INTERRUPTED,
                 } or emitted_payload or attempt >= request.retry_count:
                     raise
+                await _sleep_before_retry(attempt, cancel_token)
 
     async def complete_chat(
         self,
@@ -161,30 +168,35 @@ class OpenAICompatibleClient:
                 if response.status_code >= 400:
                     error = map_http_status(response.status_code, response.text[:500])
                     if error.code == ErrorCode.MODEL_UNAVAILABLE and attempt < request.retry_count:
+                        await _sleep_before_retry(attempt, cancel_token, response=response)
                         continue
                     raise error
                 break
             except httpx.TimeoutException as exc:
                 if attempt >= request.retry_count:
                     raise ModelAdapterError(ErrorCode.MODEL_TIMEOUT, "模型响应超时") from exc
+                await _sleep_before_retry(attempt, cancel_token)
             except httpx.ConnectError as exc:
                 if attempt >= request.retry_count:
                     raise ModelAdapterError(
                         ErrorCode.MODEL_UNAVAILABLE,
                         "无法连接模型服务",
                     ) from exc
+                await _sleep_before_retry(attempt, cancel_token)
             except httpx.RemoteProtocolError as exc:
                 if attempt >= request.retry_count:
                     raise ModelAdapterError(
                         ErrorCode.MODEL_PROTOCOL_ERROR,
                         "模型非流式连接提前断开",
                     ) from exc
+                await _sleep_before_retry(attempt, cancel_token)
             except httpx.HTTPError as exc:
                 if attempt >= request.retry_count:
                     raise ModelAdapterError(
                         ErrorCode.MODEL_PROTOCOL_ERROR,
                         "模型非流式请求失败",
                     ) from exc
+                await _sleep_before_retry(attempt, cancel_token)
         if response is None:
             raise ModelAdapterError(ErrorCode.MODEL_UNAVAILABLE, "无法连接模型服务")
 
@@ -271,6 +283,8 @@ class OpenAICompatibleClient:
                 payload["reasoning"] = {"effort": reasoning_effort}
             if text_verbosity:
                 payload["text"] = {"verbosity": text_verbosity}
+            if self._disable_response_storage:
+                payload["store"] = False
             return payload
         return {
             "model": request.model,
@@ -549,6 +563,30 @@ def _safe_choice(value: Any, allowed: set[str]) -> str | None:
         return None
     normalized = value.strip().lower()
     return normalized if normalized in allowed else None
+
+
+async def _sleep_before_retry(
+    attempt: int,
+    cancel_token: CancelToken,
+    *,
+    response: httpx.Response | None = None,
+) -> None:
+    if cancel_token.cancelled:
+        return
+    delay = _retry_delay_seconds(attempt, response=response)
+    if delay <= 0:
+        return
+    await asyncio.sleep(delay)
+
+
+def _retry_delay_seconds(attempt: int, *, response: httpx.Response | None = None) -> float:
+    retry_after = response.headers.get("retry-after") if response is not None else None
+    if retry_after:
+        try:
+            return max(0.0, min(float(retry_after), 8.0))
+        except ValueError:
+            pass
+    return min(0.8 * (attempt + 1), 4.0)
 
 
 async def _next_stream_line(

@@ -18,7 +18,7 @@ from core_types import (
 )
 from trace_service import redact
 
-from app.core.time import utc_now_iso
+from app.core.time import new_id, utc_now_iso
 from app.schemas.chat_quality import ActionDialogueDecision, ActionDialogueFacts
 from app.schemas.chat_turn_execution import ChatTurnExecutionContext, TurnExecutionPlan
 from app.services.action_dialogue_mapper import ActionDialogueMapperService
@@ -399,6 +399,14 @@ class ChatTurnExecutionOrchestrator:
 
         async def emit(event_type: ChatEventType, payload: dict[str, Any] | None = None) -> ChatEvent:
             return await facade._emit_and_record(turn_id, trace_id, events, event_type, payload)
+
+        if (
+            facade._external_platform_actions is not None
+            and await facade._external_platform_actions.looks_like_chat_request(user_text)
+        ):
+            async for event in self._run_external_platform_task_branch(facade, ctx):
+                yield event
+            return
 
         quality_outcome = facade._quality.handle(
             user_text=user_text,
@@ -1443,6 +1451,22 @@ class ChatTurnExecutionOrchestrator:
                 session_id=ctx.session_id,
                 source_turn_id=turn["turn_id"],
             )
+            plan_payload_summary = dict(pending_action.get("payload_summary") or {})
+            plan_payload_summary.update(
+                {
+                    "external_platform_plan_id": str(getattr(plan, "plan_id", "") or ""),
+                    "platform_key": str(getattr(plan, "platform_key", "") or ""),
+                    "action_type": str(getattr(plan, "action_type", "") or ""),
+                    "content_summary": str(getattr(plan, "content_summary", "") or ""),
+                }
+            )
+            pending_action = {
+                **pending_action,
+                "approval_id": str(getattr(plan, "approval_id", "") or pending_action.get("approval_id") or ""),
+                "external_platform_plan_id": str(getattr(plan, "plan_id", "") or ""),
+                "human_handoff": False,
+                "payload_summary": plan_payload_summary,
+            }
             pending_response_plan = response_plan_for_pending_action(
                 action=pending_action,
                 session_id=ctx.session_id,
@@ -1475,6 +1499,70 @@ class ChatTurnExecutionOrchestrator:
                 }
             )
             text = response_plan.plain_text or response_plan.summary or text
+            if str(pending_action.get("action_type") or "").startswith("external_platform.") and "\u7b49\u5f85" not in text and "\u5ba1\u6279" not in text:
+                text = "\u6b63\u5728\u7b49\u5f85\u4f60\u786e\u8ba4\u8fd9\u9879\u5916\u90e8\u5e73\u53f0\u64cd\u4f5c\u3002\n" + text
+                response_plan = response_plan.model_copy(update={"plain_text": text, "summary": text})
+        elif str(getattr(plan, "status", "") or "") == "awaiting_human":
+            action_type = f"external_platform.{getattr(plan, 'action_type', '') or 'action'}"
+            pending_action = {
+                "pending_action_id": new_id("pact"),
+                "kind": "external_platform_human_handoff",
+                "action_type": action_type,
+                "action_label": "外部平台人工接续",
+                "user_label": "外部平台人工接续",
+                "user_summary": text or "外部平台操作正在等待你完成登录或人工处理。",
+                "impact_summary": "在你完成登录或明确继续前，我不会把这项外部平台操作说成已经完成。",
+                "reply_options": ["已登录，继续", "拒绝", "稍后我再继续"],
+                "allowed_confirm_scopes": ["once", "deny"],
+                "approval_id": str(getattr(plan, "approval_id", "") or ""),
+                "task_id": str(getattr(plan, "task_id", "") or ""),
+                "risk_level": str(getattr(plan, "risk_level", "") or "R4"),
+                "payload_summary": {
+                    "external_platform_plan_id": str(getattr(plan, "plan_id", "") or ""),
+                    "platform_key": str(getattr(plan, "platform_key", "") or ""),
+                    "action_type": str(getattr(plan, "action_type", "") or ""),
+                    "content_summary": str(getattr(plan, "content_summary", "") or ""),
+                },
+                "external_platform_plan_id": str(getattr(plan, "plan_id", "") or ""),
+                "session_id": ctx.session_id,
+                "source_turn_id": turn["turn_id"],
+                "human_handoff": True,
+            }
+            pending_response_plan = response_plan_for_pending_action(
+                action=pending_action,
+                session_id=ctx.session_id,
+                presence_runtime=dict(turn.get("presence_runtime") or {}),
+            )
+            reply_options = list(pending_response_plan.follow_up_options)
+            structured_payload = {
+                **structured_payload,
+                **{
+                    key: value
+                    for key, value in pending_response_plan.structured_payload.items()
+                    if key
+                    in {
+                        "natural_interaction",
+                        "pending_actions",
+                        "pending_action_binding",
+                        "natural_reply_options",
+                        "reply_option_items",
+                        "response_quality_guard",
+                        "action_dialogue",
+                        "technical_detail",
+                    }
+                },
+            }
+            response_plan = pending_response_plan.model_copy(
+                update={
+                    "structured_payload": structured_payload,
+                    "follow_up_options": reply_options,
+                    "user_next_step": reply_options[0] if reply_options else pending_response_plan.user_next_step,
+                }
+            )
+            text = response_plan.plain_text or response_plan.summary or text
+            if "\u7b49\u5f85" not in text and "\u5ba1\u6279" not in text:
+                text = "\u6b63\u5728\u7b49\u5f85\u4f60\u5b8c\u6210\u5916\u90e8\u5e73\u53f0\u7684\u4eba\u5de5\u63a5\u7eed\u3002\n" + text
+                response_plan = response_plan.model_copy(update={"plain_text": text, "summary": text})
         else:
             response_plan = response_plan.model_copy(
                 update={"structured_payload": structured_payload}

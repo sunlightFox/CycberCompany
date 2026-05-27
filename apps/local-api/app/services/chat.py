@@ -4,7 +4,6 @@ import json
 import os
 import re
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from brain import ModelRouter
@@ -19,7 +18,6 @@ from chat_runtime import ChatRuntime
 from core_types import (
     ChatEvent,
     ChatEventType,
-    ChatInput,
     ChatTurnRequest,
     ChatTurnResponse,
     ContextPacket,
@@ -35,7 +33,6 @@ from response_composer import (
     ComposeRequest,
     ResponseComposer,
     canonical_action_status,
-    mirrored_status_payload,
     normalize_action_status_semantics,
     status_reason_codes,
 )
@@ -61,19 +58,17 @@ from app.services.brain_decision import BrainDecisionService
 from app.services.chat_capability_boundary import ChatCapabilityBoundaryService
 from app.services.chat_context import ChatContextCoordinator
 from app.services.chat_continuation import ChatContinuationCoordinator, ContinuationEvaluation
-from app.services.chat_experience import ChatExperienceService
+from app.services.chat_experience import ChatExperienceService, ClarificationDecision
 from app.services.chat_facade_shell import ChatFacadeShellMixin, DEFAULT_USER_ID
 from app.services.failure_experience import FailureExperienceService
 from app.services.chat_hook_runtime import ChatHookRuntime
 from app.services.chat_ingress import ChatContentNormalizer, ChatIngressService
-from app.services.chat_intent_router import ChatIntentRouter, ChatRouteDecision, office_skill_input
+from app.services.chat_intent_router import ChatIntentRouter
 from app.services.chat_prompt_options import phase89_heuristic_runtime as _phase89_heuristic_runtime
 from app.services.chat_runtime_host_helpers import (
-    browser_capability_explanation_reply as _browser_capability_explanation_reply,
     browser_read_page_error_reply as _browser_read_page_error_reply,
     browser_read_page_payload as _browser_read_page_payload,
     browser_read_page_reply as _browser_read_page_reply,
-    browser_visible_text as _browser_visible_text,
     content_payload as _content_payload,
     context_compaction_summary as _context_compaction_summary,
     debounce_delay_seconds as _debounce_delay_seconds,
@@ -83,7 +78,6 @@ from app.services.chat_runtime_host_helpers import (
     event_from_persisted as _event_from_persisted,
     grouped_presence_runtime as _grouped_presence_runtime,
     host_filesystem_list_error_reply as _host_filesystem_list_error_reply,
-    host_filesystem_label as _host_filesystem_label,
     host_filesystem_list_reply as _host_filesystem_list_reply,
     office_artifact_refs as _office_artifact_refs,
     presence_advisory_state as _presence_advisory_state,
@@ -95,7 +89,6 @@ from app.services.chat_runtime_host_helpers import (
     strategy_advice_fallback_text as _strategy_advice_fallback_text,
     terminal_command_error_reply as _terminal_command_error_reply,
     terminal_command_reply as _terminal_command_reply,
-    truncate_browser_text as _truncate_browser_text,
 )
 from app.services.chat_memory import ChatMemoryCoordinator
 from app.services.chat_model import ChatModelCoordinator
@@ -122,7 +115,6 @@ from app.services.chat_turn_finalize import ChatTurnFinalizeService
 from app.services.chat_turn_input_facts import (
     looks_like_explicit_continuation as _looks_like_explicit_continuation,
     needs_recent_history_lookup as _needs_recent_history_lookup,
-    looks_like_execution_state_explanation_request as _looks_like_execution_state_explanation_request,
     looks_like_latest_instruction_override as _looks_like_latest_instruction_override,
     looks_like_plain_analysis_request as _looks_like_plain_analysis_request,
     looks_like_short_followup as _looks_like_short_followup,
@@ -141,7 +133,6 @@ from app.services.natural_chat import (
     NaturalChatActionGateway,
     pending_action_from_approval,
     response_plan_for_pending_action,
-    set_visible_redaction_profile,
 )
 from app.services.presence_state import PresenceStateResolverService
 from app.services.response_policy import ResponsePolicyService
@@ -878,6 +869,9 @@ class ChatService(ChatFacadeShellMixin):
                 },
             )
 
+    async def close(self) -> None:
+        await self._execution.close()
+
     def _turn_requires_model_evidence(self, turn: dict[str, Any]) -> bool:
         plan = dict(
             turn.get("turn_execution_plan")
@@ -938,25 +932,8 @@ class ChatService(ChatFacadeShellMixin):
         )
         if intent == "browser_read" and not channel_requires_model_finalizer:
             return text
-        if response_plan is not None:
-            structured = dict(response_plan.structured_payload or {})
-            route = str((structured.get("route_semantics") or {}).get("route") or "")
-            action_status = str(
-                (structured.get("action_status_semantics") or {}).get("status") or ""
-            )
-            task_status = str((structured.get("task_status_semantics") or {}).get("status") or "")
-            natural_status = str((structured.get("natural_interaction") or {}).get("status") or "")
-            if (
-                response_plan.approval_prompt
-                or "natural_interaction" in structured
-                or "pending_confirmation" in structured
-                or "action_dialogue" in structured
-                or natural_status == "pending_action"
-                or action_status == "waiting_for_approval"
-                or task_status == "waiting_for_approval"
-                or route.startswith("browser_")
-            ) and not channel_requires_model_finalizer:
-                return text
+        if response_plan is not None and not channel_requires_model_finalizer:
+            return text
         if not channel_requires_model_finalizer:
             return text
         available_brains = await self._brains.list_routable_brains()
@@ -969,7 +946,8 @@ class ChatService(ChatFacadeShellMixin):
         if brain is None:
             return text
         evidence_only = (
-            mode in {TaskMode.DIRECT.value, TaskMode.DIRECT_WITH_MEMORY.value}
+            not channel_requires_model_finalizer
+            and mode in {TaskMode.DIRECT.value, TaskMode.DIRECT_WITH_MEMORY.value}
             and intent
             in {
                 "chat",
@@ -1002,8 +980,13 @@ class ChatService(ChatFacadeShellMixin):
                     "approval_prompt": response_plan.approval_prompt,
                 }
             )
-        evidence_preview = _json_preview(redact(evidence_payload), limit=9000)
         user_text = str(turn.get("current_user_text") or "")
+        candidate_text = str(text or "")
+        if channel_requires_model_finalizer:
+            repaired_candidate = preserve_visible_reply_contract(candidate_text, user_text=user_text)
+            if repaired_candidate.strip():
+                candidate_text = repaired_candidate
+        evidence_preview = _json_preview(redact(evidence_payload), limit=9000)
         messages = [
             {
                 "role": "system",
@@ -1020,7 +1003,7 @@ class ChatService(ChatFacadeShellMixin):
                 "role": "user",
                 "content": (
                     f"用户请求：{user_text[:3000]}\n"
-                    f"候选回复：{str(text or '')[:5000]}\n"
+                    f"候选回复：{candidate_text[:5000]}\n"
                     f"路由：intent={intent}, mode={mode}\n"
                     f"结构化证据(JSON，已脱敏)：{evidence_preview}"
                 ),
@@ -1042,7 +1025,7 @@ class ChatService(ChatFacadeShellMixin):
             },
             input_data={
                 "message_count": len(messages),
-                "candidate_chars": len(str(text or "")),
+                "candidate_chars": len(candidate_text),
                 "evidence_chars": len(evidence_preview),
             },
         )
@@ -1202,7 +1185,13 @@ class ChatService(ChatFacadeShellMixin):
             )
             if evidence_only:
                 return text
-            return final_text if completed and final_text else text
+            if completed and final_text:
+                guarded_final_text = preserve_visible_reply_contract(
+                    final_text,
+                    user_text=user_text,
+                )
+                return guarded_final_text or final_text
+            return text
         except Exception as exc:
             if not token.cancelled and not completed:
                 try:
@@ -1219,7 +1208,13 @@ class ChatService(ChatFacadeShellMixin):
                     )
                     if evidence_only:
                         return text
-                    return final_text or text
+                    if final_text:
+                        guarded_final_text = preserve_visible_reply_contract(
+                            final_text,
+                            user_text=user_text,
+                        )
+                        return guarded_final_text or final_text
+                    return text
                 except Exception as fallback_exc:
                     exc = fallback_exc
             await self._trace.end_span(
@@ -1607,6 +1602,58 @@ class ChatService(ChatFacadeShellMixin):
                 clarification_payload = _normalizable_clarification_payload(
                     stored_clarification
                 )
+        if clarification_payload is None and self._brain_decision is not None:
+            stored_decision = await self._brain_decision.get_by_turn(turn["turn_id"])
+            stored_decision = stored_decision if isinstance(stored_decision, dict) else {}
+            mode_payload = stored_decision.get("mode")
+            mode_payload = mode_payload if isinstance(mode_payload, dict) else {}
+            stored_payload = stored_decision.get("clarification")
+            stored_payload = stored_payload if isinstance(stored_payload, dict) else {}
+            if stored_payload.get("needs_clarification") or mode_payload.get("mode") == "ask_clarification":
+                clarification_payload = _normalizable_clarification_payload(
+                    {
+                        **stored_payload,
+                        "turn_id": turn["turn_id"],
+                        "conversation_id": turn["conversation_id"],
+                        "needs_clarification": True,
+                        "reason": stored_payload.get("reason") or "low_intent_confidence",
+                        "blocking_level": stored_payload.get("blocking_level")
+                        or "requires_answer",
+                        "questions": stored_payload.get("questions") or [],
+                        "can_answer_partially": bool(
+                            stored_payload.get("can_answer_partially", False)
+                        ),
+                    }
+                )
+        if (
+            clarification_payload is None
+            and str(response_plan.structured_payload.get("intent") or intent) == "clarification"
+        ):
+            clar_user_text = str(turn.get("current_user_text") or "")
+            clarification_reason = (
+                "high_risk_without_confirmation"
+                if "\u8f6c\u8d26" in clar_user_text or "transfer" in clar_user_text.lower()
+                else "low_intent_confidence"
+            )
+            questions = [
+                str(item)
+                for item in response_plan.follow_up_options
+                if isinstance(item, str) and item.strip()
+            ]
+            if not questions:
+                questions = [text.strip()] if text.strip() else ["请先补充要澄清的信息。"]
+            clarification_payload = _normalizable_clarification_payload(
+                {
+                    "clarification_id": new_id("clarify"),
+                    "turn_id": turn["turn_id"],
+                    "conversation_id": turn["conversation_id"],
+                    "needs_clarification": True,
+                    "reason": clarification_reason,
+                    "blocking_level": "requires_answer",
+                    "questions": questions[:3],
+                    "can_answer_partially": False,
+                }
+            )
         if clarification_payload is not None:
             response_plan = response_plan.model_copy(
                 update={
@@ -1687,7 +1734,19 @@ class ChatService(ChatFacadeShellMixin):
                         or ""
                     )
         if final_user_text:
-            guarded_text = preserve_visible_reply_contract(text, user_text=final_user_text)
+            guarded_text = (
+                text
+                if self._response_plan_has_authoritative_direct_tool_text(
+                    response_plan,
+                    text,
+                )
+                else preserve_visible_reply_contract(text, user_text=final_user_text)
+            )
+            if intent == "browser_read":
+                guarded_text = self._restore_browser_read_visible_evidence(
+                    guarded_text,
+                    response_plan=response_plan,
+                )
             if guarded_text != text:
                 text = guarded_text
                 response_plan = self._response_coordinator.finalize_plan(
@@ -2431,6 +2490,66 @@ class ChatService(ChatFacadeShellMixin):
             ),
         }
 
+    def _response_plan_has_authoritative_direct_tool_text(
+        self,
+        response_plan: ResponsePlan | None,
+        text: str,
+    ) -> bool:
+        if response_plan is None or not str(text or "").strip():
+            return False
+        structured = dict(response_plan.structured_payload or {})
+        route_semantics = dict(structured.get("route_semantics") or {})
+        tool_result_context = structured.get("tool_result_context")
+        if (
+            route_semantics.get("model_called") is not False
+            or route_semantics.get("tool_created") is not True
+            or not isinstance(tool_result_context, dict)
+        ):
+            return False
+        if (
+            tool_result_context.get("sanitized_summary")
+            or tool_result_context.get("evidence_refs")
+            or tool_result_context.get("artifact_refs")
+        ):
+            return True
+        route = str(route_semantics.get("route") or "")
+        payload = structured.get(route)
+        return isinstance(payload, dict) and bool(payload)
+
+    def _restore_browser_read_visible_evidence(
+        self,
+        text: str,
+        *,
+        response_plan: ResponsePlan | None,
+    ) -> str:
+        if response_plan is None:
+            return text
+        structured = dict(response_plan.structured_payload or {})
+        route_semantics = dict(structured.get("route_semantics") or {})
+        if str(route_semantics.get("route") or "") != "browser_read_page":
+            return text
+        browser_payload = structured.get("browser_read_page")
+        if not isinstance(browser_payload, dict):
+            return text
+        title = str(browser_payload.get("title") or "").strip()
+        visible = str(browser_payload.get("visible_text") or "").strip()
+        evidence_refs = browser_payload.get("evidence_refs") or []
+        if not title and not visible and not evidence_refs:
+            return text
+        current = str(text or "")
+        if (not title or title in current) and (not visible or visible[:80] in current):
+            return text
+        restored = _browser_read_page_reply(
+            {
+                "title": title,
+                "url": browser_payload.get("url"),
+                "visible_text": visible,
+                "browser_page_state": browser_payload.get("page_state") or {},
+                "evidence_refs": evidence_refs,
+            }
+        )
+        return restored or text
+
     def _style_visible_text(
         self,
         turn: dict[str, Any],
@@ -2449,6 +2568,11 @@ class ChatService(ChatFacadeShellMixin):
             presence_runtime=presence_runtime,
             user_text=user_text,
         )
+        if self._response_plan_has_authoritative_direct_tool_text(
+            response_plan,
+            visible,
+        ):
+            return visible
         return preserve_visible_reply_contract(
             visible,
             user_text=user_text,

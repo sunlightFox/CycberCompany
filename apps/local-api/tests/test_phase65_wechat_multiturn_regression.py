@@ -644,6 +644,9 @@ def test_phase65_wechat_100_multiturn_scenarios_preserve_quality_and_latency(
             if message.get("role") == "user":
                 user_text = _extract_prompt_user_text(content)
                 model_visible_context.append(user_text)
+                candidate_text = _extract_prompt_candidate_text(content)
+                if candidate_text:
+                    model_visible_context.append(candidate_text)
             elif message.get("role") == "system" and (
                 "# History Wrapper" in content
                 or "# Session Summary" in content
@@ -670,8 +673,8 @@ def test_phase65_wechat_100_multiturn_scenarios_preserve_quality_and_latency(
         before = len(Phase65WechatClient.send_calls)
 
         first_started = time.perf_counter()
-        _send_inbound(client, peer_ref, scenario["first"])
-        first_turn = _wait_for_new_turn(client, before)
+        first_turn_id = _send_inbound(client, peer_ref, scenario["first"])
+        first_turn = _wait_for_new_turn(client, before, turn_id=first_turn_id)
         first_elapsed_ms = int((time.perf_counter() - first_started) * 1000)
         first_reply = _latest_delivery_text(client, first_turn["turn_id"])
         first_quality = _turn_quality(client, first_turn["turn_id"])
@@ -679,8 +682,8 @@ def test_phase65_wechat_100_multiturn_scenarios_preserve_quality_and_latency(
 
         before = len(Phase65WechatClient.send_calls)
         second_started = time.perf_counter()
-        _send_inbound(client, peer_ref, scenario["second"])
-        second_turn = _wait_for_new_turn(client, before)
+        second_turn_id = _send_inbound(client, peer_ref, scenario["second"])
+        second_turn = _wait_for_new_turn(client, before, turn_id=second_turn_id)
         second_elapsed_ms = int((time.perf_counter() - second_started) * 1000)
         second_reply = _latest_delivery_text(client, second_turn["turn_id"])
         second_quality = _turn_quality(client, second_turn["turn_id"])
@@ -832,10 +835,10 @@ def _reply_for_history(*, user_text: str, user_history: list[str]) -> str:
     if "回复慢" in user_text or "排查顺序" in user_text or "耗时" in user_text:
         return "📌 耗时别先怪模型，咱们按顺序看：入站、上下文、模型、续跑、工具、投递。"
     if "刚才" in user_text or "偏好" in user_text or "顺序" in user_text:
-        if "风险" in history:
-            return "📌 你刚才把重点改成了先看风险。"
         if "先给结论" in history:
             return "📌 你刚才说的是先给结论，再看风险。"
+        if "风险" in history:
+            return "📌 你刚才把重点改成了先看风险。"
         return "📌 你刚才强调的是优先级。"
     if "风险" in user_text:
         if "复盘" in prompt or "周会" in prompt:
@@ -953,11 +956,25 @@ def _reply_for_history(*, user_text: str, user_history: list[str]) -> str:
 
 
 def _extract_prompt_user_text(content: str) -> str:
-    marker = "用户原文："
+    extraction_markers = (
+        ("用户原文：", "以上内容已按安全策略脱敏。"),
+        ("用户请求：", "\n候选回复："),
+    )
+    for marker, stop_marker in extraction_markers:
+        if marker not in content:
+            continue
+        tail = content.split(marker, 1)[1]
+        tail = tail.split(stop_marker, 1)[0]
+        return tail.strip()
+    return content
+
+
+def _extract_prompt_candidate_text(content: str) -> str:
+    marker = "候选回复："
     if marker not in content:
-        return content
+        return ""
     tail = content.split(marker, 1)[1]
-    tail = tail.split("以上内容已按安全策略脱敏。", 1)[0]
+    tail = tail.split("\n路由：", 1)[0]
     return tail.strip()
 
 
@@ -1059,33 +1076,55 @@ def _pair_peer(client: TestClient, peer_ref: str) -> None:
     Phase65WechatClient.events = []
 
 
-def _send_inbound(client: TestClient, peer_ref: str, text: str) -> None:
+def _send_inbound(client: TestClient, peer_ref: str, text: str) -> str:
     Phase65WechatClient.events = [_text_event(f"evt-{peer_ref}-{_hash(text)[:8]}", peer_ref, text)]
     routed = client.post("/api/channels/providers/wechat/poll-once")
     assert routed.status_code == 200, routed.text
-    assert routed.json()["chat_turns_created"] == 1, routed.text
+    routed_payload = routed.json()
+    assert routed_payload["chat_turns_created"] == 1, routed.text
+    turn_id = str(
+        routed_payload.get("turn_id")
+        or (routed_payload.get("correlation") or {}).get("turn_id")
+        or ""
+    )
+    assert turn_id, routed.text
     client.post("/api/channels/providers/wechat/deliver-due")
+    return turn_id
 
 
-def _wait_for_new_turn(client: TestClient, previous_send_count: int, timeout: float = 5.0) -> dict[str, Any]:
+def _wait_for_new_turn(
+    client: TestClient,
+    previous_send_count: int,
+    *,
+    turn_id: str,
+    timeout: float = 5.0,
+) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if len(Phase65WechatClient.send_calls) > previous_send_count:
-            return _latest_turn(client)
+        if (
+            len(Phase65WechatClient.send_calls) > previous_send_count
+            and _turn_has_completed_visible_response(client, turn_id)
+        ):
+            return _turn_by_id(client, turn_id)
         time.sleep(0.05)
     raise AssertionError("new WeChat send was not observed")
 
 
-def _latest_turn(client: TestClient) -> dict[str, Any]:
-    bindings = client.get(
-        "/api/channels/delivery-bindings",
-        params={"provider": "wechat", "limit": 1},
-    ).json()["items"]
-    assert bindings, "no delivery binding found"
-    turn_id = bindings[0]["turn_id"]
+def _turn_by_id(client: TestClient, turn_id: str) -> dict[str, Any]:
     turn = client.get(f"/api/chat/turns/{turn_id}").json()
     turn["turn_id"] = turn_id
     return turn
+
+
+def _turn_has_completed_visible_response(client: TestClient, turn_id: str) -> bool:
+    events = client.get(f"/api/chat/turns/{turn_id}/events").json()["items"]
+    has_delta = any(
+        str(item.get("payload", {}).get("payload", {}).get("text", ""))
+        for item in events
+        if item["event_type"] == "response.delta"
+    )
+    has_completed = any(item["event_type"] == "response.completed" for item in events)
+    return has_delta and has_completed
 
 
 def _latest_delivery_text(client: TestClient, turn_id: str) -> str:

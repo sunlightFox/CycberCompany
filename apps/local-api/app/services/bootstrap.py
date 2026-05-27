@@ -14,11 +14,11 @@ from app.db.session import Database
 DEFAULT_ORGANIZATION_ID = "org_default"
 DEFAULT_USER_ID = "user_local_owner"
 DEFAULT_BRAIN_ID = "brain_not_configured"
-DEFAULT_CODEX_API_KEY_ENV = "EDGEFN_API_KEY"
-DEFAULT_CODEX_API_KEY_REF = "env://EDGEFN_API_KEY"
-DEFAULT_CODEX_DISPLAY_NAME = "EdgeFn Default Brain"
-DEFAULT_CODEX_ENDPOINT = "https://api.edgefn.net/v1"
-DEFAULT_CODEX_MODEL = "MiniMax-M2.5"
+DEFAULT_CODEX_API_KEY_ENV = "OPENAI_API_KEY"
+DEFAULT_CODEX_API_KEY_REF = "codex-auth://OPENAI_API_KEY"
+DEFAULT_CODEX_DISPLAY_NAME = "Codex Default Brain"
+DEFAULT_CODEX_ENDPOINT = "http://127.0.0.1:8317/v1"
+DEFAULT_CODEX_MODEL = "gpt-5.5"
 DEFAULT_CODEX_CONTEXT_WINDOW = 1000000
 DEFAULT_CODEX_REASONING_EFFORT = "high"
 DEFAULT_CODEX_TEXT_VERBOSITY = "medium"
@@ -419,18 +419,20 @@ class BootstrapService:
             "supports_audio": False,
             "cost_policy": {
                 "mode": "cloud",
-                "profile": "edgefn_minimax_m25",
+                "profile": "codex_current_default",
             },
             "privacy_policy": {
                 "allow_cloud": True,
-                "provider_display_name": "EdgeFn",
+                "provider_display_name": "OpenAI",
                 "adapter_family": "openai_compatible",
-                "codex_profile": "edgefn_minimax_m25",
+                "codex_profile": "current_codex",
                 "codex_wire_api": runtime["wire_api"],
                 "codex_provider": runtime["codex_provider"],
                 "requires_openai_auth": runtime["requires_openai_auth"],
                 "reasoning_effort": runtime["reasoning_effort"],
                 "text_verbosity": DEFAULT_CODEX_TEXT_VERBOSITY,
+                "disable_response_storage": True,
+                "approvals_reviewer": "user",
                 "api_key_ref_scheme": str(api_key_ref or "").split("://", 1)[0] or None,
             },
             "status": "configured" if api_key_ref else "needs_configuration",
@@ -844,14 +846,19 @@ class BootstrapService:
 
 def _read_codex_runtime_config() -> dict[str, Any]:
     endpoint_override = os.environ.get("CYCBER_REAL_MODEL_ENDPOINT")
+    wire_api = os.environ.get("CYCBER_REAL_MODEL_WIRE_API", "responses").strip().lower()
+    if wire_api not in {"chat_completions", "responses"}:
+        wire_api = "chat_completions"
+    api_key_ref = os.environ.get("CYCBER_REAL_MODEL_API_KEY_REF", DEFAULT_CODEX_API_KEY_REF)
+    model_name = os.environ.get("CYCBER_REAL_MODEL_NAME", DEFAULT_CODEX_MODEL)
     return {
-        "codex_provider": "edgefn",
+        "codex_provider": "custom",
         "provider": "openai_compatible",
         "endpoint": endpoint_override or DEFAULT_CODEX_ENDPOINT,
-        "model": DEFAULT_CODEX_MODEL,
-        "wire_api": "chat_completions",
+        "model": model_name,
+        "wire_api": wire_api,
         "reasoning_effort": DEFAULT_CODEX_REASONING_EFFORT,
-        "requires_openai_auth": False,
-        "api_key_ref": DEFAULT_CODEX_API_KEY_REF,
+        "requires_openai_auth": True,
+        "api_key_ref": api_key_ref,
         "context_window": DEFAULT_CODEX_CONTEXT_WINDOW,
     }

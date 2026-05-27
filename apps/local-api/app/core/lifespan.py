@@ -132,5 +132,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await registry.background_worker_service.stop()
+        await registry.chat_service.close()
+        for gateway in (
+            registry.wechat_gateway_service,
+            registry.feishu_gateway_service,
+        ):
+            close = getattr(gateway, "close", None)
+            if close is not None:
+                await close()
         await registry.tool_runtime.close()
         await db.close()

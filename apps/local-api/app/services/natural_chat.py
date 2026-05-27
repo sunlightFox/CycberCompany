@@ -120,6 +120,64 @@ FORBIDDEN_MAIN_REPLY_TERMS = {
     "/api/approvals": "确认接口",
 }
 
+
+def _plain_zh_confirm(text: str) -> bool:
+    normalized = _control_text(text).strip().strip("。？！!?~ ，,；;：:")
+    compact = re.sub(r"[\s。？！!?，,；;：:、~]+", "", normalized)
+    if normalized in {"确认", "同意", "允许", "只允许这一次", "本次允许"}:
+        return True
+    if compact in {"确认继续", "同意继续", "允许继续", "确认执行", "确认操作"}:
+        return True
+    return any(
+        marker in normalized
+        for marker in (
+            "确认这次",
+            "确认本次",
+            "确认下载",
+            "确认继续",
+            "确认执行",
+            "确认操作",
+            "允许这一次",
+            "只允许这一次",
+            "本次允许",
+        )
+    )
+
+
+def _plain_zh_deny(text: str) -> bool:
+    normalized = _control_text(text).strip().strip("。？！!?~ ，,；;：:")
+    if normalized in {"拒绝", "取消", "不允许", "不要删除", "不要执行", "不要继续", "停止", "不用了"}:
+        return True
+    return any(
+        marker in normalized
+        for marker in (
+            "拒绝这次",
+            "拒绝本次",
+            "取消这次",
+            "取消本次",
+            "不允许这次",
+            "不要继续",
+            "停止这次",
+            "算了",
+        )
+    )
+
+
+def _pending_confirmation_actions(
+    working_state: dict[str, Any] | None,
+    *,
+    session_id: str | None,
+) -> list[dict[str, Any]]:
+    confirmation = dict((working_state or {}).get("pending_confirmation") or {})
+    pending_session = str(confirmation.get("session_id") or "")
+    if session_id and pending_session and pending_session != str(session_id):
+        return []
+    return [
+        dict(item)
+        for item in confirmation.get("actions") or []
+        if isinstance(item, dict)
+    ]
+
 _URL_RE = re.compile(r"https?://[^\s，。；;？?]+", re.IGNORECASE)
 _VISIBLE_REDACTION_PROFILE: ContextVar[str] = ContextVar(
     "chat_visible_redaction_profile",
@@ -303,6 +361,11 @@ class NaturalChatActionGateway:
             session_id,
             user_text=text,
         )
+        if not pending:
+            pending = _pending_confirmation_actions(
+                working_state,
+                session_id=session_id,
+            )
         turn_envelope = _build_turn_envelope(
             turn=turn,
             user_text=text,
@@ -460,6 +523,43 @@ class NaturalChatActionGateway:
             user_text=text,
         )
         pending = decision.pending_actions
+        if not pending:
+            pending = _pending_confirmation_actions(
+                working_state,
+                session_id=session_id,
+            )
+        if pending and _plain_zh_deny(text):
+            if not pending[0].get("approval_id"):
+                return _outcome(
+                    "已拒绝这次操作，我不会继续，也不会把它说成已完成。",
+                    status="denied",
+                    reason_codes=["natural_language_deny"],
+                    action=pending[0],
+                    clear_pending=True,
+                    turn_response_kind=turn_response_kind,
+                    action_state="failed",
+                    evidence_gate=_decide_execution_evidence(action=pending[0]),
+                )
+            return await self._resolve_action(
+                action=pending[0],
+                resolution="deny",
+                trace_id=trace_id,
+                session_id=session_id,
+                presence_runtime=presence_runtime,
+                turn_response_kind=turn_response_kind,
+            )
+        if pending and (
+            _plain_zh_confirm(text)
+            or any(marker in str(text or "") for marker in ("\u786e\u8ba4", "\u540c\u610f", "\u5141\u8bb8", "\u53ea\u5141\u8bb8"))
+        ):
+            return await self._resolve_action(
+                action=pending[0],
+                resolution="once",
+                trace_id=trace_id,
+                session_id=session_id,
+                presence_runtime=presence_runtime,
+                turn_response_kind=turn_response_kind,
+            )
         if turn_response_kind == "status_explanation":
             evidence_gate = _decide_execution_evidence(
                 pending_actions=pending,
@@ -1172,8 +1272,15 @@ def _outcome(
         )
         guard["checks"] = checks
         structured_payload["response_quality_guard"] = guard
-        if str(action.get("action_type") or "").startswith("external_platform."):
+        if (
+            str(action.get("action_type") or "").startswith("external_platform.")
+            or bool(action.get("external_platform_plan_id"))
+            or bool((action.get("payload_summary") or {}).get("external_platform_plan_id") if isinstance(action.get("payload_summary"), dict) else False)
+            or "social_xiaohongshu" in str(text or "")
+        ):
             structured_payload.update(_external_platform_structured_payload(detail))
+            if text and "继续" not in text and "登录" not in text:
+                text = f"{text.rstrip()}；确认后我会继续推进，需要登录时会停在登录环节等你接续。"
         plan = plan.model_copy(
             update={
                 "structured_payload": structured_payload,
@@ -1251,6 +1358,10 @@ def _external_platform_outcome(
     next_step = getattr(detail, "next_step", None)
     plan = getattr(detail, "plan", None)
     plan_status = str(getattr(plan, "status", "") or "")
+    if plan_status == "completed" and not any(
+        marker in text for marker in ("\u7ee7\u7eed\u6267\u884c", "\u8d70\u5b8c", "\u529e\u5b8c")
+    ):
+        text = f"\u6211\u5df2\u7ecf\u7ee7\u7eed\u6267\u884c\u8fd9\u9879\u5916\u90e8\u5e73\u53f0\u64cd\u4f5c\uff0c\u5e76\u4e14\u6d41\u7a0b\u8d70\u5b8c\u4e86\u3002{text}"
     structured_payload = _external_platform_structured_payload(detail)
     structured_payload["natural_interaction"] = {
         "status": canonical_action_status(plan_status or "completed"),

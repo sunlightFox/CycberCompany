@@ -3291,6 +3291,26 @@ def is_download_topic_only(text: str) -> bool:
 def _repo_false_positive_chat_request(clean: str, lowered: str) -> bool:
     if _looks_like_daily_life_advice_request(clean):
         return True
+    if any(marker in clean for marker in ("\u6c47\u603b", "\u603b\u7ed3", "\u5f52\u7eb3", "\u590d\u76d8")) and any(
+        marker in clean for marker in ("\u95ee\u9898", "\u4fee\u590d", "\u590d\u6d4b", "\u4e09\u6bb5", "\u591a\u8f6e")
+    ):
+        explicit_repo_execution = any(
+            marker in clean or marker in lowered
+            for marker in (
+                "repo",
+                "patch",
+                "pytest",
+                "\u4ee3\u7801",
+                "\u4ed3\u5e93",
+                "\u8fd0\u884c\u6d4b\u8bd5",
+                "\u6267\u884c\u6d4b\u8bd5",
+                "\u4fee\u590d\u5931\u8d25",
+                "\u6267\u884c\u4fee\u590d",
+                "\u4fee\u590d\u5e76\u8fd0\u884c",
+            )
+        )
+        if not explicit_repo_execution:
+            return True
     if "\u6d4b\u8bd5" in clean and not any(
         marker in clean or marker in lowered
         for marker in (

@@ -5,11 +5,15 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
+.opencode/
+.run/
 .tmp/
 .tmp_*
 .tmp_project_skill_repo.index.json
 .tmp_project_skill_sources/
 .wheels/
+tmp/
+opencode.json
 tmp_phase52_debug*/
 
 data/

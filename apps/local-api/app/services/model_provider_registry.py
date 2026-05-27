@@ -23,6 +23,7 @@ class ModelProviderRegistry:
             "supports_stream": brain.get("supports_stream"),
             "reasoning_effort": privacy.get("reasoning_effort"),
             "text_verbosity": privacy.get("text_verbosity"),
+            "disable_response_storage": bool(privacy.get("disable_response_storage")),
         }
         try:
             return self._client_cls(endpoint, api_key, **kwargs)

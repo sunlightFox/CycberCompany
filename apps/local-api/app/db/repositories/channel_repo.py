@@ -1037,7 +1037,7 @@ class ChannelRepository:
             SELECT *
             FROM channel_delivery_bindings
             WHERE turn_id = ? AND channel_peer_session_id = ?
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, updated_at DESC, channel_delivery_binding_id DESC
             LIMIT 1
             """,
             (turn_id, channel_peer_session_id),
@@ -1088,7 +1088,7 @@ class ChannelRepository:
             SELECT *
             FROM channel_delivery_bindings
             {clause}
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, updated_at DESC, channel_delivery_binding_id DESC
             LIMIT ?
             """,
             (*params, limit),

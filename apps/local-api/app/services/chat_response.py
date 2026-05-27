@@ -29,6 +29,26 @@ def _scrub_visible_response_plan_payload(value: Any) -> Any:
     return value
 
 
+def _has_authoritative_direct_tool_payload(structured_payload: dict[str, Any]) -> bool:
+    route_semantics = dict(structured_payload.get("route_semantics") or {})
+    tool_result_context = structured_payload.get("tool_result_context")
+    if (
+        route_semantics.get("model_called") is not False
+        or route_semantics.get("tool_created") is not True
+        or not isinstance(tool_result_context, dict)
+    ):
+        return False
+    if (
+        tool_result_context.get("sanitized_summary")
+        or tool_result_context.get("evidence_refs")
+        or tool_result_context.get("artifact_refs")
+    ):
+        return True
+    route = str(route_semantics.get("route") or "")
+    payload = structured_payload.get(route)
+    return isinstance(payload, dict) and bool(payload)
+
+
 class ChatResponseCoordinator:
     """Centralizes visible chat output filtering and response-plan text cleanup."""
 
@@ -308,17 +328,25 @@ class ChatResponseCoordinator:
             structured_payload = dict(plan.structured_payload or {})
             user_text = str(structured_payload.get("current_user_text") or "")
             visible_main_text = self.visible_text(authoritative_text or fallback_text)
-            if user_text:
+            authoritative_direct_tool = _has_authoritative_direct_tool_payload(
+                structured_payload
+            )
+            if user_text and not authoritative_direct_tool:
                 from app.services.chat_model_execution import _repair_irrelevant_model_reply
 
                 repaired_main = _repair_irrelevant_model_reply(user_text, visible_main_text)
                 if repaired_main is not None:
                     visible_main_text = self.visible_text(repaired_main)
-            visible_main_text = self._repair_structured_summary_text(
-                visible_main_text,
-                structured_payload=structured_payload,
-            )
-            if user_text and not structured_summary_chat_request(user_text):
+            if not authoritative_direct_tool:
+                visible_main_text = self._repair_structured_summary_text(
+                    visible_main_text,
+                    structured_payload=structured_payload,
+                )
+            if (
+                user_text
+                and not authoritative_direct_tool
+                and not structured_summary_chat_request(user_text)
+            ):
                 visible_main_text = preserve_visible_reply_contract(
                     visible_main_text,
                     user_text=user_text,

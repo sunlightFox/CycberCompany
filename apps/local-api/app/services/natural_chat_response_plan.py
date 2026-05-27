@@ -344,7 +344,7 @@ def no_pending_text(text: str) -> str:
 
 def ambiguous_pending_text(pending: list[dict[str, Any]]) -> str:
     label = str(pending[0].get("user_label") or "这一步操作")
-    return f"{label} 这步还差一句明确的话。你回“只允许这一次”、 “拒绝”，或者给新目标都行。\n在你点头前，我不会自己往下走。"
+    return f"{label} 这步还差一句明确的话。你回“只允许这一次”、 “确认继续”、 “拒绝”，或者给新目标都行。\n在你点头前，我不会自己往下走；确认后我再继续。"
 
 
 def multiple_pending_text(pending: list[dict[str, Any]]) -> str:
@@ -396,7 +396,7 @@ def label_for_action(action_type: str, payload: dict[str, Any]) -> str:
             return f"向 {platform} 发送消息"
         if action_name == "read_status":
             return f"读取 {platform} 状态"
-        return f"发布内容到 {platform}"
+        return f"继续发布内容到 {platform}"
     if action_type == "browser.download":
         return f"下载 {target.rsplit('/', 1)[-1] or '文件'}"
     if action_type in {"browser.submit", "browser.fill", "browser.type", "browser.click"}:

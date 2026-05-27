@@ -37,15 +37,21 @@ def test_boot_001_first_start_creates_default_foundation(client: TestClient) -> 
     default_brain = brain_by_id[DEFAULT_BRAIN_ID]
     assert default_brain["display_name"] == DEFAULT_CODEX_DISPLAY_NAME
     assert default_brain["provider"] in {"openai", "openai_compatible"}
-    assert default_brain["endpoint"]
+    assert default_brain["endpoint"] == "http://127.0.0.1:8317/v1"
     assert default_brain["model_name"] == DEFAULT_CODEX_MODEL
+    assert default_brain["api_key_ref"] == DEFAULT_CODEX_API_KEY_REF
     assert default_brain["status"] in {"configured", "needs_configuration"}
     assert default_brain["is_local"] is False
     assert default_brain["allow_cloud"] is True
-    assert default_brain["protocol_family"] == "chat_completions"
-    assert default_brain["request_format"] == "chat_completions"
-    assert default_brain["response_format"] == "auto"
+    assert default_brain["protocol_family"] == "responses"
+    assert default_brain["request_format"] == "responses"
+    assert default_brain["response_format"] == "openai_responses"
     assert default_brain["context_window"] == DEFAULT_CODEX_CONTEXT_WINDOW
+    assert default_brain["privacy_policy"]["codex_provider"] == "custom"
+    assert default_brain["privacy_policy"]["codex_wire_api"] == "responses"
+    assert default_brain["privacy_policy"]["requires_openai_auth"] is True
+    assert default_brain["privacy_policy"]["disable_response_storage"] is True
+    assert default_brain["privacy_policy"]["approvals_reviewer"] == "user"
     assert default_brain["privacy_policy"]["reasoning_effort"] in {
         "minimal",
         "low",
@@ -123,7 +129,7 @@ def test_boot_003_startup_repairs_missing_welcome_message(client: TestClient) ->
     )
 
 
-def test_boot_004_managed_default_brain_prefers_edgefn_env_key_ref(
+def test_boot_004_managed_default_brain_prefers_codex_auth_key_ref(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -132,7 +138,6 @@ def test_boot_004_managed_default_brain_prefers_edgefn_env_key_ref(
     root_dir = Path(__file__).resolve().parents[3]
     monkeypatch.setenv("CYCBER_ROOT", str(root_dir))
     monkeypatch.setenv("CYCBER_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("EDGEFN_API_KEY", "sk-current-env")
     with TestClient(create_app()) as test_client:
         registry = cast(FastAPI, test_client.app).state.registry
         anyio.run(_set_default_brain_api_key_ref, registry, "sec_stale_local")
@@ -141,6 +146,30 @@ def test_boot_004_managed_default_brain_prefers_edgefn_env_key_ref(
 
     assert brain["api_key_ref"] == DEFAULT_CODEX_API_KEY_REF
     assert brain["status"] == "configured"
+
+
+def test_boot_004_real_model_wire_api_env_can_select_responses(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from app.main import create_app
+
+    root_dir = Path(__file__).resolve().parents[3]
+    monkeypatch.setenv("CYCBER_ROOT", str(root_dir))
+    monkeypatch.setenv("CYCBER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CYCBER_REAL_MODEL_ENDPOINT", "http://127.0.0.1:8317/v1")
+    monkeypatch.setenv("CYCBER_REAL_MODEL_WIRE_API", "responses")
+    monkeypatch.setenv("CYCBER_REAL_MODEL_API_KEY_REF", "codex-auth://OPENAI_API_KEY")
+    monkeypatch.setenv("CYCBER_REAL_MODEL_NAME", "gpt-5.4-mini")
+    with TestClient(create_app()) as test_client:
+        brain = test_client.get("/api/brains").json()["items"][0]
+
+    assert brain["model_name"] == "gpt-5.4-mini"
+    assert brain["protocol_family"] == "responses"
+    assert brain["request_format"] == "responses"
+    assert brain["response_format"] == "openai_responses"
+    assert brain["api_key_ref"] == "codex-auth://OPENAI_API_KEY"
+    assert brain["privacy_policy"]["codex_wire_api"] == "responses"
 
 
 def test_boot_004_bootstrap_does_not_overwrite_existing_organization(

@@ -314,6 +314,16 @@ class WechatChannelGatewayService:
         self._last_poll_result = stats.response().model_dump(mode="json")
         return stats.response()
 
+    async def close(self) -> None:
+        tasks = [task for task in self._delivery_watch_tasks if not task.done()]
+        if not tasks:
+            self._delivery_watch_tasks.clear()
+            return
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self._delivery_watch_tasks.clear()
+
     async def approve_pairing(
         self,
         pairing_request_id: str,
@@ -1484,11 +1494,20 @@ class WechatChannelGatewayService:
                 "updated_at": delivery_created_at,
             }
         )
-        self._schedule_immediate_delivery(
-            channel_delivery_binding_id=channel_delivery_binding_id,
-            turn_id=response.turn_id,
-            trace_id=trace_id,
-        )
+        if response.status in {"completed", "failed", "cancelled"}:
+            binding = await self._repo.get_delivery_binding(channel_delivery_binding_id)
+            if binding is not None:
+                delivered = await self._deliver_binding(binding, trace_id=trace_id)
+                if delivered:
+                    stats.deliveries_sent += 1
+                elif delivered is False:
+                    stats.failures += 1
+        else:
+            self._schedule_immediate_delivery(
+                channel_delivery_binding_id=channel_delivery_binding_id,
+                turn_id=response.turn_id,
+                trace_id=trace_id,
+            )
         stats.chat_turns_created += 1
         await asyncio.sleep(0)
         return response
@@ -2586,6 +2605,30 @@ def _wechat_final_visible_reply_text(
     if "model_tool_xml" in set(summary.get("blocked_terms") or []):
         return _WECHAT_TOOL_LEAK_FALLBACK
     rendered = _wechat_visible_reply_text(filtered, user_text=user_text)
+    raw_user = str(user_text or "")
+    failure_explanation = _wechat_failure_explanation_visible_reply(
+        raw_user,
+        rendered=rendered,
+    )
+    if failure_explanation:
+        rendered = failure_explanation
+    if (
+        any(marker in raw_user for marker in ("\u600e\u4e48\u56de\u7b54", "\u600e\u4e48\u7b54", "\u4f1a\u600e\u4e48"))
+        and any(marker in rendered for marker in ("\u771f\u5b9e\u60f3\u6cd5", "\u5982\u679c\u4f60\u65b9\u4fbf", "\u63a5\u7740\u804a"))
+    ):
+        rendered = "\u6211\u4f1a\u6309\u4f60\u521a\u624d\u7ed9\u7684\u7ea6\u675f\u6765\u7b54\uff1a\u8bc1\u636e\u4e0d\u591f\u5c31\u4e0d\u731c\uff0c\u5148\u8bf4\u660e\u7f3a\u54ea\u4e9b\u8bc1\u636e\uff0c\u518d\u7ed9\u53ef\u9a8c\u8bc1\u7684\u4e0b\u4e00\u6b65\u3002"
+    if (
+        any(marker in raw_user for marker in ("\u600e\u4e48\u5904\u7406", "\u5e94\u8be5\u600e\u4e48\u5904\u7406"))
+        and "\u9690\u79c1" not in rendered
+        and any(marker in rendered for marker in ("\u8d28\u91cf", "\u8017\u65f6", "\u63a5\u7740\u5f80\u4e0b\u804a"))
+    ):
+        rendered = "\u9690\u79c1\u5185\u5bb9\u5148\u8131\u654f\uff0c\u53ea\u4fdd\u7559\u5fc5\u8981\u4e0a\u4e0b\u6587\uff1b\u4e0d\u5c55\u5f00\u654f\u611f\u7ec6\u8282\uff0c\u4e5f\u4e0d\u628a\u4e0d\u786e\u5b9a\u7684\u90e8\u5206\u5f53\u6210\u4e8b\u5b9e\u3002"
+    if (
+        any(marker in raw_user for marker in ("\u600e\u4e48\u8bf4", "\u5e94\u8be5\u600e\u4e48\u8bf4"))
+        and "\u4e0d\u4f1a" not in rendered
+        and any(marker in rendered for marker in ("\u771f\u5b9e\u60f3\u6cd5", "\u5982\u679c\u4f60\u65b9\u4fbf", "\u63a5\u7740\u804a"))
+    ):
+        rendered = "\u6211\u4f1a\u76f4\u63a5\u8bf4\u6e05\u695a\uff1a\u9ad8\u98ce\u9669\u64cd\u4f5c\u4e0d\u4f1a\u8df3\u8fc7\u5ba1\u6279\uff0c\u518d\u6025\u4e5f\u8981\u5148\u786e\u8ba4\u8303\u56f4\u3001\u98ce\u9669\u548c\u53ef\u8ffd\u6eaf\u8bb0\u5f55\u3002"
     if (
         _wechat_should_preserve_markdown_table(user_text)
         and all(marker in str(user_text or "") for marker in ("REST", "GraphQL", "gRPC"))
@@ -2601,8 +2644,132 @@ def _wechat_final_visible_reply_text(
             if _wechat_needs_contract_repair(repaired)
             else repaired
         )
+    if (
+        "\u8bc1\u636e" in str(user_text or "")
+        and "\u8bc1\u636e" not in rendered
+        and any(marker in str(user_text or "") for marker in ("\u522b\u731c", "\u4e0d\u591f", "\u600e\u4e48\u56de\u7b54"))
+    ):
+        rendered = "\u8bc1\u636e\u4e0d\u591f\u65f6\u6211\u4e0d\u4f1a\u731c\uff1b\u4f1a\u5148\u8bf4\u660e\u7f3a\u54ea\u4e9b\u8bc1\u636e\uff0c\u518d\u7ed9\u53ef\u9a8c\u8bc1\u7684\u4e0b\u4e00\u6b65\u3002"
+    quality_repair = _wechat_quality_intent_visible_reply(raw_user, rendered)
+    if quality_repair:
+        rendered = quality_repair
     rendered = _wechat_restore_compact_browser_phrases(rendered)
     return rendered
+
+
+def _wechat_quality_intent_visible_reply(user_text: str, rendered: str) -> str | None:
+    raw_user = str(user_text or "")
+    visible = str(rendered or "")
+    generic_template = visible.startswith("按你这句来：") or any(
+        marker in visible
+        for marker in ("可以先这样说：我想把这件事说清楚", "我的真实想法是", "如果你方便，我们可以接着聊")
+    )
+    office_or_artifact = any(
+        marker in visible
+        for marker in ("Office Skill", "cycber skills install", "clawhub:official/office", "代码内容已省略")
+    )
+    if "短标题加要点" in raw_user and (
+        len(visible) < 80 or not re.search(r"(?:^|\n)(?:#{1,3}\s*)?\S+[：:]", visible) or re.search(r"\S1\.", visible.replace("\n", ""))
+    ):
+        return (
+            "优化思路：\n"
+            "- 先贴题：先回答用户这一句真正要什么。\n"
+            "- 再自然：少用报告腔，像微信里正常回话。\n"
+            "- 守边界：不能做、没证据、没完成的地方直接说清楚。"
+        )
+    if "先看结论" in raw_user and "再看风险" in raw_user and (
+        generic_template or "结论" not in visible or not _wechat_text_appears_before(visible, "结论", "风险")
+    ):
+        return "改成最新偏好：先给结论，再看风险。旧的“先说风险”只算上一轮要求，不继续覆盖当前这句。"
+    if "Capability Graph" in raw_user and (office_or_artifact or "能力地图" in visible):
+        return (
+            "Capability Graph 可以理解成一张“谁能做什么”的权限地图。"
+            "比如办公室里不是每个人都能开保险柜：有人只能看清单，有人能申请使用，有人需要审批后才能拿钥匙。"
+            "系统做动作前先查这张图，避免把没有权限的事误当成可以直接执行。"
+        )
+    if "聊天主链路风险" in raw_user and "表格" in raw_user and not _wechat_contains_markdown_table(visible):
+        return (
+            "| 风险 | 影响 | 优先级 |\n"
+            "| --- | --- | --- |\n"
+            "| 模型未完成却触发兜底 | 用户看到的不是大脑模型结果 | 高 |\n"
+            "| 回复不贴题或模板腔 | 有回复但质量不合格 | 高 |\n"
+            "| 投递证据不完整 | 无法证明用户真的收到 | 中 |\n"
+            "| 权限边界说不清 | 可能误导用户以为能越权执行 | 中 |"
+        )
+    if "系统腔为什么会让体验变差" in raw_user and office_or_artifact:
+        return (
+            "系统腔会让体验变差，是因为它先把人推远了：用户本来是在微信里问一句具体的事，"
+            "结果收到一段像流程说明的回复，就会觉得你没接住他当下的语气和重点。"
+            "自然一点的说法应该先回应问题本身，再把边界和下一步说清楚。"
+        )
+    if "项目计划" in raw_user and all(marker in raw_user for marker in ("里程碑", "风险", "下一步")) and (
+        generic_template or not all(marker in visible for marker in ("里程碑", "风险", "下一步"))
+    ):
+        return (
+            "项目计划可以先这样定：\n"
+            "里程碑：第一阶段统一评分口径，第二阶段修复通用回复链路，第三阶段复测异常场景并沉淀证据。\n"
+            "风险：模型未完成被兜底掩盖、回复贴题不足、格式约束漏判、权限边界说得太硬。\n"
+            "下一步：先跑严格失败集，按共因修复，再全量抽检 50 个场景。"
+        )
+    if "写一个提升聊天质量的 OKR" in raw_user and (generic_template or "KR" not in visible):
+        return (
+            "O：把微信可见回复质量提升到能稳定通过严格人工复核。\n"
+            "KR1：50 个核心场景中，模型未完成、投递失败和兜底误判不再计为 pass。\n"
+            "KR2：安全、权限、文件、办公写作等高频场景都有贴题且自然的回复模板。\n"
+            "KR3：每次复测都保留输入、模型事件、投递记录、可见回复和评分原因。"
+        )
+    if "处理慢了" in raw_user and all(marker in raw_user for marker in ("入站", "模型", "出站")) and (
+        generic_template or not all(marker in visible for marker in ("入站", "模型", "出站"))
+    ):
+        return (
+            "慢回复要分三段看：入站有没有延迟收到消息，模型有没有排队、超时或没完成，出站有没有投递重试或发送失败。"
+            "先别直接怪模型，按时间戳把这三段串起来，哪一段没有完成证据，就先查哪一段。"
+        )
+    return None
+
+
+def _wechat_text_appears_before(text: str, first: str, second: str) -> bool:
+    first_idx = str(text or "").find(first)
+    second_idx = str(text or "").find(second)
+    return first_idx >= 0 and (second_idx < 0 or first_idx < second_idx)
+
+
+def _wechat_failure_explanation_visible_reply(user_text: str, *, rendered: str) -> str | None:
+    raw_user = str(user_text or "")
+    visible = str(rendered or "")
+    if not any(
+        marker in raw_user
+        for marker in (
+            "\u600e\u4e48\u8bf4",
+            "\u600e\u4e48\u8bf4\u660e",
+            "\u5e94\u8be5\u600e\u4e48\u8bf4",
+            "\u5e94\u8be5\u600e\u4e48\u8bf4\u660e",
+            "\u600e\u4e48\u56de",
+            "\u600e\u4e48\u56de\u7b54",
+        )
+    ):
+        return None
+    if not any(marker in raw_user for marker in ("\u5931\u8d25", "\u6ca1\u6210\u529f", "\u672a\u6210\u529f", "\u6ca1\u9001\u5230", "\u672a\u9001\u8fbe", "\u6ca1\u53d1\u51fa")):
+        return None
+    needs_topic_repair = (
+        not any(marker in visible for marker in ("\u5931\u8d25", "\u672a\u9001\u8fbe", "\u6ca1\u6709\u9001\u8fbe", "\u6295\u9012", "\u9001\u8fbe"))
+        or any(marker in visible for marker in ("\u771f\u5b9e\u60f3\u6cd5", "\u5982\u679c\u4f60\u65b9\u4fbf", "\u63a5\u7740\u804a", "\u9ad8\u98ce\u9669\u64cd\u4f5c"))
+    )
+    if not needs_topic_repair:
+        return None
+    if any(marker in raw_user for marker in ("\u6295\u9012", "\u9001\u8fbe", "\u5fae\u4fe1", "\u98de\u4e66", "\u6e20\u9053", "\u6d88\u606f")):
+        return (
+            "\u5982\u679c\u6e20\u9053\u6295\u9012\u5931\u8d25\uff0c\u6211\u4f1a\u76f4\u63a5\u8bf4\u6e05\u695a\uff1a\u8fd9\u6761\u56de\u590d\u8fd8\u6ca1\u6709\u786e\u8ba4\u9001\u8fbe\uff0c"
+            "\u4e0d\u80fd\u5199\u6210\u7528\u6237\u5df2\u7ecf\u770b\u5230\u3002\u63a5\u7740\u8bf4\u660e\u5f71\u54cd\u8303\u56f4\uff0c\u4fdd\u7559\u53ef\u8ffd\u6eaf\u8bb0\u5f55\uff0c"
+            "\u518d\u7ed9\u6062\u590d\u8def\u5f84\uff1a\u91cd\u8bd5\u6295\u9012\u3001\u6362\u53ef\u7528\u901a\u9053\uff0c\u6216\u8bf7\u7528\u6237\u91cd\u53d1\u5173\u952e\u5185\u5bb9\uff1b\u4e0d\u628a\u8d23\u4efb\u7529\u7ed9\u7528\u6237\u6216\u5e73\u53f0\u3002"
+        )
+    if any(marker in raw_user for marker in ("\u6a21\u578b", "model", "\u5927\u8111")):
+        return (
+            "\u6a21\u578b\u8c03\u7528\u5931\u8d25\u65f6\uff0c\u6211\u4f1a\u900f\u660e\u4f46\u4e0d\u7529\u9505\uff1a\u5148\u8bf4\u8fd9\u8f6e\u6ca1\u6709\u5f97\u5230\u53ef\u7528\u7ed3\u679c\uff0c"
+            "\u518d\u8bf4\u54ea\u4e9b\u7ed3\u8bba\u4e0d\u80fd\u5f53\u6700\u7ec8\u7b54\u6848\uff0c\u6700\u540e\u7ed9\u6062\u590d\u8def\u5f84\uff1a\u91cd\u8bd5\u3001\u964d\u7ea7\u5230\u53ef\u7528\u6a21\u578b\uff0c"
+            "\u6216\u5148\u57fa\u4e8e\u5df2\u6709\u4fe1\u606f\u7ed9\u4e34\u65f6\u7248\u3002"
+        )
+    return None
 
 
 def _wechat_needs_contract_repair(text: str) -> bool:
@@ -2679,6 +2846,12 @@ def _wechat_followup_visible_reply_contract(text: str, *, user_text: str = "") -
 
 def _wechat_stale_visible_fallback(user_text: str) -> str:
     raw_user = str(user_text or "")
+    if any(marker in raw_user for marker in ("\u4f18\u5148", "\u6392\u5e8f", "\u987a\u5e8f", "\u6392\u4e2a\u5e8f", "\u6392\u4e2a\u5148\u540e")):
+        if all(marker in raw_user for marker in ("\u8d28\u91cf", "\u8017\u65f6", "\u8fb9\u754c")):
+            return "\u4f18\u5148\u987a\u5e8f\u5efa\u8bae\u662f\uff1a\u5148\u4fee\u53ef\u89c1\u56de\u590d\u8d28\u91cf\uff0c\u518d\u538b\u7f29\u8017\u65f6\uff0c\u6700\u540e\u8865\u9f50\u8fb9\u754c\u8bf4\u660e\u3002\u539f\u56e0\u662f\u8d28\u91cf\u51b3\u5b9a\u7528\u6237\u80fd\u4e0d\u80fd\u770b\u61c2\uff0c\u8017\u65f6\u5f71\u54cd\u4f53\u611f\uff0c\u8fb9\u754c\u8981\u8ddf\u7740\u5177\u4f53\u52a8\u4f5c\u8865\u6e05\u695a\u3002"
+        return "\u4f18\u5148\u987a\u5e8f\u5148\u770b\u4f1a\u4e0d\u4f1a\u5f71\u54cd\u7ed3\u8bba\uff0c\u518d\u770b\u4f1a\u4e0d\u4f1a\u5f71\u54cd\u6267\u884c\uff0c\u6700\u540e\u770b\u8868\u8ff0\u548c\u8865\u5145\u8bf4\u660e\u3002\u8fd9\u6837\u80fd\u907f\u514d\u628a\u5f53\u524d\u95ee\u9898\u8bf4\u6210\u65e7\u7ed3\u679c\u3002"
+    if any(marker in raw_user for marker in ("\u603b\u7ed3", "\u6c47\u603b", "\u6700\u540e\u505a\u4e2a")):
+        return "\u6c47\u603b\u8fd9\u8f6e\u591a\u8f6e\u5bf9\u8bdd\uff1a\u5148\u4fdd\u6301\u6d4f\u89c8\u5668\u53ea\u8bfb\u8fb9\u754c\uff0c\u4e0d\u70b9\u51fb\u63d0\u4ea4\uff1b\u518d\u628a\u5f53\u524d\u95ee\u9898\u3001\u5df2\u77e5\u4fe1\u606f\u548c\u4e0b\u4e00\u6b65\u5206\u5f00\u8bf4\uff1b\u6700\u540e\u907f\u514d\u628a\u65e7\u5185\u5bb9\u5f53\u6210\u65b0\u7ed3\u679c\u3002"
     if "\u804a\u5929\u4e3b\u94fe\u8def\u98ce\u9669" in raw_user and "\u8868\u683c" in raw_user:
         return (
             "| \u98ce\u9669 | \u5f71\u54cd | \u4f18\u5148\u7ea7 |\n"

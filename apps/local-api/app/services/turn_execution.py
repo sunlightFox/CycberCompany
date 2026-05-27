@@ -26,6 +26,16 @@ class TurnExecutionManager:
         task = self._tasks.get(turn_id)
         return task is not None and not task.done()
 
+    async def close(self) -> None:
+        tasks = [task for task in self._tasks.values() if not task.done()]
+        if not tasks:
+            self._tasks.clear()
+            return
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self._tasks.clear()
+
     async def _run(self, turn_id: str) -> None:
         try:
             await self._runner(turn_id)
