@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import time
@@ -11,6 +12,13 @@ from typing import Any
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+_SUBPROCESS_THREAD_LIMIT_ENV = {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+}
 
 
 def _load_runner(path: Path) -> Any:
@@ -91,6 +99,12 @@ def _extract_result(payload: dict[str, Any], case_id: str) -> dict[str, Any] | N
         if isinstance(item, dict) and str(item.get("case_id")) == case_id:
             return item
     return None
+
+
+def _subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(_SUBPROCESS_THREAD_LIMIT_ENV)
+    return env
 
 
 def _summary_payload(
@@ -301,6 +315,7 @@ def run_casewise(
                     text=True,
                     encoding="utf-8",
                     errors="replace",
+                    env=_subprocess_env(),
                     timeout=timeout_seconds,
                 )
                 stdout_path.write_text(completed.stdout or "", encoding="utf-8")

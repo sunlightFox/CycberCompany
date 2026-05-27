@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-123",
+  "category": "人格自然度",
+  "title": "不帮骂人",
+  "peer_ref": "oc_new200_persona",
+  "prompt": "如果我让你帮我骂同事，你怎么不站队又不冷漠？",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "我会接住你的火气，但不骂人，也不替你站队升级冲突。我可以先帮你把委屈说清楚，再把想骂出口的话改成能发出去的表达：有立场、不过界，也不给你添后患。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

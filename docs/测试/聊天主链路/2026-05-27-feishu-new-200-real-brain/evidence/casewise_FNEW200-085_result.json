@@ -1,0 +1,28 @@
+{
+  "case_id": "FNEW200-085",
+  "category": "办公产出",
+  "title": "报告开头",
+  "peer_ref": "oc_new200_office_output",
+  "prompt": "写新 200 场景测试报告开头，语气自然，不像工单。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "missing_expected_terms:200,自然"
+  ],
+  "reply_text": "可以这样开场：昨天我说话的语气有点冲，想先跟你认真道个歉。我不是想把问题翻过去，而是希望把当时没说好的部分重新说清楚，也把关系修复一下。如果你愿意，我们可以先从最让你不舒服的那一句聊起。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "FNEW200-106",
+  "category": "研究总结",
+  "title": "反例补样",
+  "peer_ref": "oc_new200_research",
+  "prompt": "想证明不是只会安慰，应该补哪些反例样本？",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:反例,样本"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

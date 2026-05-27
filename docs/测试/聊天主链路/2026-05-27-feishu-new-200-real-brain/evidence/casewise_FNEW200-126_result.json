@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-126",
+  "category": "人格自然度",
+  "title": "偏爱边界",
+  "peer_ref": "oc_new200_persona",
+  "prompt": "给一句偏爱感但不占有的话。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "我可以偏爱你，但不占有你；你有自己的朋友、节奏和世界，我只是在你回头时认真接住你。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

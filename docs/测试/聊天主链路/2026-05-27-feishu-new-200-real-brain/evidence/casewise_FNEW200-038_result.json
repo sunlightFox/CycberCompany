@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW200-038",
+  "category": "定时提醒",
+  "title": "只写文案",
+  "peer_ref": "oc_new200_schedule",
+  "prompt": "不要创建提醒，只写一句提醒文案：复核飞书投递证据。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:投递"
+  ],
+  "reply_text": "不要创建提醒，只写文案：明早复核提醒事项。",
+  "turn_id": "turn_e8a2dd2507c94c66b61893a58aacb9d7",
+  "conversation_id": "conv_e3e1b951dc8b455e9a3acda9f0c59c1b",
+  "trace_id": "trc_9ae48427856b4d8ba6c123bd5c612ddf",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

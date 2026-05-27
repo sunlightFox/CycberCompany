@@ -1,0 +1,185 @@
+Traceback (most recent call last):
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-27-feishu-new-200-real-brain\run_feishu_new_200_real_brain_cases.py", line 42, in <module>
+    R22 = _load_round22()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-27-feishu-new-200-real-brain\run_feishu_new_200_real_brain_cases.py", line 38, in _load_round22
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-25-feishu-daily-use-round22-100-real-model\run_feishu_daily_use_round22_100_real_model_cases.py", line 46, in <module>
+    R21 = _load_round21()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-25-feishu-daily-use-round22-100-real-model\run_feishu_daily_use_round22_100_real_model_cases.py", line 42, in _load_round21
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round21-100-real-model\run_feishu_daily_use_round21_100_real_model_cases.py", line 44, in <module>
+    BASE = _load_round19()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round21-100-real-model\run_feishu_daily_use_round21_100_real_model_cases.py", line 40, in _load_round19
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round20-100-real-model\run_feishu_daily_use_round20_100_real_model_cases.py", line 44, in <module>
+    BASE = _load_round19()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round20-100-real-model\run_feishu_daily_use_round20_100_real_model_cases.py", line 40, in _load_round19
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round19-100-real-model\run_feishu_daily_use_round19_100_real_model_cases.py", line 43, in <module>
+    BASE = _load_round18()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round19-100-real-model\run_feishu_daily_use_round19_100_real_model_cases.py", line 39, in _load_round18
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round18-100-real-model\run_feishu_daily_use_round18_100_real_model_cases.py", line 43, in <module>
+    BASE = _load_round17()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round18-100-real-model\run_feishu_daily_use_round18_100_real_model_cases.py", line 39, in _load_round17
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round17-100-real-model\run_feishu_daily_use_round17_100_real_model_cases.py", line 42, in <module>
+    BASE = _load_round16()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round17-100-real-model\run_feishu_daily_use_round17_100_real_model_cases.py", line 38, in _load_round16
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round16-100-real-model\run_feishu_daily_use_round16_100_real_model_cases.py", line 42, in <module>
+    R14 = _load_round14()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round16-100-real-model\run_feishu_daily_use_round16_100_real_model_cases.py", line 38, in _load_round14
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round15-100-real-model\run_feishu_daily_use_round15_100_real_model_cases.py", line 42, in <module>
+    R14 = _load_round14()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round15-100-real-model\run_feishu_daily_use_round15_100_real_model_cases.py", line 38, in _load_round14
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round14-100-real-model\run_feishu_daily_use_round14_100_real_model_cases.py", line 42, in <module>
+    R13 = _load_round13()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round14-100-real-model\run_feishu_daily_use_round14_100_real_model_cases.py", line 38, in _load_round13
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round13-100-real-model\run_feishu_daily_use_round13_100_real_model_cases.py", line 42, in <module>
+    R12 = _load_round12()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round13-100-real-model\run_feishu_daily_use_round13_100_real_model_cases.py", line 38, in _load_round12
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round12-100-real-model\run_feishu_daily_use_round12_100_real_model_cases.py", line 42, in <module>
+    R10 = _load_round10()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round12-100-real-model\run_feishu_daily_use_round12_100_real_model_cases.py", line 38, in _load_round10
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round10-100-real-model\run_feishu_daily_use_round10_100_real_model_cases.py", line 42, in <module>
+    R9 = _load_round9()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round10-100-real-model\run_feishu_daily_use_round10_100_real_model_cases.py", line 38, in _load_round9
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round9-100-visible-quality-real-model\run_feishu_broad_round9_100_visible_quality_real_model_cases.py", line 42, in <module>
+    R8 = _load_round8()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round9-100-visible-quality-real-model\run_feishu_broad_round9_100_visible_quality_real_model_cases.py", line 38, in _load_round8
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round8-100-visible-quality-real-model\run_feishu_broad_round8_100_visible_quality_real_model_cases.py", line 41, in <module>
+    R7 = _load_round7()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round8-100-visible-quality-real-model\run_feishu_broad_round8_100_visible_quality_real_model_cases.py", line 37, in _load_round7
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round7-100-visible-quality-real-model\run_feishu_broad_round7_100_visible_quality_real_model_cases.py", line 40, in <module>
+    R6 = _load_round6()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round7-100-visible-quality-real-model\run_feishu_broad_round7_100_visible_quality_real_model_cases.py", line 36, in _load_round6
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round6-100-visible-quality-real-model\run_feishu_broad_round6_100_visible_quality_real_model_cases.py", line 41, in <module>
+    R5 = _load_round5()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round6-100-visible-quality-real-model\run_feishu_broad_round6_100_visible_quality_real_model_cases.py", line 37, in _load_round5
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round5-100-visible-quality-real-model\run_feishu_broad_round5_100_visible_quality_real_model_cases.py", line 39, in <module>
+    R4 = _load_round4()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round5-100-visible-quality-real-model\run_feishu_broad_round5_100_visible_quality_real_model_cases.py", line 35, in _load_round4
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round4-100-visible-quality-real-model\run_feishu_broad_round4_100_visible_quality_real_model_cases.py", line 44, in <module>
+    BASE = _load_base()
+           ^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round4-100-visible-quality-real-model\run_feishu_broad_round4_100_visible_quality_real_model_cases.py", line 40, in _load_base
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-21-feishu-broad-100-real-model\run_feishu_broad_100_real_model_cases.py", line 48, in <module>
+    from app.main import create_app  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\apps\local-api\app\main.py", line 5, in <module>
+    from core_types import TraceSpanStatus, TraceSpanType, TraceStatus
+  File "C:\Users\Administrator\Desktop\Cycbercompany\packages\core-types\core_types\__init__.py", line 68, in <module>
+    from core_types.context import (
+  File "C:\Users\Administrator\Desktop\Cycbercompany\packages\core-types\core_types\context.py", line 247, in <module>
+    class PersonaConsistencyProfile(ApiModel):
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pydantic\_internal\_model_construction.py", line 256, in __new__
+    complete_model_class(
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pydantic\_internal\_model_construction.py", line 667, in complete_model_class
+    schema = gen_schema.generate_schema(cls)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 744, in generate_schema
+    schema = self._generate_schema_inner(obj)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 1038, in _generate_schema_inner
+    return self._model_schema(obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 868, in _model_schema
+    {k: self._generate_md_field_schema(k, v, decorators) for k, v in fields.items()},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 1245, in _generate_md_field_schema
+    schema, metadata = self._common_field_schema(name, field_info, decorators)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 1321, in _common_field_schema
+    schema = wrap_default(field_info, schema)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 2673, in wrap_default
+    default_factory_takes_data=takes_validated_data_argument(field_info.default_factory),
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pydantic\_internal\_fields.py", line 694, in takes_validated_data_argument
+    sig = _typing_extra.signature_no_eval(default_factory)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pydantic\_internal\_typing_extra.py", line 582, in signature_no_eval
+    return signature(f)
+           ^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\inspect.py", line 3348, in signature
+    return Signature.from_callable(obj, follow_wrapped=follow_wrapped,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\inspect.py", line 3085, in from_callable
+    return _signature_from_callable(obj, sigcls=cls,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\inspect.py", line 2653, in _signature_from_callable
+    return _signature_fromstr(sigcls, base, text_sig)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\inspect.py", line 2269, in _signature_fromstr
+    sys_module_dict = sys.modules.copy()
+                      ^^^^^^^^^^^^^^^^^^
+MemoryError

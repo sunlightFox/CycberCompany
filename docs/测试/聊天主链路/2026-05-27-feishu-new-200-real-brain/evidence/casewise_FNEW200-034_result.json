@@ -1,0 +1,29 @@
+{
+  "case_id": "FNEW200-034",
+  "category": "定时提醒",
+  "title": "每周提醒",
+  "peer_ref": "oc_new200_schedule",
+  "prompt": "每周三 18:00 提醒我做自然度抽样，不要创建模糊任务。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:每周三,18:00"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

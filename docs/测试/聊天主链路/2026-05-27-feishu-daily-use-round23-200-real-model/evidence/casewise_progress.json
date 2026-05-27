@@ -1,0 +1,45 @@
+{
+  "run_label": "FDU23-200-REAL-20260527",
+  "started_at": "2026-05-27T18:10:59",
+  "runner": "C:\\Users\\Administrator\\Desktop\\Cycbercompany\\docs\\测试\\聊天主链路\\2026-05-27-feishu-daily-use-round23-200-real-model\\run_feishu_daily_use_round23_200_real_model_cases.py",
+  "total_selected": 199,
+  "completed": 6,
+  "items": [
+    {
+      "case_id": "FDU23-200-002",
+      "verdict": "warn",
+      "score": 90,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FDU23-200-003",
+      "verdict": "warn",
+      "score": 90,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FDU23-200-004",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU23-200-005",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU23-200-006",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FDU23-200-007",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    }
+  ]
+}

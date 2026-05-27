@@ -10,6 +10,7 @@ from app.services.bootstrap import (
     DEFAULT_CODEX_CONTEXT_WINDOW,
     DEFAULT_CODEX_DISPLAY_NAME,
     DEFAULT_CODEX_MODEL,
+    DEFAULT_CODEX_REASONING_EFFORT,
     DEFAULT_CODEX_TEXT_VERBOSITY,
     DEFAULT_MEMBER_VOICE_IDS,
     DEFAULT_ORGANIZATION_ID,
@@ -53,12 +54,7 @@ def test_boot_001_first_start_creates_default_foundation(client: TestClient) -> 
     assert default_brain["privacy_policy"]["requires_openai_auth"] is True
     assert default_brain["privacy_policy"]["disable_response_storage"] is True
     assert default_brain["privacy_policy"]["approvals_reviewer"] == "user"
-    assert default_brain["privacy_policy"]["reasoning_effort"] in {
-        "minimal",
-        "low",
-        "medium",
-        "high",
-    }
+    assert default_brain["privacy_policy"]["reasoning_effort"] == DEFAULT_CODEX_REASONING_EFFORT
     assert default_brain["privacy_policy"]["text_verbosity"] == DEFAULT_CODEX_TEXT_VERBOSITY
     member_items = members.json()["items"]
     assert len(member_items) == 11

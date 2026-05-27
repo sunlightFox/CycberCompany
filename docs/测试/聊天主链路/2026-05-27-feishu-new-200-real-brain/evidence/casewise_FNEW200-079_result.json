@@ -1,0 +1,29 @@
+{
+  "case_id": "FNEW200-079",
+  "category": "办公沟通",
+  "title": "请人帮忙",
+  "peer_ref": "oc_new200_office_comm",
+  "prompt": "想请同事帮我看公式，不显得慌，帮我开口。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:公式"
+  ],
+  "reply_text": "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。我的真实想法是……如果你方便，我们可以接着聊。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

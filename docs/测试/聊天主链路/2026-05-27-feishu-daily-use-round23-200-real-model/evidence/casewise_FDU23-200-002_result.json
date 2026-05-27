@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU23-200-002",
+  "category": "闲聊与陪伴",
+  "title": "消息愧疚",
+  "peer_ref": "oc_FDU23_casual",
+  "prompt": "飞书有条消息拖到现在才回，我有点愧疚，帮我写一句自然补回。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:拖"
+  ],
+  "reply_text": "小曜给你一句自然的：\n\n“不好意思，这条我前面漏看了，现在才回你，我先补一下。”",
+  "turn_id": "turn_463bad5b18a9400ab2f22c3335a7eed1",
+  "conversation_id": "conv_bf7688ae7db94313bb746f7f29d0b114",
+  "trace_id": "trc_6b88029f248b4ad4aa10145794a61736",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

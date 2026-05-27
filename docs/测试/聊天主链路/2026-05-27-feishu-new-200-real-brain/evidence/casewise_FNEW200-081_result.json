@@ -1,0 +1,42 @@
+{
+  "case_id": "FNEW200-081",
+  "category": "办公产出",
+  "title": "日报",
+  "peer_ref": "oc_new200_office_output",
+  "prompt": "写飞书日报：今天跑新 200 场景真实大脑模型测试，异常只重跑异常项。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:200"
+  ],
+  "reply_text": "飞书日报：\n今天完成：模型联调已完成，主链路已经能跑通。\n当前阻塞：审批账号还没开通，部分失败项不能闭环复测。\n明天计划：补跑失败项和告警项，整理通过证据、风险和下一步修复清单。",
+  "turn_id": "turn_fd00fa484b4240798f5bbe1207e65342",
+  "conversation_id": "conv_18cb75a6a0144569955a747d6b93076d",
+  "trace_id": "trc_ef49f34bc0884ce4887213b543cda9f4",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "route.selected",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

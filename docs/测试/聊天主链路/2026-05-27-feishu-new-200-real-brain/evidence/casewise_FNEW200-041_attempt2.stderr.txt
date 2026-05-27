@@ -1,0 +1,3 @@
+error: uv trampoline failed to spawn Python child process
+  Caused by: uncategorized error (os error 1455)
+

@@ -15,6 +15,7 @@ ROOT_DIR = Path(__file__).resolve().parents[3]
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("CYCBER_ROOT", str(ROOT_DIR))
     monkeypatch.setenv("CYCBER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setattr("app.services.bootstrap.Path.home", lambda: tmp_path)
     with TestClient(create_app()) as test_client:
         yield test_client
 

@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-113",
+  "category": "记忆偏好",
+  "title": "临时称呼",
+  "peer_ref": "oc_new200_memory",
+  "prompt": "这轮叫我阿澈，只在当前聊天用，不写长期记忆。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "好的，阿澈，这轮我就这么叫你。这只是当前对话里的临时称呼，不保存成长期偏好，也不写进长期记忆；后面如果还要继续用，再由你当场说明。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

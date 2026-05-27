@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-076",
+  "category": "办公沟通",
+  "title": "补充风险",
+  "peer_ref": "oc_new200_office_comm",
+  "prompt": "我漏说一个风险条件，想补一句但不推翻前面。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "可以补得轻一点：我补充一个风险条件，前面的结论不推翻，只是这里还要同时看交付时间和对方确认情况；如果这两项有变化，我们再按最新条件调整。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

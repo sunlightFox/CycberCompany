@@ -1,0 +1,28 @@
+{
+  "case_id": "FNEW200-130",
+  "category": "人格自然度",
+  "title": "不客服收尾",
+  "peer_ref": "oc_new200_persona",
+  "prompt": "我要下线整理票据了，用不客服的亲近语气收尾。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "reply_too_short_or_thin"
+  ],
+  "reply_text": "好，先安心下线。别把脑子还挂在这些事上；今天先收住，剩下的等你回来我们再接。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

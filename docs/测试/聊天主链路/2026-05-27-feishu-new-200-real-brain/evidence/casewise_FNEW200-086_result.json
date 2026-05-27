@@ -1,0 +1,40 @@
+{
+  "case_id": "FNEW200-086",
+  "category": "办公产出",
+  "title": "验收标准",
+  "peer_ref": "oc_new200_office_output",
+  "prompt": "给自然回复质量写验收标准：正确、自然、结构清楚、有边界。",
+  "verdict": "fail",
+  "score": 67,
+  "notes": [
+    "reply_too_short_or_thin",
+    "missing_expected_terms:边界"
+  ],
+  "reply_text": "我来理一下，这个“自然回复质量”的验收标准可以直接写成下面这版： 回复内容与用户问题、上下文一致，没有事实错误、逻辑错误或自相矛盾。",
+  "turn_id": "turn_c2908659984b4dababb376478740bf2b",
+  "conversation_id": "conv_e60ac9b39f974d5ea5e7df6f2cd3faee",
+  "trace_id": "trc_1cacf850bf1745b790128c2ded9cc1cc",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW200-004",
+  "category": "闲聊陪伴",
+  "title": "拖延回信",
+  "peer_ref": "oc_new200_casual",
+  "prompt": "一条消息拖到现在才回，帮我写一句不卑不亢的补回。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:补回"
+  ],
+  "reply_text": "可以这样发：\n\n“刚处理完手头的事，现在才回你；你说的我看到了，我们接着聊。”",
+  "turn_id": "turn_f509153d0b4f4562944aa60e01a213f7",
+  "conversation_id": "conv_38a476fafea446c5a40ec1147d7c2beb",
+  "trace_id": "trc_448ee9b9f4fa4e08a770c196e56cc2eb",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

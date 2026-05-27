@@ -1,0 +1,29 @@
+{
+  "case_id": "FNEW200-032",
+  "category": "定时提醒",
+  "title": "相对提醒",
+  "peer_ref": "oc_new200_schedule",
+  "prompt": "25 分钟后提醒我喝水休息，要说明这是相对时间。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:25,相对"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

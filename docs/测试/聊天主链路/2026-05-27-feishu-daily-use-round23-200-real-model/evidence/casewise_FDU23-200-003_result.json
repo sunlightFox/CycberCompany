@@ -1,0 +1,39 @@
+{
+  "case_id": "FDU23-200-003",
+  "category": "闲聊与陪伴",
+  "title": "低电量",
+  "peer_ref": "oc_FDU23_casual",
+  "prompt": "我像电量只剩 8%，但还要收个尾。给一个最低动作。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:8"
+  ],
+  "reply_text": "只做一件事：**发一条“收尾三句话”**。\n\n模板直接复制：\n\n> 我这边先收尾到这里：>1）当前进度：___>2）剩下最关键的一步：___>3）如果今天不继续，明天我会先处理：___不用完美，不补细节。小曜建议：发出去就算收尾完成。",
+  "turn_id": "turn_ee491d7a8fde405eb97a4cb123b7ec3f",
+  "conversation_id": "conv_2d4cb3576df344ceb3d71d4a05d3fdd6",
+  "trace_id": "trc_3d7e65920eff42b7a764582fac55a22c",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

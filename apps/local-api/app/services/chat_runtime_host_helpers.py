@@ -2336,7 +2336,13 @@ def deterministic_boundary_reply(user_text: str) -> str | None:
     if any(marker in lowered for marker in ("password", "secret", "api_key", "api-key", "token", "private key")) or any(
         marker in raw for marker in ("密码", "密钥", "私钥")
     ):
-        return "我不会复述密码、密钥、token 或其他敏感凭据；这类内容不会作为可直接输出的信息返回。"
+        return (
+            "我能帮你做安全处理：先把这类内容当作敏感凭据，提醒你撤回或删除可见原文，"
+            "必要时轮换密码、token 或密钥，并检查最近登录、授权和外发记录。"
+            "但我不会复述密码、密钥、token 或其他敏感凭据，也不能保存、转发、代填或帮你发给别人；"
+            "后续排查请用脱敏占位符描述，"
+            "比如 PASSWORD_X 或 TOKEN_ABC，别再发真实值。"
+        )
     if "工具要发邮件" in raw and "邮箱密码" in raw:
         return "工具不能直接读取邮箱密码。邮件这类资产访问要先经过 Asset Broker，再按权限、用途和最小范围发放可控能力；工具只执行被授权的发送动作，不能绕过权限查看明文密码。"
     if "拒绝导出 token" in raw and "trace" in raw:

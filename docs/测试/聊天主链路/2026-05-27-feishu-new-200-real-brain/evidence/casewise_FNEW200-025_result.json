@@ -1,0 +1,29 @@
+{
+  "case_id": "FNEW200-025",
+  "category": "任务监督",
+  "title": "完成定义",
+  "peer_ref": "oc_new200_supervise",
+  "prompt": "帮我定义今晚测试完成标准，别把半成品当完成。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:完成,标准"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

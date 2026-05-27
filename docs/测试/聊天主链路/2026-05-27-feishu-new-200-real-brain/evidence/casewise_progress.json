@@ -1,0 +1,183 @@
+{
+  "run_label": "FNEW200-REAL-BRAIN-20260527",
+  "started_at": "2026-05-27T18:50:08",
+  "runner": "C:\\Users\\Administrator\\Desktop\\Cycbercompany\\docs\\测试\\聊天主链路\\2026-05-27-feishu-new-200-real-brain\\run_feishu_new_200_real_brain_cases.py",
+  "total_selected": 188,
+  "completed": 29,
+  "items": [
+    {
+      "case_id": "FNEW200-013",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW200-014",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW200-015",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW200-016",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW200-017",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW200-018",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-019",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-020",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-021",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-022",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-023",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-024",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-025",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-026",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-027",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-028",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-029",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-030",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-031",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-032",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-033",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-034",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-035",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-036",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-037",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-038",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:3221225477"
+    },
+    {
+      "case_id": "FNEW200-039",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:3221225773"
+    },
+    {
+      "case_id": "FNEW200-040",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    },
+    {
+      "case_id": "FNEW200-041",
+      "verdict": "fail",
+      "score": 0,
+      "error": "case_process_failed:1"
+    }
+  ]
+}

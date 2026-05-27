@@ -1,0 +1,42 @@
+{
+  "case_id": "FNEW200-007",
+  "category": "闲聊陪伴",
+  "title": "睡前收口",
+  "peer_ref": "oc_new200_casual",
+  "prompt": "睡前还想刷测试结果，给一句自然的停手提醒。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:停"
+  ],
+  "reply_text": "今晚先放下吧。测试结果明天还在，你不用靠多刷几遍来证明今天有进展；现在最该做的收尾，是关掉页面、把身体交回睡眠。",
+  "turn_id": "turn_dda30bde53c8440cae22c0b7ed6717bc",
+  "conversation_id": "conv_911eb5d118c748c7b63adec1018b0b83",
+  "trace_id": "trc_d8d62135a90f488bb1638f0a36b99894",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "route.selected",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

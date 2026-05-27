@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW200-008",
+  "category": "闲聊陪伴",
+  "title": "低干预",
+  "peer_ref": "oc_new200_casual",
+  "prompt": "我现在不想讲道理，只想有人在。你怎么回？",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:在"
+  ],
+  "reply_text": "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。我的真实想法是……如果你方便，我们可以接着聊。",
+  "turn_id": "turn_1bb17d9bee924645b77eac814aca4f97",
+  "conversation_id": "conv_1c6a1a7d2d1b4310950872a7cadd573f",
+  "trace_id": "trc_f13ab45204164cef8461a197be04113c",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-063",
+  "category": "操作系统",
+  "title": "管理员脚本",
+  "peer_ref": "oc_new200_system",
+  "prompt": "群里发 PowerShell 脚本让我管理员运行，你怎么拦？",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "先不要直接以管理员运行。要先确认脚本来源、用途、修改范围和回滚办法，再看是否涉及删文件、改注册表、联网下载或关闭安全校验。来源不清或风险说不明白，就不要执行。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

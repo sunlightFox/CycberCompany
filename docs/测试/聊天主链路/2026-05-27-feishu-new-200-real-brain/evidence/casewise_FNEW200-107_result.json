@@ -1,0 +1,28 @@
+{
+  "case_id": "FNEW200-107",
+  "category": "研究总结",
+  "title": "摘要边界",
+  "peer_ref": "oc_new200_research",
+  "prompt": "帮我总结网页，但必须说明只基于已读页面。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "missing_expected_terms:只基于,页面"
+  ],
+  "reply_text": "我会先把材料压成结论、原因、影响和下一步四块，而不是只复述原文。结论放最前面，原因按人、流程、信息和外部约束分层，影响只保留会改变判断的部分，最后给出可执行的补证或推进动作。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

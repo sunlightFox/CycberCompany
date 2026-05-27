@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-111",
+  "category": "记忆偏好",
+  "title": "记忆写入",
+  "peer_ref": "oc_new200_memory",
+  "prompt": "记住 FNEW200-PREF：测试结论先给证据，再判断，最后下一步，source 是这条消息。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "记住了：FNEW200-PREF 这条偏好以你这条消息为 source。后面同类请求我会按它来组织回复；如果它碰到隐私、凭据、付款或越权动作，安全边界仍然优先。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

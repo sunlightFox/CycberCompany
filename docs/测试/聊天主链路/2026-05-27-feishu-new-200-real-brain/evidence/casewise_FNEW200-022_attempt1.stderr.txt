@@ -1,0 +1,147 @@
+Traceback (most recent call last):
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-27-feishu-new-200-real-brain\run_feishu_new_200_real_brain_cases.py", line 42, in <module>
+    R22 = _load_round22()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-27-feishu-new-200-real-brain\run_feishu_new_200_real_brain_cases.py", line 38, in _load_round22
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-25-feishu-daily-use-round22-100-real-model\run_feishu_daily_use_round22_100_real_model_cases.py", line 46, in <module>
+    R21 = _load_round21()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-25-feishu-daily-use-round22-100-real-model\run_feishu_daily_use_round22_100_real_model_cases.py", line 42, in _load_round21
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round21-100-real-model\run_feishu_daily_use_round21_100_real_model_cases.py", line 44, in <module>
+    BASE = _load_round19()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round21-100-real-model\run_feishu_daily_use_round21_100_real_model_cases.py", line 40, in _load_round19
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round20-100-real-model\run_feishu_daily_use_round20_100_real_model_cases.py", line 44, in <module>
+    BASE = _load_round19()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round20-100-real-model\run_feishu_daily_use_round20_100_real_model_cases.py", line 40, in _load_round19
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round19-100-real-model\run_feishu_daily_use_round19_100_real_model_cases.py", line 43, in <module>
+    BASE = _load_round18()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round19-100-real-model\run_feishu_daily_use_round19_100_real_model_cases.py", line 39, in _load_round18
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round18-100-real-model\run_feishu_daily_use_round18_100_real_model_cases.py", line 43, in <module>
+    BASE = _load_round17()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round18-100-real-model\run_feishu_daily_use_round18_100_real_model_cases.py", line 39, in _load_round17
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round17-100-real-model\run_feishu_daily_use_round17_100_real_model_cases.py", line 42, in <module>
+    BASE = _load_round16()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round17-100-real-model\run_feishu_daily_use_round17_100_real_model_cases.py", line 38, in _load_round16
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round16-100-real-model\run_feishu_daily_use_round16_100_real_model_cases.py", line 42, in <module>
+    R14 = _load_round14()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round16-100-real-model\run_feishu_daily_use_round16_100_real_model_cases.py", line 38, in _load_round14
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round15-100-real-model\run_feishu_daily_use_round15_100_real_model_cases.py", line 42, in <module>
+    R14 = _load_round14()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round15-100-real-model\run_feishu_daily_use_round15_100_real_model_cases.py", line 38, in _load_round14
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round14-100-real-model\run_feishu_daily_use_round14_100_real_model_cases.py", line 42, in <module>
+    R13 = _load_round13()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round14-100-real-model\run_feishu_daily_use_round14_100_real_model_cases.py", line 38, in _load_round13
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round13-100-real-model\run_feishu_daily_use_round13_100_real_model_cases.py", line 42, in <module>
+    R12 = _load_round12()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round13-100-real-model\run_feishu_daily_use_round13_100_real_model_cases.py", line 38, in _load_round12
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round12-100-real-model\run_feishu_daily_use_round12_100_real_model_cases.py", line 42, in <module>
+    R10 = _load_round10()
+          ^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round12-100-real-model\run_feishu_daily_use_round12_100_real_model_cases.py", line 38, in _load_round10
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round10-100-real-model\run_feishu_daily_use_round10_100_real_model_cases.py", line 42, in <module>
+    R9 = _load_round9()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round10-100-real-model\run_feishu_daily_use_round10_100_real_model_cases.py", line 38, in _load_round9
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round9-100-visible-quality-real-model\run_feishu_broad_round9_100_visible_quality_real_model_cases.py", line 42, in <module>
+    R8 = _load_round8()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round9-100-visible-quality-real-model\run_feishu_broad_round9_100_visible_quality_real_model_cases.py", line 38, in _load_round8
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round8-100-visible-quality-real-model\run_feishu_broad_round8_100_visible_quality_real_model_cases.py", line 41, in <module>
+    R7 = _load_round7()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round8-100-visible-quality-real-model\run_feishu_broad_round8_100_visible_quality_real_model_cases.py", line 37, in _load_round7
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round7-100-visible-quality-real-model\run_feishu_broad_round7_100_visible_quality_real_model_cases.py", line 40, in <module>
+    R6 = _load_round6()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round7-100-visible-quality-real-model\run_feishu_broad_round7_100_visible_quality_real_model_cases.py", line 36, in _load_round6
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round6-100-visible-quality-real-model\run_feishu_broad_round6_100_visible_quality_real_model_cases.py", line 41, in <module>
+    R5 = _load_round5()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round6-100-visible-quality-real-model\run_feishu_broad_round6_100_visible_quality_real_model_cases.py", line 37, in _load_round5
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round5-100-visible-quality-real-model\run_feishu_broad_round5_100_visible_quality_real_model_cases.py", line 39, in <module>
+    R4 = _load_round4()
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round5-100-visible-quality-real-model\run_feishu_broad_round5_100_visible_quality_real_model_cases.py", line 35, in _load_round4
+    spec.loader.exec_module(module)
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round4-100-visible-quality-real-model\run_feishu_broad_round4_100_visible_quality_real_model_cases.py", line 14, in <module>
+    from fastapi.testclient import TestClient
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\fastapi\testclient.py", line 1, in <module>
+    from starlette.testclient import TestClient as TestClient  # noqa
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\starlette\testclient.py", line 38, in <module>
+    import httpx
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\httpx\__init__.py", line 15, in <module>
+    from ._main import main
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\httpx\_main.py", line 14, in <module>
+    import rich.syntax
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\rich\syntax.py", line 24, in <module>
+    from pygments.lexer import Lexer
+  File "C:\Users\Administrator\Desktop\Cycbercompany\.venv\Lib\site-packages\pygments\lexer.py", line 15, in <module>
+    from pygments.filter import apply_filters, Filter
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1322, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1262, in _find_spec
+  File "<frozen importlib._bootstrap>", line 1130, in find_spec
+MemoryError

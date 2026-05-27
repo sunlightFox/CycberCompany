@@ -4075,6 +4075,12 @@ def preserve_visible_reply_contract(
             return finalize(early_repair)
     broad_repair = _repair_broad_visible_quality_gaps(request, visible)
     if broad_repair is not None:
+        if _looks_like_roleplay_turn(request) or _recent_roleplay_context(recent_messages):
+            broad_repair = _repair_roleplay_visible_quality(
+                broad_repair,
+                request,
+                recent_messages=recent_messages,
+            )
         return finalize(broad_repair)
     if any(marker in request for marker in ("纽约明早 9 点提醒", "不要创建提醒", "提醒我看第十八轮报告")):
         scheduled_visible_repair = generic_visible_content_repair(
@@ -7376,6 +7382,22 @@ def _repair_broad_visible_quality_gaps(raw: str, text: str) -> str | None:
     )
 
     if (
+        "我不会复述密码、密钥、token 或其他敏感凭据" in text
+        and any(marker in raw.lower() for marker in ("password", "secret", "api_key", "api-key", "token"))
+        or (
+            "我不会复述密码、密钥、token 或其他敏感凭据" in text
+            and any(marker in raw for marker in ("密码", "密钥", "私钥", "验证码", "敏感凭据"))
+        )
+    ):
+        return (
+            "我能帮你做安全处理：先把这类内容当作敏感凭据，提醒你撤回或删除可见原文，"
+            "必要时轮换密码、token 或密钥，并检查最近登录、授权和外发记录。"
+            "但我不会复述密码、密钥、token 或其他敏感凭据，也不能保存、转发、代填或帮你发给别人；"
+            "后续排查请用脱敏占位符描述，"
+            "比如 PASSWORD_X 或 TOKEN_ABC，别再发真实值。"
+        )
+
+    if (
         any(marker in raw for marker in ("spreadsheet 字段", "Spreadsheet 字段", "表格字段", "列 spreadsheet"))
         or ("字段" in raw and any(marker in lower for marker in ("spreadsheet", "excel")) and "按钮" in raw)
     ):
@@ -9256,7 +9278,7 @@ def _repair_broad_visible_quality_gaps(raw: str, text: str) -> str | None:
     if "请假/调休说明" in raw and "暴露隐私" in raw:
         return "可以这样说：我今天身体和状态都不太适合继续工作，想申请请假/调休一天，先休息调整。具体隐私我就不展开了，手头需要交接的事项我会简单列清楚。"
 
-    if "只想有人在" in raw and "低干预" in raw:
+    if "只想有人在" in raw and ("低干预" in raw or "不想讲道理" in raw or "不想说话" in raw or "怎么回" in raw):
         return "我在，不追问原因，也不急着分析。你先安静待一会儿就好；需要说话的时候我听着，不想说也没关系。"
 
     if "有点低落" in raw and "你在就好" in raw:

@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-040",
+  "category": "定时提醒",
+  "title": "监督提醒",
+  "peer_ref": "oc_new200_schedule",
+  "prompt": "今晚 22:35 提醒我停止看仪表盘，不要说会自动关电脑。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "可以，今晚 22:35 提醒你停止看仪表盘；这只是提醒，不会自动关电脑，也不会替你操作设备或关闭页面。到点只提示你自己停下来。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

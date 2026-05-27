@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-028",
+  "category": "任务监督",
+  "title": "只重跑异常",
+  "peer_ref": "oc_new200_supervise",
+  "prompt": "200 个里 7 个 fail、9 个 warn，修复后怎么重跑？",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "不要全量重跑。先把 7 个 fail 和 9 个 warn 放进异常清单，记录原因、修复点和预期结果。修复通用问题后，只重跑这 16 个异常项，再把新证据合并回 100 条总结果；如果还有异常，就继续只重跑剩余异常项。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

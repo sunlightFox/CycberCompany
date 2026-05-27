@@ -1,0 +1,29 @@
+{
+  "case_id": "FNEW200-026",
+  "category": "任务监督",
+  "title": "卡住处理",
+  "peer_ref": "oc_new200_supervise",
+  "prompt": "我卡在第一个失败项，给一个不逃避也不硬扛的处理法。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:失败"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

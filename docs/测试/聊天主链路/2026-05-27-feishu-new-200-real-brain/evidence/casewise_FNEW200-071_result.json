@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-071",
+  "category": "办公沟通",
+  "title": "催材料",
+  "peer_ref": "oc_new200_office_comm",
+  "prompt": "对方没给材料，帮我写飞书催一下，要礼貌、有截止点、留余地。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "可以这样发：你好，想跟你确认一下材料进度，怕影响后续安排。如果方便的话，麻烦在今天 18:00 前同步一版；如果暂时给不了，也可以先告诉我预计截止时间，我这边好调整节奏。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

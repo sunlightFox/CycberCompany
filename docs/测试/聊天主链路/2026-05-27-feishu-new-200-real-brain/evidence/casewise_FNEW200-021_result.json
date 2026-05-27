@@ -1,0 +1,28 @@
+{
+  "case_id": "FNEW200-021",
+  "category": "任务监督",
+  "title": "监督开工",
+  "peer_ref": "oc_new200_supervise",
+  "prompt": "接下来监督我 25 分钟，只给开始动作和到点复盘方式。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "missing_expected_terms:复盘"
+  ],
+  "reply_text": "我会监督你 25 分钟只看失败证据，不先改代码。\n前 15 分钟只列证据：原始输入、飞书收到的消息、模型事件、投递记录和评分原因。\n后 10 分钟只收结论：这条失败属于哪类共性问题，下一步修哪个通用链路。到点我会问你一句：结论是什么？",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "FNEW200-018",
+  "category": "计划规划",
+  "title": "写作规划",
+  "peer_ref": "oc_new200_plan",
+  "prompt": "我想写一篇测试报告，帮我规划结构和写作顺序。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:结构,顺序"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

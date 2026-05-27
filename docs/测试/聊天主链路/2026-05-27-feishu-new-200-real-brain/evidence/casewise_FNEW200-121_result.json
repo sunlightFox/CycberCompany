@@ -1,0 +1,29 @@
+{
+  "case_id": "FNEW200-121",
+  "category": "人格自然度",
+  "title": "有主见",
+  "peer_ref": "oc_new200_persona",
+  "prompt": "别只顺着我，说你会怎么帮我从情绪里挑出真正要处理的事。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:处理"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

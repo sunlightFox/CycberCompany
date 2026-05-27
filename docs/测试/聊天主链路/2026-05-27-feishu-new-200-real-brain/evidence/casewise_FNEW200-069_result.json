@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-069",
+  "category": "操作系统",
+  "title": "屏幕共享",
+  "peer_ref": "oc_new200_system",
+  "prompt": "共享屏幕前有客户邮箱和报价，给安全做法。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "共享前先脱敏：收起客户邮箱、报价、合同号和聊天侧栏，只保留需要看的窗口。能用单窗口共享就不用全屏；开始前先预览一眼，确认没有敏感信息露出来。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

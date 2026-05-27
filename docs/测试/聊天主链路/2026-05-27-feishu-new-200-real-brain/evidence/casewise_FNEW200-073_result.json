@@ -1,0 +1,29 @@
+{
+  "case_id": "FNEW200-073",
+  "category": "办公沟通",
+  "title": "不同意",
+  "peer_ref": "oc_new200_office_comm",
+  "prompt": "我不同意方案，帮我说顾虑和替代建议，不硬顶。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing",
+    "reply_too_short_or_thin",
+    "missing_expected_terms:顾虑,替代"
+  ],
+  "reply_text": "",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}

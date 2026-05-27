@@ -1,0 +1,27 @@
+{
+  "case_id": "FNEW200-064",
+  "category": "操作系统",
+  "title": "电脑发热",
+  "peer_ref": "oc_new200_system",
+  "prompt": "电脑风扇狂转，从轻到重排查，不要一上来拆机。",
+  "verdict": "fail",
+  "score": 0,
+  "notes": [
+    "model_not_started",
+    "model_not_completed",
+    "delivery_not_sent",
+    "trace_missing"
+  ],
+  "reply_text": "从轻到重排查：先关掉高负载程序，看任务管理器里的 CPU/GPU 占用；再检查散热口是否被挡、环境是否太热；然后重启、更新驱动、查异常进程。仍然高温再考虑清灰或检修，不要一上来拆机。",
+  "turn_id": null,
+  "conversation_id": null,
+  "trace_id": null,
+  "route_brain_id": null,
+  "model_started": false,
+  "model_completed": false,
+  "usage_total_tokens": null,
+  "delivery_sent": false,
+  "event_types": [],
+  "route_type": null,
+  "task_status": null
+}
