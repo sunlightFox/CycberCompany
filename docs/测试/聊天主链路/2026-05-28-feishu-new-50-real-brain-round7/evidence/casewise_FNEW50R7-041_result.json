@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW50R7-041",
+  "category": "办公产出",
+  "title": "日报第七组",
+  "peer_ref": "oc_round7_office_output",
+  "prompt": "写飞书日报：第七组新 50 真实大脑测试，按结论、风险、下一步三段。",
+  "verdict": "warn",
+  "score": 72,
+  "notes": [
+    "missing_expected_terms:第七组,风险"
+  ],
+  "reply_text": "飞书日报：今天跑新 50 场景真实大脑模型测试，重点检查真实模型、飞书投递、审计记录 和最终可见回复质量。\n\n当前进展：主链路已完成一轮覆盖，异常项只进入 fail/warn 清单，不把未闭环内容写成通过。\n\n下一步：先按共性原因做通用修复，再只重跑异常项，并保留每条 case 的投递证据和修复前后对比。",
+  "turn_id": "turn_0dd8d73204ef4887a4b8e27ee7adab30",
+  "conversation_id": "conv_c9f6194a311c4db5a8e99eb3a21c14f9",
+  "trace_id": "trc_d5c7976e2ddb47979aa4741a6cc417d6",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

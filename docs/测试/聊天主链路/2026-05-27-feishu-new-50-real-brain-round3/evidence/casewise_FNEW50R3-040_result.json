@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW50R3-040",
+  "category": "办公沟通",
+  "title": "统一结论",
+  "peer_ref": "oc_round3_office_comm",
+  "prompt": "发一句群消息：先统一第三组测试结论口径，不把 warn 写成 pass。",
+  "verdict": "warn",
+  "score": 84,
+  "notes": [
+    "missing_expected_terms:warn,pass"
+  ],
+  "reply_text": "先不要直接采信“这个事实判断”。我会核查四件事：\n1. 基数：从多少增长到多少，小基数会把百分比放得很夸张。\n2. 口径：分子、分母、去重规则、样本范围和是否只截取了有利人群。\n3. 时间范围：是日、周、月还是活动期，是否和对照期长度一致。\n4. 来源证据/原始证据：原始数据、官方公告、计算过程和更新时间；缺任何一项，都只能写成待核查。",
+  "turn_id": "turn_edbd30547cd94969a22d9d198e9b5f24",
+  "conversation_id": "conv_0b43c945274445638cd0fb44be4c0196",
+  "trace_id": "trc_b0a0c4bcfffd4066a91f315f8c36fb6a",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

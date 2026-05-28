@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW50R7-010",
+  "category": "计划规划",
+  "title": "修复顺序",
+  "peer_ref": "oc_round7_plan",
+  "prompt": "事实错、段落墙、客服腔、未送达误报，先修哪个？给理由。",
+  "verdict": "warn",
+  "score": 72,
+  "notes": [
+    "missing_expected_terms:未送达,理由"
+  ],
+  "reply_text": "先不要直接采信“这个事实判断”。我会核查四件事：\n1. 基数：从多少增长到多少，小基数会把百分比放得很夸张。\n2. 口径：分子、分母、去重规则、样本范围和是否只截取了有利人群。\n3. 时间范围：是日、周、月还是活动期，是否和对照期长度一致。\n4. 来源证据/原始证据：原始数据、官方公告、计算过程和更新时间；缺任何一项，都只能写成待核查。",
+  "turn_id": "turn_a768b177e07b4b7ca3294a71f6f06c4b",
+  "conversation_id": "conv_bbfc8fd832e84b80b877c04b60d8b14d",
+  "trace_id": "trc_e20bd5359130493e8ec8a78dabd79248",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

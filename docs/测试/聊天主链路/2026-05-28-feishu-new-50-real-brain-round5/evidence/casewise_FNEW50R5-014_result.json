@@ -1,0 +1,40 @@
+{
+  "case_id": "FNEW50R5-014",
+  "category": "定时提醒",
+  "title": "不建提醒",
+  "peer_ref": "oc_round5_schedule",
+  "prompt": "不要创建提醒，只把这句改自然：晚上看第五组证据链。",
+  "verdict": "fail",
+  "score": 67,
+  "notes": [
+    "missing_expected_terms:第五组",
+    "reply_too_short_or_thin"
+  ],
+  "reply_text": "不要创建提醒，也不创建提醒任务，只写文案：复核提醒事项。",
+  "turn_id": "turn_5297d243c9804eb5a30125bf86e059ea",
+  "conversation_id": "conv_b84979a7634f41498c58993ea105ec51",
+  "trace_id": "trc_721f619fbe1848d48bf0d14f83202fcb",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

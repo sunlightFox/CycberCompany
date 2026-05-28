@@ -1,0 +1,147 @@
+{
+  "run_label": "FNEW50R3-REAL-BRAIN-20260527",
+  "started_at": "2026-05-28T00:00:35",
+  "runner": "C:\\Users\\Administrator\\Desktop\\Cycbercompany\\docs\\测试\\聊天主链路\\2026-05-27-feishu-new-50-real-brain-round3\\run_feishu_new_50_round3_real_brain_cases.py",
+  "total_selected": 23,
+  "completed": 23,
+  "items": [
+    {
+      "case_id": "FNEW50R3-005",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-007",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-013",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-014",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-015",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-033",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-034",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-035",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-036",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-037",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-038",
+      "verdict": "warn",
+      "score": 90,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R3-039",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-040",
+      "verdict": "warn",
+      "score": 84,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R3-041",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-042",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-043",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-044",
+      "verdict": "warn",
+      "score": 76,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R3-045",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-046",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-047",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-048",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-049",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R3-050",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW50R6-037",
+  "category": "办公沟通",
+  "title": "客户未送达",
+  "peer_ref": "oc_round6_office_comm",
+  "prompt": "给客户解释：结果生成了，但飞书送达未确认，不能说已收到。",
+  "verdict": "fail",
+  "score": 70,
+  "notes": [
+    "forbidden_term_visible:已收到"
+  ],
+  "reply_text": "结果可以说已经生成，但飞书送达仍未确认，所以不能说对方已收到。当前口径应写成“送达待确认”，等投递记录和 trace 对上后再更新结论。",
+  "turn_id": "turn_c943d623484f4787a6d5073eeb1b63a6",
+  "conversation_id": "conv_5f63c87e2d71419d82ad6875d0c7ab6f",
+  "trace_id": "trc_09caac77597b40e0b05340e21974b9c0",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

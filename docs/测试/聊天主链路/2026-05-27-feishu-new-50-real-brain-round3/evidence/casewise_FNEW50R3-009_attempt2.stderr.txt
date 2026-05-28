@@ -1,0 +1,69 @@
+Traceback (most recent call last):
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-27-feishu-new-50-real-brain-round2\run_feishu_new_50_round2_real_brain_cases.py", line 596, in <module>
+    main()
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-27-feishu-new-50-real-brain-round2\run_feishu_new_50_round2_real_brain_cases.py", line 569, in main
+    results = run(
+              ^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-27-feishu-new-50-real-brain-round2\run_feishu_new_50_round2_real_brain_cases.py", line 516, in run
+    return BASE.run(
+           ^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-27-feishu-new-200-real-brain\run_feishu_new_200_real_brain_cases.py", line 752, in run
+    return R22.run(
+           ^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-25-feishu-daily-use-round22-100-real-model\run_feishu_daily_use_round22_100_real_model_cases.py", line 655, in run
+    return R21.run(
+           ^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round21-100-real-model\run_feishu_daily_use_round21_100_real_model_cases.py", line 822, in run
+    results = BASE.run(
+              ^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round20-100-real-model\run_feishu_daily_use_round20_100_real_model_cases.py", line 807, in run
+    results = BASE.run(
+              ^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round19-100-real-model\run_feishu_daily_use_round19_100_real_model_cases.py", line 746, in run
+    results = BASE.run(
+              ^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round18-100-real-model\run_feishu_daily_use_round18_100_real_model_cases.py", line 737, in run
+    results = BASE.run(
+              ^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round17-100-real-model\run_feishu_daily_use_round17_100_real_model_cases.py", line 580, in run
+    results = BASE.run(
+              ^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round16-100-real-model\run_feishu_daily_use_round16_100_real_model_cases.py", line 823, in run
+    results = R14.run(
+              ^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round15-100-real-model\run_feishu_daily_use_round15_100_real_model_cases.py", line 800, in run
+    results = R14.run(
+              ^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round14-100-real-model\run_feishu_daily_use_round14_100_real_model_cases.py", line 585, in run
+    results = R13.run(
+              ^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round13-100-real-model\run_feishu_daily_use_round13_100_real_model_cases.py", line 521, in run
+    return R12.run(
+           ^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round12-100-real-model\run_feishu_daily_use_round12_100_real_model_cases.py", line 586, in run
+    return R10.run(
+           ^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-daily-use-round10-100-real-model\run_feishu_daily_use_round10_100_real_model_cases.py", line 595, in run
+    results = R9.run(
+              ^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round9-100-visible-quality-real-model\run_feishu_broad_round9_100_visible_quality_real_model_cases.py", line 547, in run
+    return R8.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round8-100-visible-quality-real-model\run_feishu_broad_round8_100_visible_quality_real_model_cases.py", line 500, in run
+    return R7.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round7-100-visible-quality-real-model\run_feishu_broad_round7_100_visible_quality_real_model_cases.py", line 642, in run
+    results = R6.run(
+              ^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round6-100-visible-quality-real-model\run_feishu_broad_round6_100_visible_quality_real_model_cases.py", line 581, in run
+    return R5.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round5-100-visible-quality-real-model\run_feishu_broad_round5_100_visible_quality_real_model_cases.py", line 476, in run
+    return R4.run(
+           ^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-23-feishu-broad-round4-100-visible-quality-real-model\run_feishu_broad_round4_100_visible_quality_real_model_cases.py", line 926, in run
+    all_cases = _cases(site_url)
+                ^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-24-feishu-daily-use-round21-100-real-model\run_feishu_daily_use_round21_100_real_model_cases.py", line 818, in _selected_cases
+    raise RuntimeError(f"case ids not found: {sorted(selected_ids)}")
+RuntimeError: case ids not found: ['FNEW50R3-009']

@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "C:\Users\Administrator\Desktop\Cycbercompany\docs\测试\聊天主链路\2026-05-27-feishu-new-50-real-brain-round2\run_feishu_new_50_round2_real_brain_cases.py", line 11, in <module>
+    from app.services.chat_visible_guard import preserve_visible_reply_contract as _service_preserve_visible_reply_contract
+ModuleNotFoundError: No module named 'app'

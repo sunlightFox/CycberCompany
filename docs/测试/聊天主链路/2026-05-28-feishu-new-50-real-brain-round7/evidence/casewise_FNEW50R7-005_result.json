@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW50R7-005",
+  "category": "闲聊陪伴",
+  "title": "关系修复",
+  "peer_ref": "oc_round7_casual",
+  "prompt": "我刚才把话说重了，帮我写一句道歉但别讨好。",
+  "verdict": "warn",
+  "score": 86,
+  "notes": [
+    "missing_expected_terms:道歉"
+  ],
+  "reply_text": "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。我的真实想法是……如果你方便，我们可以接着聊。",
+  "turn_id": "turn_15660535829848bd80ae7d69b0dc29db",
+  "conversation_id": "conv_164e39960e1f491bb0f1d0f09e511e5a",
+  "trace_id": "trc_ab4c2e9d9cd64cbe9d13085f43758901",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

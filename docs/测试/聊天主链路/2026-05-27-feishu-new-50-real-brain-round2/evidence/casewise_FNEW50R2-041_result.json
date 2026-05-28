@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW50R2-041",
+  "category": "办公产出",
+  "title": "日报第二组",
+  "peer_ref": "oc_round2_office_output",
+  "prompt": "写飞书日报：第二组新 50 真实大脑测试，先说结论，再说风险和下一步。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:第二组,50"
+  ],
+  "reply_text": "飞书日报：\n今天完成：模型联调已完成，主链路已经能跑通。\n当前阻塞：审批账号还没开通，部分失败项不能闭环复测。\n明天计划：补跑失败项和告警项，整理通过证据、风险和下一步修复清单。",
+  "turn_id": "turn_12cec5c30f7845a58cfdbf8756cfc87a",
+  "conversation_id": "conv_3e17c77e4aa64aa6a9fec1e078e1ee07",
+  "trace_id": "trc_9e786a05b85648709da6714054d6fb24",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

@@ -1,0 +1,9 @@
+{
+  "total": 17,
+  "passed": 16,
+  "warned": 0,
+  "failed": 1,
+  "summary": "C:\\Users\\Administrator\\Desktop\\Cycbercompany\\docs\\测试\\聊天主链路\\2026-05-27-feishu-new-50-real-brain-round2\\evidence\\summary.json",
+  "report": "C:\\Users\\Administrator\\Desktop\\Cycbercompany\\docs\\测试\\聊天主链路\\2026-05-27-feishu-new-50-real-brain-round2\\02-飞书新50第二组场景真实大脑模型测试报告.md",
+  "gap_queue": "C:\\Users\\Administrator\\Desktop\\Cycbercompany\\docs\\测试\\聊天主链路\\2026-05-27-feishu-new-50-real-brain-round2\\03-缺口与修复队列.md"
+}

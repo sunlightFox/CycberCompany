@@ -1,0 +1,40 @@
+{
+  "case_id": "FNEW50-043",
+  "category": "办公产出",
+  "title": "验收标准",
+  "peer_ref": "oc_new50_office_output",
+  "prompt": "给飞书可见回复质量写验收标准：正确、自然、结构清楚、有边界。",
+  "verdict": "fail",
+  "score": 70,
+  "notes": [
+    "reply_too_short_or_thin",
+    "missing_expected_terms:边界"
+  ],
+  "reply_text": "正确：回答贴住当前问题，不拿旧轮次、旧模板或无关素材凑数。 自然：像正常飞书对话，不机械、不系统腔、不客服腔。",
+  "turn_id": "turn_f932f1c72e3e4d6aa4c30af6cf18d438",
+  "conversation_id": "conv_2987ec54e7b34cc69e8f1fb947d52b0c",
+  "trace_id": "trc_ab08cf7e055e4fc492da53e59c271bbc",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

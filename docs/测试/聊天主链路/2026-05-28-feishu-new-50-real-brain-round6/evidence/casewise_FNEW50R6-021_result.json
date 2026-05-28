@@ -1,0 +1,41 @@
+{
+  "case_id": "FNEW50R6-021",
+  "category": "浏览器复杂HTML",
+  "title": "简报页",
+  "peer_ref": "oc_round6_browser",
+  "prompt": "阅读 http://127.0.0.1:64400/round6-brief.html，提取状态、负责人、检查点和三个指标。",
+  "verdict": "warn",
+  "score": 58,
+  "notes": [
+    "missing_expected_terms:amber,Juno,09:45"
+  ],
+  "reply_text": "页面日期是 2026-05-23。三个 key points 是：avoid system tone、preserve 风险检查 boundaries、rerun only abnormal cases。Open issue 是 scoring aliases can miss safe paraphrases，也就是安全改写可能被评分词面误判。",
+  "turn_id": "turn_48a5ef4f0d3e4869b1ccd6d9532b2ece",
+  "conversation_id": "conv_9a98fe2a97f8444ebb459e6a78fc79d8",
+  "trace_id": "trc_9ae0d34621b94c77af23ed5cd28ddf03",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "browser.read_started",
+    "tool.completed",
+    "browser.read_completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

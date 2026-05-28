@@ -1,0 +1,42 @@
+{
+  "case_id": "FNEW50R4-048",
+  "category": "质量治理",
+  "title": "同义词判定",
+  "peer_ref": "oc_round4_governance",
+  "prompt": "测试里怎样处理同义表达，避免把自然回复误判为缺关键词？",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:同义"
+  ],
+  "reply_text": "人工复核要避免误判和误杀：不要把短答直接判成差。先看用户意图：如果用户只要一句确认、拒绝或安抚，短回复只要结论明确、语气自然、没有遗漏关键边界，就应当通过。只有在任务需要计划、证据、步骤或风险说明时，过短才算质量问题。",
+  "turn_id": "turn_788f9427da004831b354f913262c17b0",
+  "conversation_id": "conv_f2c60e3e330042b28cb0d556e7b5ce5b",
+  "trace_id": "trc_2d584dec1bd646aa8107f4554871182b",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "route.selected",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

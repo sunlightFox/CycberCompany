@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW50R4-008",
+  "category": "计划规划",
+  "title": "五天提升",
+  "peer_ref": "oc_round4_plan",
+  "prompt": "五天内把飞书回复从机械腔改自然，规划每天做什么。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:五天"
+  ],
+  "reply_text": "先给结论：5天内可以把飞书回复从“机械模板感”改到“像靠谱同事在回消息”。重点不是堆话术，而是建立一套：语气标准→场景模板→改写规则→真实测试→复盘迭代。理一下每天做什么。##第1天：抓样本，找出“机械腔”问题目标：知道现在哪里不自然。要做：1.收集最近50～100条飞书回复样本包括：确认类、催办类、拒绝类、解释类、通知类、跟进类。2.标记机械感来源常见问题一般是：-开头像客服：“您好，已收到您的需求”-句子太满：“感谢您的反馈，我们将尽快处理”-没有上下文：“请您提供相关信息”-太像公告：“请知悉”- 没有人味：。",
+  "turn_id": "turn_ca1539c330204f18ba779d5525c01c5f",
+  "conversation_id": "conv_51a55d46755346d281a41a987b37d379",
+  "trace_id": "trc_3f7c35a1e6fe467d8507a168f3873377",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

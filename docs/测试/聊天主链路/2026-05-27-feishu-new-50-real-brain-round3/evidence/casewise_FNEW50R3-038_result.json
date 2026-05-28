@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW50R3-038",
+  "category": "办公沟通",
+  "title": "坚持通用修复",
+  "peer_ref": "oc_round3_office_comm",
+  "prompt": "我不同意只修一个 case，帮我写坚定但不冲的理由。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:通用"
+  ],
+  "reply_text": "结论：可以这样说，态度坚定，但不把矛头指向人。\n\n> 我不太建议只修这一个 case。这个问题看起来不是单点异常，而是同一类逻辑/边界条件下都会触发的风险。 \n> 如果只针对当前 case 打补丁，短期看能过，但后续很可能在相似场景里反复出现，维护成本会更高，也容易让问题被误判为“已解决”。 \n> 我更倾向于从根因上处理：先确认这一类 case 的共同触发条件，再统一修复，并补上对应测试，确保后面不会因为类似输入或状态变化再次踩坑。 \n> 这样虽然改动范围可能比单 case 略大，但整体风险更可控，也更符合长期维护的方向。如果想更短一点，可以用这版：\n\n> 我不同意只修这一个 case，主要是因为它更像一类问题的表现，而不是孤立问题。只修当前 case 容易变成局部补丁，后续类似场景还会复发。 \n> 建议从根因和同类场景一起处理，并补充测试覆盖，这样风险更可控，也避免重复返工。\n\n再强一点但仍不冲：\n\n> 我认为只修这一个 case 风险偏高。它只能解决眼前现象，不能证明同类问题已经被覆盖。 \n> 如果我们现在只做局部修复，后面出现相似问题时，成本和影响都会更大。我的建议是按问题类型统一修，而不是按单个 case 补洞。",
+  "turn_id": "turn_3ff71c05880a4fb491defbbbe0f1527d",
+  "conversation_id": "conv_7d60b2ecb48f47b4b813307346cb9c66",
+  "trace_id": "trc_e9e5ec77acfe4838a41e3e204ce1f773",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

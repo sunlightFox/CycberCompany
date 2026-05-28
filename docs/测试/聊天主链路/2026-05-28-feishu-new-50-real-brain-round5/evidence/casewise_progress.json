@@ -1,0 +1,21 @@
+{
+  "run_label": "FNEW50R5-REAL-BRAIN-20260528",
+  "started_at": "2026-05-28T02:40:11",
+  "runner": "C:\\Users\\Administrator\\Desktop\\Cycbercompany\\docs\\测试\\聊天主链路\\2026-05-28-feishu-new-50-real-brain-round5\\run_feishu_new_50_round5_real_brain_cases.py",
+  "total_selected": 2,
+  "completed": 2,
+  "items": [
+    {
+      "case_id": "FNEW50R5-038",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R5-042",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    }
+  ]
+}

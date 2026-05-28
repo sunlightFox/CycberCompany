@@ -1,0 +1,39 @@
+{
+  "case_id": "FNEW50R6-047",
+  "category": "质量治理",
+  "title": "证据排序",
+  "peer_ref": "oc_round6_governance",
+  "prompt": "飞书最终消息、投递记录、模型事件、trace、截图，报告里怎么排序？",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:飞书,trace"
+  ],
+  "reply_text": "看到热搜截图，先别急着转，尤其要防伪造和断章取义。可以按这几步核查：\n1. 找原图和原始链接：看账号、发布时间、平台页面是否真实存在。\n2. 查上下文：截图里的话是不是只截了一半，前后是否改变意思。\n3. 看痕迹：头像、字号、排版、互动数、链接格式有没有编辑或拼接迹象。\n4. 交叉验证：用官方账号、当事人主页、可信媒体或网页缓存核查；找不到出处时，只能写“待核查”，别当事实。",
+  "turn_id": "turn_b2603ef0d7034330acf923a785f68667",
+  "conversation_id": "conv_76f9abf19aa042f6a4d00726c58ce87b",
+  "trace_id": "trc_56b03da3611d47948f580a65ae76cb16",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

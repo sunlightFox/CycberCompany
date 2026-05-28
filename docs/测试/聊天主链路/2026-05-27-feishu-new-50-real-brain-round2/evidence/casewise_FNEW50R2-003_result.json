@@ -1,0 +1,42 @@
+{
+  "case_id": "FNEW50R2-003",
+  "category": "闲聊陪伴",
+  "title": "轻松开场",
+  "peer_ref": "oc_round2_casual",
+  "prompt": "给新一轮 50 场景测试写一句轻松开场，别像公告。",
+  "verdict": "warn",
+  "score": 90,
+  "notes": [
+    "missing_expected_terms:50"
+  ],
+  "reply_text": "可以这样开场：昨天我说话的语气有点冲，想先跟你认真道个歉。我不是想把问题翻过去，而是希望把当时没说好的部分重新说清楚，也把关系修复一下。如果你愿意，我们可以先从最让你不舒服的那一句聊起。",
+  "turn_id": "turn_cd71a68d9b274e45b7e6be9dc1caa16c",
+  "conversation_id": "conv_0cc51774b8cb435a98730a5fc0b89323",
+  "trace_id": "trc_ec3f3bc7affb409b8b0fbc5ad51081aa",
+  "route_brain_id": "brain_not_configured",
+  "model_started": true,
+  "model_completed": true,
+  "usage_total_tokens": null,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "route.selected",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ],
+  "route_type": null,
+  "task_status": null
+}

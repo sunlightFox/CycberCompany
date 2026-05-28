@@ -1,0 +1,81 @@
+{
+  "run_label": "FNEW50R4-REAL-BRAIN-20260528",
+  "started_at": "2026-05-28T01:26:47",
+  "runner": "C:\\Users\\Administrator\\Desktop\\Cycbercompany\\docs\\测试\\聊天主链路\\2026-05-28-feishu-new-50-real-brain-round4\\run_feishu_new_50_round4_real_brain_cases.py",
+  "total_selected": 12,
+  "completed": 12,
+  "items": [
+    {
+      "case_id": "FNEW50R4-002",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R4-003",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R4-030",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R4-038",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R4-042",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R4-043",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R4-045",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R4-046",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R4-047",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R4-048",
+      "verdict": "warn",
+      "score": 90,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R4-049",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R4-050",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    }
+  ]
+}
