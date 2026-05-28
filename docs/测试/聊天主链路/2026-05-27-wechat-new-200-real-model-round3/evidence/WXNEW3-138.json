@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-138",
+  "category": "生活办公混合",
+  "title": "明早汇报，今晚怎么收尾？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：明早、收尾。\n明早汇报，今晚怎么收尾？",
+  "reply_text": "我接住这句：明早汇报，今晚怎么收尾？。\n\n这轮重点是明早、收尾；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f8b551b33a2c4d8da75fde3b08920040",
+  "trace_id": "trc_599cf31e40e0481dbcf93f2f7eafea36",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-162",
+  "category": "语气排版",
+  "title": "系统公告腔怎么改自然？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：短句、自然。\n系统公告腔怎么改自然？",
+  "reply_text": "可以这么改：先把“通知大家”“请知悉”“特此说明”这类公告词拿掉。\n换成像人说话的短句。\n- 系统公告腔：请各位用户注意，系统将于今晚进行维护，期间可能影响正常使用，请提前做好相关安排\n\n补上这轮关键点：短句、自然。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1a33c596bab8445186ac09ec4328321d",
+  "trace_id": "trc_d6894571f4874301a0a6072154ec1746",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

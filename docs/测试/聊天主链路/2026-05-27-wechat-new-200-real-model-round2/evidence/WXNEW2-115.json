@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-115",
+  "category": "记忆偏好",
+  "title": "偏好冲突时用新的还是旧的？",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：新的、source。\n偏好冲突时用新的还是旧的？",
+  "reply_text": "偏好冲突时优先用新的，尤其是你这轮明确说的要求；旧偏好只在不冲突时作为参考。\n\n同时会说明每条记忆/偏好的 source，并区分是临时只用于当前对话，还是长期偏好。涉及敏感内容的，不写入记忆。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0654aab5076642b593b7c4c64a8537b6",
+  "trace_id": "trc_56079b315d6a438cb91ece402466bcb8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

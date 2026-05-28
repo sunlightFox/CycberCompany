@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-176",
+  "category": "长短控制",
+  "title": "短答漏前提会有什么风险？",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：风险、前提。\n短答漏前提会有什么风险？",
+  "reply_text": "结论被误用：用户不知道答案成立的条件，可能把只适用于特定场景的结论当成通用规则。 责任边界不清：缺少前提会让建议看起来过于绝对，尤其在医疗、法律、财务、业务决策等场景风险更高。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a5fcfff49b2a464581fe59cc0082dd71",
+  "trace_id": "trc_11b035408a5a4a5597d3d6357c164df9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

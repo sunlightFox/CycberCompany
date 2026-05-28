@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-197",
+  "category": "审计追踪",
+  "title": "高风险动作拒绝也要记吗？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：拒绝、trace。\n高风险动作拒绝也要记吗？",
+  "reply_text": "高风险动作被拒绝时，建议记录这些最小必要信息： 请求类型/风险类别：例如高风险操作、越权、敏感数据访问等- 决策结果：已拒绝- 拒绝依据：规则、权限、审批缺失或安全边界- trace 信息：时间、会话/请求 ID、链路 ID、处理节点\n- 证据引用：可以是脱敏摘要、规则命中、哈希或日志引用\n- 处理方式：是否给了替代方案、是否要求审批或人工确认不要记录：",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9b60c09088df4ae09b1d20b41784cffb",
+  "trace_id": "trc_ddf286104b7e4009a7a0759b2edb17b9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

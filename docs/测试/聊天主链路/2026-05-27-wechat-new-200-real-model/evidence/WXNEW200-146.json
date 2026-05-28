@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-146",
+  "category": "计划",
+  "title": "我下周要开始运动，帮我排一个低门槛计划。（变体）",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：低门槛、运动。\n我下周要开始运动，帮我排一个低门槛计划。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "可以先按“低门槛、能坚持”为主，不追求强度。下周先动起来就赢了。我来排一个7天入门版👇周一｜适应日快走20分钟结束后拉伸5分钟周二｜轻力量深蹲10个×2组靠墙俯卧撑10个×2组平板支撑15秒×2组周三｜恢复运动散步20-30分钟不用追速度，舒服就行周四｜有氧日快走/慢跑交替20分钟比如：快走3分钟+慢跑1 分钟，循环几轮周五｜核心+拉伸卷腹10 个 ×2组臀桥12 个 ×2组拉伸8 分钟周六｜自由运动日选一个你不讨厌的：骑车、羽毛球、跳操、爬楼、长走30 分钟以内就行周日｜休息复盘休息，或者轻松散步15 分钟想一下：哪天最容易坚持？哪项最不痛苦？\n\n小曜建议你先定一个最低标准：每天只要完成15-20 分钟，就算成功。这比一上来猛练更靠谱。\n\n目前缺口是：你有没有运动基础、膝盖/腰有没有旧伤、每天大概能空出多久。如果这些不确定，就先按上面这个低门槛版本来，强度别加太快。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c1d02665186e43eda7b3d89956c433c6",
+  "trace_id": "trc_5084ba46ec9d4871b01c442ab08d0b69",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

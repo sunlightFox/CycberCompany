@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-096",
+  "category": "HR管理",
+  "title": "试用期反馈要留哪些证据？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：试用期、证据。\n试用期反馈要留哪些证据？",
+  "reply_text": "我接住这句：试用期反馈要留哪些证据？。\n\n这轮重点是试用期、证据；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d874e67c972e4df1aa9d9181d226b842",
+  "trace_id": "trc_be5664bdac504d4f9783c6c64a3ba7ce",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

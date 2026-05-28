@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-081",
+  "category": "办公协作",
+  "title": "催同事确认排期，别像催债。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：排期、时间点。\n催同事确认排期，别像催债。",
+  "reply_text": "项目排期可以按里程碑说清楚：先列阶段目标，再写每个里程碑的负责人、预计时间、交付物和验收证据；\n如果依赖项还没确认，就标成待确认，不把它写成已经完成。\n\n这句话的边界是：理解对方关心，但不把自己的节奏交出去\n\n补上这轮关键点：排期、时间点。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_36d640a484e2404bac1e1392bd9d97b2",
+  "trace_id": "trc_713cd3e5f88341b1845e4cf16d2d603d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

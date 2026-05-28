@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-040",
+  "category": "监督",
+  "title": "我复健训练怕疼，监督时怎么温柔一点？",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：疼痛、停止信号。\n我复健训练怕疼，监督时怎么温柔一点？",
+  "reply_text": "小曜给你一个温柔监督版本：核心不是“逼自己坚持”，而是“确认安全、少做一点、及时停”。\n\n你可以这样对自己说：\n\n“今天只做最小一组。做到有牵拉感可以，但如果疼痛明显增加、刺痛、麻、发软，或者动作变形，这就是停止信号。停下来不是失败，是在保护恢复。”\n\n最小下一步：\n\n现在只选一个动作，做 3 次，速度放慢一半。\n做完立刻打分：疼痛 0–10 分。\n如果超过 3 分，或者越做越疼，就停止，记录下来，下次带给康复师看。\n\n监督时温柔一点，可以把目标从“完成训练”改成：\n\n“我只负责出现一下，安全地试 3 次。”\n\n这就够了。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0cc1b46abed8446480a8c80753105985",
+  "trace_id": "trc_4b3fbdf6ae60450aa2c9faa45c787fa9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

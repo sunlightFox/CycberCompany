@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-089",
+  "category": "HR招聘",
+  "title": "培训反馈出现尖锐意见，怎么归纳不贴标签？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：主题、不贴标签。\n培训反馈出现尖锐意见，怎么归纳不贴标签？",
+  "reply_text": "可以按“主题归纳，不贴标签”的方式处理：只归纳问题，不评价人。 事实层：先还原反馈内容 把尖锐意见拆成可验证事实，比如“培训节奏偏快”“案例与岗位场景匹配度不足”“互动答疑时间不够”，避免写成“学员不配合”“讲师准备不足”。\n\n敏感",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ab320e8f69cf44ea823bcdb3bbd635ef",
+  "trace_id": "trc_161a03ec347d49bdbc4cff416452f550",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

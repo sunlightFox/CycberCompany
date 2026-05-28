@@ -1,0 +1,32 @@
+{
+  "case_id": "WXNEW2-171",
+  "category": "模型语气",
+  "title": "把这句客服腔改自然：您的需求已收到。",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：收到、自然。\n把这句客服腔改自然：您的需求已收到。",
+  "reply_text": "按你这句来：不假装已经完成，也不编细节。当前能做的是先给一个清楚、自然、有边界的判断；缺证据的地方单独标出来，等补齐后再收口\n\n补上这轮关键点：收到、自然。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f84c93398a38477f9d3430c7d7d1f7ad",
+  "trace_id": "trc_5b458d29e0224e86a4ff82ad59267bbb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.fallback",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

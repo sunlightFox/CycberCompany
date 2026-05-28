@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-175",
+  "category": "长短控制",
+  "title": "只问是不是时，怎么答？",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：先回答、补充。\n只问是不是时，怎么答？",
+  "reply_text": "我接住这句：只问是不是时，怎么答？。\n\n这轮重点是先回答、补充；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2a72d0a488f44ccca3c2943f402be161",
+  "trace_id": "trc_ca6197a180b3440c9fd88c8260eec074",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-136",
+  "category": "生活办公混合",
+  "title": "漏回客户半天，给一句稳一点的。",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：抱歉、补上。\n漏回客户半天，给一句稳一点的。",
+  "reply_text": "可以发这句：\n\n抱歉，刚才这边没及时回你，我现在补上：这个事情我看下后马上给你确认。\n\n这句不甩锅，也不会显得太卑微，重点是把后续动作接住。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9be2db43e0194e65970090e56195162f",
+  "trace_id": "trc_05a71a6c4e6047b18ef4b318696f4fce",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

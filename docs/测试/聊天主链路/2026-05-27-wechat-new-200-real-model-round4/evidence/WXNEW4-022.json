@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-022",
+  "category": "提醒定时",
+  "title": "每周二早上提醒我交日报。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：每周二、日报。\n每周二早上提醒我交日报。",
+  "reply_text": "未实际设置：以后每周二早上9 点提醒你交日报。\n\n如果你想换成更具体的时间，比如8:30 或10:00，告诉我我再改。到点我只会提醒你，不会自动执行任何设备动作或替你提交日报。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0dfb7a6491364796bc984b1918e6969f",
+  "trace_id": "trc_8fa1eba2589143edbbbe8b03c6952287",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

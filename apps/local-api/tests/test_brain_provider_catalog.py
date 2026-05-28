@@ -79,7 +79,7 @@ def test_brain_provider_catalog_api_route(client: TestClient) -> None:
 
     assert response.status_code == 200, response.text
     providers = {item["provider"]: item for item in response.json()["items"]}
-    assert providers["openai"]["default_model"] == "gpt-5.5"
+    assert providers["openai"]["default_model"] == "gpt-5.4-mini"
     assert providers["deepseek"]["endpoint"] == "https://api.deepseek.com/v1"
     assert providers["ollama"]["is_local_default"] is True
 

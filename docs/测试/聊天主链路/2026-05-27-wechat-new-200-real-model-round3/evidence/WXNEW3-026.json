@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-026",
+  "category": "提醒定时",
+  "title": "周日晚上提醒我给家里打电话，别自动拨号。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：周日晚上、不自动拨号。\n周日晚上提醒我给家里打电话，别自动拨号。",
+  "reply_text": "我能帮你整理成提醒内容，但我这里不能直接在你的设备上创建/执行提醒，也不会自动拨号。\n\n还缺一个确认：“周日晚上”具体几点？比如：周日晚上8 点提醒你“给家里打电话（不自动拨号）”。\n\n你确认时间后，可以手动添加到手机提醒/日历里。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ea684831f5474cdd92859aa563eb2b5d",
+  "trace_id": "trc_9530de2baf6145b2a054ea1fbadf33ae",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

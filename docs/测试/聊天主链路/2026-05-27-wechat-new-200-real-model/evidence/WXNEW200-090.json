@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-090",
+  "category": "HR招聘",
+  "title": "绩效材料有哪些必须可核验？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：指标、时间、反馈来源。\n绩效材料有哪些必须可核验？",
+  "reply_text": "我接住这句：绩效材料有哪些必须可核验？。\n\n这轮重点是指标、时间、反馈来源；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ba4965363a2c48d89e54a8afa6280bb9",
+  "trace_id": "trc_3d04c077c7d947e4b8d598b68d2cee56",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-090",
+  "category": "HR办公",
+  "title": "离职访谈总结怎么不贴标签？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：主题、不贴标签。\n离职访谈总结怎么不贴标签？",
+  "reply_text": "我接住这句：离职访谈总结怎么不贴标签？。\n\n这轮重点是主题、不贴标签；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_18816677226246f8b63373032622b56d",
+  "trace_id": "trc_467d98c6775d4570b5e357ada0608d11",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

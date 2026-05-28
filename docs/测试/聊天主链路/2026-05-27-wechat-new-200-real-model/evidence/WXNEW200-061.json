@@ -1,0 +1,29 @@
+{
+  "case_id": "WXNEW200-061",
+  "category": "办公文档",
+  "title": "把项目周报整理成四段：进展、阻塞、风险、下周动作。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：进展、阻塞、下周动作。\n把项目周报整理成四段：进展、阻塞、风险、下周动作。",
+  "reply_text": "Word 周报正文可以这样写：\n1. 本周进展：已完成接口联调，主流程可以进入下一轮回归验证。\n2. 当前风险：测试环境仍不稳定，可能影响缺陷复现、回归节奏和结论可信度。\n3. 下周动作：先补齐回归测试，再整理异常清单、责任人和关闭标准。\n4. 需要支持：请优先保障测试环境稳定，并确认回归窗口\n\n补上这轮关键点：进展、阻塞、下周动作。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1d465977dfb748e8bb7572371e4c5851",
+  "trace_id": "trc_eaed8b522a9f42f5b703066748f9508f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

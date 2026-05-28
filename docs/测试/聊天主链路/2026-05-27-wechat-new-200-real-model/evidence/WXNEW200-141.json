@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-141",
+  "category": "计划",
+  "title": "我周末只有半天，想恢复一下又要处理一件正事。（变体）",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：恢复、一件正事。\n我周末只有半天，想恢复一下又要处理一件正事。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "半天别排满，按“先恢复，再处理一件正事，最后留缓冲”来。\n\n可以这样安排：\n\n上午/下午开始后先空 60-90 分钟\n别急着做事，睡个回笼觉、散步、吃顿舒服的，手机少看一点。目标就是恢复状态。\n\n中间留 90-120 分钟处理一件正事\n只选一件最重要的，不要顺手开第二件。\n比如：办手续、整理材料、处理账单、推进一个工作任务。做到“有明确结果”就停。\n\n最后留 30-45 分钟收尾\n简单洗澡、收拾桌面、列一下下周第一步。别再加任务，避免半天被榨干。\n\n我这边缺一个信息：你说的“一件正事”具体是什么？\n如果你告诉我是哪类事，我可以帮你把那 90-120 分钟拆成更具体的步骤。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_dfeeeec341f04680af6549a78f15113a",
+  "trace_id": "trc_a37da0c0577f4262b6324b234e8bc0f6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

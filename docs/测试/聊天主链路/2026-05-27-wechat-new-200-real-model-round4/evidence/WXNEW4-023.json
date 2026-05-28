@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-023",
+  "category": "提醒定时",
+  "title": "40 分钟后提醒我关火，但不要替我关。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：40 分钟后、不替我关。\n40 分钟后提醒我关火，但不要替我关。",
+  "reply_text": "可以，40 分钟后提醒你关火。\n\n边界我按你的原话处理：不替我关，也就是不替你操作设备。这类事到点后还需要你自己看现场情况，安全第一。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_624a22b309f9477ca14d8091edc0dbbe",
+  "trace_id": "trc_ffb6a3fcc89c4480928807360e94ecbb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

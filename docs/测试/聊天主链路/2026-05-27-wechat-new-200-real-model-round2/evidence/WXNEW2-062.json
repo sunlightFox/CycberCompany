@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW2-062",
+  "category": "办公文档",
+  "title": "帮我做一份日报结构，不要生成文件。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：日报、不生成文件。\n帮我做一份日报结构，不要生成文件。",
+  "reply_text": "飞书日报可以这样写：\n今天进展：接口联调已完成，主流程已经能正常走通。\n当前阻塞：测试账号权限还没开通，回归验证暂时不能闭环。\n明天计划：账号开通后第一时间补回归，并同步通过项、失败项和需要继续跟进的风险\n\n补上这轮关键点：日报、不生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_11f4e72544af45cb8f9fd89752511413",
+  "trace_id": "trc_bd923c4b48904b8ca74427a96fb2b4c3",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

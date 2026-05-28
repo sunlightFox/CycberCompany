@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-018",
+  "category": "计划规划",
+  "title": "我想恢复阅读习惯，每天只做很小一步。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：每天、小一步。\n我想恢复阅读习惯，每天只做很小一步。",
+  "reply_text": "按“轻到不会抗拒”的原则给你规划一版。核心不是读很多，而是让阅读重新变成每天能碰一下的事。*第一步：先选一本低门槛的书\n\n补上这轮关键点：每天、小一步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8402aeff927845c18b9e3fa4f111613c",
+  "trace_id": "trc_597f9f000bc845c3b4c9cd59839c2047",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

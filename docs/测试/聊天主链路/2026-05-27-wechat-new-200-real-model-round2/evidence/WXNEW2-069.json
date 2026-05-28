@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW2-069",
+  "category": "办公文档",
+  "title": "客户投诉处理记录应该有哪些段落？",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：投诉、处理记录。\n客户投诉处理记录应该有哪些段落？",
+  "reply_text": "我接住这句：客户投诉处理记录应该有哪些段落？。\n\n这轮重点是投诉、处理记录；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_fc528393637543b4a8c074c02ca0c0cd",
+  "trace_id": "trc_27cd5d6c2c4149338fb38c3f09d70c75",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

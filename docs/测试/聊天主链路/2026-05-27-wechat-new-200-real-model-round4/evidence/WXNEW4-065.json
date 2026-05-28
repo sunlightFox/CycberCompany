@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-065",
+  "category": "办公文档",
+  "title": "整理会议纪要要有哪些固定段落？",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：结论、行动项。\n整理会议纪要要有哪些固定段落？",
+  "reply_text": "会议纪要建议固定用这几个段落，既清楚又方便后续追踪，不需要假装生成文件，直接复制到文档里就能用。\n\n- *会议纪要固定结构：**\n\n1. 会议基本信息\n- 会议主题：\n- 会议时间：\n- 会议地点 / 会议方式：\n- 参会人员：\n- 记录人：\n\n2. 会议背景 / 目标\n 简要说明为什么开这个会，本次会议要解决什么问题。\n\n3. 核心结论\n 用几条 bullet 写清楚已经达成的判断、共识或决策。\n 例如：\n- 确认采用方案 A\n- 项目上线时间暂定为 XX\n- 预算范围控制在 XX 内\n\n4. 讨论要点\n 按议题整理，不要逐字记录，重点写分歧、依据和重要信息。\n 例如：\n- 议题一：市场投放节奏\n- 议题二：产品改版范围\n- 议题三：风险与资源缺口\n\n5. 行动项\n 这是最关键的追踪部分，建议用表格：\n\n行动项 / 负责人 / 截止时间 / 备注\n\n完成方案初稿 / 张三 / 3月15日 / 需同步设计组\n\n整理预算明细 / 李四 / 3月18日 / 下次会议前提交\n\n6. 风险与待确认事项\n 记录还没解决、需要进一步确认的问题。\n 例如：\n- 供应商报价尚未确认\n- 技术排期存在不确定性\n- 法务审核时间待评估\n\n7. 下次会议安排\n- 下次会议时间：\n- 下次会议主题：\n- 会前需准备内容：\n\n一个通用模板可以这样写：\n\n代码内容已省略：会议纪要\n\n小曜建议：如果是正式会议，重点放在“核心结论”和“行动项”；\n如果是头脑风暴，可以多保留“讨论要点”和“待确认事项”。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_40ab239f48474278b7b69a9333599994",
+  "trace_id": "trc_3ed36261df8b49878e3aac0b160e7fe8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

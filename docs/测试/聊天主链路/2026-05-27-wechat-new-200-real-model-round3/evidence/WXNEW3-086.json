@@ -1,0 +1,29 @@
+{
+  "case_id": "WXNEW3-086",
+  "category": "办公协作",
+  "title": "给同事改文档建议，别像挑毛病。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：文档、建议。\n给同事改文档建议，别像挑毛病。",
+  "reply_text": "可以这样发：\n\n我看了下这版文档，整体方向是清楚的。有两处我建议再顺一下：一是开头结论可以更直接，二是关键数据最好补一下来源。这样读的人更容易跟上，也不是在挑刺。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6486a69267df4cbbbaa9b7c6cc067ab1",
+  "trace_id": "trc_6145d7b97a364656b81fbd6f67949c49",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

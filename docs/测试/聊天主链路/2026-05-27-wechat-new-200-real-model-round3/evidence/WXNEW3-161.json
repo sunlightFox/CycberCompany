@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-161",
+  "category": "语气排版",
+  "title": "把“您的请求已处理”改成微信口吻。",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：收到、人话。\n把“您的请求已处理”改成微信口吻。",
+  "reply_text": "按你刚刚改的这句，收到。改成人话、微信口吻可以这样：\n\n“收到，已经帮你弄好了。”\n\n如果更像小吴本人一点，也可以用：\n\n“收到，搞定了。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_70febec4a2634b63ac2933a40e70f779",
+  "trace_id": "trc_5e3f493a689d4dd385af15623168d8f8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

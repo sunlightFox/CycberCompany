@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-013",
+  "category": "计划规划",
+  "title": "周三前要交材料，帮我倒排三步。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：周三、三步。\n周三前要交材料，帮我倒排三步。",
+  "reply_text": "周三前交材料，最稳就是倒排三步——先定稿范围，再补齐内容，最后留出检查和提交时间。\n\n第一步：今天先定清单\n把要交的材料列出来：哪些必须交、哪些是附件、有没有格式要求。\n这一步别急着写，先确认“不漏项”。\n\n第二步：周二前完成主体\n能写的正文、表格、证明材料，尽量在周二白天前补齐。\n如果有需要别人提供的内容，今天就发出去催，别等到最后一天。\n\n第三步：周三只做收尾提交\n周三不要再大改，主要做三件事：检查格式、核对附件、按要求提交。\n最好提前半天交，留一点余量处理临时问题。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1f2b5ea21bcd401d80fc012226771749",
+  "trace_id": "trc_782c38b5b15b4214a5d1cad899bc7d2b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

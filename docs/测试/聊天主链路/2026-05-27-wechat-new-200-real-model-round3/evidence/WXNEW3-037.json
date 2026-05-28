@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-037",
+  "category": "监督陪跑",
+  "title": "我写方案卡住了，给我 3 分钟启动。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：3 分钟、启动。\n我写方案卡住了，给我 3 分钟启动。",
+  "reply_text": "我接住这句：我写方案卡住了，给我 3 分钟启动。\n\n这轮重点是3 分钟、启动；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_81d2497977714f998ac6e7093fa0fab6",
+  "trace_id": "trc_53d384061f86426db1decea558d1ca4b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

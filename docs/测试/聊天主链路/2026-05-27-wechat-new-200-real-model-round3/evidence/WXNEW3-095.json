@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-095",
+  "category": "HR管理",
+  "title": "招聘时能不能问婚育计划？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：不能、岗位相关。\n招聘时能不能问婚育计划？",
+  "reply_text": "我接住这句：招聘时能不能问婚育计划？。\n\n这轮重点是不能、岗位相关；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8c468910774340f2ac7974d3f04cd596",
+  "trace_id": "trc_1d2363bae12d47c9af77ec73e11b345c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

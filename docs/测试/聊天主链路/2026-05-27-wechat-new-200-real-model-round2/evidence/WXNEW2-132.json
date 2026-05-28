@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-132",
+  "category": "办公协作",
+  "title": "项目群里通知今晚暂停发布，怎么写？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：暂停发布、原因。\n项目群里通知今晚暂停发布，怎么写？",
+  "reply_text": "可以这样发到项目群：\n\n各位，今晚发布先暂停。原因是当前还有部分关键问题需要进一步确认，为避免带着风险上线，先不按原计划发布。后续确认完成后，我会同步新的发布时间和安排。辛苦大家知悉。\n\n如果想更正式一点：\n\n各位同事，今晚原计划发布暂停。暂停发布的原因是当前仍有关键项待确认，为确保发布质量和线上稳定性，暂不推进今晚发布。后续排期确认后会第一时间同步。辛苦大家配合。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c8c5f67d1f2f4bf682f7e6b326c9f243",
+  "trace_id": "trc_acca7a70ded74b15bff6a6d8adf192be",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

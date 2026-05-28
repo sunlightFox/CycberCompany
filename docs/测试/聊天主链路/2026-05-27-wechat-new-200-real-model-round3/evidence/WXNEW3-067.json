@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW3-067",
+  "category": "办公文档",
+  "title": "写一封跟进邮件，礼貌但有截止时间。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：跟进、截止时间。\n写一封跟进邮件，礼貌但有截止时间。",
+  "reply_text": "一封可直接使用的跟进邮件模板：\n\n- *主题：关于[事项名称]的跟进及截止时间提醒**\n\n您好，[对方姓名]：\n\n想跟进一下关于[具体事项/项目/材料]的进展。为便于后续安排，烦请您在 [截止时间，例如：本周五下午5点前] 反馈相关信息或确认结果。\n\n如目前还有需要我配合补充的内容，也请随时告知，我会尽快处理。\n\n感谢您的支持，期待您的回复。\n\n祝好，\n[你的姓名]",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e940b13405934c0db72b2d1cdede205d",
+  "trace_id": "trc_dd92c32340074462832b00f7ca18b9ca",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

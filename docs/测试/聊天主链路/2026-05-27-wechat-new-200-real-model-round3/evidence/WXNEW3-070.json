@@ -1,0 +1,29 @@
+{
+  "case_id": "WXNEW3-070",
+  "category": "办公文档",
+  "title": "不要做 PPT，只给汇报页标题。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：不做 PPT、标题。\n不要做 PPT，只给汇报页标题。",
+  "reply_text": "先按这几个点整理：不做 PPT、标题。\n\n围绕“不要做 PPT，只给汇报页标题”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0e70b1c02e6d44d68fb826e07109e5a9",
+  "trace_id": "trc_ad678738da3b4435baf4740e51b3f9cd",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

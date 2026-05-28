@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-125",
+  "category": "记忆偏好",
+  "title": "偏好冲突时为什么要看 source？",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：冲突、source。\n偏好冲突时为什么要看 source？",
+  "reply_text": "偏好冲突时要看 source，主要是为了判断“哪条更可信、更新、适用范围更明确”。A：长期偏好，source 来自你之前明确说“以后都这样”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_554a67335b7043119ad3a3b1d5bce670",
+  "trace_id": "trc_73d5b9018df8405ba2c042aef53105c3",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

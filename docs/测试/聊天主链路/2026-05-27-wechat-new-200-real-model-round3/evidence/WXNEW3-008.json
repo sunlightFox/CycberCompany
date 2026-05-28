@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-008",
+  "category": "闲聊",
+  "title": "我很困但还不想睡，劝我一句。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：困、先睡。\n我很困但还不想睡，劝我一句。",
+  "reply_text": "我接住这句：我很困但还不想睡，劝我一句。\n\n这轮重点是困、先睡；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ca87aa0f808f462e953f2df2ba86bb17",
+  "trace_id": "trc_50eda6f4116b477280e02c6adb98b9b4",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

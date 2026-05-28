@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-154",
+  "category": "任务边界",
+  "title": "创建待办但缺负责人怎么办？",
+  "prompt": "任务边界场景要说明能做什么、不能假装完成、需要确认什么。请自然提到：负责人、先确认。\n创建待办但缺负责人怎么办？",
+  "reply_text": "缺负责人时，不能直接假装已经创建待办，也不该随便指定负责人。\n\n我能做的是：先把待办内容、截止时间、备注等信息整理好，并提示“缺少负责人，暂不能创建/暂不完整”。\n需要你先确认的是：这条待办的负责人是谁；\n如果允许，也可以确认是否先创建为“未分配负责人”的待办。\n\n可以这样回复用户：\n\n“这条待办目前缺少负责人，我还不能确认创建完成。请先确认负责人是谁；\n确认后我再继续创建。也可以先建为未分配待办，但需要你明确同意。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e4f3e63307144b479e0f1b13a5f6dc4b",
+  "trace_id": "trc_9b2e9ac03c3e4602b2d4601d980f7464",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

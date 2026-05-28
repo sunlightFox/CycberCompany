@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-152",
+  "category": "任务边界",
+  "title": "帮我整理附件，但我还没上传。",
+  "prompt": "任务边界场景要说明能做什么、不能假装完成、需要确认什么。请自然提到：没上传、不能整理。\n帮我整理附件，但我还没上传。",
+  "reply_text": "等你上传附件后我再整理。现在附件没上传，我不能整理，也不能假装已经看过或完成。\n\n你上传后我可以做这些：\n- 提炼重点、摘要、待办事项- 按章节/主题重新整理- 做成表格、会议纪要、汇报稿或清单- 标注不确定信息，并注明依据/source需要你确认的是：\n- 想整理成什么格式- 是否要保留原文细节- 是否需要区分“原文依据”和“我的归纳”\n\n替代方案：如果你暂时不方便上传，也可以先把附件里的文字粘贴过来，我按你提供的内容整理。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2e4e036ccf434ac8ac6b3017253eea03",
+  "trace_id": "trc_2250bb34ca8648a7aaf252b87783b759",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

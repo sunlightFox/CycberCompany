@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-013",
+  "category": "计划",
+  "title": "帮我把一周阅读计划排得轻一点，不要太满。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：一周、轻一点。\n帮我把一周阅读计划排得轻一点，不要太满。",
+  "reply_text": "小曜来给你排个一周的，节奏放轻一点，不塞太满，主要是让你能稳定读完、还有余地休息。整体节奏每天20–30分钟就够。不用追求读很多，重点是保持连续感。周一：进入状态读20分钟。周二：正式开始读25分钟。读完后简单记1–2句：今天看到什么、有什么印象。周三：轻松一点读15–20分钟。这天不求进度，可以只读一小节，保持手感就行。周四：正常推进读25–30 分钟。\n如果状态好就多读一点；状态一般就到点停。周五：整理日读20 分钟。再花5 分钟翻一下前几天划过的内容，不用写长笔记。周六：自由阅读读30 分钟以内。可以选自己最感兴趣的章节读，不一定按顺序。周日：休息加回顾可以不读，或者只读10–15 分钟。简单想一下：这周读到了哪里、下周想继续哪部分。小原则别把阅读排成任务清单。这一周先以“能坚持、没压力”为主，宁愿少一点，也别太满。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9bd01fde2ff042b5b9f9f308734d73ba",
+  "trace_id": "trc_b53471f87337450195363c76162e7c8d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

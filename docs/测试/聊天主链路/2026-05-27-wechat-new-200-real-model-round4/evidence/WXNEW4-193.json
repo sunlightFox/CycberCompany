@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-193",
+  "category": "审计追踪",
+  "title": "审批记录为什么不能放 secret？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：secret、敏感。\n审批记录为什么不能放 secret？",
+  "reply_text": "审批记录不能放 secret，核心原因是：审批记录是用来做 trace 和证据留存的，不是用来保存敏感凭据的。\n它通常会被多人查看、长期保存、进入日志/审计系统，甚至用于问题排查和合规取证。\n一旦把 secret、token、密码、密钥这类敏感信息写进去，就会扩大暴露面：审批人、审计人、系统管理员、日志平台都可能接触到原文，后续也很难彻底删除。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_29cd85f5f11c472193d3bb8b527def15",
+  "trace_id": "trc_2ec2ff2d35844c34bfc5946f9255cf2b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

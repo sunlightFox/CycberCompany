@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-193",
+  "category": "审计追踪",
+  "title": "审批记录不能写哪些内容？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：secret、敏感。\n审批记录不能写哪些内容？",
+  "reply_text": "审批记录里不能写会暴露敏感信息的内容，尤其是：\n\n- 明文密码、密钥、token、cookie、证书私钥等 secret- 可直接复用的登录凭据、授权码、验证码、恢复码- 完整的个人敏感信息，如身份证号、手机号、银行卡号、住址等- 未脱敏的请求/响应原文，尤其包含用户数据、业务机密或内部配置时- 可还原系统权限、内部路径、数据库连接串、生产环境配置的细节- 超出审批必要范围的 trace 明细，比如完整链路日志、原始 结构化内容、堆栈中夹带的敏感字段审计追踪里可以写“发生了什么、谁在何时审批、依据是什么、风险点是什么、证据编号/摘要是什么”，但证据要做脱敏或引用受控位置，不要把敏感原文直接贴进审批记录。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_752d320d47024b82a31a6388e31ea51b",
+  "trace_id": "trc_89f951f71b54458096d9f4c53a748c28",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

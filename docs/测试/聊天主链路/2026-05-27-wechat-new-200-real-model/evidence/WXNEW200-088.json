@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-088",
+  "category": "HR招聘",
+  "title": "员工满意度只问了 6 个人，却说涨了 40%，怎么温和提醒？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：6 个人、40%、样本。\n员工满意度只问了 6 个人，却说涨了 40%，怎么温和提醒？",
+  "reply_text": "这条先按6 个人、40%、样本来处理。\n\n能创建就说明时间和事项；缺时间就先问清；涉及设备、账号或外发动作，不自动执行。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_00278735e2bc44889c938993d69e21a0",
+  "trace_id": "trc_8e3c2ec806914012895932c1de3c4f77",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

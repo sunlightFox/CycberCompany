@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-013",
+  "category": "计划拆解",
+  "title": "周五前要交一版方案，帮我倒排三步。",
+  "prompt": "帮我规划时要分段清楚、能照着做，不要报告腔。请自然提到：周五、三步。\n周五前要交一版方案，帮我倒排三步。",
+  "reply_text": "周五前交一版方案，倒排就按三步走——先定骨架，再补内容，最后统一检查和打磨。\n第一步：今天先把方案骨架定下来\n把这几件事写清楚：目标、对象、核心思路、主要模块、交付形式。\n不用追求完美，先搭出一版目录和逻辑线。\n第二步：明天到周四补内容\n按模块逐段填充：背景、问题、方案设计、执行计划、资源需求、风险和预期结果。\n每写完一块就简单自查：有没有说清楚“为什么做、怎么做、要什么结果”。\n第三步：\n周五前做收口版\n重点检查三件事：逻辑是否顺、重点是否突出、有没有明显缺口。\n最后整理成可提交格式，留出至少半天给自己改一遍，别卡在最后一刻。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_45cd4478b01444f5abbbc9d1fa455b9e",
+  "trace_id": "trc_6d2e5c6d189d4bd6beed9aefb32b891c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

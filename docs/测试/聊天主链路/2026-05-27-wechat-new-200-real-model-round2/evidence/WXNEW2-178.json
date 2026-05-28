@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-178",
+  "category": "模型语气",
+  "title": "安全拒绝怎么不冷冰冰？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：拒绝、替代方案。\n安全拒绝怎么不冷冰冰？",
+  "reply_text": "安全拒绝不冷冰冰，核心不是“多加礼貌词”，而是别让用户感觉被一刀切。\n先接住对方的真实目的 比如：“我明白你是想解决这个问题，不是单纯想违规。\n”\n\n补上这轮关键点：拒绝、替代方案。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_512da6a4b1c2492e8d035e4c1c4b07c1",
+  "trace_id": "trc_07fcdc95cb85460aa1ece03e381f8774",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

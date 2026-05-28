@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-034",
+  "category": "监督",
+  "title": "帮我三天内把床头书读完，不要压迫。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：三天、不压迫。\n帮我三天内把床头书读完，不要压迫。",
+  "reply_text": "我做陪跑监督，不喊口号、不压迫。\n\n先给结论：三天读完可以拆得很轻。最小下一步：你现在只要把床头书拿起来，读 5分钟，读到哪算哪，然后告诉我“第几页到第几页”。\n\n我会按这个节奏陪你：\n今天：先启动，不追求读很多- 明天：接着往前推一点- 后天：收尾读完，没读完也不骂，只调整你现在的任务就一个：读5分钟。读完回来报页码，我帮你接下一小步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_87a27b9c7944478c93b37cf1cc8360c7",
+  "trace_id": "trc_26b277a100a5427baaad8be41fd31d00",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

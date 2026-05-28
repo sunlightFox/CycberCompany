@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-140",
+  "category": "办公协作",
+  "title": "通知大家资料别外传，怎么自然说？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：资料、外传。\n通知大家资料别外传，怎么自然说？",
+  "reply_text": "- 各位，这份资料仅限内部沟通使用，麻烦不要外传，谢谢大家配合。\n- 大家注意下，这份资料目前只在内部参考使用，先不要外传，感谢配合。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1ded9717a3214831861a76f722ec8579",
+  "trace_id": "trc_ccd680ae32cc41a2bfb3dc1285f55c87",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

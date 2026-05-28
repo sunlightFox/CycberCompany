@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW4-067",
+  "category": "办公文档",
+  "title": "采购复核说明怎么写清证据？",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：采购、证据。\n采购复核说明怎么写清证据？",
+  "reply_text": "可以这样写，核心是把“复核结论”和“证据来源”分开写清楚，避免只写“已核实”。\n复核事项说明本次复核的采购项目、采购内容、金额、供应商、合同/订单编号等。\n示例： > 本次复核事项为XX部门提交的XX采购申请，采购内容为XX，预算金额XX元，拟选供应商为XX公司。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2c2af8df34e94fd1a37b3911720f01e8",
+  "trace_id": "trc_9834f35a463b46f399d1fdd2762a2917",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

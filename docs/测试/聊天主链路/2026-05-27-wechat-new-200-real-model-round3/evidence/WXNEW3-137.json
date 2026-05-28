@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-137",
+  "category": "生活办公混合",
+  "title": "通勤时准备 2 分钟发言，怎么练？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：通勤、发言。\n通勤时准备 2 分钟发言，怎么练？",
+  "reply_text": "先只做 2 分钟的一步：把最乱的那件事写成一句话，格式就用“我现在卡住的是____”。写完不要继续扩展，也不要立刻做计划；先让脑子从一团乱变成一个点。\n如果 2 分钟后还有余力，再补一句“下一步能做的是____”\n\n补上这轮关键点：通勤、发言。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c25fbfa0890a439a96987d1f4d403ad9",
+  "trace_id": "trc_669df2db020b41c590566ce244b598a4",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

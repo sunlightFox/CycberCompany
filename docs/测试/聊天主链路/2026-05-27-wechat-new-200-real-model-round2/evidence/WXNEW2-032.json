@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-032",
+  "category": "监督",
+  "title": "陪我连续五天写日记，每天只要一句。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：五天、一句。\n陪我连续五天写日记，每天只要一句。",
+  "reply_text": "我陪你。\n\n规则就定得很小：连续五天，每天只写一句，不追求深刻，不补作业，不自责。\n\n今天的最小下一步：\n\n写这一句就行——“今天我最明显的感受是：____。”\n\n你把空填上发我，我只做监督和陪跑。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f16e4eb05a2446ed851e67dcb1b24f43",
+  "trace_id": "trc_0c08643eb6664027883a5df738ad1ef6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

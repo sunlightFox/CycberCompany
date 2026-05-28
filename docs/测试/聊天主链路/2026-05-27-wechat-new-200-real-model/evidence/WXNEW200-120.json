@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-120",
+  "category": "多轮记忆",
+  "title": "新旧记忆冲突时怎么处理？",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：supersede、source。\n新旧记忆冲突时怎么处理？",
+  "reply_text": "新旧记忆冲突时，我会按这个顺序处理：\n\n1.先看 source：优先采用你最近、最明确的一条说明。2. 再看范围：临时偏好只在当前聊天/阶段生效；长期偏好才会作为后续默认。3. 如果新记忆明确覆盖旧记忆，会标记为 supersede，即“新规则替代旧规则”，而不是两条同时生效。4. 如果冲突不明确，我会先按当前这轮的要求执行，并向你确认是否要长期覆盖。5. 敏感内容不写入记忆；即使你提到，也只在当前对话中必要使用，不沉淀为长期偏好。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_20385c93fa524f9abc00ddeec752007b",
+  "trace_id": "trc_b54125d904a243bd83a2511f01f25fb8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

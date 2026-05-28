@@ -70,13 +70,19 @@ class ChatIntentRouter:
             return ChatRouteDecision("empty", 0.0, "empty_text")
         structured_summary_request = is_structured_summary_request(clean)
         format_sensitive_request = _format_sensitive_direct_answer_request(clean)
-        office_request = parse_office_chat_request(clean)
+        text_snippet_request = _text_snippet_office_context(clean)
+        terminal_request = terminal_command(clean) is not None
+        office_request = None if text_snippet_request or terminal_request else parse_office_chat_request(clean)
         if office_request is None:
             document_type = office_document_type(clean)
             if (
                 document_type is not None
                 and not structured_summary_request
                 and not format_sensitive_request
+                and not text_snippet_request
+                and not terminal_request
+                and not is_webpage_read_request(clean)
+                and not is_browser_page_action_request(clean)
                 and not _looks_like_reminder_time_clarification_request(clean)
                 and not _direct_only(clean)
                 and not _looks_like_non_office_advice_context(clean)
@@ -296,6 +302,10 @@ def is_readonly_route_request(text: str) -> bool:
 
 def parse_office_chat_request(text: str) -> OfficeChatRequest | None:
     clean = _clean(text)
+    if _text_snippet_office_context(clean) or terminal_command(clean) is not None:
+        return None
+    if is_webpage_read_request(clean) or is_browser_page_action_request(clean) or is_explicit_download_request(clean):
+        return None
     if _looks_like_reminder_time_clarification_request(clean):
         return None
     if _direct_only(clean):
@@ -363,6 +373,20 @@ def _has_implied_office_action(text: str, document_type: str) -> bool:
     if document_type in {"word", "excel", "ppt"}:
         return True
     return False
+
+
+def _text_snippet_office_context(text: str) -> bool:
+    clean = _clean(text)
+    lowered = clean.lower()
+    if "大纲" in clean and not any(marker in clean for marker in ("生成", "做成", "创建", "产出", "导出", "文件")):
+        return True
+    if not any(marker in clean for marker in ("写一段", "写一条", "写个", "写一个", "出一个", "改成", "润色")):
+        return False
+    if any(marker in lowered for marker in ("word", "docx", "excel", "xlsx", "ppt", "pptx", "powerpoint")):
+        return False
+    if any(marker in clean for marker in ("生成", "做成", "创建", "产出", "导出", "文件", "文档", "工作簿", "幻灯片")):
+        return False
+    return any(marker in clean for marker in ("周报", "日报", "PR", "公告", "邮件", "纪要", "项目状态"))
 
 
 def office_document_type(text: str) -> str | None:

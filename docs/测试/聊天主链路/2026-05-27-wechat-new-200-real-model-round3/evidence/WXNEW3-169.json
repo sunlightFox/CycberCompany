@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-169",
+  "category": "语气排版",
+  "title": "复杂问题先给什么？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：结论、再展开。\n复杂问题先给什么？",
+  "reply_text": "复杂问题先给结论，再展开。\n\n也就是先把答案、判断或建议放前面，让对方马上知道方向；后面再补依据、风险、细节和下一步。不要一上来铺很多背景，不然会显得绕、也容易像技术腔。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_97192abb789a4eed87fc1bea78288883",
+  "trace_id": "trc_2b665f2efaac4e18970941f2d4b52944",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-091",
+  "category": "HR管理",
+  "title": "面试评价怎么写才基于证据？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：证据、岗位要求。\n面试评价怎么写才基于证据？",
+  "reply_text": "我接住这句：面试评价怎么写才基于证据？。\n\n这轮重点是证据、岗位要求；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f10204e6150743fcad3784b9faa36142",
+  "trace_id": "trc_57ca1e5ea4954502b5cb597a5989209c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

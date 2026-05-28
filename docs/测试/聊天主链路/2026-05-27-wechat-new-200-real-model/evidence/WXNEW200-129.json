@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-129",
+  "category": "渠道质量",
+  "title": "如果回复自然但太短，为什么不能直接判 fail？",
+  "prompt": "测试治理场景要说清真实模型、微信投递、trace、最终可见回复。请自然提到：短答、意图。\n如果回复自然但太短，为什么不能直接判 fail？",
+  "reply_text": "自然但太短不一定直接 fail，要先看意图。\n\n如果用户只是要一句话，短答可以通过；\n如果用户要计划、清单、证据或操作边界，短到缺关键信息就要降级或重跑。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6ef5de0fd58348c4bb29f2f8e40d252d",
+  "trace_id": "trc_154d1206aac6493eafc8a47d70768f04",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

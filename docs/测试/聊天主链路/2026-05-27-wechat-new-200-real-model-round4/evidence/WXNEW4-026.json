@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-026",
+  "category": "提醒定时",
+  "title": "明天 9:15 提醒我带合同。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：明天 9:15、合同。\n明天 9:15 提醒我带合同。",
+  "reply_text": "已创建：明天9:15 提醒你带合同。目前不缺额外确认；到点我只会提醒你，不会自动执行设备动作或高风险操作\n\n补上这轮关键点：明天 9:15、合同。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1b4709c14ce74ba9a8365779be99c8a8",
+  "trace_id": "trc_563ce3e0b0774b6d8c3f09e1c60f6b04",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

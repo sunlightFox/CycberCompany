@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-090",
+  "category": "办公协作",
+  "title": "通知资料不要外传，说得自然一点。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：资料、外传。\n通知资料不要外传，说得自然一点。",
+  "reply_text": "可以自然一点这样说：\n\n这份资料只用于当前内部沟通，大家先不要外传，也别转给无关人员。\n如果后面确实需要对外同步，我们再确认版本、范围和接收方。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_91b8ab3828f34ac7a1721b73ffeca528",
+  "trace_id": "trc_891ba7169d764495aee0806876d01321",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from brain.adapters import OpenAICompatibleClient
 from chat_runtime import ChatRuntime
 from shell_runtime import ShellRuntime
 from trace_service import TraceService
@@ -108,10 +109,12 @@ from app.services.external_platform_extensions import (
 from app.services.failure_experience import FailureExperienceService
 from app.services.heart_runtime import HeartRuntimeService
 from app.services.goals import GoalService
+from app.services.goal_engine import GoalRuntime
 from app.services.knowledge import KnowledgeService
 from app.services.mcp import MCPService
 from app.services.media import MediaService
 from app.services.memory import MemoryService
+from app.services.model_gateway import ModelProtocolGateway
 from app.services.model_routing import ModelRoutingService
 from app.services.multimodal_understanding import MultimodalUnderstandingService
 from app.services.notifications import NotificationGatewayService
@@ -183,6 +186,7 @@ class ServiceRegistry:
     knowledge_service: KnowledgeService
     task_engine: TaskEngine
     goal_service: GoalService
+    goal_runtime: GoalRuntime
     background_worker_service: BackgroundWorkerService
     scheduled_task_service: ScheduledTaskService
     checkpoint_service: CheckpointService
@@ -776,14 +780,22 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
     scheduled_task_service.set_notification_callback(
         notification_gateway_service.notify_scheduled_run
     )
+    goal_model_gateway = ModelProtocolGateway(
+        secret_store=secret_store,
+        client_cls=OpenAICompatibleClient,
+    )
     goal_service = GoalService(
         repo=goal_repo,
         member_repo=member_repo,
         scheduled_task_service=scheduled_task_service,
         trace_service=trace_service,
         audit_service=audit_service,
+        memory_service=memory_service,
+        brain_repo=brain_repo,
+        model_gateway=goal_model_gateway,
     )
-    scheduled_task_service.set_goal_checkin_callback(goal_service.handle_scheduled_checkin)
+    goal_runtime = GoalRuntime(goal_service)
+    scheduled_task_service.set_goal_checkin_callback(goal_runtime.handle_scheduled_checkin)
     background_worker_service = BackgroundWorkerService(
         scheduled_tasks=scheduled_task_service,
         notifications=notification_gateway_service,
@@ -932,6 +944,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         approval_service,
         scheduled_task_service,
         goal_service,
+        goal_runtime,
         project_deployment_service,
         host_install_service,
         external_platform_action_service,
@@ -1094,6 +1107,7 @@ def build_registry(config: AppConfig, db: Database, shell_runtime: ShellRuntime)
         knowledge_service=knowledge_service,
         task_engine=task_engine,
         goal_service=goal_service,
+        goal_runtime=goal_runtime,
         background_worker_service=background_worker_service,
         scheduled_task_service=scheduled_task_service,
         checkpoint_service=checkpoint_service,

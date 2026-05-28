@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-083",
+  "category": "办公协作",
+  "title": "需求评审前要问哪些风险？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：需求、风险。\n需求评审前要问哪些风险？",
+  "reply_text": "需求评审前，先把风险问清：\n1. 需求风险：目标、范围和优先级是否已经确认。\n2. 交付风险：研发、测试、设计和上线时间会不会受影响。\n3. 数据风险：口径、权限、埋点或历史数据是否会变。\n\n问这些不是挑刺，是为了评审后少返工。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3d2c49998d6049a382dc53c492542bc7",
+  "trace_id": "trc_986f194ce74443fc9b3fd727cbc978a6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

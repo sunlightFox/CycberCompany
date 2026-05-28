@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-180",
+  "category": "长短控制",
+  "title": "复杂任务先问 3 个问题。",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：3 个、澄清。\n复杂任务先问 3 个问题。",
+  "reply_text": "小曜记下：长短按用户意图来，结构保持清楚。\n\n遇到复杂任务时，我会先做澄清，优先问3 个关键问题，再继续推进。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0ca10fc520574126af81de624f0929f7",
+  "trace_id": "trc_6268dd1baddc4779874ced96a9b14414",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-170",
+  "category": "监督",
+  "title": "我说要整理报销票据，你盯我一下。（变体）",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：报销票据、先。\n我说要整理报销票据，你盯我一下。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "我盯你。\n\n最小下一步：先把报销票据都集中到一个地方，别分类，先收齐。\n\n缺口：你想我隔多久提醒你一次？",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2b5831c82c5647848427611354b79ceb",
+  "trace_id": "trc_9708409ee9bb47afa93556b86dbea8b8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

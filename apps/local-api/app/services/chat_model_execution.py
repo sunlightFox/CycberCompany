@@ -2233,7 +2233,7 @@ def _needs_latest_fact_boundary_shape(user: str, reply: str) -> bool:
 
 
 def _needs_boss_sync_shape(user: str, reply: str) -> bool:
-    if "同步" not in user and "老板" not in user:
+    if not any(marker in user for marker in ("老板", "上级", "管理层", "老板版")):
         return False
     groups = (("结论", "结果"), ("风险", "边界", "复核", "核对", "缺口"), ("下一步", "补齐", "继续推进"))
     return not all(any(marker in reply for marker in group) for group in groups)

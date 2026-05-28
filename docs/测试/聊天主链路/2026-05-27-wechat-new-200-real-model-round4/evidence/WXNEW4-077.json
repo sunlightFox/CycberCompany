@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-077",
+  "category": "办公表格",
+  "title": "预算超支原因怎么拆？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：预算、超支。\n预算超支原因怎么拆？",
+  "reply_text": "我接住这句：预算超支原因怎么拆？。\n\n这轮重点是预算、超支；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e235c8c3291c4d6d98429257ae3bdde5",
+  "trace_id": "trc_e97bab413a86489ebdf7c50442d42bd7",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

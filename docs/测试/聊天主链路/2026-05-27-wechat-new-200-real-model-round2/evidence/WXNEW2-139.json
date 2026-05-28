@@ -1,0 +1,32 @@
+{
+  "case_id": "WXNEW2-139",
+  "category": "办公协作",
+  "title": "合作方没回复，跟进话术要有余地。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：跟进、余地。\n合作方没回复，跟进话术要有余地。",
+  "reply_text": "这条可以直接发：\n\n> 你好，想跟进一下上次沟通的事项。\n> 目前我们这边还在等贵方反馈，想确认下是否方便近期给个更新？\n> 如果还需要内部评估或时间调整也没问题，我们这边可以预留一定余地，麻烦你方便时同步一下进展即可。谢谢。\n\n更短一点也可以：\n\n> 你好，跟进一下上次沟通的事项。想确认下贵方目前是否有进一步反馈？\n如果还需要时间评估，我们这边也可以留些余地，方便时麻烦同步下进展，谢谢。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_99df3a1022804ed6b8822d77cfd4a71d",
+  "trace_id": "trc_2cca9c7261764162bec097a559005beb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.fallback",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

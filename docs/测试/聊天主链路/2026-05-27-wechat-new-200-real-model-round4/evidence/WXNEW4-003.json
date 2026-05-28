@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-003",
+  "category": "闲聊",
+  "title": "朋友一直倒苦水，我想接住但不被卷进去。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：接住、边界。\n朋友一直倒苦水，我想接住但不被卷进去。",
+  "reply_text": "懂，你不是不想管，是怕自己被情绪淹进去。\n\n可以这样：先接住对方的感受，再把边界放出来。比如你回：\n\n“我听出来你真的很难受，我在，也愿意听你说一会儿。但我现在状态也有限，可能没法一直陪你一起陷进去。我们先聊20 分钟，或者你最想我帮你理哪一块？”\n\n这样既不冷，也不会把自己交出去。微信里熟人说句实在的：能陪伴不等于要负责到底，你可以心软，但边界要硬一点。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_533958b94ea24885ab3143bb849a09f5",
+  "trace_id": "trc_fe7082697d4b4587881a25aac749feeb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

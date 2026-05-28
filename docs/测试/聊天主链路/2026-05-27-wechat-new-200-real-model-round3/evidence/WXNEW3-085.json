@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-085",
+  "category": "办公协作",
+  "title": "会议改到下周，通知怎么写？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：改到下周、新时间。\n会议改到下周，通知怎么写？",
+  "reply_text": "可以这样写，直接替换【新时间】就能发：\n\n各位好，原定本周召开的会议因安排调整，改到下周进行。新时间为【下周X，X月X日，XX:XX\n- XX:XX】，会议地点/线上会议链接不变。如新时间与大家已有安排冲突，请提前告知我，方便协调。谢谢大家。\n\n更简洁一点：\n\n各位好，会议时间调整：原定本周的会议改到下周，新时间为【X月X日 周X XX:XX】。地点/会议链接不变。如有时间冲突请提前反馈，谢谢。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d2c4c442a803480fb5325bf5b4869f4d",
+  "trace_id": "trc_a6031adf8dad475d8f459e894f76cf59",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-017",
+  "category": "计划规划",
+  "title": "帮我把搬家准备拆成今天能做的三步。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：搬家、三步。\n帮我把搬家准备拆成今天能做的三步。",
+  "reply_text": "今天的搬家准备别摊太大，抓住“三步”就够了——先断舍离，再打包关键物品，最后确认搬运细节。第一步：清出不用带的东西花30–60 分钟，把明显不要的东西先分出来：丢掉、送人、回收。重点看衣服、旧杂物、过期用品、厨房囤货，别让它们占箱子。\n\n第二步：先打包低频物品今天不要碰明天还要用的东西。先装书、换季衣物、装饰品、备用餐具这类低频物品。每个箱子写清楚：房间 + 内容，比如“卧室｜冬衣”。\n\n第三步：确认搬家当天的关键安排把最容易出问题的事今天定下来：搬家公司/车的时间、停车位置、电梯预约、钥匙交接、重要证件和贵重物品随身带。\n\n这样今天做完，你不会太累，但搬家这件事会明显往前推进。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0bb63c5feab84dadb58def5fedd3293b",
+  "trace_id": "trc_a2e433c915d2476ebbb5aab6fd45c143",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-065",
+  "category": "办公文档",
+  "title": "设计采购审批说明结构。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：采购、审批。\n设计采购审批说明结构。",
+  "reply_text": "可以按“背景—需求—方案—预算—供应商—风险—审批事项”来写，办公场景里最稳，采购和审批链路都清楚。可直接用的\n《采购审批说明》",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e756658b9cb8444b9dcbabfcc24160c3",
+  "trace_id": "trc_fc7226b5fb4e456d9d565233bcddbd2b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

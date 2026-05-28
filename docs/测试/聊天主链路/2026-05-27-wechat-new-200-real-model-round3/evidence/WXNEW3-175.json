@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-175",
+  "category": "长短控制",
+  "title": "用户只问能不能，怎么答？",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：先回答、必要补充。\n用户只问能不能，怎么答？",
+  "reply_text": "- 先回答：能 / 不能 / 现在还不能确定。\n能。\n先直接回答结论，再补充必要条件；\n如果有风险，也只点到为止，不展开成完整方案\n\n补上这轮关键点：先回答、必要补充。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8e9df25d106e4a0c91e760a2447e2ce1",
+  "trace_id": "trc_89d1545af68847beb4a96f19aacbd069",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

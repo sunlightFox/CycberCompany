@@ -37,7 +37,10 @@ from app.services.chat_runtime_host_helpers import (
     terminal_command_reply,
 )
 from app.services.chat_tasks import ScheduledTaskIntentCoordinator
-from app.services.chat_turn_execution import _scheduled_task_created_reply
+from app.services.chat_turn_execution import (
+    _quality_eval_prompt_requires_real_model,
+    _scheduled_task_created_reply,
+)
 from app.services.chat_turn_input_facts import (
     explicit_preference_recall_query,
     needs_recent_history_lookup,
@@ -2070,3 +2073,20 @@ def test_round18_action_safety_advice_questions_do_not_become_execution_routes()
     assert is_file_mutation_request(confirmation_classification) is False
     assert ChatIntentRouter().decide(confirmation_classification).route_type == "default"
     assert route_turn_response(confirmation_classification)["turn_response_kind"] == "boundary_question"
+
+
+def test_host_helper_does_not_intercept_quality_test_prompts() -> None:
+    prompts = [
+        "像微信一样自然，不要机械。请自然提到：提醒、轻一点。\n我想轻轻提醒朋友别忘了带证件。",
+        "帮我规划时，回复要自然分段。请自然提到：两周、Python。\n我想两周补 Python 基础，每天只有半小时。",
+    ]
+
+    for prompt in prompts:
+        assert deterministic_no_model_reply(prompt) is None
+
+
+def test_quality_eval_prompts_require_real_model_evidence() -> None:
+    assert _quality_eval_prompt_requires_real_model(
+        "像微信里熟人一样自然回应，别系统腔。请自然提到：在、不分析。\n我现在不想分析，只想有人说一句在。"
+    )
+    assert not _quality_eval_prompt_requires_real_model("今天 18:45 提醒我取快递。")

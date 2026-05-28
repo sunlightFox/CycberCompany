@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-021",
+  "category": "提醒定时",
+  "title": "今天 18:35 提醒我拿快递。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：18:35、拿快递。\n今天 18:35 提醒我拿快递。",
+  "reply_text": "我不能直接在你的设备上创建/执行提醒，也不会自动设置闹钟、通知或其他设备动作。\n\n你要提醒的内容是：今天18:35 拿快递。\n如果你希望真正收到提醒，需要你在手机日历、提醒事项或闹钟里手动创建；或在支持授权的环境里确认并授权我创建提醒。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3315d1dc4da140d1b6ac285c5f6ef2e6",
+  "trace_id": "trc_799201a10ebf4ebe9c5043f9361ec2c2",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

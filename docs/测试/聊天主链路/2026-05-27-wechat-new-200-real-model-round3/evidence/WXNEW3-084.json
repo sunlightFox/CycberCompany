@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-084",
+  "category": "办公协作",
+  "title": "客户问进度但我还没拿到结论，怎么回？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：未确认、同步。\n客户问进度但我还没拿到结论，怎么回？",
+  "reply_text": "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。我的真实想法是……如果你方便，我们可以接着聊\n\n补上这轮关键点：未确认、同步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f92c2b67698b4ca485611c48f36b3608",
+  "trace_id": "trc_e5c8107d3d624bafa6e1bd8df8832b5e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

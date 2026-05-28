@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW4-069",
+  "category": "办公文档",
+  "title": "给团队发节后收心提醒。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：节后、收心。\n给团队发节后收心提醒。",
+  "reply_text": "可以直接发这版：\n\n各位同事好，节后开工，大家辛苦调整一下状态，尽快收心回到工作节奏中来。\n\n请大家今天重点做好三件事：1. 梳理手头任务和节前遗留事项，明确优先级；\n2. 对本周重点工作做一次计划同步，避免遗漏；\n3.需要协作或资源支持的事项，及时在群里沟通。\n\n新的一阶段我们继续保持节奏、提高效率，也欢迎大家相互提醒、相互配合。祝大家开工顺利！",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_da5d946a6c5742ba8416c446b971b1e5",
+  "trace_id": "trc_825c4c0ac4614a7ab989cf84bfd6e338",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

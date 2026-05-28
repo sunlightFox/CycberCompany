@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-171",
+  "category": "长短控制",
+  "title": "只回一句收到，不展开。",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：收到、一句。\n只回一句收到，不展开。",
+  "reply_text": "我接住这句：只回一句收到，不展开。\n\n这轮重点是收到、一句；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ddce6c13a993457394bc244a6930e004",
+  "trace_id": "trc_7327be9b5aeb4640b119bf8a15fe5d60",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

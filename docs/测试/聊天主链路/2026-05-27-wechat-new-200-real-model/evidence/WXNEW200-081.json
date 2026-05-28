@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-081",
+  "category": "HR招聘",
+  "title": "运营分析师简历筛选标准怎么写？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：Excel、SQL、书面表达。\n运营分析师简历筛选标准怎么写？",
+  "reply_text": "运营分析师筛选标准：\n硬性条件：Excel/SQL 基础、指标拆解能力、数据清洗能力、清楚的书面表达和业务复盘经验。\n加分项：看板经验、A/B 测试、自动化报表、增长或留存分析案例。\n风险信号：只写工具不写结果、指标堆砌但无归因、成果夸张却没有口径和基数。\n面试追问：让候选人讲一个指标异常案例，追问数据来源、分析路径、采取动作和最终结果。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8c81c723ba57405195c96e592ee5bdb0",
+  "trace_id": "trc_a5b99eaa48264161849a5a16db7db02a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

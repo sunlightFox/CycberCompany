@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-005",
+  "category": "闲聊",
+  "title": "我想说谢谢但别显得客套。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：谢谢、具体一点。\n我想说谢谢但别显得客套。",
+  "reply_text": "可以说得更像微信里熟人一点：\n\n“谢谢你啊，真的。你刚刚那一下挺帮到我的，比我自己硬扛好多了。”\n\n如果想再具体一点，也可以发：\n\n“谢谢你刚刚帮我把那事理清楚，我一下没那么慌了，真的挺有用的。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b0fd221daf2c487eb13d032a77dbf4de",
+  "trace_id": "trc_d43a0db6b96049a9942b8b8fe609ba6a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

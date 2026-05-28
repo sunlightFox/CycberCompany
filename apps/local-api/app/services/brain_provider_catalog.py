@@ -182,7 +182,7 @@ _PRESETS: tuple[ProviderPreset, ...] = (
         category="cloud",
         endpoint="https://api.openai.com/v1",
         api_key_env_vars=("OPENAI_API_KEY", "OPENAI_API_KEYS"),
-        default_model="gpt-5.5",
+        default_model="gpt-5.4-mini",
         models=(
             _model("gpt-5.5", context_window=400000, supports_vision=True, reasoning=True),
             _model("gpt-5.4-mini", context_window=400000, supports_vision=True, reasoning=True),
@@ -201,8 +201,10 @@ _PRESETS: tuple[ProviderPreset, ...] = (
         category="subscription",
         adapter_family="provider_plugin",
         implementation_status="catalog_only",
-        default_model="gpt-5.5",
-        models=(_model("gpt-5.5", context_window=400000, supports_vision=True, reasoning=True),),
+        default_model="gpt-5.4-mini",
+        models=(
+            _model("gpt-5.4-mini", context_window=400000, supports_vision=True, reasoning=True),
+        ),
         protocol_family="responses",
         request_format="responses",
         response_format="openai_responses",

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-036",
+  "category": "监督",
+  "title": "我想少喝奶茶，给一个温和记录法。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：记录、温和。\n我想少喝奶茶，给一个温和记录法。",
+  "reply_text": "别先戒，先温和记录7 天，只看规律，不评价自己。\n\n最小下一步：从今天开始，每次想喝或喝了奶茶，就记一行：\n\n`时间｜想喝程度0\n- 10｜最后有没有喝｜当时在干嘛`\n\n例子：下午3:40｜8分｜喝了半糖中杯｜开会后有点累\n\n规则很简单：- 不要求少喝，也不要求忍住- 想喝但没喝，也记- 喝了也不用补偿-7 天后只看一个问题：你最常在什么时候、什么状态下想喝小曜陪你用这个法子就行：先记录，不急着改变。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8d2437f080dc414c98513786d865586e",
+  "trace_id": "trc_2fb469eecbcf483781af6c2ba9e6f5c0",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

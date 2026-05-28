@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-024",
+  "category": "定时提醒",
+  "title": "提醒我给物业回电话，但我没说具体时间。",
+  "prompt": "处理提醒请求要说清时间、事项、边界；缺信息先问，不假装已创建。请自然提到：缺时间、物业。\n提醒我给物业回电话，但我没说具体时间。",
+  "reply_text": "我会先确认时间：你想哪一天、几点提醒你看请求要说清时间、事项、边界？\n如果是循环提醒，也要确认频率和结束条件；在你给出具体时间前，我不会创建模糊提醒\n\n补上这轮关键点：缺时间、物业。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_be9b30a59a5f4ef98facd4da938575ae",
+  "trace_id": "trc_a6b3f83f9a744c9fb57ff6c338ced564",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

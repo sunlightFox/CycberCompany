@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-079",
+  "category": "办公表格",
+  "title": "看板数字必须可复核，至少留什么？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：数字、证据。\n看板数字必须可复核，至少留什么？",
+  "reply_text": "我接住这句：看板数字必须可复核，至少留什么？。\n\n这轮重点是数字、证据；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a8fb693073cb458c9cf597472c372691",
+  "trace_id": "trc_eb307df0c76649a68aa665722d3737a6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

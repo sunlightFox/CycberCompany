@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-191",
+  "category": "审计追踪",
+  "title": "模型调用 trace 用来干什么？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：trace、回溯。\n模型调用 trace 用来干什么？",
+  "reply_text": "模型调用 trace主要是做审计追踪和问题回溯用的。\n\n它的作用不是暴露完整敏感内容，而是把同一个 case里的关键链路串起来：模型什么时候被调用、用了哪个模型、调用是否成功、有没有产出、后续是否投递、最终用户看到的回复是什么。这样排查问题时，可以先用 trace 定位链路，再结合真实模型事件、投递记录和截图等证据做交叉确认。\n\n简单说：trace 是“线索主干”，用于回溯一次模型调用从触发到回复的全过程；证据要分层看，不能只靠截图；同时审计时应做脱敏，只保留必要的时间、状态、调用关系和结果摘要，避免暴露用户隐私、prompt 原文或其他敏感信息。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_43dfade3adec42769e69ea38715da7ed",
+  "trace_id": "trc_ae4cb633cf4349bdbcab8849fffb8c8f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

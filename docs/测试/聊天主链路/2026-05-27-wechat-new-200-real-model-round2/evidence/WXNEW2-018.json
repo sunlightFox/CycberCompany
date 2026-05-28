@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-018",
+  "category": "计划",
+  "title": "帮我规划一次不累的家庭大扫除。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：分区、休息。\n帮我规划一次不累的家庭大扫除。",
+  "reply_text": "别想着一天把家“翻新”，这次按分区+轮换休息来做，目标是“明显变干净，但人不累趴”。 先定一个轻松节奏建议安排半天到一天，不要连续干。可以用这个节奏：-干40分钟",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e3697d7900f74109b44874dba6ff3f6e",
+  "trace_id": "trc_5aebca25d641481691a0e6c6c3ec4762",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-075",
+  "category": "办公表格",
+  "title": "报销表怎么设计状态列？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：状态、审批。\n报销表怎么设计状态列？",
+  "reply_text": "先按这几个点整理：状态、审批。\n\n围绕“报销表怎么设计状态列？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8697901009d74eab86c5a83ea04df164",
+  "trace_id": "trc_59aa3e222e124623a7b8640393d19aca",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

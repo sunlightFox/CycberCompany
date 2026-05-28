@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-009",
+  "category": "闲聊",
+  "title": "我想给自己一点鼓励，别鸡血。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：已经开始、慢慢来。\n我想给自己一点鼓励，别鸡血。",
+  "reply_text": "我接住这句：我想给自己一点鼓励，别鸡血。\n\n这轮重点是已经开始、慢慢来；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_844e5243b63e44f0a9859219ccfcf2f9",
+  "trace_id": "trc_66569404c491473788b337054151fb42",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

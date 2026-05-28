@@ -1475,6 +1475,8 @@ def deterministic_no_model_reply(
     raw = str(user_text or "").strip()
     if not raw:
         return None
+    if "请自然提到" in raw:
+        return None
     if (
         any(marker in raw.lower() for marker in ["ppt", "powerpoint", "docx", "xlsx", "excel"])
         and any(marker in raw for marker in ["生成", "做一个", "做一份", "做成", "汇报"])

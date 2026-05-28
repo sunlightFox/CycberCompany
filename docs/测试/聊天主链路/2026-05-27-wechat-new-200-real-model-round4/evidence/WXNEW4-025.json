@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-025",
+  "category": "提醒定时",
+  "title": "每季度最后一天提醒我备份财务资料。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：每季度、备份。\n每季度最后一天提醒我备份财务资料。",
+  "reply_text": "我能帮你整理这条提醒规则，但目前我不能直接替你创建系统提醒/日历事件，也不会自动执行任何设备动作或帮你备份文件。\n\n提醒内容可以设为：\n\n“每季度最后一天提醒我备份财务资料。”\n\n还缺一个确认：你希望每季度最后一天的几点提醒？例如：每季度最后一天09:00，或18:00。确认时间后，你可以把它添加到日历/提醒事项里。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a50879f7444a44f8a88996410e345169",
+  "trace_id": "trc_ce8c0483118c43c2b449a06fa85d4d12",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-013",
+  "category": "计划规划",
+  "title": "帮我把周末学习排轻一点，别塞满。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：周末、轻一点。\n帮我把周末学习排轻一点，别塞满。",
+  "reply_text": "理一下：周末就排轻一点，不塞满，重点是“保持手感 + 留出休息”。\n\n周六：轻学习 + 多休息\n\n上午安排一段主任务就够了：\n选一个最重要的内容学 60–90 分钟\n学完简单整理 10 分钟笔记\n\n下午不要排硬任务：\n可以做一点复习或刷几道题，30–45 分钟就停\n剩下时间放松、运动、出门都行\n\n晚上不安排正式学习：- 最多看一眼明天要做什么\n不熬夜补进度\n\n周日：收尾为主\n\n上午做一个小复盘：\n回顾周六学的内容\n补一下薄弱点，控制在 60 分钟左右\n\n下午安排轻量任务：\n做一组练习 / 背一点内容 / 整理错题，三选一\n不要三样都塞进去\n\n晚上留空：\n提前准备下周计划\n早点休息，让周末真的缓一缓\n\n整体原则\n\n这周末学习别排满，每天最多 2 个学习块。\n如果状态好，可以多做一点；状态一般，就完成最低量也算过关。重点不是拼时长，是别把自己压垮。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1cc98b19396941adb5130e9f6c20af0c",
+  "trace_id": "trc_2a3f125d97934d2889ae8c9751f61751",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

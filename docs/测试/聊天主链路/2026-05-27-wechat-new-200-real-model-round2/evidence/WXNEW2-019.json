@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-019",
+  "category": "计划",
+  "title": "我想把年度目标拆到本月，别太宏大。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：本月、可执行。\n我想把年度目标拆到本月，别太宏大。",
+  "reply_text": "先别把年度目标硬拆成12份。本月只抓一个小切片，做到能推进、能看见变化就行。本月我只完成年度目标里最关键的一个可见进展：\n\n补上这轮关键点：本月、可执行。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1198d1517eff47388f5877458907856b",
+  "trace_id": "trc_b1912a6954594ce4ba02c8e2d43c3484",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

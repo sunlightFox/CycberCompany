@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-038",
+  "category": "监督",
+  "title": "监督我每天散步，不要打卡焦虑。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：散步、不焦虑。\n监督我每天散步，不要打卡焦虑。",
+  "reply_text": "小曜来做“陪跑式监督”：不催、不喊口号，不把散步变成打卡焦虑。\n\n最小下一步就一个：今天找个方便的时间，出门走5 分钟就算完成。\n\n以后你每天来一句“我走了/没走”，我只帮你轻轻接住：\n- 走了：算数，结束。\n没走：不补债，明天继续。\n累了：楼下转一圈也可以。\n\n目标是让散步变得不焦虑，而不是多一个任务压着你。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_cc3c04d9ea944024b0b46fb02e5342b6",
+  "trace_id": "trc_c72d0455b96a465dab2c0aad4444b381",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

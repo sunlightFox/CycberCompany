@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-014",
+  "category": "计划",
+  "title": "我想周末整理电脑文件，但容易拖，怎么拆？",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：周末、三步。\n我想周末整理电脑文件，但容易拖，怎么拆？",
+  "reply_text": "我接住这句：我想周末整理电脑文件，但容易拖，怎么拆？。\n\n这轮重点是周末、三步；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_00c2f488b4af49bcb4722c2460443b19",
+  "trace_id": "trc_dfd8833747a3407a85f34b32b4c3b73e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

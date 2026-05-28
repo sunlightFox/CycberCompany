@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-077",
+  "category": "办公表格",
+  "title": "滚动预测表分哪几层？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：实际数、预算、预测。\n滚动预测表分哪几层？",
+  "reply_text": "滚动预测表建议分三层：\n1. 数据层：实际数 Actual、预算数 Budget、预测数 Forecast 分版本存放，字段包括期间、部门、科目、版本、金额。\n2. 规则层：已关账月份取实际数，未来月份取最新预测数，预算数只做基准对比。\n3. 展示层：输出全年滚动预测、预算差异、差异率和主要原因。\n复核边界：实际数锁定不改，预测版本保留时间戳和负责人，预算差异要能追到数据源、公式和审批版本。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ab8a5778ee4e4fd18180f3074bf31086",
+  "trace_id": "trc_ff22acf6e4d543f6adc1f384e6bb3aa0",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

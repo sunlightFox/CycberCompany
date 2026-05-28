@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-186",
+  "category": "渠道质量",
+  "title": "trace 怎么帮助回溯问题？",
+  "prompt": "测试治理场景要说清真实模型、微信投递、trace、最终可见回复。请自然提到：trace、回溯。\ntrace 怎么帮助回溯问题？",
+  "reply_text": "trace 对回溯问题的价值，主要是把一次“最终可见回复”背后的链路串起来，方便定位问题发生在哪一层，而不是只看微信里最后投递出去的那句话。\n确认真实模型与路由",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_de3001b375c94eb98ca78c9c409f10f3",
+  "trace_id": "trc_1a0caa8f1c0f4be998a24c89778556ef",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

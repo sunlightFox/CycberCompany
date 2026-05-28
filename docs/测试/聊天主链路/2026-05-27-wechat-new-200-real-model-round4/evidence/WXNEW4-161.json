@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-161",
+  "category": "语气排版",
+  "title": "把“已收到您的反馈”改自然。",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：收到、自然。\n把“已收到您的反馈”改自然。",
+  "reply_text": "可以改成：\n\n“收到，我这边看到了。”\n\n更像小吴本人一点、也更自然；\n如果想再轻一点：\n\n“收到，我看到了哈。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9dbd539d7fa84b3da4648b7cab643962",
+  "trace_id": "trc_0e6fc4763b494a69a8f8a5943ffd3ff8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

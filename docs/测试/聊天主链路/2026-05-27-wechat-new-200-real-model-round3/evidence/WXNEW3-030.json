@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-030",
+  "category": "提醒定时",
+  "title": "取消提醒前你要确认哪些信息？",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：取消、确认。\n取消提醒前你要确认哪些信息？",
+  "reply_text": "我这边看到几个相近的提醒：-以后每天早上9 点：吃药，但别给诊断建议- 明天下午4:10：回访客户\n- 24 分钟后：站起来活动，不要关应用你确认要取消哪一个后，我再处理。另外，我可以帮你创建或取消提醒；但如果提醒内容涉及“关应用”等设备动作，我不会自动执行设备操作，只会按时提醒你。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_704de6fe35f84b73bcae4b4bd3b1909b",
+  "trace_id": "trc_7f2a1bad63e44004aa135038bddb8628",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

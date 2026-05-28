@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-166",
+  "category": "语气排版",
+  "title": "规划回复为什么不能只鸡血？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：规划、步骤。\n规划回复为什么不能只鸡血？",
+  "reply_text": "因为“规划”不是打气，它本质上是把一件事从想做，拆到能做。\n只鸡血的问题是：听完当下很有劲，但明天还是不知道先干嘛、卡在哪、怎么判断自己有没有推进。\n这样很容易从“我可以”变成“我又没做到”\n\n补上这轮关键点：规划、步骤。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_62a9ca11957f4782b64c083bf2b8f0d4",
+  "trace_id": "trc_27bc668b59674a48ae80cdfd9ce8f135",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

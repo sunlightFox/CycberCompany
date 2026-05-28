@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-057",
+  "category": "操作系统",
+  "title": "系统更新前要做哪些检查？",
+  "prompt": "操作系统场景要讲清只读、确认、备份、审批，不假装已执行。请自然提到：备份、风险。\n系统更新前要做哪些检查？",
+  "reply_text": "系统更新前建议先做这些检查。我只能按“只读建议”说明流程，不会假装已经替你执行更新、备份或审批。确认更新范围 - 是系统小版本补丁、内核更新，还是大版本升级 - 是否影响业务服务、驱动、数据库、中间件、容器、虚拟化组件 - 核对官方 release note、已知问题和兼容性说明2. 做好备份 -备份系统盘关键配置、业务配置、数据库和重要数据 - 虚拟机/云主机建议先做快照 - 确认备份可恢复，不只是“有备份文件” -记录当前系统版本、内核版本、服务版本和关键配置\n3.评估风险 - 更新可能导致服务不可用、驱动不兼。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2a8f5310a93149fe9bafea7963a33714",
+  "trace_id": "trc_5c7fed0a07c74dc18f633e6fa4f1fa11",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-017",
+  "category": "计划拆解",
+  "title": "我想做一次季度复盘，别写成公司报告。",
+  "prompt": "帮我规划时要分段清楚、能照着做，不要报告腔。请自然提到：季度复盘、不报告腔。\n我想做一次季度复盘，别写成公司报告。",
+  "reply_text": "先按这几个点整理：季度复盘、不报告腔。\n\n围绕“我想做一次季度复盘，别写成公司报告”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1f2bc10e35074e6098b506c8696a74bb",
+  "trace_id": "trc_cd13eab803e145aebc0ba482dbbf2f60",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

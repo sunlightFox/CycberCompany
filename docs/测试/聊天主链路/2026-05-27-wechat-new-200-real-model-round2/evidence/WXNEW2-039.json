@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-039",
+  "category": "监督",
+  "title": "帮我把论文每天推进一点，别催命。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：每天、一点。\n帮我把论文每天推进一点，别催命。",
+  "reply_text": "已安排：以后每天早上9 点提醒你。\n\n我会按“监督和陪跑”的方式来，不喊口号、不催命；每天只给你一个最小下一步，让论文往前推进一点。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e271a6a999fe41d68ac4d968a18e9f78",
+  "trace_id": "trc_b09b6981781b4a8e8ce46188c66f6c5b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

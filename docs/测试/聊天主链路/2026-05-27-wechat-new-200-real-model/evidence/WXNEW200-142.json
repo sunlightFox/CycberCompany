@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-142",
+  "category": "计划",
+  "title": "我同时要回客户、买药、洗衣服，帮我分轻重。（变体）",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：回客户、买药、洗衣服。\n我同时要回客户、买药、洗衣服，帮我分轻重。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "先按轻重排：\n1. 回客户：先发一句短消息，别让对方一直等。\n2. 买药：如果身体不舒服或药急用，就提到第一位。\n3. 洗衣服：放最后，能晚一点，不要让它抢注意力。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3d9eef1c410847acb562f896c9335f50",
+  "trace_id": "trc_acfc4259348a475cb2c3ad0a3214bb7b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-004",
+  "category": "闲聊情绪",
+  "title": "朋友一直抱怨同一件事，我想回应但不陷进去。",
+  "prompt": "像微信里熟人一样自然回应，别系统腔，也别讲大道理。请自然提到：回应、边界。\n朋友一直抱怨同一件事，我想回应但不陷进去。",
+  "reply_text": "可以这样回，像微信里熟人那种不冷也不被拖进去：\n\n“我知道你这事真的挺烦的，我也愿意听你说两句。但我怕一直绕在这里你更难受，我也有点接不住。要不我们先想一个你现在能做的小步骤？”\n\n核心就是：先回应情绪，再把边界放轻一点说出来。别急着帮他解决，也别每次都陪着复盘同一遍。你可以关心，但不用把自己也耗进去。可以这样回，像微信里熟人那种不冷也不被拖进去：\n\n“我知道你这事真的挺烦的，我也愿意听你说两句。但我怕",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a3f020dea6fa4c56a142a0b2430d4e5c",
+  "trace_id": "trc_68a721d29441429794e5b3ceee75cc52",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

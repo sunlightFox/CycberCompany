@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-188",
+  "category": "渠道质量",
+  "title": "技术腔为什么要判失败？",
+  "prompt": "测试治理场景要说清真实模型、微信投递、trace、最终可见回复。请自然提到：技术腔、用户体验。\n技术腔为什么要判失败？",
+  "reply_text": "我接住这句：技术腔为什么要判失败？。\n\n这轮重点是技术腔、用户体验；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_152e0ee4f73d44579f98e9086a850902",
+  "trace_id": "trc_e6cc9c07c6fb45eb964b9323c733d0b6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

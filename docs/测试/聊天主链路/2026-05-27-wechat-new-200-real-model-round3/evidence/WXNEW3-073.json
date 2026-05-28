@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-073",
+  "category": "办公表格",
+  "title": "满意度只有 8 份反馈，怎么写边界？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：8 份、不能外推。\n满意度只有 8 份反馈，怎么写边界？",
+  "reply_text": "我接住这句：满意度只有 8 份反馈，怎么写边界？。\n\n这轮重点是8 份、不能外推；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ad5528e667cc47f9ad5397727a53bff6",
+  "trace_id": "trc_7a12d066738c47988f97dd9b6c13e2a4",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

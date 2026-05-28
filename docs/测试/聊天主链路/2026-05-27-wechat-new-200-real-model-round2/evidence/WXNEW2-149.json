@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-149",
+  "category": "生活办公混合",
+  "title": "身体不舒服但有交付，怎么降级安排？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：不舒服、降级。\n身体不舒服但有交付，怎么降级安排？",
+  "reply_text": "身体不舒服但还有交付，先降级，不硬扛满配。\n\n1. 只保最小交付：先交能说明结论和下一步的版本。\n2. 砍掉装饰项：排版、美化、延伸分析都往后放。\n3. 提前同步：告诉对方今天状态不舒服，会先给可用版本，细节后补。\n\n目标是不中断交代，也别把身体耗空。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ccac41f416434bedbe963fe228c90946",
+  "trace_id": "trc_8ac4443bbf3c47ebb938177c5c5b5edc",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

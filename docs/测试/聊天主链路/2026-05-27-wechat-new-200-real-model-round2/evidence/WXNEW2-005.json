@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-005",
+  "category": "闲聊",
+  "title": "我今天效率很低，别骂我，帮我收个尾。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：收尾、明天第一步。\n我今天效率很低，别骂我，帮我收个尾。",
+  "reply_text": "不骂你，今天效率低也不是世界末日。像微信里熟人说句实在的：先别硬撑了，我们做个轻收尾就行。\n\n今晚只做三件小事：\n\n1. 把今天已经做了的写两行，算进度，不否定自己。2. 把没做完的挑出来，最多留1\n- 2个明天继续。3. 定一个明天第一步：打开文档 / 看任务清单 / 回复最关键那条消息，越小越好。\n\n你现在就可以收尾了。今天到这儿，别跟自己较劲。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_46618e63512e4ac4a228d5bab410bfd4",
+  "trace_id": "trc_28486ffeb1df4c9390aa933c3fe8148a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-031",
+  "category": "监督陪跑",
+  "title": "监督我先打开文档，不要求写完。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：打开文档、不写完。\n监督我先打开文档，不要求写完。",
+  "reply_text": "我按“监督和陪跑”的方式来，不喊口号。\n\n- *下一步只有一个：打开文档。**\n\n打开后你只要回我：已打开。本轮就算完成，不写完，也不要求进入状态。\n如果你卡住了，也可以只回我：还没打开，我再给你更小一步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3efc0362c4ab452791252625b0fd4f76",
+  "trace_id": "trc_67100d427b714057911bcda19e42fa21",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-157",
+  "category": "提醒定时",
+  "title": "不要创建提醒，只写一句明早复核的文案。（变体）",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：不要创建、明早复核。\n不要创建提醒，只写一句明早复核的文案。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "不要创建提醒，只写文案：明早复核，先看结论是否站得住，再补证据；有疑点就标出来，不急着下定论。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0291fa087f6e4ca88f10f90937d278fe",
+  "trace_id": "trc_db92a39fbb3e4edb804add95bbdbc2aa",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

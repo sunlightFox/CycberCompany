@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-165",
+  "category": "监督",
+  "title": "我卡在第一步，帮我拆到 2 分钟能做。（变体）",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：2 分钟、第一步。\n我卡在第一步，帮我拆到 2 分钟能做。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "能拆，但现在缺口是——你没说“第一步”具体是什么。\n\n先用这个2 分钟版本：\n\n▸ 1. 打开要做的那个东西2.只找到入口/文件/页面3. 写下一句：我下一步要做什么4. 到点就停，不要求完成你现在只要回我一句：“我卡住的第一步是：___”\n\n小曜再帮你压到真正2 分钟能动的那一下。先给结论：",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_5166ce7de2674a7c89729f4fb60499d5",
+  "trace_id": "trc_6f4a60112ef946b39ff82452cd45a5a9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

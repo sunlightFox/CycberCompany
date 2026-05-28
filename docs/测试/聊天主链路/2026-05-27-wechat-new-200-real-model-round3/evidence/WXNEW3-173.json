@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-173",
+  "category": "长短控制",
+  "title": "80 字以内讲清一个重点。",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：80 字、重点。\n80 字以内讲清一个重点。",
+  "reply_text": "我接住这句：80 字以内讲清一个重点。\n\n这轮重点是80 字、重点；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a4694a5268994293a6b1b6bf9c192060",
+  "trace_id": "trc_7351a90f9d0a4ab19cad050aadd22eb1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

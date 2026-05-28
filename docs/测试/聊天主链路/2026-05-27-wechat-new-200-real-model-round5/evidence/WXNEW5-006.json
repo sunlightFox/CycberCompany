@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-006",
+  "category": "闲聊情绪",
+  "title": "我把事情搞砸了一点，想先稳住自己。",
+  "prompt": "像微信里熟人一样自然回应，别系统腔，也别讲大道理。请自然提到：稳住、下一步。\n我把事情搞砸了一点，想先稳住自己。",
+  "reply_text": "先别急，稳住。搞砸“一点”通常还没到不可收拾，先把自己从慌里拉出来最重要。\n\n你现在就做一件事：喝口水，坐稳，慢慢呼吸三轮。下一步我们再看：到底发生了啥、有没有马上要补救的点。我在呢，像微信里熟人陪你捋。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8538d432bef341db833e52c48900c44f",
+  "trace_id": "trc_d36297756d26471ca95825aa6d922aab",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

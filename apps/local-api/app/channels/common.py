@@ -25,6 +25,7 @@ class ChannelBindingNotificationProvider:
             isinstance(voice_reply, dict)
             and voice_reply.get("requested")
             and not voice_reply.get("should_render")
+            and not voice_reply.get("allow_text_fallback")
         ):
             return ProviderDeliveryResult(
                 status="rejected",

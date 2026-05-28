@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-023",
+  "category": "提醒定时",
+  "title": "半小时后叫我休息眼睛，不要关电脑。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：半小时后、不关电脑。\n半小时后叫我休息眼睛，不要关电脑。",
+  "reply_text": "提醒内容是：半小时后提醒你休息眼睛。\n\n但先说清楚：我当前不能在后台自动创建或触发定时提醒；\n如果你有可用的提醒/日历/闹钟工具，需要你确认授权或自己设置。另外我不会自动执行设备动作，所以不关电脑。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4ae824dd79104174a15c4ddb57ac96c1",
+  "trace_id": "trc_1a8225721bd148598926e165c2a3f515",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-191",
+  "category": "审计追踪",
+  "title": "为什么模型调用要有 trace？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：trace、回溯。\n为什么模型调用要有 trace？",
+  "reply_text": "模型调用要有 trace，核心是为了把一次请求从入口到模型调用、再到消息投递和用户可见回复串成一条可回溯的审计链路。\n便于回溯问题",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f2ee63a6bef845e18ef4bba2b84aecfe",
+  "trace_id": "trc_9d1d78ec8082457790759f6783245c17",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

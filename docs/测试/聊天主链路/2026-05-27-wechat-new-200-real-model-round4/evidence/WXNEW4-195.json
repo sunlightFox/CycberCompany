@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-195",
+  "category": "审计追踪",
+  "title": "消息投递证据包括什么？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：投递、证据。\n消息投递证据包括什么？",
+  "reply_text": "消息投递证据一般包括这些内容，用来串起 trace、证明投递链路，同时避免暴露敏感信息： trace 标识：如 审计记录、request_id、消息记录，用于关联一次消息从创建到投递的全链路。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d941c4f815bb4e9b9367bcbfae4fe0c2",
+  "trace_id": "trc_711311a868094bf7bd25d47b28baf26a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

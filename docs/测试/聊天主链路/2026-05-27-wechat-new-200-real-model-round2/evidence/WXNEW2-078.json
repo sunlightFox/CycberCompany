@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-078",
+  "category": "办公表格",
+  "title": "月度经营看板先看哪三类指标？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：收入、成本、现金流。\n月度经营看板先看哪三类指标？",
+  "reply_text": "我接住这句：月度经营看板先看哪三类指标？。\n\n这轮重点是收入、成本、现金流；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ed1a883b05014dc6b18c6751fa2968a7",
+  "trace_id": "trc_228a5e810c694b6a802041cbaa8b9f7b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

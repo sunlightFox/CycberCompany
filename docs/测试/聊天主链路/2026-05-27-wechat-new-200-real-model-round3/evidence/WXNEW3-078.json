@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-078",
+  "category": "办公表格",
+  "title": "现金流看板先看哪三项？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：现金流、应收、应付。\n现金流看板先看哪三项？",
+  "reply_text": "我接住这句：现金流看板先看哪三项？。\n\n这轮重点是现金流、应收、应付；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_50fcb3667ca346e78eaf65c56cfe39e4",
+  "trace_id": "trc_09c0a4b5b78e4d1abf25fb1f0350c38f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

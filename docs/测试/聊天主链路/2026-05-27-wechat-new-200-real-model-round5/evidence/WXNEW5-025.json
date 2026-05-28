@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-025",
+  "category": "定时提醒",
+  "title": "每月 25 号提醒我核对发票。",
+  "prompt": "处理提醒请求要说清时间、事项、边界；缺信息先问，不假装已创建。请自然提到：每月 25 号、发票。\n每月 25 号提醒我核对发票。",
+  "reply_text": "把提醒内容整理好，但我这里不能直接创建真实提醒。\n\n还缺一个信息：你希望每月25号几点提醒你核对发票？\n\n比如：每月25号上午9:00，提醒「核对发票」\n\n补上这轮关键点：每月 25 号、发票。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f546412450f9427084ba5c82ecca1fca",
+  "trace_id": "trc_0fde94b8421945d29557e3b1de8969fb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

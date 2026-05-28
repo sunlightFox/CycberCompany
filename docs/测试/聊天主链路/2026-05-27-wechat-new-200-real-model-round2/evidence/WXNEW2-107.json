@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-107",
+  "category": "知识研究",
+  "title": "竞品调研怎么避免只看宣传？",
+  "prompt": "知识类回答要说明证据、来源、样本、时效，不乱外推。请自然提到：宣传、验证。\n竞品调研怎么避免只看宣传？",
+  "reply_text": "我接住这句：竞品调研怎么避免只看宣传？。\n\n这轮重点是宣传、验证；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_471b4af2431a4c4397962c94c31fa77a",
+  "trace_id": "trc_416f91a579514f319f4f36ec487e0ac5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

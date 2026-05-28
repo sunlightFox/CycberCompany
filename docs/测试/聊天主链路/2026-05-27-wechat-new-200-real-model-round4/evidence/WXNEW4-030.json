@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-030",
+  "category": "提醒定时",
+  "title": "如果我说取消一个提醒，你要先确认什么？",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：取消、哪一条。\n如果我说取消一个提醒，你要先确认什么？",
+  "reply_text": "我接住这句：如果我说取消一个提醒，你要先确认什么？。\n\n这轮重点是取消、哪一条；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9f4424d0102b45b98b1fe110ee52fd4b",
+  "trace_id": "trc_69dde6ad69c04098b3058b88694a544b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-001",
+  "category": "闲聊",
+  "title": "我刚醒但脑子还没启动，陪我轻轻开机。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：先喝水、小步。\n我刚醒但脑子还没启动，陪我轻轻开机。",
+  "reply_text": "醒啦？先别急着启动，像微信里熟人陪你那种：先喝水，坐起来缓一缓。\n\n我们小步来——先把脚放下床边，深呼吸一下。然后喝两口水，看看窗外或者房间里一个固定的东西。脑子不用马上清醒，先让身体上线就行。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_7a3011e5b6de4d158df9e878ca6bfa3b",
+  "trace_id": "trc_963346c8eefd42c3b462118ec3c6ad58",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

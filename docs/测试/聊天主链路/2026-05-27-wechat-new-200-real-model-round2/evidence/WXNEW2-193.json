@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-193",
+  "category": "审计追踪",
+  "title": "审批记录里不能放什么？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：secret、敏感。\n审批记录里不能放什么？",
+  "reply_text": "审批记录里不能放可直接暴露敏感信息的内容，尤其是：\n\n- 明文密码、密钥、token、API key、secret- 私钥、证书内容、签名原文等凭据材料\n- 个人敏感信息或业务敏感数据的原文- 可复用的登录态、验证码、Cookie、授权头- 未脱敏的请求/响应全文、数据库结果、日志片段审计追踪场景可以记录 trace 和证据，但应记录“可核验、不可滥用”的信息，比如 审计记录、时间、操作者、审批动作、资源标识、脱敏后的摘要、哈希、证据引用位置等。原则是：能说明依据和链路，但不把 secret 或其他敏感内容放进审批记录里。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ea2f345fb7ad4dde9d7af43e44d52f46",
+  "trace_id": "trc_5b679d29b7244e3083f6cba113cdb0db",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

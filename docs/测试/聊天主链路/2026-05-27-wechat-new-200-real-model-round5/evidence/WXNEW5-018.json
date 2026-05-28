@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-018",
+  "category": "计划拆解",
+  "title": "下午低能量，只能做两件轻任务，帮我排。",
+  "prompt": "帮我规划时要分段清楚、能照着做，不要报告腔。请自然提到：低能量、两件。\n下午低能量，只能做两件轻任务，帮我排。",
+  "reply_text": "我接住这句：下午低能量，只能做两件轻任务，帮我排。\n\n这轮重点是低能量、两件；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_02b3cb4390ec493bbe130dda467c1d05",
+  "trace_id": "trc_c5efcc0de35e42768c96ef0ea4ebfd67",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

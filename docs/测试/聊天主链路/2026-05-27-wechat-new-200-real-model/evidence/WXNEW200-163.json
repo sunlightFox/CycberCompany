@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-163",
+  "category": "监督",
+  "title": "我又想逃避汇报，给我一句能开始的话。（变体）",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：汇报、开始。\n我又想逃避汇报，给我一句能开始的话。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "先打开汇报文档，写第一句：“我先同步目前进展，完成了哪些、卡在哪里、下一步准备怎么做。”\n\n不用写完，先开始这一句。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_5ee6a6d9c50b46898b3e334538fc3b16",
+  "trace_id": "trc_2c3a4f2ed1d84d71b062d14b69f0b258",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

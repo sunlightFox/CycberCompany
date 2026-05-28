@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-031",
+  "category": "监督陪跑",
+  "title": "监督我先打开文档，不要求写完。",
+  "prompt": "做监督和陪跑要给最小下一步，不要像打卡机器或教练口号。请自然提到：打开文档、不写完。\n监督我先打开文档，不要求写完。",
+  "reply_text": "我只盯这一小步：先打开文档，不写完。\n\n打开就算完成，不用起标题、不用写正文。你现在去打开，回来发我一句“打开了”就行。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_07d5513c533a456396cc5fbdcc31f3dd",
+  "trace_id": "trc_38a99ff182914679a92bc5fe2ac34b80",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

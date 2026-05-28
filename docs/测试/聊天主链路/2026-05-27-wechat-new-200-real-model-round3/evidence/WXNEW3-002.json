@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-002",
+  "category": "闲聊",
+  "title": "我突然有点空，不想被安排任务。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：有点空、不安排。\n我突然有点空，不想被安排任务。",
+  "reply_text": "我接住这句：我突然有点空，不想被安排任务。\n\n这轮重点是有点空、不安排；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1741c53e29914ba4b8f2e2392ab83273",
+  "trace_id": "trc_b5aaee3a871f48e98585ae13568f6225",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-022",
+  "category": "提醒定时",
+  "title": "每周三晚上提醒我倒垃圾。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：每周三、倒垃圾。\n每周三晚上提醒我倒垃圾。",
+  "reply_text": "可以创建“每周三提醒你倒垃圾”的定时提醒，但“晚上”还缺具体时间，不能准确落到几点。\n\n请确认一下：每周三晚上几点提醒？比如20:00 或21:00。到点我只会提醒你，不会自动执行任何设备动作，也不会替你倒垃圾。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1ec8dbb228734314b2719da0b9492630",
+  "trace_id": "trc_8630d258dbfe46cabd815b8bfcd69b25",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-175",
+  "category": "模型语气",
+  "title": "怎么避免一上来就列大标题？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：先回应、再分点。\n怎么避免一上来就列大标题？",
+  "reply_text": "关键是别一开口就像写方案。先像人一样接住对方的情绪或问题，再分点补充。\n\n比如不要上来写：\n\n- *一、道歉**二、解释三、补救\n\n这样会显得很机械。\n\n可以改成小吴那种更自然的开场：\n\n“昨天我那句话确实说重了，先跟你道个歉。我不是想把这事糊弄过去，是觉得当时没说好，想重新把话说清楚。”\n\n然后再轻一点地分点：\n\n“我想说三件事：第一，我当时的语气不对，这个我认。第二，我不是故意否定你，只是表达得太急了。第三，如果你愿意，我们可以先从最让你不舒服的那句话聊起。”\n\n也就是：先回应，再分点。前面先给一句真实的人话，把情绪接住；后面再用“我想说几件事”“我分开说一下”来承接，就不会像一上来列大标题。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c6571259a19c4107ba50e3674377e34f",
+  "trace_id": "trc_ff92930af6554fc3adb01725950db0d0",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

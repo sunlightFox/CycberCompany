@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-083",
+  "category": "HR招聘",
+  "title": "同事问我为什么不参加聚餐，我不想说私人原因，给一句自然边界。",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：聚餐、隐私。\n同事问我为什么不参加聚餐，我不想说私人原因，给一句自然边界。",
+  "reply_text": "可以自然一点说：这次我就不参加聚餐了，想留一点私人时间处理自己的安排。具体原因我就不展开啦，你们好好玩；下次合适的话我再一起去。这样既有边界，也不把隐私摊开讲。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f26aedf6987e4523bc6876214420d903",
+  "trace_id": "trc_5f81309ef91f4e73bbcf7f7774ccba93",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

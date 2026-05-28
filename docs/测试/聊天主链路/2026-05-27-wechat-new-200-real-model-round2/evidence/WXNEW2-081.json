@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-081",
+  "category": "HR办公",
+  "title": "候选人面试评价怎么写才不主观？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：证据、岗位要求。\n候选人面试评价怎么写才不主观？",
+  "reply_text": "我接住这句：候选人面试评价怎么写才不主观？。\n\n这轮重点是证据、岗位要求；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ffb567718cb34d98af35f0ffe2028f86",
+  "trace_id": "trc_dca9bc5edb1f499b8ef313ab51fd28dd",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

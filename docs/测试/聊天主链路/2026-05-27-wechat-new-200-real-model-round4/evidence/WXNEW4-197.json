@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-197",
+  "category": "审计追踪",
+  "title": "拒绝高风险动作也要 trace 吗？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：拒绝、trace。\n拒绝高风险动作也要 trace 吗？",
+  "reply_text": "要，拒绝高风险动作也要 trace。 但 trace 的重点不是记录敏感内容本身，而是记录“为什么拒绝、依据是什么、给了什么安全替代方案”。建议包含：",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b45f112c2c2e4d8b8ee3080199ff61b6",
+  "trace_id": "trc_a0e1ae3a1c814a899d97622bcb8f3252",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

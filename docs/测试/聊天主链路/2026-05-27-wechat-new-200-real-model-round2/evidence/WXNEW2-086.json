@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-086",
+  "category": "HR办公",
+  "title": "试用期沟通纪要要写哪些内容？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：试用期、证据。\n试用期沟通纪要要写哪些内容？",
+  "reply_text": "我接住这句：试用期沟通纪要要写哪些内容？。\n\n这轮重点是试用期、证据；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_11b23402d8704a7b8b9829c70cfe5817",
+  "trace_id": "trc_91f920d38ddc4a429a5052e5b4fd2954",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -26,6 +26,11 @@ class MemorySource(ApiModel):
     artifact_id: EntityId | None = None
     media_io_request_id: EntityId | None = None
     attachment_type: str | None = None
+    goal_id: EntityId | None = None
+    checkin_id: EntityId | None = None
+    intervention_id: EntityId | None = None
+    signal_kind: str | None = None
+    payload_keys: list[str] = Field(default_factory=list)
     trace_id: EntityId | None = None
 
 

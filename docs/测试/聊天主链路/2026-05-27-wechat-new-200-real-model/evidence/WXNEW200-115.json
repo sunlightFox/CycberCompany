@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-115",
+  "category": "多轮记忆",
+  "title": "刚才所有风格切换都只在当前聊天有效。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：当前聊天、长期记忆。\n刚才所有风格切换都只在当前聊天有效。",
+  "reply_text": "收到，刚才所有风格切换都只在当前聊天有效，不写进长期记忆。后面我会恢复默认的小耀相处方式；除非你明确说要长期保存，并说明 source，我才会更新长期偏好。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_de96c89cc39f47429fdaa42017475dcf",
+  "trace_id": "trc_ead9ad733b364f70a321a8d30449bb89",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-015",
+  "category": "计划规划",
+  "title": "我想 7 天准备一次分享，别搞太复杂。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：7 天、分享。\n我想 7 天准备一次分享，别搞太复杂。",
+  "reply_text": "我接住这句：我想 7 天准备一次分享，别搞太复杂。\n\n这轮重点是7 天、分享；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_bac6dfb3f3484941ba7a050a146731a8",
+  "trace_id": "trc_95052c38da2349ebbaece6773b51a064",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

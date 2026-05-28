@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-056",
+  "category": "操作系统",
+  "title": "压缩备份一个目录前，要确认哪些信息？",
+  "prompt": "操作系统场景要讲清只读、确认、备份、审批，不假装已执行。请自然提到：路径、备份。\n压缩备份一个目录前，要确认哪些信息？",
+  "reply_text": "可以归纳成三层：\n📌 1. 执行层：确认、备份，表现为推进节奏和日常反馈不够稳定。\n2. 协同层：审批、不假装已执行。请自然提到：路径，说明输入、沟通和验收之间没有及时对齐。\n3. 机制层：需要补上明确负责人、变更记录、测试口径和固定同步节奏，否则同类问题会反复出现。\n\n边界：这只是只读方案，不执行、不修改文件；需要保留权限和审计记录，避免把读取说成写入。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d4fc198260a64b8893e7a3a9226577f6",
+  "trace_id": "trc_bf03206c2d3a4aa99a7bec31c50abf3e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

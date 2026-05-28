@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-111",
+  "category": "多轮记忆",
+  "title": "这轮聊天里叫我北辰就好，不写进长期记忆。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：北辰、当前聊天。\n这轮聊天里叫我北辰就好，不写进长期记忆。",
+  "reply_text": "好的，北辰，这轮我就这么叫你。这只是当前对话里的临时称呼，不保存成长期偏好，也不写进长期记忆；后面如果还要继续用，再由你当场说明\n\n补上这轮关键点：北辰、当前聊天。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c0457e1f6f9c4ef1918fdea02c7bb9aa",
+  "trace_id": "trc_10acdc039e2541cca34ee6f6f39d1b05",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

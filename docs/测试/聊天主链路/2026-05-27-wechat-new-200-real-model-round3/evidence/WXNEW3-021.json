@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-021",
+  "category": "提醒定时",
+  "title": "明早 7:40 提醒我拿工牌。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：明早 7:40、工牌。\n明早 7:40 提醒我拿工牌。",
+  "reply_text": "已创建提醒：明早7:40 提醒你拿工牌。\n\n目前不缺额外确认；到点我只会发提醒，不会自动执行任何设备动作\n\n补上这轮关键点：明早 7:40、工牌。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4e5ddfc862284549b90068edb7342575",
+  "trace_id": "trc_c7d7b9a7843c4736ae0eff3c2aafbd8b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

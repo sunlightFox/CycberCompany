@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-199",
+  "category": "审计追踪",
+  "title": "多轮任务怎么追踪每一步？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：步骤、状态。\n多轮任务怎么追踪每一步？",
+  "reply_text": "多轮任务建议按“步骤级 trace”来追踪：每一步都记录它的目标、输入依据、执行状态、产出证据和下一步关系，但不要把敏感信息原文暴露出来。\n给整轮任务一个 审计记录",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e0c4b3aa58ae4079ba988da6ed58c6b2",
+  "trace_id": "trc_48b22191d1dc4de6b31e66ff562a7c7a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

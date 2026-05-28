@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-169",
+  "category": "语气排版",
+  "title": "复杂问题先给结论还是过程？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：结论、过程。\n复杂问题先给结论还是过程？",
+  "reply_text": "复杂问题先给结论，再讲过程。\n\n这样对方能先知道方向，不用一路猜你想表达什么；后面再补过程、依据和关键取舍，就会更好理解。\n\n我一般会这样说：\n\n>结论先说：我建议选 A。>过程是这样的：我看了成本、风险和落地难度，A 虽然不是最完美，但现在最稳。\n\n如果问题特别敏感、结论可能被误解，也可以先铺一句背景，但别铺太长。核心还是：先让人抓住结论，再用过程支撑它。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f2f4e765e9d34ea8b31a633a30ab8568",
+  "trace_id": "trc_11f3bde64f6741f2b9dcba50cb54d4cd",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

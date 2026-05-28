@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-012",
+  "category": "计划规划",
+  "title": "我想把三件杂事塞进午休，但别太满。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：午休、三件。\n我想把三件杂事塞进午休，但别太满。",
+  "reply_text": "把午休当成“顺手处理一下”，别当成赶场。*前3分钟：先挑顺序把三件杂事快速看一眼，按这个顺序排：1. 最容易完成的\n2. 今天最值得处理的\n3. 可以只推进一点的接下来20分钟：只认真做两件第一件控制在8—10分钟，选最轻的，做完就停。第二件也给10分钟左右，能完成最好，卡住就记一下下一步，别硬耗。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_95e55f2c10284a1aa00d8ed5c6a24f7a",
+  "trace_id": "trc_346e0dc7ef3f4c8cbada49f5cc88b8b5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

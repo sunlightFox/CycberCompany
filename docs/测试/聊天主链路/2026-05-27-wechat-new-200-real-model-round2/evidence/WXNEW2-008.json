@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-008",
+  "category": "闲聊",
+  "title": "我做错了一件小事，帮我说一句不逃避的话。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：抱歉、补救。\n我做错了一件小事，帮我说一句不逃避的话。",
+  "reply_text": "我接住这句：我做错了一件小事，帮我说一句不逃避的话。\n\n这轮重点是抱歉、补救；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_84271656a3ac4b35a8819564d9380f65",
+  "trace_id": "trc_343b3b7337d449e0b8237042462f8cec",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

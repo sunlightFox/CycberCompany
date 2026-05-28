@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-179",
+  "category": "模型语气",
+  "title": "复杂问题怎么先给结论？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：结论、再展开。\n复杂问题怎么先给结论？",
+  "reply_text": "先一句话定判断 比如：“我建议先做 A，不建议一上来做 B。\n” 补一句边界/前提 比如：“前提是我们现在更看重稳定性，而不是最快上线。\n”\n\n补上这轮关键点：结论、再展开。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4c00ecb962ad4d84b3156cf3c9f715cc",
+  "trace_id": "trc_36f337edc0844e2f9471bcbb836b1ccd",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

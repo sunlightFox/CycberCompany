@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-177",
+  "category": "长短控制",
+  "title": "长答让人累在哪里？",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：太长、负担。\n长答让人累在哪里？",
+  "reply_text": "长答让人累，通常不只是因为字数多，而是因为它把理解成本转嫁给了用户。太长，信息密度不稳 用户本来只想要一个结论，结果要先穿过背景、解释、例子，才能找到重点\n\n补上这轮关键点：太长、负担。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_41510a6850bc4dd9a61878f0773caae2",
+  "trace_id": "trc_cb9fff2c10b14ec8839a1d7192819252",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

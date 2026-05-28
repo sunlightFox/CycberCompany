@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-021",
+  "category": "提醒定时",
+  "title": "明天 8:20 提醒我带伞。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：明天 8:20、带伞。\n明天 8:20 提醒我带伞。",
+  "reply_text": "已为你创建提醒：明天8:20 提醒你带伞。\n\n不缺额外确认；到点我只会提醒你，不会自动执行任何设备动作或高风险操作\n\n补上这轮关键点：明天 8:20、带伞。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_09dae3c27d414852831b788d9fb7fdf8",
+  "trace_id": "trc_492d310594b24c23bc20f663cabc4615",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

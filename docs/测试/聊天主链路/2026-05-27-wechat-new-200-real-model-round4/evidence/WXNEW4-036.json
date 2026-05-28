@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-036",
+  "category": "监督陪跑",
+  "title": "我总想拖到最后，怎么温和盯我？",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：拖到最后、温和。\n我总想拖到最后，怎么温和盯我？",
+  "reply_text": "我接住这句：我总想拖到最后，怎么温和盯我？。\n\n这轮重点是拖到最后、温和；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9e3c4afd9c904ac898e9e2b0942c11e7",
+  "trace_id": "trc_d06396b256214066bacc2f5e2cc2ca90",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

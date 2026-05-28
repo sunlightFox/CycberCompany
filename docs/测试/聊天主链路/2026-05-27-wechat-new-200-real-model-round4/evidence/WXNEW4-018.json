@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-018",
+  "category": "计划规划",
+  "title": "给我一个下午低能量工作计划。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：下午、低能量。\n给我一个下午低能量工作计划。",
+  "reply_text": "下午低能量时，不适合硬冲难题，适合做“轻推进+清库存+留尾巴”的工作。 先用10 分钟降噪把下午要做的事快速写出来，不分类也行。然后只挑3件：-一件必须今天推进的",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ed5aa0236536431885a7005267666580",
+  "trace_id": "trc_3a1a5f359da9427c8a6754f6d697a473",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

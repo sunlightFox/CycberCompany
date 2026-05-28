@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-038",
+  "category": "监督陪跑",
+  "title": "我想连续四天整理桌面，每天 5 分钟。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：四天、5 分钟。\n我想连续四天整理桌面，每天 5 分钟。",
+  "reply_text": "我们就按“四天、每天5 分钟”来，不做大扫除，也不喊口号。选桌面上最碍眼的一小块，比如键盘旁、杯子旁、桌角。开5 分钟，只做三件事：",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9745a031bb0e47fd9e9572e4abde8aee",
+  "trace_id": "trc_e254da5086c14760abcfcd6c71ec898e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

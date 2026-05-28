@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-150",
+  "category": "计划",
+  "title": "我想学 Python，每天只有 25 分钟，怎么排？（变体）",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：25 分钟、Python。\n我想学 Python，每天只有 25 分钟，怎么排？\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "我接住这句：我想学 Python，每天只有 25 分钟，怎么排？。\n\n这轮重点是25 分钟、Python；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9ad3d661caf84abb80892e15073a6f06",
+  "trace_id": "trc_8b1b8c1ac6c64e8baaf1694f42f254bb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

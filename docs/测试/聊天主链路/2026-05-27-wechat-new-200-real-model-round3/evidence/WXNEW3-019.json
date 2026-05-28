@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-019",
+  "category": "计划规划",
+  "title": "早上总拖延，给我一个不痛苦的开始顺序。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：早上、顺序。\n早上总拖延，给我一个不痛苦的开始顺序。",
+  "reply_text": "我接住这句：早上总拖延，给我一个不痛苦的开始顺序。\n\n这轮重点是早上、顺序；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_80873f6fb29649a98e6a2ce2dae34b31",
+  "trace_id": "trc_d6e24b672b8d4affa90626a4a298905f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

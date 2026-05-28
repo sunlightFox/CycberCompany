@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-116",
+  "category": "知识研究",
+  "title": "读论文要摘哪些字段？",
+  "prompt": "知识类回答要说明证据、来源、样本、时效，不乱外推。请自然提到：方法、样本。\n读论文要摘哪些字段？",
+  "reply_text": "只有少量用户反馈时，报告要把“样本观察”和“整体结论”分开写。开头先标清：本报告基于当前 12 条用户反馈，只反映这个样本里的共性问题和倾向，不代表全部用户。正文只归纳样本里真实出现的主题、原话和频次，不用“用户普遍”“大多数人都”这类放大的说法。\n最后补一段边界：样本量小、来源有限，适合做线索和下一步验证，不适合直接当成全量判断\n\n补上这轮关键点：方法、样本。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_de402db8bdf440c79abbccabf0166dae",
+  "trace_id": "trc_f823ae5b117141e283b44d432a8dc9f5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-114",
+  "category": "多轮记忆",
+  "title": "纠正偏好：以后先看风险，再看结论。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：风险、结论。\n纠正偏好：以后先看风险，再看结论。",
+  "reply_text": "我接住这句：纠正偏好：以后先看风险，再看结论。\n\n这轮重点是风险、结论；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_828f0f0bd1a04f28808e630be6b02410",
+  "trace_id": "trc_28f2636ab7c24c4190a1ba5b40d1c05b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

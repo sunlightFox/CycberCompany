@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-138",
+  "category": "办公协作",
+  "title": "把紧急事项分派给两个人，话术怎么写？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：负责人、截止时间。\n把紧急事项分派给两个人，话术怎么写？",
+  "reply_text": "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。我的真实想法是……如果你方便，我们可以接着聊\n\n补上这轮关键点：负责人、截止时间。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f0413c3760eb4e178fd64094fc717208",
+  "trace_id": "trc_dba88044e8f94537b62142e4847b5b20",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

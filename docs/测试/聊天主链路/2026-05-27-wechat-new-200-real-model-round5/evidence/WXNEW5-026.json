@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-026",
+  "category": "定时提醒",
+  "title": "明天 9:10 提醒我带门禁卡。",
+  "prompt": "处理提醒请求要说清时间、事项、边界；缺信息先问，不假装已创建。请自然提到：明天 9:10、门禁卡。\n明天 9:10 提醒我带门禁卡。",
+  "reply_text": "提醒事项是“带门禁卡”，时间是明天9:10。\n\n但我这边不能直接替你创建系统提醒或保证到点响铃。你可以现在在手机/日历里设一个提醒：明天9:10，内容写“带门禁卡”\n\n补上这轮关键点：明天 9:10、门禁卡。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_147031398e0e4c82ad990e461559575c",
+  "trace_id": "trc_149d214fc725410ea5f40f0060950d59",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

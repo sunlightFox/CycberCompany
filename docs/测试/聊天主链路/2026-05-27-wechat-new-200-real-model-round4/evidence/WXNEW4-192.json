@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-192",
+  "category": "审计追踪",
+  "title": "工具失败日志要写哪些字段？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：失败原因、时间。\n工具失败日志要写哪些字段？",
+  "reply_text": "工具失败日志建议写“能追踪、能复盘、能举证，但不暴露敏感信息”的字段。审计记录 / request_id\n\n补上这轮关键点：失败原因、时间。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_01763da17149421ba08305b6b3b20e49",
+  "trace_id": "trc_6d14ebd5a9d94743a2d4af36f62d8112",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

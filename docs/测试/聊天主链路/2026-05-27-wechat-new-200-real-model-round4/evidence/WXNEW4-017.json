@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-017",
+  "category": "计划规划",
+  "title": "我想做一次不累的年度整理。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：年度整理、不累。\n我想做一次不累的年度整理。",
+  "reply_text": "我们就把这次年度整理做得轻一点：不追求完整复盘，不做自我审判，只是把这一年简单收个尾，让你看清楚哪些值得留下，哪些可以放下。工作 / 学习\n- 生活状态- 健康\n- 关系- 钱和消费- 情绪- 兴趣和个人成长挑3～5 个就够了。这一步的目标不是全面，而是让年度整理能轻松开始\n\n补上这轮关键点：年度整理、不累。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_158a2f0ae1ac48929de5b472fecb88e4",
+  "trace_id": "trc_6ee98e53ffcf4ad2af07365ea1077b03",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

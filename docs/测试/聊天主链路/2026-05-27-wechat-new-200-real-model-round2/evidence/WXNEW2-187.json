@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-187",
+  "category": "长短控制",
+  "title": "回复太长会造成什么问题？",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：太长、负担。\n回复太长会造成什么问题？",
+  "reply_text": "回复太长主要会带来这些问题：\n\n1. 阅读负担变重：用户只是想快速确认重点，内容太长会让人不想读完。2. 重点被稀释：关键信息埋在大段文字里，反而不清楚结论是什么。3. 不符合用户意图：如果用户只问一个简单问题，长篇解释会显得过度。4. 沟通效率下降：用户需要花更多时间筛选有用信息，来回确认也会变多。5. 体验变差：尤其在飞书/微信这类聊天场景里，太长容易造成压迫感。\n\n所以长短控制要看用户意图：简单问题先短答，复杂问题再分层展开，结构清楚比堆内容更重要。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c966f0f1b1d54f78a965cc96e40df027",
+  "trace_id": "trc_cb90e04a315f47bd82cbdf656cb9ffa8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

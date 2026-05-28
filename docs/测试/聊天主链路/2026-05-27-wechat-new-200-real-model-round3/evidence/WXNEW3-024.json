@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-024",
+  "category": "提醒定时",
+  "title": "提醒我交水费，但我没说哪天。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：缺时间、交水费。\n提醒我交水费，但我没说哪天。",
+  "reply_text": "可以提醒你交水费，但现在缺时间：你还没说哪天、几点提醒。\n\n请补充具体时间，比如“本周五上午9点”或“每月25号晚上8点”。在你确认前，我不会创建这个模糊提醒；即使创建提醒，也只会到点提醒你，不会自动执行缴费或其他设备动作。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_cd83dc2b44214769b09eed57125538fe",
+  "trace_id": "trc_805031a5926f4d83b64904af11926227",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

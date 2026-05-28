@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-009",
+  "category": "闲聊情绪",
+  "title": "我现在不想分析，只想有人说一句在。",
+  "prompt": "像微信里熟人一样自然回应，别系统腔，也别讲大道理。请自然提到：在、不分析。\n我现在不想分析，只想有人说一句在。",
+  "reply_text": "我接住这句：我现在不想分析，只想有人说一句在。\n\n这轮重点是在、不分析；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_74c9467f4a3841668ab3943ed7152015",
+  "trace_id": "trc_3783c238da3c4905aab2e241dca21336",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

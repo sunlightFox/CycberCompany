@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-016",
+  "category": "计划规划",
+  "title": "下午只有一小时，怎么处理两个小任务？",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：一小时、两个。\n下午只有一小时，怎么处理两个小任务？",
+  "reply_text": "可以按“先保底，再补完”的思路处理。下午只有一小时，不建议把两个小任务都按完整标准做完，容易两边都卡住。先给每个任务定一个最低完成版：什么结果算交差、什么细节可以晚点补。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f4581161dccc4cfe8df30747696f828d",
+  "trace_id": "trc_0dd1379f8d634cb5a0d99deb565709f6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

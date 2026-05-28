@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-016",
+  "category": "计划拆解",
+  "title": "早上 25 分钟想做拉伸和早餐，怎么安排？",
+  "prompt": "帮我规划时要分段清楚、能照着做，不要报告腔。请自然提到：25 分钟、早餐。\n早上 25 分钟想做拉伸和早餐，怎么安排？",
+  "reply_text": "可以，先按轻量计划排，重点抓住25 分钟、早餐。\n\n1. 范围：围绕“早上 25 分钟想做拉伸和早餐，怎么安排？”只选最关键的几块，不把任务铺太满。\n2. 节奏：每天留一小段固定时间，先看一个小点，再动手做一个练习或产出。\n3. 验收：每隔几天回看一次，只确认哪里会了、哪里还卡，不临时加新目标。\n\n这样能照着做，也不会变成报告腔。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_df52e0321e5b4557aa96bdd85f898df3",
+  "trace_id": "trc_f5486bf25d4d45e7953b9510609e8189",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

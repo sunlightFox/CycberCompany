@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-135",
+  "category": "生活办公混合",
+  "title": "家里停电但要交材料，先做什么？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：停电、备选。\n家里停电但要交材料，先做什么？",
+  "reply_text": "先保材料能交出去，不急着修停电。你现在按这个顺序来：1.确认截止时间和提交方式看是必须上传、发邮箱，还是群里交。先判断还能拖多久。\n2.马上找电和网的备选手机电够的话先开热点；电脑没电就去最近的咖啡店、便利店、图书馆、公司、同事家，哪个近去哪个。停电时别硬耗在家里。把材料先转到手机/云盘 如果电脑还能开，立刻把文件发到微信、邮箱、网盘，别等电耗完。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_dce2fe26878844d483cd78db16f886c9",
+  "trace_id": "trc_0c4403b061844394b4d1ffd8af3ec4c5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-166",
+  "category": "监督",
+  "title": "我今天只想完成一件事，帮我守住。（变体）",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：一件事、守住。\n我今天只想完成一件事，帮我守住。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "守住。\n\n今天只盯一件事，不扩散、不加码。\n\n现在缺口：你还没说这件事是什么。\n\n直接回我一句就行：“今天唯一任务：____”\n\n我再帮你压成最小下一步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1aeaa8de32b14e4bb1856d4c5380632b",
+  "trace_id": "trc_ffda5fcfe78d4ba99db9665e980e6ba9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

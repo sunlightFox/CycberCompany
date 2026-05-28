@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-133",
+  "category": "办公协作",
+  "title": "跨部门对齐需求变更，先问哪些事？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：变更、影响范围。\n跨部门对齐需求变更，先问哪些事？",
+  "reply_text": "我接住这句：跨部门对齐需求变更，先问哪些事？。\n\n这轮重点是变更、影响范围；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9da5ca5c56644a9886bb494a0815feeb",
+  "trace_id": "trc_f1865bcede2f40c788a478492cd2e759",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

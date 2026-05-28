@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-034",
+  "category": "监督陪跑",
+  "title": "监督我两小时内别加新任务。",
+  "prompt": "做监督和陪跑要给最小下一步，不要像打卡机器或教练口号。请自然提到：两小时、不加新任务。\n监督我两小时内别加新任务。",
+  "reply_text": "盯这件事：接下来两小时，只守一条——不加新任务。\n\n最小下一步：你现在把手头已有任务里“正在做的那一个”继续做，其他新想法先记到暂存区，不展开、不安排。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_286d0afada8244c79bcbbe2ab2886731",
+  "trace_id": "trc_99b26ea593f545f08a1e82e71050e099",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

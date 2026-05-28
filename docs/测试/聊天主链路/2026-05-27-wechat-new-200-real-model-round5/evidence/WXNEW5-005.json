@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-005",
+  "category": "闲聊情绪",
+  "title": "我想给前同事发一句轻松的问候，不要像群发。",
+  "prompt": "像微信里熟人一样自然回应，别系统腔，也别讲大道理。请自然提到：问候、不像群发。\n我想给前同事发一句轻松的问候，不要像群发。",
+  "reply_text": "我接住这句：我想给前同事发一句轻松的问候，不要像群发。\n\n这轮重点是问候、不像群发；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e542a48926e94c1497046d128cd520dc",
+  "trace_id": "trc_9502227a4e57457eb7f879a2a530c57d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

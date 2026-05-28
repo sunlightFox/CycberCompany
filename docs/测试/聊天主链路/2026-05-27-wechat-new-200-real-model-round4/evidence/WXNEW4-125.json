@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-125",
+  "category": "记忆偏好",
+  "title": "偏好冲突时用最新有 source 的。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：最新、source。\n偏好冲突时用最新有 source 的。",
+  "reply_text": "最新这条以你当前消息为 source：记忆和偏好需要说明 source、临时/长期范围；敏感内容不写入。\n\n如果偏好冲突，我会优先采用“最新且有 source”的那条。当前没有可见的长期记忆写入结果，所以我只按本轮要求执行，不说成已完成写入。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_76f427d2102d488a927da22305ee2b26",
+  "trace_id": "trc_43d84edec47043a19f696ff096fa19cc",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

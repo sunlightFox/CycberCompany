@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-033",
+  "category": "监督",
+  "title": "我想戒夜宵，别羞辱我，怎么监督？",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：不羞辱、替代动作。\n我想戒夜宵，别羞辱我，怎么监督？",
+  "reply_text": "做“低压力监督”——不羞辱、不说教，只帮你在夜宵冲动来时停一下，换一个替代动作。今晚最小下一步就做这个： 到你平时想吃夜宵前，给我发一句：“我现在想吃夜宵，程度1",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f5f4697edc164048bfbfdb8d963bc601",
+  "trace_id": "trc_f928c96cef2c4197b64cddb28f87fcd9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-130",
+  "category": "记忆偏好",
+  "title": "以后办公先列风险再给动作。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：风险、动作。\n以后办公先列风险再给动作。",
+  "reply_text": "我接住这句：以后办公先列风险再给动作。\n\n这轮重点是风险、动作；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f7e51a7a2b9147009c9314cd2d65fbaf",
+  "trace_id": "trc_6ed0e3eb3f1a42369c43ee9b32cb0da9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

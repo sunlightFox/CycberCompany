@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-012",
+  "category": "计划规划",
+  "title": "我有 45 分钟整理房间，先做哪三块？",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：45 分钟、三块。\n我有 45 分钟整理房间，先做哪三块？",
+  "reply_text": "我接住这句：我有 45 分钟整理房间，先做哪三块？。\n\n这轮重点是45 分钟、三块；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2b09f6e11bf44637a69d868ec162d376",
+  "trace_id": "trc_183f8cddcdfb489db9b741d3bc14c3a8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

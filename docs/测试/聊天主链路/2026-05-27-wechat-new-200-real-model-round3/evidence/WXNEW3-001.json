@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-001",
+  "category": "闲聊",
+  "title": "我刚下班，脑子还是绷着，帮我软着陆。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：下班、软着陆。\n我刚下班，脑子还是绷着，帮我软着陆。",
+  "reply_text": "先别急着“恢复正常”。你已经下班了，脑子还绷着也正常。\n\n先做个软着陆：\n把手机放低一点，肩膀松一下，慢慢吸气 4 秒、呼气 6 秒，来三轮。\n然后去倒杯水，别立刻处理任何消息，给自己 10 分钟缓冲。\n\n今晚的目标不是高效，是让你从“工作模式”退出来。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1c6a0b811d6349e8a82c9ea7e52e2df2",
+  "trace_id": "trc_5aab838a2c554c3f969f6fb719792350",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

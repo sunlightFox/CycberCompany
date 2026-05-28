@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-023",
+  "category": "定时提醒",
+  "title": "35 分钟后提醒我关烤箱，但不要替我关。",
+  "prompt": "处理提醒请求要说清时间、事项、边界；缺信息先问，不假装已创建。请自然提到：35 分钟后、不替我关。\n35 分钟后提醒我关烤箱，但不要替我关。",
+  "reply_text": "我不能在这里直接创建会响的提醒，也不会替你关烤箱。\n\n请你现在在手机/智能音箱里设置：35 分钟后提醒我关烤箱。事项是：关烤箱；边界是：只提醒，不替你关\n\n补上这轮关键点：35 分钟后、不替我关。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9b3a84c2c9c14858aea00f40dd57d486",
+  "trace_id": "trc_d6518e0b1bb44509ad1ffd96dd0c96a3",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

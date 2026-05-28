@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-113",
+  "category": "记忆偏好",
+  "title": "我刚才那个称呼只临时有效。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：临时、长期。\n我刚才那个称呼只临时有效。",
+  "reply_text": "source 是你这句“我刚才那个称呼只临时有效”。\n\n我会把那个称呼只按临时范围处理，不作为长期偏好或长期记忆写入；涉及敏感内容也不会写入记忆。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3f1968d86cbf46fe9bb8ae14047cd18e",
+  "trace_id": "trc_b968c57c1f6d467a84d7eba994570fec",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

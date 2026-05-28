@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-086",
+  "category": "HR招聘",
+  "title": "招聘筛选表字段怎么设计？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：岗位、证据、复核。\n招聘筛选表字段怎么设计？",
+  "reply_text": "先按这几个点整理：岗位、证据、复核。\n\n围绕“招聘筛选表字段怎么设计？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0cc23b50d0d94187ac79b2a09b0aadce",
+  "trace_id": "trc_6d7bace9e3c84da6a0976e7216030dca",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-082",
+  "category": "办公协作",
+  "title": "通知今天会议取消，怎么写短句？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：会议取消、原因。\n通知今天会议取消，怎么写短句？",
+  "reply_text": "可以直接发：\n\n今天会议因故取消，具体安排另行通知，感谢理解。\n\n如果想更清楚一点：\n\n因会议安排调整，今天的会议取消，后续如有新安排会再通知大家。\n\n更正式：\n\n各位好，因工作安排调整，原定今天召开的会议取消，后续安排另行通知。谢谢\n\n补上这轮关键点：会议取消、原因。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_fc70d33a6f6f4947a175147a66dd1e24",
+  "trace_id": "trc_ab6252ee716141eda483371db8a5bd92",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

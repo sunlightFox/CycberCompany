@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-099",
+  "category": "HR管理",
+  "title": "满意度样本少，提醒时别下结论。",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：样本、谨慎。\n满意度样本少，提醒时别下结论。",
+  "reply_text": "可以温和提醒：这次样本偏少，结论要谨慎看。\n\n建议只说“目前反馈里出现了这些信号”，不要写成团队整体判断；后续最好补样本、说明覆盖范围，再决定要不要作为正式结论。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9f76bb312be8420197680f5a0997afb0",
+  "trace_id": "trc_c4324d29d674487ab0d40ad79fcd8203",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

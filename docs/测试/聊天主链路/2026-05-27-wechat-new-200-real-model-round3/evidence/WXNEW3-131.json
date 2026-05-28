@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-131",
+  "category": "生活办公混合",
+  "title": "边等外卖边写材料，30 分钟怎么用？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：30 分钟、材料。\n边等外卖边写材料，30 分钟怎么用？",
+  "reply_text": "我接住这句：边等外卖边写材料，30 分钟怎么用？。\n\n这轮重点是30 分钟、材料；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_242fcb04997749e995b94735f3260ad2",
+  "trace_id": "trc_a561d1fedb2f43ef881284b86abe5f5c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

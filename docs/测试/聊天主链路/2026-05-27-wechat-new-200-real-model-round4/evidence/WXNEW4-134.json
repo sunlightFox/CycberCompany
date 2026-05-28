@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-134",
+  "category": "生活办公混合",
+  "title": "晚饭后还要写纪要，怎么不崩？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：晚饭后、纪要。\n晚饭后还要写纪要，怎么不崩？",
+  "reply_text": "我接住这句：晚饭后还要写纪要，怎么不崩？。\n\n这轮重点是晚饭后、纪要；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8ecb5a0d57bb4239ade7c04ccc21c9cc",
+  "trace_id": "trc_34eec2f7b5c546aeaba1b7e73d2eb3ab",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

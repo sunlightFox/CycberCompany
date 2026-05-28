@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW200-063",
+  "category": "办公文档",
+  "title": "写一条办公区搬迁群公告，包含时间、地点、影响、联系人。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：时间、地点、联系人。\n写一条办公区搬迁群公告，包含时间、地点、影响、联系人。",
+  "reply_text": "办公区搬迁群公告：\n\n各位同事好，因办公区搬迁安排，现通知如下：\n\n1. 时间：办公区将于【具体时间】进行搬迁，请大家提前完成个人物品整理。2. 地点：搬迁后办公地点调整为【新办公地点】。3.影响：搬迁期间可能影响工位使用、快递收发、会议室预订及现场网络，请大家合理安排工作；个人重要物品请提前带走，办公设备按行政要求打包并贴好标签。4. 联系人：如有特殊工位、设备搬运、访客接待或当天办公安排问题，请联系【联系人/电话/飞书】。\n\n感谢大家理解与配合。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e1cab509075f40f290e5d7b07adb1d9a",
+  "trace_id": "trc_dc25e037356d4e25b062f955501aa409",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

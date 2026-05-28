@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-066",
+  "category": "办公文档",
+  "title": "把复盘压成一句结论加两条动作。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：一句结论、两条动作。\n把复盘压成一句结论加两条动作。",
+  "reply_text": "我会先把材料压成结论、原因、影响和下一步四块，而不是只复述原文。结论放最前面，原因按人、流程、信息和外部约束分层，影响只保留会改变判断的部分，最后给出可执行的补证或推进动作\n\n补上这轮关键点：一句结论、两条动作。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_31905de26266474fa85fe4e5e3e827be",
+  "trace_id": "trc_79dbd40e9068468fa1f0bb6b29998a66",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

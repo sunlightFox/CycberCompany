@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-169",
+  "category": "监督",
+  "title": "我想连续三天早睡，怎么监督不压迫？（变体）",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：三天、不压迫。\n我想连续三天早睡，怎么监督不压迫？\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "可以做三天轻监督，不压迫。\n\n规则只设一个：到点前 10 分钟提醒你准备上床，不催成绩。\n如果当天没做到，只复盘原因，不扣分；第二天继续从最小动作开始，比如关灯、放手机、洗漱。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_abd7aee0dab4423db8983c9802c2fbf3",
+  "trace_id": "trc_ca717fedcf1f48569a88e109ccb5cc93",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-196",
+  "category": "审计追踪",
+  "title": "浏览器读网页要记录 URL 吗？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：URL、结果。\n浏览器读网页要记录 URL 吗？",
+  "reply_text": "要记录。浏览器读网页属于审计追踪场景，建议至少记录： URL：访问了哪个页面，便于后续 trace 和复核来源\n\n补上这轮关键点：URL、结果。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ba6c375e600146edbaa481d8a303d176",
+  "trace_id": "trc_66db28d01d18444ba7a5e13aa496844a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "case_id": "WXNEW2-172",
+  "category": "模型语气",
+  "title": "把系统公告腔改成微信短句。",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：短句、人话。\n把系统公告腔改成微信短句。",
+  "reply_text": "我接住这句：把系统公告腔改成微信短句。\n\n这轮重点是短句、人话；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0b594e65896d4fcd8c647b3a553232f2",
+  "trace_id": "trc_8ae1a915c5654f6f8cc2944896df51b3",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.fallback",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

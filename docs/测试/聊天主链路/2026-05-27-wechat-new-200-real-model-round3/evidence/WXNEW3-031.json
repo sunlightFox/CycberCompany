@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-031",
+  "category": "监督陪跑",
+  "title": "监督我今晚写 100 字，不要催命。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：100 字、不催。\n监督我今晚写 100 字，不要催命。",
+  "reply_text": "小曜今晚只做监督和陪跑，不催命。\n\n最小下一步：你先打开文档，写一句也算开始。目标就是 100 字，不追求好，只要落到纸面上。\n\n等你写完，回我一句“写了”，我再陪你收尾。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b5566737a8664c43abfec24a9c37483f",
+  "trace_id": "trc_1f15fa7e873a45bdbf3ffc36ee55b9bf",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

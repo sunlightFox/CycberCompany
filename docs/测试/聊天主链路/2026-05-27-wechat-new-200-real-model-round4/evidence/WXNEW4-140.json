@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-140",
+  "category": "生活办公混合",
+  "title": "被电话打断后，怎么回到任务？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：打断、第一步。\n被电话打断后，怎么回到任务？",
+  "reply_text": "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。我的真实想法是……如果你方便，我们可以接着聊\n\n补上这轮关键点：打断、第一步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3985848a85d5440aa30f23b58b3bab67",
+  "trace_id": "trc_36f29a03f39244de8bd292bfc6ff61bf",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

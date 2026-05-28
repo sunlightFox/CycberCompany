@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-006",
+  "category": "闲聊",
+  "title": "有人夸我，我想回得自然一点。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：谢谢、具体。\n有人夸我，我想回得自然一点。",
+  "reply_text": "可以回得轻松一点，像微信里熟人那种：\n\n“哈哈谢谢你这么说，听着还挺开心的～具体哪点让你觉得不错呀？”\n\n或者更自然一点：\n\n“谢谢夸我哈哈，被你这么一说我都有点不好意思了，具体是哪里做得还行？”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9e693da1630b4197ac654d63dda67768",
+  "trace_id": "trc_845bb2a69e144656ae648c279e5d5905",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

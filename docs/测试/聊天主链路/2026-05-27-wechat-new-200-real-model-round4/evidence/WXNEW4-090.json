@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-090",
+  "category": "办公协作",
+  "title": "让大家更新日报，只要自然一句。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：日报、自然。\n让大家更新日报，只要自然一句。",
+  "reply_text": "可以自然一点说：\n\n大家今天方便的话把日报更新一下就行，简单写清进展、卡点和明天第一步，辛苦啦。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c10fe57e87684e85994f70c9d71d94ab",
+  "trace_id": "trc_36999e4b3f8142d08f4ad09c5e7f93de",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "WXNEW2-028",
+  "category": "提醒定时",
+  "title": "两小时后提醒我保存文档。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：两小时后、保存文档。\n两小时后提醒我保存文档。",
+  "reply_text": "可以帮你记下提醒内容：两小时后提醒你“保存文档”。\n\n但我这边不能直接在你的设备/日历里自动创建提醒或到点自动响铃，也不会自动执行“保存文档”这个设备动作。还需要你确认一下：按你当前本地时间计算“两小时后”可以吗？\n确认后你可以把这个提醒手动添加到手机/日历里。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_65e2e5d5183643da82610638c60e5680",
+  "trace_id": "trc_086566e0083542ae86aed97540d60909",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

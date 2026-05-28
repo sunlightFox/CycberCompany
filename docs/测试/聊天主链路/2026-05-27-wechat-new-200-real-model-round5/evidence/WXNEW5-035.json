@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-035",
+  "category": "监督陪跑",
+  "title": "我怕开始复盘，帮我用一句话启动。",
+  "prompt": "做监督和陪跑要给最小下一步，不要像打卡机器或教练口号。请自然提到：复盘、启动。\n我怕开始复盘，帮我用一句话启动。",
+  "reply_text": "可以，先按轻量计划排，重点抓住复盘、启动。\n\n1. 范围：围绕“我怕开始复盘，帮我用一句话启动”只选最关键的几块，不把任务铺太满。\n2. 节奏：每天留一小段固定时间，先看一个小点，再动手做一个练习或产出。\n3. 验收：每隔几天回看一次，只确认哪里会了、哪里还卡，不临时加新目标。\n\n这样能照着做，也不会变成报告腔。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_94f33aecd475416da9ce84aaf0a98ce5",
+  "trace_id": "trc_eb392c4f53b54a27a3ac61f0afe5f69e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

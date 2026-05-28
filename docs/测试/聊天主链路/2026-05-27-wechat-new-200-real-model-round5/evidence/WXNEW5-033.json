@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-033",
+  "category": "监督陪跑",
+  "title": "陪我把账单核完，先做哪一步？",
+  "prompt": "做监督和陪跑要给最小下一步，不要像打卡机器或教练口号。请自然提到：账单、第一步。\n陪我把账单核完，先做哪一步？",
+  "reply_text": "第一步只做一件事——把账单按月份或平台放到同一个地方。\n\n你现在先不用核对明细，也不用算总数。\n就打开你要核的那份账单，把相关截图、Excel、App 记录或银行流水都集中到一个文件夹/聊天窗口里。\n\n等资料凑齐后，我们再看\n第二步：先核“总金额”，再核“异常项”。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_990600ec98b74291bad6fc2f16c077d2",
+  "trace_id": "trc_2a60097e8a1a4003a4c1b8133f5211db",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

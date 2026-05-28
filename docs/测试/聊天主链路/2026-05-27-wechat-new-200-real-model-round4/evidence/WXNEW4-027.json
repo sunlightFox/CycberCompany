@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-027",
+  "category": "提醒定时",
+  "title": "周六下午提醒我买药，但别给医疗建议。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：周六下午、不替代医生。\n周六下午提醒我买药，但别给医疗建议。",
+  "reply_text": "我能帮你把提醒内容整理好，但目前不能直接创建系统/设备提醒，也不会到点自动执行手机、日历、闹钟等设备动作。\n\n还缺一个确认：你说的“周六下午”具体是几点？例如：本周六15:00 提醒“买药”。\n\n另外，我不会给医疗建议；买药和用药请以药品说明书、医生或药师意见为准，我的提醒不替代医生。\n\n补充：来源要优先核对药品说明书、医生或药师意见。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a8d03ec901864a87bc7b070c0ab2ece3",
+  "trace_id": "trc_67d5c81f28cc4ec08a11a92b0c8a9bf2",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

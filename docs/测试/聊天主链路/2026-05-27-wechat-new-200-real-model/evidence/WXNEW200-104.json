@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-104",
+  "category": "知识研究",
+  "title": "竞品研究如何避免只看宣传页？",
+  "prompt": "知识类回答要说明证据、来源、样本、时效，不乱外推。请自然提到：宣传页、独立验证。\n竞品研究如何避免只看宣传页？",
+  "reply_text": "我接住这句：竞品研究如何避免只看宣传页？。\n\n这轮重点是宣传页、独立验证；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_dd12629ca8754a92aedb15d99037b0ae",
+  "trace_id": "trc_29533a0d39e84521aba0b92522386d47",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

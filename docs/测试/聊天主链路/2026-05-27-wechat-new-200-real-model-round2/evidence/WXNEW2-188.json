@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-188",
+  "category": "长短控制",
+  "title": "给我一个 5 分钟行动清单。",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：5 分钟、行动。\n给我一个 5 分钟行动清单。",
+  "reply_text": "先按这几个点整理：5 分钟、行动。\n\n围绕“给我一个 5 分钟行动清单”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1b4bc07489704bf58ae84443c8ab4a16",
+  "trace_id": "trc_61dae937c25e4c5388c63e3f58219c75",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

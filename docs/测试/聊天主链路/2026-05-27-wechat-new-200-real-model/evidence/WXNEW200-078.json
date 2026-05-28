@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-078",
+  "category": "办公表格",
+  "title": "供应商报价 A 最低但想选 B，审批说明怎么写？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：最低价、质量。\n供应商报价 A 最低但想选 B，审批说明怎么写？",
+  "reply_text": "先不要直接采信“这个事实判断”。我会核查四件事： 基数：从多少增长到多少，小基数会把百分比放得很夸张。\n\n最低价补充：审批说明要明确 A 是最低价，但本次选择 B 的理由来自质量、交付、售后、风险或综合成本。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d122ca7197ba420da715ebfc28a3b789",
+  "trace_id": "trc_0c08da6287814c0c8abe96f1e35f1ccb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

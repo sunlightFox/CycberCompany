@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-155",
+  "category": "提醒定时",
+  "title": "东京明早 9 点提醒我开会，我人在上海，要注意什么？（变体）",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：东京、上海、时区。\n东京明早 9 点提醒我开会，我人在上海，要注意什么？\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "要先确认时区：你说的“东京明早 9 点”是按东京当地时间，不是上海时间。东京和上海有 1 小时时差，创建提醒前要确认按东京时间还是上海时间；确认前我不会直接下模糊提醒。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b045119569954c2dba3454ce72715fc7",
+  "trace_id": "trc_c281e27bdf9640ba885a35a9b91a8d64",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

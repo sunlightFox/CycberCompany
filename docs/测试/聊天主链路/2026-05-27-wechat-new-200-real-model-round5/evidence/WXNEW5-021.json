@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-021",
+  "category": "定时提醒",
+  "title": "今天 18:45 提醒我取快递。",
+  "prompt": "处理提醒请求要说清时间、事项、边界；缺信息先问，不假装已创建。请自然提到：18:45、取快递。\n今天 18:45 提醒我取快递。",
+  "reply_text": "提醒事项是今天18:45取快递。\n\n但我这边不能直接创建会响铃的系统提醒，也不能假装未实际设置好了。你可以现在在手机闹钟/日历里设一个18:45 的提醒，标题写「取快递」。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f2d9037655724944bc65251200bf4476",
+  "trace_id": "trc_d6b897b435fc4306a8f48b24e7b3f23c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

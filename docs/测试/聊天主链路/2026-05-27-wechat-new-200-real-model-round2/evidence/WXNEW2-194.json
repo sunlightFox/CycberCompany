@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-194",
+  "category": "审计追踪",
+  "title": "记忆写入为什么要 source？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：source、来源。\n记忆写入为什么要 source？",
+  "reply_text": "记忆写入要带 source（来源），核心是为了审计追踪：以后如果用到这条记忆，能说清它是从哪句话、哪次交互、哪个明确偏好来的，而不是“系统凭空记住的”。\ntrace 可追溯",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c8b46f3287f14de5ab79730945846bfb",
+  "trace_id": "trc_950678b2a3c54bedbe2e0940ab1c1cb6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

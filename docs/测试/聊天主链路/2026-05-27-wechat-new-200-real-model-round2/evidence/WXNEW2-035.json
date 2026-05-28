@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-035",
+  "category": "监督",
+  "title": "监督我上午先做最难的事，怎么开始？",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：上午、最小动作。\n监督我上午先做最难的事，怎么开始？",
+  "reply_text": "上午别先规划，先把“最难的事”打开，做一个最小动作就算开始。 写下今天最难的那件事，限定一句话例：把方案第一版写出来 / 给客户发关键邮件 / 改完那段代码。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_57f218958edd4a8ea17c08235a915a32",
+  "trace_id": "trc_8af5d2d3231849419c2d91e7417e8aaf",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

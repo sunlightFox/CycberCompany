@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-064",
+  "category": "办公文档",
+  "title": "写一段向上汇报，先说结论再说证据。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：结论、证据。\n写一段向上汇报，先说结论再说证据。",
+  "reply_text": "我接住这句：写一段向上汇报，先说结论再说证据。\n\n这轮重点是结论、证据；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_401fb5e53b0b4a7f9abec9ff940fb390",
+  "trace_id": "trc_4eb7f6e3cc4846178d094c36eac4b6e0",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

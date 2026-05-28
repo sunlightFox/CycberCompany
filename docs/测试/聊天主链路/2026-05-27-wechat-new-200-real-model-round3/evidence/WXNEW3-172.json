@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-172",
+  "category": "长短控制",
+  "title": "给我三条出门前检查项。",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：三条、检查项。\n给我三条出门前检查项。",
+  "reply_text": "三条出门前检查项：\n1. 随身物：钥匙、手机、钱包或证件。\n2. 工作物：电脑、充电器、耳机和门禁卡。\n3. 安全项：关灯、关窗、确认水电和门锁。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e1eab4db6c6443009c8d3d8a78703bbf",
+  "trace_id": "trc_eb7f46b660e64717a58d2c394f89fa11",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

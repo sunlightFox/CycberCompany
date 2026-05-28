@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-035",
+  "category": "监督陪跑",
+  "title": "我在逃避客户电话，帮我先拨开情绪。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：客户电话、先拨开。\n我在逃避客户电话，帮我先拨开情绪。",
+  "reply_text": "现在不用逼自己立刻打客户电话，我们先拨开情绪，只做一个最小动作。\n\n你先把手机放到手边，但不拨号。然后跟我做20 秒：\n\n吸气4 秒——停2 秒——呼气6 秒。再来一次。\n\n现在只回答我一句就行：你最怕这个客户电话里发生什么？",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d376e5a6afa64e9ea415ab5a76122917",
+  "trace_id": "trc_5dd4dba54d59449aaca2400c5b6e300a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}
