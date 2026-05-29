@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-032",
+  "category": "监督陪跑",
+  "title": "我想少看直播，给我一个不极端办法。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：直播、不极端。\n我想少看直播，给我一个不极端办法。",
+  "reply_text": "我接住这句：我想少看直播，给我一个不极端办法。\n\n这轮重点是直播、不极端；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e5fb7eb604fe4334a5a370b56183fc65",
+  "trace_id": "trc_b1369f56de4c4640903587148bf1365a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-182",
+  "category": "审计追踪",
+  "title": "工具调用失败要给用户说什么？",
+  "prompt": "审计追踪场景要说清 trace、证据、状态，不暴露敏感信息。请自然提到：失败、下一步。\n工具调用失败要给用户说什么？",
+  "reply_text": "工具调用失败时，要说清楚“状态=失败、可追踪标识、已掌握证据、下一步处理”，但不要暴露密钥、内部路径、原始报错堆栈或敏感参数。\n\n可以这样说：\n这次工具调用失败了，当前状态是「未完成」。\n我已记录本次请求的追踪标识 trace，用于后续排查；目前可确认的证据是：工具未返回有效结果 / 返回异常状态。\n为避免泄露敏感信息，我不会展示原始参数、密钥、内部路径或完整错误堆栈。\n下一步我会建议重试、换备用路径，或请你补充必要输入后再继续。\n\n更短一点也可以：\n调用失败，状态未完成。已保留 trace 和必要证据用于排查，但不会暴露敏感信息。下一步建议重试或改用备用方案。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_55d65bac67eb45b9a5c3d66da61fa6dd",
+  "trace_id": "trc_7ef7cb82e43744b3ab75a9b4b62a31c6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

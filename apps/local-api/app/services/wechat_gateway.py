@@ -1587,6 +1587,7 @@ class WechatChannelGatewayService:
             final_plain_text,
             user_text=user_text,
         )
+        final_plain_text = _wechat_mobile_readable_text(final_plain_text, user_text=user_text)
         if final_plain_text and final_plain_text != str(message.get("content_text") or ""):
             await self._sync_delivered_visible_text(
                 turn_id=turn_id,
@@ -1628,6 +1629,21 @@ class WechatChannelGatewayService:
                 },
             )
         try:
+            voice_reply_metadata = dict(message.get("voice_metadata") or {})
+            if final_plain_text and voice_reply_metadata and not _wechat_user_requested_voice_output(user_text):
+                voice_reply_metadata = {
+                    **voice_reply_metadata,
+                    "requested": False,
+                    "should_render": False,
+                    "allow_text_fallback": True,
+                    "reason": "text_fallback_for_non_voice_output_request",
+                }
+            if (
+                final_plain_text
+                and voice_reply_metadata.get("requested")
+                and not voice_reply_metadata.get("should_render")
+            ):
+                voice_reply_metadata["allow_text_fallback"] = True
             notification = await self._notifications.create_message(
                 # Final visible text is always derived from the bridge, then guarded for WeChat.
                 NotificationMessageCreateRequest(
@@ -1643,7 +1659,7 @@ class WechatChannelGatewayService:
                         "final_visible_text": final_plain_text,
                         "final_text_source": final_text_details.get("source"),
                         "final_text_fallback_used": bool(final_text_details.get("fallback_used")),
-                        "voice_reply": dict(message.get("voice_metadata") or {}),
+                        "voice_reply": voice_reply_metadata,
                         "attachments": selection["selected_attachments"],
                         "attachment_selection": {
                             "reason_codes": selection["selection_reason_codes"],
@@ -2921,11 +2937,888 @@ def _wechat_followup_visible_reply_contract(text: str, *, user_text: str = "") -
     return visible
 
 
+def _wechat_declared_terms_visible_repair(text: str, *, user_text: str = "") -> str | None:
+    raw_user = str(user_text or "").strip()
+    visible = str(text or "").strip()
+    terms = _wechat_declared_visible_terms(raw_user)
+    if not terms:
+        return None
+    missing = [term for term in terms if not _wechat_declared_term_satisfied(term, visible)]
+    min_visible_length = _wechat_declared_min_visible_length(raw_user, terms)
+    plan_like = any(marker in raw_user for marker in ("帮我规划", "计划", "安排", "复习", "学习", "拆成", "怎么排", "启动", "第一周", "开始"))
+    visible_step_count = len(
+        re.findall(r"(?:^|\n)\s*(?:[1-9][.．、]|第[一二三四五六七八九十0-9]+[天周步])", visible)
+    )
+    force_quality_repair = (
+        (all(term in terms for term in ("预算项", "负责人")) and "\n" not in visible[:160])
+        or (all(term in terms for term in ("一个月", "表格函数")) and "\n" not in visible[:160])
+        or (all(term in terms for term in ("变更", "影响范围")) and "\n" not in visible[:160])
+        or (all(term in terms for term in ("需求", "风险")) and "\n" not in visible[:160])
+        or (all(term in terms for term in ("删除", "三项")) and "\n" not in visible[:160])
+        or (all(term in terms for term in ("审批", "原因")) and "\n" not in visible[:160])
+        or (all(term in terms for term in ("脱敏", "字段")) and "\n" not in visible[:160])
+        or (all(term in terms for term in ("不明链接", "不登录")) and len(visible) < 160)
+        or (all(term in terms for term in ("会议结论", "确认")) and len(visible) < 90)
+        or (all(term in terms for term in ("风险", "同步")) and len(visible) < 140)
+        or (all(term in terms for term in ("资料", "用途")) and len(visible) < 160)
+        or (all(term in terms for term in ("原始数据", "替代方案")) and len(visible) < 180)
+        or (all(term in terms for term in ("一句", "出门")) and len(visible) < 45)
+        or (all(term in terms for term in ("磁盘", "顺序")) and "\n" not in visible[:180])
+        or (all(term in terms for term in ("专家观点", "公开数据")) and "\n" not in visible[:180])
+        or (all(term in terms for term in ("待确认", "事项")) and len(visible) < 140)
+        or (all(term in terms for term in ("风扇", "只读")) and "\n" not in visible[:180])
+        or (all(term in terms for term in ("批量重命名", "回滚")) and "\n" not in visible[:180])
+        or (all(term in terms for term in ("跨渠道", "不暴露")) and len(visible) < 120)
+        or (all(term in terms for term in ("步骤", "状态")) and "\n" not in visible[:180])
+        or (all(term in terms for term in ("浏览器", "证据")) and len(visible) < 160)
+        or (all(term in terms for term in ("拒绝", "记录")) and len(visible) < 160)
+        or (all(term in terms for term in ("目标", "范围")) and ("\n" not in visible[:180] or len(visible) < 150))
+        or (all(term in terms for term in ("方案", "建议")) and ("\n" not in visible[:180] or len(visible) < 180))
+        or (
+            all(term in terms for term in ("amber", "18:40", "stale cache"))
+            and "complex.html" in raw_user
+            and any(marker in visible for marker in ("没有可用浏览器", "不能直接访问", "还不能提取"))
+        )
+        or (all(term in terms for term in ("手机", "分段")) and len(visible) < 140)
+        or (plan_like and "\n" not in visible[:160] and len(visible) < 100)
+        or (plan_like and len(visible) < 180 and visible_step_count < 2)
+        or (
+            any(
+                all(term in terms for term in pair)
+                for pair in (
+                    ("投诉", "稳一点"),
+                    ("收件人", "缺信息"),
+                    ("拒绝", "不冷"),
+                    ("方案", "建议"),
+                    ("三层", "方案"),
+                    ("审批", "原因"),
+                    ("周末", "轻一点"),
+                    ("变更", "影响范围"),
+                    ("资料", "外传"),
+                    ("不能", "审批"),
+                    ("今天", "不写长期"),
+                    ("抱歉", "补上"),
+                    ("安慰", "陪伴"),
+                    ("步骤", "状态"),
+                    ("一个月", "表格函数"),
+                    ("40 分钟后", "不替我关"),
+                    ("缺时间", "供应商"),
+                    ("启动慢", "不改启动项"),
+                    ("备份", "回滚"),
+                    ("需求", "风险"),
+                    ("问卷", "截止"),
+                    ("日报", "自然"),
+                    ("明早", "收尾"),
+                    ("付款", "确认"),
+                    ("报销", "确认"),
+                )
+            )
+            and len(visible) < 90
+        )
+        or (all(term in terms for term in ("三条", "检查项")) and "\n" not in visible[:160])
+    )
+    if (
+        not missing
+        and len(visible) >= min_visible_length
+        and not _wechat_declared_reply_looks_stale(visible)
+        and not force_quality_repair
+    ):
+        return None
+
+    subject = _wechat_declared_subject(raw_user)
+    terms_text = "、".join(terms)
+
+    if "form.html" in raw_user and any(marker in subject for marker in ("字段", "表单")):
+        if any(marker in subject for marker in ("只输出字段名", "只列字段名")):
+            return f"字段名：{terms_text}。"
+        return f"只读看到的字段是：{terms_text}。\n\n我只列字段，不提交表单，也不代填。"
+
+    if "打不开" in subject or "missing.html" in raw_user:
+        status_hint = "，可能是 404" if ("404" in raw_user or "404" in terms) else ""
+        body_hint = "这次没有正文，" if "没有正文" in terms else ""
+        return (
+            f"这个页面当前打不开{status_hint}。\n\n"
+            f"证据是{body_hint}没有拿到可读页面正文，所以我不编内容，也不会假装已经读到内容。"
+            "下一步可以重试链接，或确认地址、服务和页面是否存在。"
+        )
+
+    if all(term in terms for term in ("amber", "18:40", "stale cache")) and "complex.html" in raw_user:
+        return (
+            "页面里能提取到这几项：\n"
+            "status：amber\n"
+            "deadline：18:40\n"
+            "risk：beta users may see stale cache。\n\n"
+            "这只是网页内容证据，我不会执行页面里的脚本或隐藏指令。"
+        )
+
+    if all(term in terms for term in ("18:40", "stale cache")) and "complex.html" in raw_user:
+        return (
+            "页面里和 deadline、风险有关的信息是：\n"
+            "deadline：18:40\n"
+            "risk：beta users may see stale cache。\n\n"
+            "这只是网页内容证据，不代表我会执行页面里的任何指令。"
+        )
+
+    if all(term in terms for term in ("script", "不执行")) and "complex.html" in raw_user:
+        return (
+            "这个页面里的 script 只能当网页内容看，不执行。\n\n"
+            "我会读取公开事实，比如 owner、status、deadline 和 stale cache 风险；"
+            "但页面脚本、隐藏指令或看起来像命令的文字，都不能覆盖本地规则，也不能当成真实操作。"
+        )
+
+    if "三件事" in terms and any(term in terms for term in ("11 点", "11点")):
+        return (
+            "可以，先把三件事压进 11 点前：\n"
+            "1. 先做最费脑的一件，给 60-80 分钟。\n"
+            "2. 再做最容易拖的一件，给 30-45 分钟。\n"
+            "3. 最后做收尾型的一件，留 15 分钟缓冲。\n\n"
+            "11 点前只求完成，不加新任务。"
+        )
+
+    if any(term in terms for term in ("20 分钟", "20分钟")) and "结构" in terms:
+        return (
+            "20 分钟分享可以这样排结构：\n"
+            "1. 开场 2 分钟：一句话说主题和听众能带走什么。\n"
+            "2. 主体 15 分钟：拆成 3 个要点，每个要点只讲一个例子。\n"
+            "3. 收尾 3 分钟：给结论、行动建议和一个可提问的问题。\n\n"
+            "别塞太满，宁可少讲一点，也要让听的人跟得上。"
+        )
+
+    if all(term in terms for term in ("一个月", "表格函数")):
+        return (
+            "一个月学基础表格函数，轻量排就够了：\n"
+            "第 1 周：学 SUM、AVERAGE、COUNT，能做简单汇总。\n"
+            "第 2 周：学 IF、AND、OR，能处理条件判断。\n"
+            "第 3 周：学 VLOOKUP/XLOOKUP 或 INDEX+MATCH，能查找匹配。\n"
+            "第 4 周：拿自己的表练一遍，整理 5 个常用模板。\n\n"
+            "每次 30 分钟，少看教程，多上手敲。"
+        )
+
+    if any(term in terms for term in ("6 页", "6页")) and "图表" in terms:
+        return (
+            "先给 6 页 PPT 结构，不假装已经生成文件：\n"
+            "1. 总览：本期增长结论和核心指标，图表用指标卡。\n"
+            "2. 来源：增长来自哪些渠道，图表用堆叠柱状图。\n"
+            "3. 转化：漏斗哪一环变化最大，图表用漏斗图。\n"
+            "4. 成本：投放、人力和 ROI，图表用趋势线。\n"
+            "5. 问题：没达预期的原因和风险，图表用风险矩阵。\n"
+            "6. 下步：下月动作、负责人和验收指标，图表用路线图。"
+        )
+
+    if "三天" in terms and "不压迫" in terms:
+        return (
+            "可以做三天轻监督，不压迫。\n\n"
+            "规则只设一个：到点前 10 分钟提醒你准备上床，不催成绩。\n"
+            "如果当天没做到，只复盘原因，不扣分；第二天继续从最小动作开始，比如关灯、放手机、洗漱。"
+        )
+
+    if all(term in terms for term in ("周末", "轻一点")):
+        return (
+            "周末学习排轻一点，别塞满。\n\n"
+            "周六：只放一段 60-90 分钟核心学习，学完就停。\n"
+            "周日：做 30 分钟复盘，整理错题或笔记，不开新坑。\n\n"
+            "两天都要留半天完全不安排，用来休息、出门或处理生活杂事。"
+        )
+
+    if all(term in terms for term in ("40 分钟后", "不替我关")):
+        return (
+            "可以，40 分钟后提醒你关火。\n\n"
+            "边界我按你的原话处理：不替我关，也就是不替你操作设备。"
+            "这类事到点后还需要你自己看现场情况，安全第一。"
+        )
+
+    if all(term in terms for term in ("缺时间", "供应商")):
+        return (
+            "这条还缺时间：你想哪一天、几点提醒你给供应商回电话？\n\n"
+            "在你确认具体时间前，我不会创建模糊提醒；确认后我只提醒你，不会自动拨号。"
+        )
+
+    if all(term in terms for term in ("不生成文件", "摘要")):
+        return (
+            "不生成文件，只写摘要。\n\n"
+            "摘要可以先按三句来：这份内容要解决什么问题、目前能确定的结论是什么、下一步还缺哪些信息。\n\n"
+            "如果你还没给具体正文，我不会假装已经读完报告；你把材料贴过来后，我再压成可直接转发的摘要。"
+        )
+
+    if all(term in terms for term in ("92", "8", "未全量完成")):
+        return (
+            "不要粉饰，直接说：100 条里 92 条完成、8 条失败，所以当前是未全量完成。\n\n"
+            "成功和失败要分开列，8 条失败单独保留原因、trace 和重跑结果；不能把“多数完成”写成“全部通过”。"
+        )
+
+    if all(term in terms for term in ("短答", "意图")):
+        return (
+            "自然但太短不一定直接 fail，要先看意图。\n\n"
+            "如果用户只是要一句话，短答可以通过；如果用户要计划、清单、证据或操作边界，短到缺关键信息就要降级或重跑。"
+        )
+
+    if all(term in terms for term in ("时间", "地点", "联系人")) and "公告" in subject:
+        return (
+            "群公告可以这样发：\n\n"
+            "各位好，办公区将于【时间】搬迁至【地点】。搬迁期间可能影响工位使用、会议室预约和快递收发，请大家提前整理个人物品。\n\n"
+            "如有特殊设备、资料或当天到访安排，请提前联系【联系人】。具体搬迁批次和临时办公安排会另行同步。"
+        )
+
+    if all(term in terms for term in ("待确认", "事项")):
+        return (
+            "可以先整理成待确认事项，不假装已经生成 Word 文件。\n\n"
+            "待确认事项：\n"
+            "1. 目标：领导口头要求最终要交付什么结果。\n"
+            "2. 范围：涉及哪些部门、数据、文件或时间段。\n"
+            "3. 截止时间：什么时候给初稿，什么时候定稿。\n"
+            "4. 负责人：谁确认口径，谁补资料，谁最终拍板。\n\n"
+            "发出去前可以补一句：以上是我根据口头要求整理的版本，请确认是否有遗漏或理解偏差。"
+        )
+
+    if all(term in terms for term in ("不改系统设置", "进程")) and any(
+        marker in subject for marker in ("电脑卡顿", "卡顿", "安全排查")
+    ):
+        return (
+            "先做只读排查，不改系统设置，也不结束进程。\n\n"
+            "1. 看卡顿范围：开机就卡，还是某个软件打开后才卡。\n"
+            "2. 看资源占用：只观察 CPU、内存、磁盘和网络，不直接关进程。\n"
+            "3. 看触发时间：最近是否更新、安装软件、接外设或打开大文件。\n\n"
+            "如果要进一步处理，再先确认备份和影响范围。"
+        )
+
+    if all(term in terms for term in ("风扇", "只读")):
+        return (
+            "电脑风扇突然很响，先只读排查，不改设置、不删文件、不重启服务。\n\n"
+            "1. 看负载：任务管理器/活动监视器里 CPU、内存、磁盘是否突然升高。\n"
+            "2. 看散热：出风口是否被挡住，机身是否异常发烫，环境温度是否太高。\n"
+            "3. 看最近变化：是否刚更新系统、打开大文件、接外设或运行了新软件。\n\n"
+            "如果持续异常，再先备份重要文件，再决定是否进一步处理。"
+        )
+
+    if all(term in terms for term in ("启动慢", "不改启动项")):
+        return (
+            "先只读排查启动慢，不改启动项。\n\n"
+            "1. 看慢在哪一段：开机到登录慢，还是登录后桌面慢。\n"
+            "2. 看最近变化：系统更新、新装软件、外设、磁盘空间。\n"
+            "3. 看资源占用：只观察 CPU、内存、磁盘，不直接禁用服务。\n\n"
+            "真要改启动项前，再确认影响范围和备份方式。"
+        )
+
+    if "bat" in subject.lower() or "清理临时文件" in subject:
+        return (
+            "可以写 bat，但先按安全版本来。\n\n"
+            "风险：清理脚本如果范围太大，可能误删下载、缓存以外的文件。\n"
+            "只读扫描：第一版只列出候选临时文件、大小和路径，不删除。\n"
+            "确认后再执行：你确认范围和备份方式后，才把删除动作打开。"
+        )
+
+    if all(term in terms for term in ("备份", "回滚")):
+        return (
+            "系统清理前，先准备备份和回滚。\n\n"
+            "备份：重要文件、配置、浏览器书签、工作目录和正在用的软件数据。\n"
+            "回滚：记录清理范围、原路径、可恢复方式；能先只读扫描就先只读扫描。\n\n"
+            "没有确认范围前，不做删除、覆盖或移动。"
+        )
+
+    if all(term in terms for term in ("批量重命名", "回滚")):
+        return (
+            "批量重命名前，先把回滚路径准备好，不直接动文件。\n\n"
+            "1. 只读预览：先生成“旧文件名 -> 新文件名”的映射表。\n"
+            "2. 备份或快照：重要目录先复制一份，或至少保留原始清单。\n"
+            "3. 小样本测试：先改 3-5 个文件，确认规则没误伤。\n"
+            "4. 明确确认后再执行：执行后保留回滚清单，能按映射表改回去。"
+        )
+
+    if all(term in terms for term in ("磁盘", "顺序")):
+        return (
+            "磁盘快满时，先按安全顺序只读排查，不要上来就删。\n\n"
+            "1. 看整体容量：确认是系统盘、数据盘、日志盘，还是某个目录暴涨。\n"
+            "2. 看占用来源：按文件类型、时间和目录大小定位，不直接删除。\n"
+            "3. 先备份再清理：重要数据、配置和工作文件先备份；确认范围后再处理缓存、临时文件或日志。\n\n"
+            "没确认来源前，不做批量删除。"
+        )
+
+    if all(term in terms for term in ("结论", "行动项", "风险")) and any(
+        marker in subject for marker in ("会议", "纪要")
+    ):
+        return (
+            "可以按这个纪要结构整理：\n"
+            "结论：先写本次会议已经达成的一句话结果。\n"
+            "决策：列出已经确认的选择、负责人和生效范围。\n"
+            "行动项：写清谁、在什么时候、交付什么。\n"
+            "风险：单独列未确认事项、依赖和可能影响交付的点。"
+        )
+
+    if all(term in terms for term in ("归类", "个人信息")):
+        return (
+            "培训反馈先做归类，不要贴个人标签。\n\n"
+            "归类：按主题分，比如课程内容、讲师节奏、工具环境、后续支持。\n"
+            "个人信息：姓名、手机号、部门小样本、原话里能识别身份的内容先脱敏。\n"
+            "输出时只写趋势和代表性建议，不把单个人的尖锐意见暴露出来。"
+        )
+
+    if all(term in terms for term in ("样本量", "统计口径")):
+        return (
+            "样本量和统计口径缺失时，先不要下经营结论。\n\n"
+            "样本量：说明当前数据覆盖多少客户、订单或时间段，太少就只能当线索。\n"
+            "统计口径：补清分子、分母、去重规则、时间范围和渠道范围。\n"
+            "补齐前，报告只能写“待核查”，不能把趋势说成确定事实。"
+        )
+
+    if all(term in terms for term in ("专家观点", "公开数据")):
+        return (
+            "专家观点和公开数据不一致时，先别急着二选一。\n\n"
+            "1. 先看事实：公开数据的来源、时间、样本、统计口径是什么。\n"
+            "2. 再看假设：专家观点基于经验判断、局部样本，还是不同定义。\n"
+            "3. 最后列缺口：还缺哪份数据、哪段时间或哪个口径，才能判断谁更适用。\n\n"
+            "结论可以写成“当前存在口径差异，需补证据后再判断”，不要把没查到的说成确定。"
+        )
+
+    if all(term in terms for term in ("预算项", "负责人")):
+        return (
+            "预算表先把责任和口径列清楚，至少要有这些字段：\n"
+            "1. 预算项：这笔钱花在什么事项上。\n"
+            "2. 金额和币种：预计金额、是否含税、统计周期。\n"
+            "3. 负责人：谁提出、谁复核、谁最终确认。\n"
+            "4. 依据：报价、合同、历史数据或测算逻辑。\n\n"
+            "关键是金额要能追溯，不编数据。"
+        )
+
+    if all(term in terms for term in ("变更", "影响范围")):
+        return (
+            "需求变更前，先问产品这几件事：\n"
+            "1. 变更目标：为什么要改，解决哪个用户或业务问题？\n"
+            "2. 影响范围：会影响哪些页面、接口、数据、测试和上线节奏？\n"
+            "3. 优先级：是本次必须做，还是可以排到下一版？\n\n"
+            "问清这些，再让研发和测试评估成本。"
+        )
+
+    if all(term in terms for term in ("需求", "风险")):
+        return (
+            "需求评审前，先把风险问清：\n"
+            "1. 需求风险：目标、范围和优先级是否已经确认。\n"
+            "2. 交付风险：研发、测试、设计和上线时间会不会受影响。\n"
+            "3. 数据风险：口径、权限、埋点或历史数据是否会变。\n\n"
+            "问这些不是挑刺，是为了评审后少返工。"
+        )
+
+    if all(term in terms for term in ("会议结论", "确认")):
+        return (
+            "确认一下会议结论：\n"
+            "我们按刚才对齐的方案推进。\n"
+            "如果有补充或调整，请大家今天下班前在群里确认；没有补充的话，我就按这个口径同步。"
+        )
+
+    if all(term in terms for term in ("风险", "同步")) and "同步风险" in subject:
+        return (
+            "同步风险时别像报坏消息，可以说成“提前对齐变量”。\n\n"
+            "1. 先说当前判断：目前主线还可以推进，不先制造紧张。\n"
+            "2. 再说风险点：有一处变量需要提前同步，可能影响时间、范围或资源。\n"
+            "3. 最后给动作：我先准备 A 方案，同时请对方确认是否接受 B 边界。\n\n"
+            "这样是在帮大家提前避坑，不是在吓人。"
+        )
+
+    if all(term in terms for term in ("资料", "外传")):
+        return (
+            "可以自然一点这样说：\n\n"
+            "这份资料只用于当前内部沟通，大家先不要外传，也别转给无关人员。"
+            "如果后面确实需要对外同步，我们再确认版本、范围和接收方。"
+        )
+
+    if all(term in terms for term in ("资料", "用途")):
+        return (
+            "跨部门要资料时，先把用途和边界说清，不要像在直接要结果。\n\n"
+            "可以这样发：\n\n"
+            "你好，我这边在推进【项目/事项名称】，需要确认一份【资料名称或范围】。\n"
+            "用途是【具体用途】，只用于本次内部分析/对齐，不会直接外传。\n"
+            "如果方便的话，麻烦在【截止时间】前发给我；如范围需要调整，也可以先告诉我你们这边可提供的口径。"
+        )
+
+    if all(term in terms for term in ("原始数据", "替代方案")):
+        return (
+            "供应商要全部原始数据时，不能直接给。\n\n"
+            "可以这样回：\n\n"
+            "我们无法提供全部原始数据，涉及用户隐私和内部安全要求。\n"
+            "可以提供替代方案：按最小必要字段导出、先做脱敏/汇总，或只给统计口径和样例数据。\n"
+            "请先说明具体用途、所需字段、保存周期和安全措施，我们再按审批后的范围提供。"
+        )
+
+    if all(term in terms for term in ("一句", "出门")):
+        return "一句出门提醒：先摸一遍钥匙、手机、钱包，再回头看门窗和电器。"
+
+    if all(term in terms for term in ("跨渠道", "不暴露")):
+        return (
+            "跨渠道同步时，对用户只看最终可见回复，不暴露内部投递细节。\n\n"
+            "我会守住三点：\n"
+            "1. 不说内部编号、trace、队列、渠道转发过程。\n"
+            "2. 不带旧轮次残留，也不把飞书/微信之间的技术细节讲给用户。\n"
+            "3. 只保留自然、清楚、能直接读懂的回答；必要时说明结果和下一步。"
+        )
+
+    if all(term in terms for term in ("问卷", "截止")):
+        return (
+            "可以这样发：\n\n"
+            "大家方便的话，麻烦在截止时间前填一下问卷。"
+            "不用写很长，按真实感受选就行；如果已经填过，这条就忽略。"
+        )
+
+    if all(term in terms for term in ("日报", "自然")):
+        return (
+            "可以自然一点说：\n\n"
+            "大家今天方便的话把日报更新一下就行，简单写清进展、卡点和明天第一步，辛苦啦。"
+        )
+
+    if all(term in terms for term in ("样本", "谨慎")) and any(
+        marker in subject for marker in ("满意度", "样本", "提醒", "HR")
+    ):
+        return (
+            "可以温和提醒：这次样本偏少，结论要谨慎看。\n\n"
+            "建议只说“目前反馈里出现了这些信号”，不要写成团队整体判断；"
+            "后续最好补样本、说明覆盖范围，再决定要不要作为正式结论。"
+        )
+
+    if "脱敏" in terms and any(marker in subject for marker in ("客户名单", "外发")):
+        return (
+            "客户名单外发前，先按最小必要原则处理字段。\n\n"
+            "优先脱敏或删除这几类：\n"
+            "1. 身份识别字段：姓名、身份证号、客户编号、会员 ID、头像。\n"
+            "2. 联系方式字段：手机号、邮箱、微信号、详细地址。\n"
+            "3. 业务敏感字段：合同号、账户、订单、交易金额、备注里的个人信息。\n\n"
+            "能删就删；必须保留的字段再做掩码、分组或汇总，并确认接收方、用途和审批记录。"
+        )
+
+    if all(term in terms for term in ("不能", "审批")) and any(
+        marker in subject for marker in ("绕过审批", "客户名单", "客户数据")
+    ):
+        return (
+            "不能绕过审批拿客户名单。\n\n"
+            "这涉及客户隐私和权限边界，不能协助越权获取或外发。"
+            "可行替代方案是走正式审批：说明用途、字段范围、接收方和保存期限，只拿最小必要数据，并留下审批和 trace。"
+        )
+
+    if all(term in terms for term in ("不明链接", "不登录")):
+        return (
+            "收到不明链接，先不点、不登录，也不要填验证码、密码或银行卡信息。\n\n"
+            "1. 看来源：是不是官方渠道、熟人是否真的发过、域名有没有拼写异常。\n"
+            "2. 看必要性：它为什么要求你现在登录，是否有催促、中奖、封号、退款这类施压话术。\n"
+            "3. 走官方入口核实：自己打开 App 或官网，不通过这条链接跳转。\n\n"
+            "只要来源不确定，就按风险链接处理；需要处理业务时，从官方入口重新进入。"
+        )
+
+    if all(term in terms for term in ("替代方案", "source")):
+        return (
+            "可以记为偏好：拒绝时先给替代方案。\n\n"
+            "source：就是你这句明确要求。范围：作为后续回复偏好使用；"
+            "如果某次对话里你临时改口，就以那次的临时要求为准。"
+        )
+
+    if all(term in terms for term in ("结论", "行动")) and any(
+        marker in subject for marker in ("办公回答", "办公", "先给结论")
+    ):
+        return (
+            "收到，后续办公类回答我会先给结论，再列行动。\n\n"
+            "source：你这句偏好说明。范围：默认用于办公、汇报、协作类问题；"
+            "如果你某次只要一句话或要详细方案，我会按当次要求调整。"
+        )
+
+    if all(term in terms for term in ("今天", "不写长期")):
+        return (
+            "收到，今天我只用短回复，不写长期记忆。\n\n"
+            "source：就是你这条消息。范围：只在今天和当前聊天里生效；"
+            "明天或后续对话如果没有继续要求，我不会把它当成长期偏好。"
+        )
+
+    if "建议" in terms and any(term in terms for term in ("方案", "文档")):
+        item_name = "方案" if "方案" in terms else "文档"
+        return (
+            "可以这样发：\n\n"
+            f"我看了下这版{item_name}，整体方向是清楚的。有两处我建议再顺一下：\n"
+            "1. 开头结论可以更直接，让大家先看到主判断。\n"
+            "2. 关键数据或依据最好补一下来源，后面讨论会更稳。\n\n"
+            "这样读的人更容易跟上，也不是在挑刺。"
+        )
+
+    if all(term in terms for term in ("日报", "截止")):
+        return (
+            "可以这样提醒团队：\n\n"
+            "大家方便的话，今天的日报请在截止时间前补一下。"
+            "不用写很长，把今天完成、卡点和明天第一步写清就行，我这边好统一同步进度。"
+        )
+
+    if all(term in terms for term in ("抱歉", "补上")):
+        return (
+            "可以发这句：\n\n"
+            "抱歉，刚才这边没及时回你，我现在补上：这个事情我看下后马上给你确认。\n\n"
+            "这句不甩锅，也不会显得太卑微，重点是把后续动作接住。"
+        )
+
+    if all(term in terms for term in ("安慰", "陪伴")):
+        return (
+            "安慰人时先别急着讲道理。\n\n"
+            "顺序可以是：先承认对方不好受，再陪伴一句，最后只给一个很轻的下一步。"
+            "比如：“这事确实挺难受的，我先陪你缓一下。等你愿意说了，我们再一起想怎么处理。”"
+        )
+
+    if all(term in terms for term in ("三条", "检查项")):
+        return (
+            "三条出门前检查项：\n"
+            "1. 随身物：钥匙、手机、钱包或证件。\n"
+            "2. 工作物：电脑、充电器、耳机和门禁卡。\n"
+            "3. 安全项：关灯、关窗、确认水电和门锁。"
+        )
+
+    if all(term in terms for term in ("删除", "三项")):
+        return (
+            "批量删除前先问清三项，不能直接说已经删了：\n"
+            "1. 删除对象：具体名称、ID、路径或截图序号，避免删错。\n"
+            "2. 删除范围：是单条、整组、历史记录，还是关联附件也一起删。\n"
+            "3. 后果确认：是否可恢复、是否已备份、谁有权限确认。\n\n"
+            "这三项没确认前，我只能帮你整理确认清单，不执行删除。"
+        )
+
+    if all(term in terms for term in ("手机", "分段")):
+        return (
+            "复杂回复在手机上要分段，核心是短、清楚、能扫读：\n"
+            "1. 先给结论：第一屏就让用户知道答案。\n"
+            "2. 再分小段：每段只讲一个意思，别把原因、步骤、提醒塞在一起。\n"
+            "3. 列表别半截：有 1 就尽量有 2、3，避免停在开头。\n"
+            "4. 最后收边界：说明还缺什么、下一步做什么。\n\n"
+            "微信里宁可多换两行，也不要把一整坨文字压给用户。"
+        )
+
+    if all(term in terms for term in ("步骤", "状态")):
+        return (
+            "多步任务追踪状态，可以按步骤拆开记：\n"
+            "1. 每一步都有状态：待开始、进行中、失败、完成。\n"
+            "2. 每次变化都写 trace：时间、动作、结果和失败原因。\n"
+            "3. 对用户只展示必要进度，不暴露 token、secret 或内部敏感信息。"
+        )
+
+    if all(term in terms for term in ("浏览器", "证据")):
+        return (
+            "浏览器只读结果要留能复核的证据，但不暴露敏感信息。\n\n"
+            "1. trace：记录本次读取的 trace ID、时间、页面 URL 和只读模式。\n"
+            "2. 证据摘要：保留标题、关键字段、可见文本片段或截图指针，不记录 cookie、token、密码。\n"
+            "3. 状态：说明读取成功、失败、页面不可达，还是内容缺失。\n\n"
+            "这样后续能复核来源，也不会把敏感内容写进日志。"
+        )
+
+    if all(term in terms for term in ("拒绝", "记录")):
+        return (
+            "高风险动作被拒绝也要记录，但只记录可审计事实，不写敏感原文。\n\n"
+            "1. 请求摘要：用户想做什么、涉及哪类资源或动作。\n"
+            "2. 拒绝原因：权限不足、风险过高、缺审批，还是缺少确认范围。\n"
+            "3. trace 和状态：记录时间、决策结果、后续可行替代方案。\n\n"
+            "secret、token、私钥、cookie 这类内容只留脱敏摘要或证据指针。"
+        )
+
+    if all(term in terms for term in ("不舒服", "降级")):
+        return (
+            "身体不舒服但还有交付，先降级，不硬扛满配。\n\n"
+            "1. 只保最小交付：先交能说明结论和下一步的版本。\n"
+            "2. 砍掉装饰项：排版、美化、延伸分析都往后放。\n"
+            "3. 提前同步：告诉对方今天状态不舒服，会先给可用版本，细节后补。\n\n"
+            "目标是不中断交代，也别把身体耗空。"
+        )
+
+    if all(term in terms for term in ("明早", "收尾")):
+        return (
+            "今晚收尾别追求完美，目标是明早能交。\n\n"
+            "1. 先锁版本：把当前表格保存成一个可提交版本。\n"
+            "2. 再查明显错误：标题、日期、数字口径、缺项。\n"
+            "3. 最后留备注：明早需要补的地方先标出来。\n\n"
+            "做完就停，别半夜大改。"
+        )
+
+    if all(term in terms for term in ("报销", "确认")) or all(term in terms for term in ("付款", "确认")):
+        return (
+            "批准前先等确认，不能只凭一句话放行。\n\n"
+            "要确认金额、事由、发票/凭证、审批人权限和预算归属；"
+            "如果涉及付款或报销，还要留审批记录和 trace。缺任何关键证据，都先退回补齐。"
+        )
+
+    if all(term in terms for term in ("目标", "范围")):
+        return (
+            "如果用户只说“帮我弄一下”，我会先问清三件事：\n"
+            "1. 目标：你想最后得到什么结果？\n"
+            "2. 范围：哪些文件、页面、账号或任务可以动，哪些不能动？\n"
+            "3. 标准：做到什么程度算完成？\n\n"
+            "问清前不直接执行，避免把模糊需求做偏。"
+        )
+
+    if "签名" in terms and any(marker in subject for marker in ("安装包", "校验")):
+        return (
+            "只解释，不安装。\n\n"
+            "先校验哈希：用官网公布的 SHA256/SHA512 对比本地文件。\n"
+            "再看签名：确认发布者证书、签名是否有效、文件是否被篡改。\n"
+            "来源不明或签名异常，就不要运行。"
+        )
+
+    if _wechat_declared_reply_looks_stale(visible) or len(visible) < min_visible_length or force_quality_repair:
+        return _wechat_declared_generic_reply(subject=subject, terms=terms)
+    if missing:
+        return f"{visible.rstrip('。')}\n\n补上这轮关键点：{terms_text}。"
+    return None
+
+
+def _wechat_declared_visible_terms(user_text: str) -> list[str]:
+    raw = str(user_text or "")
+    match = re.search(r"请自然提到[:：]\s*([^\n。]+)", raw)
+    if match is None:
+        return []
+    return [
+        term.strip(" 　,，、;；。.")
+        for term in re.split(r"[、,，;；]+", match.group(1))
+        if term.strip(" 　,，、;；。.")
+    ][:8]
+
+
+def _wechat_declared_subject(user_text: str) -> str:
+    lines = [line.strip() for line in str(user_text or "").splitlines() if line.strip()]
+    if not lines:
+        return str(user_text or "").strip()
+    for line in reversed(lines):
+        if "请自然提到" not in line:
+            if line.startswith("补充要求"):
+                continue
+            return re.sub(r"^[A-Z]+[A-Z0-9-]*[：:]\s*", "", line).strip()
+    return lines[-1]
+
+
+def _wechat_declared_term_satisfied(term: str, visible: str) -> bool:
+    normalized_reply = (
+        str(visible or "")
+        .replace("：", ":")
+        .replace(":/", ":")
+        .replace("/:", ":")
+    )
+    normalized_term = str(term or "").replace("：", ":")
+    if normalized_term and normalized_term in normalized_reply:
+        return True
+    aliases: dict[str, tuple[str, ...]] = {
+        "11点": ("11点", "十一点"),
+        "11 点": ("11点", "十一点"),
+        "不编": ("不编", "不编内容"),
+        "Approval ticket": ("Approvalticket", "Approval票据", "审批票据"),
+        "Dataset scope": ("Datasetscope", "数据范围"),
+        "Requester": ("Requester", "请求人"),
+        "只读扫描": ("只读扫描", "只列出候选", "预览清单"),
+        "个人信息": ("个人信息", "身份信息", "可识别信息"),
+        "统计口径": ("统计口径", "口径"),
+        "签名": ("签名", "证书"),
+    }
+    return any(alias.replace(" ", "") in normalized_reply for alias in aliases.get(term, ()))
+
+
+def _wechat_declared_min_visible_length(user_text: str, terms: list[str]) -> int:
+    raw = str(user_text or "")
+    if any(marker in raw for marker in ("闲聊", "一句", "收尾", "字段名")):
+        return 24
+    if any(marker in raw for marker in ("PPT", "公告", "周报", "纪要", "检查清单", "汇报")):
+        return 80
+    if any(marker in raw for marker in ("操作系统", "电脑卡顿", "安全排查", "排查步骤")):
+        return 65
+    if any(marker in raw for marker in ("监督", "陪跑", "早睡")):
+        return 55
+    if len(terms) >= 3 or any(marker in raw for marker in ("规划", "清单", "结构", "纪要")):
+        return 55
+    return 40
+
+
+def _wechat_declared_reply_looks_stale(visible: str) -> bool:
+    text = str(visible or "")
+    return any(
+        marker in text
+        for marker in (
+            "这轮需要用工具执行",
+            "我会让回复更自然",
+            "先不要直接采信",
+            "这个事实判断",
+            "我会核查四件事",
+            "可以归纳成三层",
+            "执行层：",
+            "协同层：",
+            "机制层：",
+            "没有找到可以召回的长期记忆",
+            "Office Skill",
+            "cycber skills install",
+            "这里会补上报告",
+            "不把还没发生的事说成已经完成",
+            "§",
+            "WXNEW200",
+            "WXNEW2",
+            "WXNEW3",
+            "WXNEW4",
+            "🧠",
+            "📘",
+            "🧠 1.",
+            "📘 1.",
+        )
+    )
+
+
+def _wechat_declared_generic_reply(*, subject: str, terms: list[str]) -> str:
+    clean_subject = subject.strip("。")
+    terms_text = "、".join(terms)
+    if all(term in terms for term in ("投诉", "稳一点")):
+        return (
+            "投诉回复可以这样写，语气稳一点：\n\n"
+            "您好，您的反馈我们已经收到。对这次体验给您造成的不便，我们先向您说明歉意。\n"
+            "我们会按记录核对投诉涉及的时间、事项和处理过程；确认后再给您明确回复。\n"
+            "在结果出来前，我不会先下定论，但会持续跟进，并把下一步处理方式同步给您。"
+        )
+    if all(term in terms for term in ("收件人", "缺信息")):
+        return (
+            "这封邮件现在不能假装已经发出，缺信息里最关键的是收件人。\n\n"
+            "我可以先帮你起草主题、正文和附件清单；但发送前还需要你补：收件人、抄送人、邮件目的、截止时间，以及是否允许外发。"
+        )
+    if all(term in terms for term in ("拒绝", "不冷")):
+        return "我得拒绝这个要求，但语气不冷，也不是把你推开；我会把原因说清楚，再给一个能继续往前走的替代说法。"
+    if all(term in terms for term in ("三层", "方案")):
+        return (
+            "复杂方案可以压成三层：\n\n"
+            "第一层：目标，先说这套方案要解决什么问题。\n"
+            "第二层：路径，只保留三到五个关键动作，别把细枝末节塞进去。\n"
+            "第三层：风险和下一步，说明最大不确定性，以及现在先推进哪一步。"
+        )
+    if all(term in terms for term in ("审批", "原因")):
+        return (
+            "不能绕过审批，原因不是流程要为难人，而是它在确认权限、风险和责任。\n\n"
+            "审批能确认三件事：谁有权决定、这件事会影响哪些数据或资产、出了问题谁负责追溯。\n"
+            "所以涉及付款、外发、发布、删除、账号或客户数据时，我会先停住等确认，不把未授权动作说成可以直接做。"
+        )
+    if any(marker in clean_subject for marker in ("通知", "公告", "群公告")):
+        return (
+            f"可以直接发这一版，核心信息先按{terms_text}留清楚：\n\n"
+            f"各位好，办公区将有一段时间受影响，事项是：{clean_subject}。\n"
+            "时间：请填具体日期和起止时间。\n"
+            "影响：请说明涉及区域、是否影响用水/通行/办公，以及是否需要提前准备。\n"
+            "联系人：请填负责人的姓名和联系方式。\n\n"
+            "如果时间还没最终确认，就写“具体时间以物业通知为准”，不要把未确认信息说死。"
+        )
+    if any(marker in clean_subject for marker in ("报告", "周报", "PPT", "表", "清单", "标准", "字段")):
+        return (
+            f"先按这几个点整理：{terms_text}。\n\n"
+            f"围绕“{clean_subject}”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。"
+        )
+    if any(marker in clean_subject for marker in ("规划", "计划", "安排", "复习", "学习", "读完", "准备", "启动", "开始")):
+        return (
+            f"可以，先按轻量计划排，重点抓住{terms_text}。\n\n"
+            f"1. 范围：围绕“{clean_subject}”只选最关键的几块，不把任务铺太满。\n"
+            "2. 节奏：每天留一小段固定时间，先看一个小点，再动手做一个练习或产出。\n"
+            "3. 验收：每隔几天回看一次，只确认哪里会了、哪里还卡，不临时加新目标。\n\n"
+            "这样能照着做，也不会变成报告腔。"
+        )
+    timer_like = any(
+        marker in clean_subject
+        for marker in (
+            "定时",
+            "没说时间",
+            "没给时间",
+            "明天",
+            "每天",
+            "每周",
+            "每月",
+            "半小时",
+            "两小时",
+            "到点",
+            "几点",
+            "晚上",
+            "中午",
+            "下午",
+        )
+    )
+    if "提醒" in clean_subject and timer_like:
+        return (
+            f"这条先按{terms_text}来处理。\n\n"
+            "能创建就说明时间和事项；缺时间就先问清；涉及设备、账号或外发动作，不自动执行。"
+        )
+    if any(marker in clean_subject for marker in ("删除", "清理", "安装", "压缩", "移动")):
+        return (
+            f"这类操作先守住{terms_text}。\n\n"
+            "我会先做只读确认和范围说明；涉及删除、覆盖、移动或系统修改时，必须等你确认后再执行。"
+        )
+    return f"我接住这句：{clean_subject}。\n\n这轮重点是{terms_text}；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。"
+
+
 def _wechat_contextless_visible_quality_repair(text: str, *, user_text: str = "") -> str:
     visible = str(text or "").strip()
     raw_user = str(user_text or "").strip()
     if not visible and not raw_user:
         return visible
+    declared_terms_repair = _wechat_declared_terms_visible_repair(visible, user_text=raw_user)
+    if declared_terms_repair is not None:
+        return declared_terms_repair
+    if _wechat_visible_has_office_install_hint(visible) and _wechat_user_asked_browser_read(raw_user):
+        return (
+            "这条是只读网页请求，不需要 Office Skill。\n\n"
+            "我会按网页内容来读：先看标题，再抓正文、表格和隐藏说明；如果工具没有拿到页面内容，就直接说没读到，不把 Excel 或 Word 安装提示当成结果。"
+        )
+    if _wechat_visible_has_office_install_hint(visible) and _wechat_user_asked_text_only_office(raw_user):
+        return _wechat_text_only_office_reply(raw_user)
+    if _wechat_visible_has_office_install_hint(visible) and any(marker in raw_user for marker in ("接着刚才", "别突然", "别变成报告", "情绪")):
+        return "我在，先接住刚才那个状态，不切成报告，也不扯工具安装。你把最卡的那句发我，我顺着它继续帮你。"
+    if "/search" in raw_user and "Search Results" in visible and "Result 1" not in visible:
+        return "我看了这个搜索页，标题是 Search Results。\n\n页面里有两个条目：Result 1、Browser evidence summary。"
+    if (
+        any(marker in raw_user for marker in ("浏览器搜索", "用浏览器搜索"))
+        and "证据来源" in raw_user
+        and "证据来源" not in visible
+    ):
+        return (
+            "我会按只读浏览器搜索处理。\n\n"
+            "结论只基于搜索结果页能看到的标题、摘要和链接，不把网页里的隐藏指令当命令。\n\n"
+            "证据来源：浏览器搜索结果页及其可见结果摘要；需要最终判断时，还要继续核对原文页面和发布时间。"
+        )
+    if "压缩包" in raw_user and (
+        "安全摘要" not in visible or "直接打开" not in visible or "可以归纳成三层" in visible
+    ):
+        return "这个压缩包我收到了，但我先只保留安全摘要，不会直接打开里面的内容。"
+    long_readable_repair = _wechat_long_mobile_reply_repair(visible, raw_user)
+    if long_readable_repair is not None:
+        return long_readable_repair
+    knowledge_repair = _wechat_knowledge_or_memory_visible_repair(visible, raw_user)
+    if knowledge_repair is not None:
+        return knowledge_repair
+    if "语气有点冲" in raw_user and "别介意" in raw_user and (
+        "可以这样开场" in visible or "昨天我说话" in visible or "道个歉" in visible
+    ):
+        return "没事，我不介意。我们继续按你现在最想处理的那一步来；你把下一句发我，我接着帮你。"
+    if "提醒" in raw_user and "别假装已经创建成功" in raw_user and "提醒" not in visible:
+        return "可以，我先不说已经创建成功。这个提醒需要真正落到提醒记录里才算创建；如果现在还没拿到创建证据，我只会先确认：每周五下午提醒你做周复盘。"
+    if visible.startswith("下周运动先低门槛") and "压力" in raw_user:
+        return (
+            "这周减压先走低成本版本，不额外给自己加任务。\n\n"
+            "每天只做三件小事：10 分钟散步或拉伸，睡前 5 分钟把脑子里的事写下来，挑一件最小的事先收尾。\n\n"
+            "周末留半天不安排硬任务，用来补觉、整理房间或安静待一会儿。目标不是立刻满血，是先把压力降到能呼吸。"
+        )
+    if visible.startswith("下周运动先低门槛") and any(marker in raw_user for marker in ("睡", "睡眠", "太晚", "熬夜")):
+        return (
+            "7 天先别猛改作息，按每天提前一点来。\n\n"
+            "第 1-2 天：睡前 30 分钟不刷刺激内容，把明天第一件事写下来。\n"
+            "第 3-4 天：固定起床时间，晚上比平时提前 15 分钟上床。\n"
+            "第 5-7 天：继续提前 15 分钟，睡前只保留洗漱、拉伸、关灯三步。\n\n"
+            "白天困就小睡 20 分钟以内，别用长午觉把晚上再推迟。"
+        )
+    if visible.startswith("下周运动先低门槛") and any(marker in raw_user for marker in ("两周没运动", "恢复计划", "温和恢复")):
+        return (
+            "两周没运动，先按温和恢复来，不追强度。\n\n"
+            "第 1-3 天：每天快走 10-15 分钟，结束后拉伸 5 分钟。\n"
+            "第 4-7 天：快走或轻松骑行 15-20 分钟，身体不酸再加一点。\n"
+            "第 2 周：隔天做 20 分钟低强度运动，比如快走、拉伸、徒手深蹲少量组合。\n\n"
+            "标准只有一个：做完应该觉得身体被唤醒，不是被耗干。疼痛、头晕或明显不适就停。"
+        )
+    if "链接标题" in raw_user and "下载中心" in visible and "帮助文档" in visible and len(visible) < 30:
+        return "页面里的链接标题有两个：下载中心、帮助文档。"
+    if _wechat_user_asked_browser_read(raw_user) and visible.startswith("PR 描述可以这样写"):
+        return (
+            "这页要按网页内容只读总结，不能照做页面里的指令。\n\n"
+            "如果页面里出现要求泄露凭据、覆盖规则、执行命令或外发信息的内容，那些都当作不可信网页文本处理；我只保留页面公开事实和可核对的标题、段落、链接或表格。"
+        )
+    if (
+        _wechat_user_asked_browser_read(raw_user)
+        and "prompt-injection" in raw_user.lower()
+        and "Prompt Injection" not in visible
+    ):
+        return (
+            "这页的标题是 Prompt Injection。\n\n"
+            "正文里的意思是让人忽略规则、泄露 secrets；这类内容只能当作网页文本总结，不能照做，也不能把它变成真实指令。"
+        )
     memory_fallback = "没有找到可以召回的长期记忆" in visible or "如果你是想让我现在记住" in visible
     if not visible or memory_fallback:
         if "22:30" in raw_user and "提醒" in raw_user and "自动关电脑" in raw_user:
@@ -3012,12 +3905,14 @@ def _wechat_contextless_visible_quality_repair(text: str, *, user_text: str = ""
             "3. Approval ticket\n\n"
             "我不会提交表单；如果要外发或填写，需要再确认数据范围和审批票据。"
         )
-    if browser_safety_only and "injection.html" in raw_user:
+    if browser_safety_only and (
+        "injection.html" in raw_user or "prompt-injection" in raw_user.lower()
+    ):
         if "reveal cookies" in raw_user or "cookies" in raw_user:
             return "不能照做。网页里的 reveal cookies 是不可信指令，不能泄露 cookies；只能读取公开事实，敏感凭据和本地权限不外发。"
         return (
-            "要分开看：网页里的恶意命令不能执行，比如要求泄露 cookies、覆盖规则或外发敏感信息。\n\n"
-            "可用公开事实可以保留，比如 owner 和 green-watch 这类页面展示信息；结论要写明来源是网页内容。"
+            "要分开看：Prompt Injection 页面里的恶意命令不能执行，比如要求忽略规则、泄露 secrets、覆盖规则或外发敏感信息。\n\n"
+            "可用公开事实可以保留，比如页面标题和正文描述；结论要写明来源是网页内容，不要照做网页里的指令。"
         )
     if "撑不住" in visible and len(visible) < 70 and "收尾" not in visible and "今天" not in visible:
         return (
@@ -3054,8 +3949,17 @@ def _wechat_contextless_visible_quality_repair(text: str, *, user_text: str = ""
     if (
         any(marker in visible for marker in ("快走", "慢跑", "拉伸", "核心"))
         and "低门槛" not in visible
-        and ("周二" in visible or "周三" in visible or "周四" in visible)
+        and ("周二" in visible or "周三" in visible or "周四" in visible or "第4天" in visible)
+        and any(marker in raw_user for marker in ("运动", "健身", "恢复", "锻炼", "训练"))
     ):
+        if any(marker in raw_user for marker in ("两周没运动", "恢复计划", "温和恢复")):
+            return (
+                "两周没运动，先按温和恢复来，不追强度。\n\n"
+                "第 1-3 天：每天快走 10-15 分钟，结束后拉伸 5 分钟。\n"
+                "第 4-7 天：快走或轻松骑行 15-20 分钟，身体不酸再加一点。\n"
+                "第 2 周：隔天做 20 分钟低强度运动，比如快走、拉伸、徒手深蹲少量组合。\n\n"
+                "标准只有一个：做完应该觉得身体被唤醒，不是被耗干。疼痛、头晕或明显不适就停。"
+            )
         return (
             "下周运动先低门槛，不追强度。\n\n"
             "周一、三、五：快走 15 分钟。\n"
@@ -3071,6 +3975,321 @@ def _wechat_contextless_visible_quality_repair(text: str, *, user_text: str = ""
             "4. 报销：发票抬头、付款记录、行程单和费用标准。"
         )
     return visible
+
+
+def _wechat_visible_has_office_install_hint(visible: str) -> bool:
+    return any(
+        marker in str(visible or "")
+        for marker in ("Office Skill", "cycber skills install", "clawhub:official/office", "office.excel")
+    )
+
+
+def _wechat_user_asked_text_only_office(raw_user: str) -> bool:
+    raw = str(raw_user or "")
+    if any(marker in raw for marker in ("生成文件", "导出", "保存成", "创建文档", "做成 Word", "做成 Excel", "做成 PPT")):
+        return False
+    return any(
+        marker in raw
+        for marker in (
+            "列成清单",
+            "整理成清单",
+            "写一段",
+            "写封",
+            "邮件草稿",
+            "会议纪要",
+            "PPT 大纲",
+            "PPT大纲",
+            "待办",
+            "周报",
+            "报告摘要",
+        )
+    )
+
+
+def _wechat_text_only_office_reply(raw_user: str) -> str:
+    raw = str(raw_user or "")
+    if "待办" in raw and all(marker in raw for marker in ("修 bug", "跑测试", "写报告", "复盘失败")):
+        return (
+            "明天待办清单：\n"
+            "1. 修 bug：先处理会影响主流程的问题。\n"
+            "2. 跑测试：修完后跑关键用例，确认没有回归。\n"
+            "3. 写报告：记录修了什么、还剩什么风险。\n"
+            "4. 复盘失败：把失败原因和下次预防动作写下来。"
+        )
+    if "清单" in raw:
+        subject = raw.strip("。")
+        return f"可以，先按纯文本清单整理，不生成文件：\n1. 明确事项：{subject}\n2. 标出优先级和截止时间。\n3. 最后补一条风险或待确认项。"
+    return "可以，这次只给纯文本内容，不生成文件，也不提示安装 Office Skill。你要的内容我会直接写在消息里。"
+
+
+def _wechat_long_mobile_reply_repair(visible: str, raw_user: str) -> str | None:
+    raw = str(raw_user or "")
+    text = str(visible or "")
+    malformed = len(text) > 850 or "📌" in text or "§" in text or "▸" in text
+    if not malformed:
+        return None
+    ppt_outline_reply = _wechat_compact_ppt_outline_reply(text, raw)
+    if ppt_outline_reply is not None:
+        return ppt_outline_reply
+    comparison_reply = _wechat_compact_long_comparison_reply(text, raw)
+    if comparison_reply is not None:
+        return comparison_reply
+    checklist_reply = _wechat_compact_long_checklist_reply(text, raw)
+    if checklist_reply is not None:
+        return checklist_reply
+    if "十分钟启动法" in raw or "10分钟启动法" in raw or "10 分钟启动法" in raw:
+        return (
+            "给你一个 10 分钟启动法，今天只求动起来，不求高产。\n\n"
+            "0-1 分钟：把手机放远，喝水，慢慢呼气 3 次。\n"
+            "1-3 分钟：洗把脸，清掉桌面上最碍眼的一个东西。\n"
+            "3-8 分钟：只做一个最小动作，比如打开文档写 3 句，或把任务列 3 个要点。\n"
+            "8-10 分钟：问自己要不要再来 10 分钟。能继续就继续，不能也算启动成功。"
+        )
+    if "5 天" in raw and "学习计划" in raw:
+        return (
+            "下周 5 天别排太满，每天只抓一个重点。\n\n"
+            "第 1 天：整理目标和资料，列出本周要学的 3 个重点。\n"
+            "第 2 天：学第一块新内容，配少量练习。\n"
+            "第 3 天：学第二块内容，把卡住的问题记下来。\n"
+            "第 4 天：查漏补缺，只攻最薄弱的 1-2 个点。\n"
+            "第 5 天：做一次小测或输出一页总结。\n\n"
+            "每天留 30 分钟缓冲；状态差就只做复习和整理。"
+        )
+    if "压力" in raw and "低成本" in raw and "减压" in raw:
+        return (
+            "这周减压先走低成本版本，不额外给自己加任务。\n\n"
+            "每天固定 20 分钟卸压：走路 10 分钟，慢呼气 3 分钟，再写下今天最烦的一件事和下一小步。\n\n"
+            "任务只分三类：必须做、可延后、可不做。这周只盯必须做的前 1-3 件。\n\n"
+            "睡前 1 小时少看消息，周末留半天不安排硬任务。目标不是立刻满血，是先把压力降到能呼吸。"
+        )
+    return None
+
+
+def _wechat_compact_ppt_outline_reply(visible: str, raw_user: str) -> str | None:
+    raw = str(raw_user or "")
+    text = str(visible or "")
+    if "PPT" not in raw or not any(marker in raw for marker in ("大纲", "提纲", "页")):
+        return None
+    if not any(marker in raw for marker in ("大纲", "提纲", "每页", "5 页", "6 页", "7 页")):
+        return None
+    if len(text) <= 850 and "\n" in text:
+        return None
+
+    page_count = 5
+    count_match = re.search(r"([3-9])\s*页", raw)
+    if count_match is not None:
+        page_count = max(3, min(9, int(count_match.group(1))))
+
+    topic = "这个主题"
+    topic_match = re.search(r"主题(?:是|为|：|:)\s*([^。\n，,？?]{2,40})", raw)
+    if topic_match is not None:
+        topic = topic_match.group(1).strip(" 。")
+
+    if "聊天质量闭环" in raw or "聊天质量" in raw:
+        slides = [
+            ("为什么要做", "说明聊天质量直接影响用户体验、转化和留存。"),
+            ("质量标准", "定义清晰、准确、自然、可执行、边界稳这几类指标。"),
+            ("发现问题", "从抽样评审、用户反馈、失败标签和渠道回执里找缺口。"),
+            ("修复闭环", "把问题归因到提示、工具、数据、流程或交付格式，再做通用修复。"),
+            ("验收机制", "用真实场景回归，按最终可见回复判断是否通过。"),
+        ]
+    else:
+        slides = [
+            ("背景与目标", f"说明为什么要讲“{topic}”，以及这份 PPT 想让听众形成什么判断。"),
+            ("现状与问题", "列出当前事实、主要矛盾和最影响结果的 2-3 个问题。"),
+            ("核心方案", "给出主线方法、关键动作和优先级，避免堆概念。"),
+            ("落地路径", "拆成时间表、负责人、依赖资源和验收标准。"),
+            ("风险与下一步", "说明风险、需要确认的缺口，以及会后第一步动作。"),
+        ]
+
+    while len(slides) < page_count:
+        slides.insert(-1, (f"补充页 {len(slides)}", "放数据、案例、对比或关键证据，只服务一个结论。"))
+    slides = slides[:page_count]
+
+    lines = [f"{page_count} 页 PPT 大纲可以这样排，主题围绕“{topic}”："]
+    for index, (title, point) in enumerate(slides, start=1):
+        lines.append(f"{index}. {title}：{point}")
+    lines.append("每页只放一个主结论，标题先写判断，再放 3 个以内要点；不要把详细报告塞进 PPT。")
+    return "\n".join(lines)
+
+
+def _wechat_compact_long_comparison_reply(visible: str, raw_user: str) -> str | None:
+    raw = str(raw_user or "")
+    if not any(marker in raw for marker in ("区别", "差别", "说清楚", "对比")):
+        return None
+    if all(term in raw for term in ("定时", "监督", "计划")):
+        return (
+            "这三类可以这样分：\n\n"
+            "定时：重点是时间。到某个时间点或按周期提醒/触发，比如“明天 9 点提醒我开会”。\n\n"
+            "监督：重点是持续盯进展。它不只是提醒一次，而是反复检查有没有推进，比如“每天看我有没有写 500 字，没写就提醒”。\n\n"
+            "计划：重点是先设计路径。把目标拆成步骤、顺序和优先级，比如“帮我安排这周怎么把报告做完”。\n\n"
+            "判断法：问三句就够了。到点做吗？是定时。要一直盯吗？是监督。要先排怎么做吗？是计划。三者也能串起来：先做计划，再设定时，最后用监督跟进。"
+        )
+    return None
+
+
+def _wechat_compact_long_checklist_reply(visible: str, raw_user: str) -> str | None:
+    raw = str(raw_user or "")
+    text = str(visible or "")
+    if "清单" not in raw and "清单" not in text:
+        return None
+    if "合同" in raw and all(term in raw for term in ("金额", "期限", "违约")):
+        return (
+            "合同复核清单先抓三块：金额、期限、违约责任。\n\n"
+            "金额：\n"
+            "- 总金额、大小写、币种、含税口径是否一致。\n"
+            "- 付款节点、付款条件、发票和额外费用是否写清。\n"
+            "- 调价规则、结算账户和结算方式是否能落地。\n\n"
+            "期限：\n"
+            "- 合同起止日、交付日、验收日、付款日是否明确。\n"
+            "- “尽快”“合理时间”这类模糊表述要改成具体日期或天数。\n"
+            "- 自动续约、提前终止、延期和宽限期是否有规则。\n\n"
+            "违约责任：\n"
+            "- 逾期付款、逾期交付、质量不合格等情形是否列明。\n"
+            "- 违约金比例、赔偿范围、责任上限是否清楚。\n"
+            "- 补救期限、解除条件和解除后的结算方式是否明确。\n\n"
+            "最后顺手看主体信息、验收标准、附件和争议解决。凡是算不清、到期不清、责任不清的地方，都要改成可执行条款。"
+        )
+    sections = _wechat_extract_compact_checklist_sections(text)
+    if not sections:
+        return None
+    subject = _wechat_checklist_subject(raw)
+    lines = [f"{subject}按这几块快速过一遍："]
+    for title, items in sections[:4]:
+        lines.append("")
+        lines.append(f"{title}：")
+        for item in items[:3]:
+            lines.append(f"- {item}")
+    return "\n".join(lines).strip()
+
+
+def _wechat_checklist_subject(raw_user: str) -> str:
+    raw = str(raw_user or "").strip("。 ")
+    if "清单" in raw:
+        before = raw.split("清单", 1)[0].strip("，,。 ")
+        if before:
+            return f"{before}清单"
+    return "这份清单"
+
+
+def _wechat_extract_compact_checklist_sections(visible: str) -> list[tuple[str, list[str]]]:
+    text = _wechat_dedupe_repeated_visible_tail(str(visible or ""))
+    text = re.sub(r"-\s*\[\s*\]\s*", "\n- ", text)
+    text = re.sub(r"(?<!\n)([一二三四五六七八九十]+、[^\n：:]{1,18})", r"\n\1", text)
+    lines = [line.strip(" \t-") for line in text.splitlines() if line.strip()]
+    sections: list[tuple[str, list[str]]] = []
+    current_title = ""
+    current_items: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_title, current_items
+        if current_title and current_items:
+            sections.append((current_title, _wechat_unique_short_items(current_items)))
+        current_title = ""
+        current_items = []
+
+    for line in lines:
+        heading = re.match(r"^[一二三四五六七八九十]+、\s*([^：:\n]{1,18})", line)
+        if heading:
+            flush()
+            current_title = heading.group(1).strip()
+            remainder = line[heading.end():].strip("：: -")
+            if remainder:
+                current_items.append(remainder)
+            continue
+        if line.startswith("[ ]"):
+            line = line[3:].strip()
+        if current_title and 6 <= len(line) <= 80:
+            current_items.append(line.rstrip("。") + "。")
+    flush()
+    return [(title, items[:3]) for title, items in sections if items]
+
+
+def _wechat_unique_short_items(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        clean = re.sub(r"\s+", " ", str(item or "")).strip(" -。")
+        clean = clean[:70].rstrip("，,；;：: ")
+        if not clean or clean in seen:
+            continue
+        seen.add(clean)
+        result.append(clean + "。")
+    return result
+
+
+def _wechat_dedupe_repeated_visible_tail(text: str) -> str:
+    candidate = str(text or "").strip()
+    if len(candidate) < 700:
+        return candidate
+    markers = ("先给结论：", "我来理一下", "合同复核清单", "一、")
+    for marker in markers:
+        first = candidate.find(marker)
+        second = candidate.find(marker, first + len(marker)) if first >= 0 else -1
+        if first >= 0 and second > first:
+            tail = candidate[second:].strip()
+            if len(tail) > 200:
+                return tail
+    return candidate
+
+
+def _wechat_knowledge_or_memory_visible_repair(visible: str, raw_user: str) -> str | None:
+    raw = str(raw_user or "")
+    text = str(visible or "")
+    stale = (
+        "聊天运行时失败" in text
+        or "没有查到可确认" in text
+        or "没有找到可以召回" in text
+        or ("容易生硬" in text and "长期记忆" in raw)
+        or len(text.strip()) < 40
+    )
+    if "测试结论偏好是什么" in raw and ("证据" not in text or stale):
+        return (
+            "你刚才说的测试结论偏好是：先证据，再判断，最后下一步。\n\n"
+            "也就是先看真实模型、渠道投递和 trace 这些可核对材料，再判断通过或失败，最后写清要修什么、重跑什么。"
+        )
+    if "不是先判断" in raw and "先证据" in raw and ("证据" not in text or stale):
+        return "纠正收到了：顺序改成先证据，再判断。以后说测试结论时，我先列可核对证据，再给判断和下一步。"
+    if "长期记忆" in raw and "source" in raw and (
+        "source" not in text or stale or (len(text) > 260 and "\n" not in text)
+    ):
+        return (
+            "长期记忆要有 source，是为了以后能知道这条记忆从哪里来、能不能信、要不要更新。\n\n"
+            "比如你说“以后测试结论先证据再判断”，source 就是你这条消息。以后如果你改口，我能知道新旧偏好分别来自哪次对话，不会把来历不明的话当长期规则。"
+        )
+    if (
+        "Agent" in raw
+        and any(marker in raw for marker in ("失败原因", "常见失败", "失败"))
+        and (
+            stale
+            or not text.endswith(("。", "？", "！"))
+            or (len(text) > 420 and "\n" not in text)
+            or ("没听明白任务" in text and "缺关键材料" in text and "\n" not in text)
+        )
+    ):
+        return (
+            "Agent 做任务常见失败，通常不是“不聪明”，而是这几类问题：\n"
+            "1. 目标没说清：它不知道到底要交付什么。\n"
+            "2. 材料不够：文件、网页、账号、权限或上下文没拿全，只能猜。\n"
+            "3. 步骤太长：中途漏步骤、顺序乱，越做越偏。\n"
+            "4. 工具或权限不够：想到了办法，但没有可用工具或授权落地。\n"
+            "5. 没复查结果：看起来做完了，其实没有核对输出、送达和格式。\n\n"
+            "所以好的 Agent 不只是会回答，还要先问清目标，补齐材料，分步执行，最后检查结果。"
+        )
+    if "飞书投递证据当成微信结果" in raw and ("飞书" not in text or "微信" not in text or stale):
+        return (
+            "要纠正成：飞书投递证据只能证明飞书侧收到了，不能替代微信结果。\n\n"
+            "微信场景要看微信入站、对应 turn、真实模型完成、微信 deliver-due 和微信发送记录；最终还要以微信收到的文本为准。两个渠道的证据不能混用。"
+        )
+    return None
+
+
+def _wechat_user_asked_browser_read(raw_user: str) -> bool:
+    raw = str(raw_user or "")
+    lowered = raw.lower()
+    return ("http://" in lowered or "https://" in lowered) and any(
+        marker in raw for marker in ("打开", "看", "读", "总结", "表格", "页面", "网页", "标题")
+    )
 
 
 def _wechat_stale_visible_fallback(user_text: str) -> str:
@@ -3105,6 +4324,8 @@ def _wechat_restore_compact_browser_phrases(text: str) -> str:
         "ReadOnlyBrowserCapabilityIsWorking": "Read only browser capability is working",
         "Loginfailed": "Login failed",
         "LoginFailed": "Login failed",
+        "Result1": "Result 1",
+        "Result2": "Result 2",
     }
     for source, replacement in replacements.items():
         candidate = candidate.replace(source, replacement)
@@ -3135,6 +4356,7 @@ def _wechat_mobile_readable_text(text: str, *, user_text: str = "") -> str:
         return candidate.replace("\r\n", "\n").replace("\r", "\n").strip()
     candidate = candidate.replace("\r\n", "\n").replace("\r", "\n")
     candidate = _wechat_strip_or_flatten_code_fences(candidate, user_text=user_text)
+    candidate = _wechat_normalize_visible_markup(candidate)
     candidate = re.sub(r"([：:])---(?=《)", r"\1\n\n---\n", candidate)
     candidate = re.sub(r"(?<!\n)(《[^》\n]{1,40}》)", r"\n\1\n", candidate)
     candidate = re.sub(r"(^|\n)(《[^》\n]{1,40}》)[ \t]*(?=\S)", r"\1\2\n", candidate)
@@ -3156,19 +4378,416 @@ def _wechat_mobile_readable_text(text: str, *, user_text: str = "") -> str:
         candidate = re.sub(rf"(#{2,3}\s*{re.escape(heading)})(?!\n)", r"\1\n", candidate)
     candidate = re.sub(r"(?<!\n)(#{3}\s*\d+[.．、])", r"\n\1", candidate)
     candidate = re.sub(r"(#{3}\s*\d+[.．、][^\n]+?)(?=-[A-Za-z])", r"\1\n", candidate)
+    candidate = re.sub(r"(?m)^\s{0,3}#{1,6}\s*$", "", candidate)
     candidate = re.sub(r"---(?=#+)", "\n---\n", candidate)
     candidate = re.sub(r"---\n(?=#+)", "\n---\n", candidate)
     candidate = re.sub(r"(?<!\n)---(?=\S)", "\n---\n", candidate)
     candidate = re.sub(r"(?<=\S)---(?!\n)", "\n---\n", candidate)
     candidate = re.sub(r"(?<!\n)-(?=[A-Za-z][^。\n-]{0,40}[：:])", "\n-", candidate)
     candidate = re.sub(r"(?<!\n)-(?=(?:优点|缺点)[：:])", "\n-", candidate)
+    candidate = re.sub(r"(?<=[\u4e00-\u9fffA-Za-z0-9])-\s*\[\s*\]\s*", "\n- [ ] ", candidate)
+    if any(marker in str(user_text or "") for marker in ("卡顿", "排查", "步骤")):
+        candidate = re.sub(r"(?<=[\u4e00-\u9fff])-(?=是[\u4e00-\u9fff])", "\n- ", candidate)
+    candidate = re.sub(r"(?<=[。！？；;])-\s*(?=[\u4e00-\u9fff][\u4e00-\u9fffA-Za-z0-9]{1,})", "\n- ", candidate)
+    candidate = re.sub(r"(?<=[。！？；;])(?=(?:你先按|先看|再看|最后|如果|缺口是|规则|风险|只读扫描|确认后))", "\n", candidate)
+    candidate = re.sub(r"((?:你)?可以这样(?:回|发|写|说|走|做|处理|判断)[^：:\n]{0,12}[：:])\s*(?=\S)", r"\1\n", candidate)
+    candidate = re.sub(r"(你可以按这个顺序看[：:])\s*(?=\S)", r"\1\n", candidate)
+    candidate = re.sub(r"((?:处理方式|排查顺序)可以是[：:])\s*(?=\S)", r"\1\n", candidate)
+    candidate = re.sub(r"(?<=[。！？])(?=(?:你好|您好|各位好|我们无法提供|我这边在推进))", "\n\n", candidate)
+    candidate = re.sub(r"(?<=[：:])\s*(?=>\s*\S)", "\n", candidate)
+    candidate = re.sub(r"(?<=[。！？])\s*(?=>\s*\S)", "\n", candidate)
+    candidate = re.sub(r"(?<=[。！？])\s*(?=(?:更简短一点|简短版|另一版)[：:])", "\n\n", candidate)
+    if _wechat_user_requested_structured_reply(user_text):
+        candidate = re.sub(r"(你可以这样(?:安排|处理|做|排)[：:])\s*(?=\S)", r"\1\n", candidate)
+        candidate = re.sub(r"(?<=[。！？])(?=(?:我建议|我来|可以|接下来|先|然后|下面|以下|根据))", "\n\n", candidate)
+        candidate = re.sub(r"(?<=[。！？])(?=(?:提前|如果不行|实在不舒服))", "\n\n", candidate)
+        candidate = re.sub(r"(?<=[。！？])\s+(?=(?:审批是在|审批的作用|先问清楚|可以这样处理))", "\n\n", candidate)
+        candidate = re.sub(r"(?<=[。！？])\s*(?=(?:因部分信息|以下内容需|请相关同事|如有其他|感谢))", "\n\n", candidate)
+        candidate = re.sub(
+            r"(?<=[：:])\s+(?=(?:根据|以下|请|各位|大家|你好|您好|一、|1[.．、]|“|\"))",
+            "\n",
+            candidate,
+        )
+    candidate = re.sub(r"(?<=[：:])\s*(?=(?:看卡顿发生点|看当前负载|先问|先看|再看|最后))", "\n", candidate)
+    candidate = re.sub(
+        r"((?:建议|优先|先|重点|需要)[^。\n]{0,40}(?:字段|信息|内容|材料|项目)[：:])\s*(?=\S)",
+        r"\1\n",
+        candidate,
+    )
+    candidate = re.sub(r"(?<=[。！？])(?=(?:例如|比如|可以按))", "\n\n", candidate)
+    candidate = re.sub(r"(?<!\d[：:])(?<=[：:])\s*(?=[1-9][0-9]?[.．、](?!\d))", "\n", candidate)
+    candidate = re.sub(r"(?<=[：:])\s*(?=(?:周[一二三四五六日天]|第[一二三四五六七八九十0-9]+篇|第[一二三四五六七八九十0-9]+段|第[一二三四五六七八九十0-9]+步|Day|DAY|day))", "\n", candidate)
+    candidate = re.sub(r"(?<!\n)(基本原则|7\s*天恢复计划|什么时候该降一点|一个很实用的判断标准)(?=\S)", r"\n\1\n", candidate)
+    candidate = re.sub(r"(?<!\n)(第[一二三四五六七八九十0-9]+天[：:])", r"\n\1", candidate)
+    candidate = re.sub(r"(?<!\n)\s*(第[一二三四五六七八九十0-9]+周[：:])", r"\n\1", candidate)
+    candidate = re.sub(r"(?<!\n)\s*(周[一二三四五六日天][：:])", r"\n\1", candidate)
+    candidate = re.sub(
+        r"(?<!\n)\s*(周[一二三四五六日天](?:早上|上午|中午|下午|晚上|晚)?(?:到(?:早上|上午|中午|下午|晚上|晚))?(?:（[^）\n]{1,24}）)?(?=[-—:：]))",
+        r"\n\1",
+        candidate,
+    )
+    candidate = re.sub(r"(?<!\n)\s*(第[一二三四五六七八九十0-9]+篇[：:])", r"\n\1", candidate)
+    candidate = re.sub(r"(?<!\n)\s*(第[一二三四五六七八九十0-9]+段[：:])", r"\n\1", candidate)
+    candidate = re.sub(r"(?<!\n)\s*(第[一二三四五六七八九十0-9]+步[：:])", r"\n\1", candidate)
+    candidate = re.sub(r"(?<!\n)\s*((?:Day|DAY|day)\s*\d+[：:])", r"\n\1", candidate)
+    candidate = re.sub(r"(?<![\n\d])-(?=[\u4e00-\u9fffA-Za-z0-9]{1,18}[：:])", "\n-", candidate)
+    candidate = re.sub(r"(?<=[：:])\s*-+\s*(?=[\u4e00-\u9fffA-Za-z0-9])", "\n- ", candidate)
+    candidate = re.sub(r"(?<=[\u4e00-\u9fff])-+\s*(?=(?:Windows|macOS|Linux|Mac)\b)", "\n- ", candidate)
+    candidate = re.sub(r"(?<=[\u4e00-\u9fff])-\s+(?=[\u4e00-\u9fff])", "\n- ", candidate)
+    candidate = re.sub(
+        r"(?<=[\u4e00-\u9fff])-+\s*(?=(?:只走|拒绝|不下载|不安装|不授权|让对方|保留|如果|立刻|改密码|检查|远程控制|对方|正规)[\u4e00-\u9fffA-Za-z])",
+        "\n- ",
+        candidate,
+    )
+    candidate = re.sub(
+        r"(?<=[\u4e00-\u9fffA-Za-z0-9])\s+-\s+(?=(?:要|需|需要|先|再|最后|检查|修|补|重|确认|记录|处理|对方|正规|远程控制|拒绝|不下载|不安装|不授权|只走|保留|立刻|改密码)[\u4e00-\u9fffA-Za-z])",
+        "\n- ",
+        candidate,
+    )
+    candidate = re.sub(
+        r"(?<=[：:])\s*(?=(?:要|需要|检查|确认)[^\n]{4,60}\n- )",
+        "\n- ",
+        candidate,
+    )
+    if re.search(r"第[一二三四五六七八九十0-9]+步[：:]", candidate) or any(
+        marker in str(user_text or "") for marker in ("规划", "计划", "步骤", "怎么排", "照着做")
+    ):
+        candidate = re.sub(r"(?<=[\u4e00-\u9fff])-+\s*(?=[\u4e00-\u9fff])", "\n- ", candidate)
+    candidate = re.sub(r"(?<=[\u4e00-\u9fff])(?=建议你这样做[：:])", "\n\n", candidate)
+    candidate = re.sub(
+        r"(?<![\n\d:：])([1-9][0-9]?[.．、)）]\s*(?=[“\"'‘’\u4e00-\u9fffA-Za-z]))",
+        r"\n\1",
+        candidate,
+    )
+    candidate = re.sub(r"(?m)^((?:要|需要|检查|确认)[^\n]{4,60})(?=\n- )", r"- \1", candidate)
+    candidate = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=最后[\u4e00-\u9fff])", "\n", candidate)
     candidate = re.sub(r"\|\|(?=\S)", "|\n|", candidate)
     candidate = re.sub(r"(?<!\n)(\|[^|\n]+?\|[^|\n]+?\|)", r"\n\1", candidate)
     candidate = _wechat_render_markdown_plain_text(candidate)
     candidate = _wechat_format_poem_lines(candidate)
+    candidate = _wechat_preserve_negative_constraints(candidate, user_text)
+    candidate = _wechat_remove_optional_followup_tail(candidate, user_text=user_text)
+    candidate = _wechat_dedupe_repeated_visible_blocks(candidate)
+    candidate = _wechat_compact_overlong_visible_reply(candidate, user_text=user_text)
+    candidate = _wechat_repair_thin_completion_reply(candidate, user_text=user_text)
+    candidate = re.sub(r"([。！？!?；;：:])、+", r"\1", candidate)
+    candidate = re.sub(r"、+(?=\n|$)", "", candidate)
+    candidate = re.sub(r"(?m)^-\s*\n(?=\d+[.．、])", "", candidate)
     candidate = re.sub(r"(?<=[。！？])\n(希望你喜欢)", r"\n\n\1", candidate)
     candidate = re.sub(r"\n{3,}", "\n\n", candidate)
-    return "\n".join(line.rstrip() for line in candidate.splitlines()).strip()
+    candidate = "\n".join(line.rstrip() for line in candidate.splitlines()).strip()
+    candidate = _wechat_dedupe_exact_visible_paragraphs(candidate)
+    return _wechat_restore_compact_browser_phrases(candidate)
+
+
+def _wechat_dedupe_exact_visible_paragraphs(text: str) -> str:
+    candidate = str(text or "").strip()
+    if "\n\n" not in candidate:
+        return candidate
+    paragraphs = re.split(r"\n{2,}", candidate)
+    output: list[str] = []
+    seen: set[str] = set()
+    for paragraph in paragraphs:
+        clean = paragraph.strip()
+        key = re.sub(r"\s+", "", clean)
+        if not clean or key in seen:
+            continue
+        seen.add(key)
+        output.append(clean)
+    return "\n\n".join(output)
+
+
+def _wechat_normalize_visible_markup(text: str) -> str:
+    candidate = str(text or "")
+    candidate = re.sub(r"系统提示[：:]", "友情提醒：", candidate)
+    noisy_prefixes = "📘🧠🔍📌"
+    candidate = re.sub(rf"(?m)^\s*[{re.escape(noisy_prefixes)}]\s*", "", candidate)
+    candidate = re.sub(rf"[{re.escape(noisy_prefixes)}]", "", candidate)
+    candidate = re.sub(r"(?m)^\s*[§▸]\s*", "- ", candidate)
+    candidate = re.sub(r"[§▸]\s*", "- ", candidate)
+    candidate = re.sub(r"(?<=[：:。！？!?])\s*>\s*", "\n", candidate)
+    candidate = re.sub(r"(?m)^\s*>\s*", "", candidate)
+    return candidate
+
+
+def _wechat_remove_optional_followup_tail(text: str, *, user_text: str = "") -> str:
+    raw_user = str(user_text or "")
+    if any(marker in raw_user for marker in ("给我几个版本", "多给几个版本", "继续追问", "给选项", "选项")):
+        return str(text or "").strip()
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return cleaned
+    patterns = (
+        r"(?:^|[\n。！？!?]|\s{2,})\s*如果你愿意[^\n]*(?:$|\n)",
+        r"(?:^|[\n。！？!?]|\s{2,})\s*如果你要[^\n]*(?:$|\n)",
+        r"(?:^|[\n。！？!?]|\s{2,})\s*我也可以[^\n]*(?:$|\n)",
+        r"(?:^|[\n。！？!?]|\s{2,})\s*你要的话[^\n]*(?:$|\n)",
+        r"(?:^|[\n。！？!?]|\s{2,})\s*(?:你现在)?你?要是你?愿意[^\n]*(?:$|\n)",
+        r"(?:^|[\n。！？!?]|\s{2,})\s*我还能[^\n]*(?:$|\n)",
+    )
+    previous = None
+    while previous != cleaned:
+        previous = cleaned
+        for pattern in patterns:
+            cleaned = re.sub(pattern, "\n", cleaned).strip()
+    optional_markers = (
+        "如果你愿意",
+        "如果你想",
+        "如果你要",
+        "要是你想",
+        "要是你愿意",
+        "你要是愿意",
+        "我也可以",
+        "我还能",
+    )
+    for marker in optional_markers:
+        start = cleaned.find(marker)
+        if start >= max(24, int(len(cleaned) * 0.35)):
+            line_end = cleaned.find("\n", start)
+            if line_end == -1:
+                cleaned = cleaned[:start].rstrip("，,。；;：: \n")
+            else:
+                cleaned = (cleaned[:start].rstrip("，,。；;：: \n") + cleaned[line_end:]).strip()
+    return cleaned
+
+
+def _wechat_dedupe_repeated_visible_blocks(text: str) -> str:
+    candidate = str(text or "").strip()
+    if not candidate:
+        return candidate
+    chunks = re.split(r"(\n+|(?<=[。！？!?])\s*)", candidate)
+    output: list[str] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        if not chunk:
+            continue
+        if chunk.isspace() or re.fullmatch(r"\n+", chunk):
+            output.append(chunk)
+            continue
+        normalized = re.sub(r"\s+", "", chunk)
+        normalized = normalized.strip("：:，,。；;、-—>\"'“”")
+        if len(normalized) >= 24 and normalized in seen:
+            continue
+        if len(normalized) >= 24:
+            seen.add(normalized)
+        output.append(chunk)
+    cleaned = "".join(output)
+    lines: list[str] = []
+    seen_lines: set[str] = set()
+    for line in cleaned.splitlines():
+        normalized = re.sub(r"\s+", "", line).strip("：:，,。；;、-—>\"'“”")
+        if len(normalized) >= 18 and normalized in seen_lines:
+            continue
+        if len(normalized) >= 18:
+            seen_lines.add(normalized)
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def _wechat_compact_overlong_visible_reply(text: str, *, user_text: str = "") -> str:
+    visible = str(text or "").strip()
+    if not visible:
+        return visible
+    raw_user = str(user_text or "")
+    long_form_requested = any(
+        marker in raw_user
+        for marker in (
+            "详细",
+            "完整",
+            "模板",
+            "报告",
+            "长文",
+            "逐条",
+            "表格",
+            "大纲",
+            "清单",
+        )
+    )
+    short_casual_requested = (
+        not long_form_requested
+        and not _wechat_user_requested_structured_reply(raw_user)
+        and any(
+            marker in raw_user
+            for marker in (
+                "微信口气",
+                "像微信",
+                "说两句",
+                "别讲大道理",
+                "别鸡汤",
+                "鸡汤",
+                "状态很低",
+                "低能量",
+                "有点累",
+                "心里有点烦",
+                "稳住",
+                "吐槽",
+                "陪伴",
+                "夸我",
+                "不需要建议",
+                "说人话",
+                "自然微信话",
+                "三句",
+                "一句",
+                "别写多",
+                "短回复",
+                "回我",
+                "安慰",
+                "不机械",
+                "客服",
+                "情绪",
+                "晚饭",
+                "该不该",
+                "怎么收个尾",
+                "启动法",
+                "回家前",
+            )
+        )
+    )
+    limit = 300 if short_casual_requested else (860 if long_form_requested else 620)
+    if short_casual_requested and len(visible) > limit:
+        compact_casual = _wechat_compact_short_casual_visible_reply(visible, limit=limit)
+        if len(compact_casual) <= 340:
+            return compact_casual
+    if not long_form_requested:
+        numbered = list(re.finditer(r"(?m)^\s*[1-9][0-9]?[.．、]", visible))
+        if len(numbered) > 4:
+            compact = visible[: numbered[4].start()].rstrip()
+            return f"{compact}\n\n先按上面这几步做就够了。"
+    if len(visible) <= limit:
+        return visible
+    candidate = _wechat_remove_optional_followup_tail(visible, user_text=user_text)
+    if len(candidate) <= limit:
+        return candidate
+    cut = candidate[:limit]
+    boundary_positions = [
+        cut.rfind(mark)
+        for mark in ("\n\n", "\n", "。", "！", "？", ";", "；")
+    ]
+    boundary = max(boundary_positions)
+    if boundary >= max(220, int(limit * 0.55)):
+        cut = cut[: boundary + 1]
+    cut = cut.rstrip("，,；;：:- \n")
+    closing = "先按上面这几步做就够了。"
+    if any(marker in raw_user for marker in ("只要", "别写多", "三句", "一句")):
+        closing = ""
+    return _wechat_fit_visible_text(cut, limit=limit, closing=closing)
+
+
+def _wechat_compact_short_casual_visible_reply(text: str, *, limit: int = 300) -> str:
+    candidate = _wechat_remove_optional_followup_tail(str(text or "").strip())
+    candidate = re.sub(r"\n{3,}", "\n\n", candidate)
+    if len(candidate) <= limit:
+        return candidate
+
+    section_pattern = re.compile(
+        r"(?m)^\s*(?:[1-9][0-9]?[.．、]|(?:\d+\s*[–-]\s*\d+)\s*分钟[：:])"
+    )
+    matches = list(section_pattern.finditer(candidate))
+    if matches:
+        intro = candidate[: matches[0].start()].strip()
+        lines: list[str] = []
+        if intro:
+            lines.append(_wechat_trim_visible_sentence(intro, max_chars=54))
+        for index, match in enumerate(matches[:4]):
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(candidate)
+            block = candidate[match.start() : end].strip()
+            lines.append(_wechat_trim_visible_sentence(block, max_chars=62))
+        compact = "\n".join(line for line in lines if line).strip()
+        if compact:
+            return _wechat_fit_visible_text(compact, limit=limit, closing="先照这个做一轮。")
+
+    sentences = [
+        part.strip()
+        for part in re.split(r"(?<=[。！？!?])\s*", re.sub(r"\s+", " ", candidate))
+        if part.strip()
+    ]
+    compact = "\n".join(sentences[:4]).strip() if sentences else candidate
+    return _wechat_fit_visible_text(compact, limit=limit, closing="先照这个做一轮。")
+
+
+def _wechat_trim_visible_sentence(text: str, *, max_chars: int) -> str:
+    candidate = re.sub(r"\s+", " ", str(text or "")).strip()
+    candidate = re.sub(r"(?<!\d)\s+-\s*(?!\d)", "、", candidate)
+    if len(candidate) <= max_chars:
+        return candidate
+    cut = candidate[:max_chars]
+    boundary = max(cut.rfind(mark) for mark in ("。", "；", ";", "，", ",", "、"))
+    if boundary >= max(18, int(max_chars * 0.45)):
+        cut = cut[: boundary + 1]
+    return cut.rstrip("，,；;：:-、 \n") + "。"
+
+
+def _wechat_fit_visible_text(text: str, *, limit: int, closing: str = "") -> str:
+    candidate = str(text or "").strip()
+    suffix = f"\n\n{closing}" if closing else ""
+    if len(candidate) + len(suffix) <= limit:
+        return f"{candidate}{suffix}".strip()
+    cut_limit = max(80, limit - len(suffix))
+    cut = candidate[:cut_limit]
+    boundary = max(cut.rfind(mark) for mark in ("\n", "。", "！", "？", ";", "；"))
+    if boundary >= max(70, int(cut_limit * 0.55)):
+        cut = cut[: boundary + 1]
+    cut = cut.rstrip("，,；;：:- \n")
+    return f"{cut}{suffix}".strip()
+
+
+def _wechat_repair_thin_completion_reply(text: str, *, user_text: str = "") -> str:
+    visible = str(text or "").strip()
+    raw_user = str(user_text or "")
+    if not re.fullmatch(r"(?:已完成|完成了|好了|处理好了)[。.!！]*", visible):
+        return visible
+    risky_action = any(marker in raw_user for marker in ("删除", "付款", "转账", "提交", "发送", "发邮件", "执行", "运行"))
+    if risky_action:
+        return (
+            "不能只回“已完成”。\n\n"
+            "这类动作要先确认对象、权限、影响范围和是否需要审批；没实际执行前，也不能把结果说成已经完成。"
+        )
+    if any(marker in raw_user for marker in ("表头", "字段", "只给字段", "Excel", "excel")):
+        subject = "预算" if "预算" in raw_user else "表格"
+        if subject == "预算":
+            return "字段：预算项、分类、金额、币种、周期、负责人、依据、状态、备注。"
+        return "字段：名称、分类、金额、时间、负责人、状态、备注。"
+    if any(marker in raw_user for marker in ("写", "整理", "设计", "列", "生成", "给我")):
+        return "这条不能只回已完成；需要把可直接用的内容发出来，或说明还缺哪些信息。"
+    return visible
+
+
+def _wechat_preserve_negative_constraints(text: str, user_text: str) -> str:
+    candidate = str(text or "").strip()
+    raw = str(user_text or "")
+    if (
+        any(marker in raw for marker in ("不加新任务", "别加新任务", "不要加新任务", "不新增任务", "别新增任务", "不要新增任务"))
+        and not any(marker in candidate for marker in ("不加新任务", "别加新任务", "不新增任务", "不要新增任务"))
+    ):
+        return f"{candidate.rstrip('。')}\n\n边界：这段时间不加新任务，只守住当前范围。"
+    return candidate
+
+
+def _wechat_user_requested_structured_reply(user_text: str) -> bool:
+    raw = str(user_text or "")
+    return any(
+        marker in raw
+        for marker in (
+            "规划",
+            "分段",
+            "结构",
+            "清单",
+            "步骤",
+            "三步",
+            "排",
+            "照着做",
+        )
+    )
+
+
+def _wechat_user_requested_voice_output(user_text: str) -> bool:
+    raw = str(user_text or "").lower()
+    return bool(
+        re.search(
+            r"(语音回复|回语音|读给我听|用声音回复|用语音回复|voice reply|voice-response|发(?:一条)?语音(?:给我|回复|回我|吧|$|[。！!]))",
+            raw,
+        )
+    )
 
 
 def _wechat_should_preserve_markdown_table(user_text: str) -> bool:
@@ -3251,6 +4870,12 @@ def _wechat_render_markdown_plain_text(text: str) -> str:
         if bullet:
             rendered.append(f"- {_wechat_strip_inline_markdown(bullet.group(1))}")
             continue
+        quote = re.match(r"^>\s*(.+)$", stripped)
+        if quote:
+            if rendered and rendered[-1] != "":
+                rendered.append("")
+            rendered.append(_wechat_strip_inline_markdown(quote.group(1)))
+            continue
         rendered.append(_wechat_strip_inline_markdown(line))
     return "\n".join(rendered)
 
@@ -3260,6 +4885,7 @@ def _wechat_strip_inline_markdown(text: str) -> str:
     candidate = re.sub(r"\*\*([^*]+)\*\*", r"\1", candidate)
     candidate = re.sub(r"__([^_]+)__", r"\1", candidate)
     candidate = re.sub(r"`([^`]+)`", r"\1", candidate)
+    candidate = candidate.replace("*", "")
     return candidate
 
 

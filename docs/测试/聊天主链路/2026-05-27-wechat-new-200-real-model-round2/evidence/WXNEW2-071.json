@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-071",
+  "category": "办公表格",
+  "title": "预算表要有哪些字段？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：预算项、负责人。\n预算表要有哪些字段？",
+  "reply_text": "预算表先把责任和口径列清楚，至少要有这些字段：\n1. 预算项：这笔钱花在什么事项上。\n2. 金额和币种：预计金额、是否含税、统计周期。\n3. 负责人：谁提出、谁复核、谁最终确认。\n4. 依据：报价、合同、历史数据或测算逻辑。\n\n关键是金额要能追溯，不编数据。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a8c4bc5dfbf64c57809a743737a29b8d",
+  "trace_id": "trc_a275437c1c2a482fafda789fbbb2df06",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

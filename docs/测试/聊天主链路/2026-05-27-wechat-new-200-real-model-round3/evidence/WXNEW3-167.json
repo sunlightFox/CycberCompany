@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-167",
+  "category": "语气排版",
+  "title": "安慰人时怎么不讲课？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：安慰、陪伴。\n安慰人时怎么不讲课？",
+  "reply_text": "安慰人时先别急着讲道理。\n\n顺序可以是：先承认对方不好受，再陪伴一句，最后只给一个很轻的下一步。比如：“这事确实挺难受的，我先陪你缓一下。等你愿意说了，我们再一起想怎么处理。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_27b7c6f7b3084cf8b89003e97c1675ad",
+  "trace_id": "trc_9f21b1f629004bffae7f3839af1776ab",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

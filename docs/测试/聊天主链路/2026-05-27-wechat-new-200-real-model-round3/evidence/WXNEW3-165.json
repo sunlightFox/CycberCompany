@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-165",
+  "category": "语气排版",
+  "title": "为什么别一上来写大标题？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：先回应、再分点。\n为什么别一上来写大标题？",
+  "reply_text": "可以这样开场：昨天我说话的语气有点冲，想先跟你认真道个歉。我不是想把问题翻过去，而是希望把当时没说好的部分重新说清楚，也把关系修复一下。\n如果你愿意，我们可以先从最让你不舒服的那一句聊起\n\n补上这轮关键点：先回应、再分点。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8c673dade55e4ef5a3f038ad7af1b5dc",
+  "trace_id": "trc_8642de673cd94580a39e95309aa356c6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

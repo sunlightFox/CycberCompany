@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-088",
+  "category": "办公协作",
+  "title": "把两个紧急事项分给两个人，话术要清楚。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：负责人、截止时间。\n把两个紧急事项分给两个人，话术要清楚。",
+  "reply_text": "可以直接这样发——大家同步一下，两个紧急事项先明确负责人和截止时间，避免漏项：\n\n1. 事项一：［填写具体事项］负责人：［同事A］截止时间：今天［具体时间］前请先推进处理，有卡点及时在群里说。\n\n2. 事项二：［填写具体事项］负责人：［同事B］截止时间：今天［具体时间］前请同步当前进展和预计完成时间。\n\n以上先按这个分工执行；我这边不默认事项已完成，后续以两位负责人实际反馈为准。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_622629450cd7441ca13c4bb001c22409",
+  "trace_id": "trc_e9f72c4a1dc545be994a565be56f41b3",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-117",
+  "category": "知识研究",
+  "title": "竞品资料全是官网宣传，怎么办？",
+  "prompt": "知识类回答要说明证据、来源、样本、时效，不乱外推。请自然提到：宣传、验证。\n竞品资料全是官网宣传，怎么办？",
+  "reply_text": "我接住这句：竞品资料全是官网宣传，怎么办？。\n\n这轮重点是宣传、验证；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_eb6fee65a93f439c99e907a555927d6e",
+  "trace_id": "trc_9e13e4c3e96d43de9f39d86a45c088f7",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

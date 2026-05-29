@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-128",
+  "category": "渠道质量",
+  "title": "如果回复像系统公告，为什么要失败？",
+  "prompt": "测试治理场景要说清真实模型、微信投递、trace、最终可见回复。请自然提到：系统腔、用户体验。\n如果回复像系统公告，为什么要失败？",
+  "reply_text": "我接住这句：如果回复像系统公告，为什么要失败？。\n\n这轮重点是系统腔、用户体验；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ed80fe41140d4df98fa1ba276b0e43eb",
+  "trace_id": "trc_311aa1526577417abc6124c4b1122f8b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-077",
+  "category": "办公表格",
+  "title": "供应商评分不要只看报价，还看什么？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：报价、质量。\n供应商评分不要只看报价，还看什么？",
+  "reply_text": "我接住这句：供应商评分不要只看报价，还看什么？。\n\n这轮重点是报价、质量；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e7b2738f707840d39de7070ac9d0888d",
+  "trace_id": "trc_4dcb0dae4ab84efabcde15e3955385cf",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

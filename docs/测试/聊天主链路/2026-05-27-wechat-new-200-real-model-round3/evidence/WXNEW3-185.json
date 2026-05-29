@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-185",
+  "category": "渠道质量",
+  "title": "报告为什么不能只写通过数？",
+  "prompt": "测试治理场景要说清真实模型、微信投递、trace、最终可见回复。请自然提到：失败、证据。\n报告为什么不能只写通过数？",
+  "reply_text": "报告证据优先级可以这样排：\n先看 trace，把同一个 case 的模型调用、投递记录和最终回复串起来；\n再看真实模型事件，确认 模型开始记录、模型完成记录 和实际输出；接着看飞书投递记录，确认消息真的发出；截图放最后做用户可见结果补证，能辅助复核，但不能单独替代前面的链路证据\n\n补上这轮关键点：失败、证据。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_25ee693939ec4349b7599644e6123cf5",
+  "trace_id": "trc_1b44dede2bd447e995d098169fcf5e13",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

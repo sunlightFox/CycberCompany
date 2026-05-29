@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-012",
+  "category": "计划拆解",
+  "title": "这周想把三篇旧笔记整理完，别排太满。",
+  "prompt": "帮我规划时要分段清楚、能照着做，不要报告腔。请自然提到：三篇、不排满。\n这周想把三篇旧笔记整理完，别排太满。",
+  "reply_text": "我接住这句：这周想把三篇旧笔记整理完，别排太满。\n\n这轮重点是三篇、不排满；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_34fa315c1d8445fc9bf8328acfa35fdc",
+  "trace_id": "trc_20a6aeddd05049b1ba5f75db47325611",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

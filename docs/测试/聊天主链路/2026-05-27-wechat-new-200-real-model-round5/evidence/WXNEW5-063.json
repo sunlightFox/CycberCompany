@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-063",
+  "category": "办公文档",
+  "title": "给同事反馈方案问题，语气别像挑刺。",
+  "prompt": "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：方案、建议。\n给同事反馈方案问题，语气别像挑刺。",
+  "reply_text": "可以这样发：\n我看了下这版方案，整体方向是清楚的。有两处我建议再顺一下：\n1. 开头结论可以更直接，让大家先看到主判断。\n2. 关键数据或依据最好补一下来源，后面讨论会更稳。\n\n这样读的人更容易跟上，也不是在挑刺。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_14395df1528844f3aa4abcdbfc561788",
+  "trace_id": "trc_1de0936c531041fd87fc1e88b2cba013",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

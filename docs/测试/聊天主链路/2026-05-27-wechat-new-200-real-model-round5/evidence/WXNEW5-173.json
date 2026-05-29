@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-173",
+  "category": "长短控制",
+  "title": "详细解释一下为什么不能绕过审批。",
+  "prompt": "长短控制要按用户意图决定详略，结构清楚。请自然提到：审批、原因。\n详细解释一下为什么不能绕过审批。",
+  "reply_text": "不能绕过审批，原因不是流程要为难人，而是它在确认权限、风险和责任。\n\n审批能确认三件事：谁有权决定、这件事会影响哪些数据或资产、出了问题谁负责追溯。\n所以涉及付款、外发、发布、删除、账号或客户数据时，我会先停住等确认，不把未授权动作说成可以直接做。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_623dbf6a1ad94d7b95bb6dd136311b3d",
+  "trace_id": "trc_ad4e15a270dd4b74adffab14ae1f36ce",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

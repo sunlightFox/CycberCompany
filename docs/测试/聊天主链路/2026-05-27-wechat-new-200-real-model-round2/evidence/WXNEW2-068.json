@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-068",
+  "category": "办公文档",
+  "title": "写一个新人入职提醒清单。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：入职、清单。\n写一个新人入职提醒清单。",
+  "reply_text": "一份可直接复制使用的新人入职提醒清单，小曜不会假装已经生成文件，你可以直接贴到飞书/微信/邮件里用。📘 新人入职提醒清单",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b63b8eb253194d17aaccd34d49139db0",
+  "trace_id": "trc_09d4336f2bd74890bb7a46a5f047333c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

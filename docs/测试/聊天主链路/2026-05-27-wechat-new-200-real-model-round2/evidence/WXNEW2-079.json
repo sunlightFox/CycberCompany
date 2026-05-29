@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-079",
+  "category": "办公表格",
+  "title": "用户反馈标签表怎么避免贴人？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：标签、个人信息。\n用户反馈标签表怎么避免贴人？",
+  "reply_text": "先按这几个点整理：标签、个人信息。\n\n围绕“用户反馈标签表怎么避免贴人？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8f0a4acb487348d4926cb6a2165b0e2a",
+  "trace_id": "trc_038b05247fe04ccbae726fd1fbe77e56",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

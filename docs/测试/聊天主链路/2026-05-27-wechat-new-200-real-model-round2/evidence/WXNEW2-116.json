@@ -1,0 +1,32 @@
+{
+  "case_id": "WXNEW2-116",
+  "category": "记忆偏好",
+  "title": "记住：拒绝时先给替代方案。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：替代方案、source。\n记住：拒绝时先给替代方案。",
+  "reply_text": "可以记为偏好：拒绝时先给替代方案。\n\nsource：就是你这句明确要求。范围：作为后续回复偏好使用；\n如果某次对话里你临时改口，就以那次的临时要求为准。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ccbae30985164c1cb5bc8483777a05bc",
+  "trace_id": "trc_2bc5fcbbd4c0416282766e63db600713",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "memory.candidate",
+    "memory.written",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

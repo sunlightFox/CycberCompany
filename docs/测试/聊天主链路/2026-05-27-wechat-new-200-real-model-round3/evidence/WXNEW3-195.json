@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-195",
+  "category": "审计追踪",
+  "title": "怎么证明微信消息真的发出了？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：投递、证据。\n怎么证明微信消息真的发出了？",
+  "reply_text": "可以这样证明：不要只说“我发了”，而是给出一条可审计的 trace，并配套最小必要的证据。\n发送侧 trace\n\n补上这轮关键点：投递、证据。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8a035fdfd24c4064857f8981a7835139",
+  "trace_id": "trc_ce7aec4f0f4d4017bc8ca2366fd7bfc2",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

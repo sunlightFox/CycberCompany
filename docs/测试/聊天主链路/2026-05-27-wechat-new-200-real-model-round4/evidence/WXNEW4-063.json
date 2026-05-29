@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW4-063",
+  "category": "办公文档",
+  "title": "给领导汇报问题，先说事实和影响。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：事实、影响。\n给领导汇报问题，先说事实和影响。",
+  "reply_text": "我接住这句：给领导汇报问题，先说事实和影响。\n\n这轮重点是事实、影响；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_869fae1653f74a5e99ac9c90d3644631",
+  "trace_id": "trc_a7cc986daa65449ca3b202e2e4103991",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

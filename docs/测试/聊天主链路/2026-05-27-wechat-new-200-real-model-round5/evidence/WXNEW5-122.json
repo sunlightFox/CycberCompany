@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-122",
+  "category": "记忆偏好",
+  "title": "以后拒绝我时先给替代方案。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：替代方案、source。\n以后拒绝我时先给替代方案。",
+  "reply_text": "小曜记下这个偏好：\n长期偏好：以后需要拒绝你时，先给可行的替代方案，再说明边界或原因。\nsource：来自你当前这条消息。\n范围：作为长期沟通偏好使用；敏感内容、一次性任务进度不会写入长期记忆。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e94d493c863844f4889b8cbee36752b9",
+  "trace_id": "trc_f55eddecaed8447c8489f3dfad551c74",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

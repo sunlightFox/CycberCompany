@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-080",
+  "category": "办公表格",
+  "title": "数据缺了两天，趋势图怎么标注？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：缺失、标注。\n数据缺了两天，趋势图怎么标注？",
+  "reply_text": "我接住这句：数据缺了两天，趋势图怎么标注？。\n\n这轮重点是缺失、标注；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4b27e6284d204211a7b88d1af0489877",
+  "trace_id": "trc_65e776ad96484c27acf42944fbaeca2a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

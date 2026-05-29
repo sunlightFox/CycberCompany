@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-020",
+  "category": "计划规划",
+  "title": "我想月末复盘，怎么不写成流水账？",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：月末、复盘。\n我想月末复盘，怎么不写成流水账？",
+  "reply_text": "我接住这句：我想月末复盘，怎么不写成流水账？。\n\n这轮重点是月末、复盘；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_79f89122cd02456ba39ee3c5e043c481",
+  "trace_id": "trc_d872cd0ceb524759b59cc82d7d946dab",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

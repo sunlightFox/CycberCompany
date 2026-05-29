@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-139",
+  "category": "生活办公混合",
+  "title": "头疼但有交付，怎么降级安排？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：头疼、降级。\n头疼但有交付，怎么降级安排？",
+  "reply_text": "头疼但交付不能停，就别硬扛满配，直接做“保交付、降质量、砍范围、延非关键”。可以这样安排：1.先定最低交付线 今天必须交什么？把目标降级成：能用、能看、能继续，不追求完美。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6643e38281fc4ab7876d10025a9ceb38",
+  "trace_id": "trc_e21c6d86807e4348b325eb3e91aa7b11",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

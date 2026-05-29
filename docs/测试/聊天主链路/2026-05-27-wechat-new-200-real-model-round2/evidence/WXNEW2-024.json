@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-024",
+  "category": "提醒定时",
+  "title": "下个月第一天提醒我检查账单。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：下个月第一天、账单。\n下个月第一天提醒我检查账单。",
+  "reply_text": "把提醒内容整理好，但我这边不能直接创建系统提醒/定时任务，也不会自动执行任何设备动作。\n\n还缺一个确认：下个月第一天提醒你检查账单，具体几点提醒？例如：6 月1 日上午9:00，提醒“检查账单”。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8d3d555eeff1456dad51b6cfef1175e9",
+  "trace_id": "trc_b1b7fe990b8344738a93847a5ad81fa1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

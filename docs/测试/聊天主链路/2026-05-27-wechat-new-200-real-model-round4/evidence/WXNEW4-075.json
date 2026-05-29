@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-075",
+  "category": "办公表格",
+  "title": "库存预警表要看哪些阈值？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：库存、阈值。\n库存预警表要看哪些阈值？",
+  "reply_text": "先按这几个点整理：库存、阈值。\n\n围绕“库存预警表要看哪些阈值？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d4c4c96aced84991abd5d899ecd175e3",
+  "trace_id": "trc_e5d025ae36eb47e683f7027d8b560a44",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

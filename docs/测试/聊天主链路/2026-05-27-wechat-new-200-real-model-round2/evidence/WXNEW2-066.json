@@ -1,0 +1,29 @@
+{
+  "case_id": "WXNEW2-066",
+  "category": "办公文档",
+  "title": "把复盘报告压成三段摘要。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：三段、摘要。\n把复盘报告压成三段摘要。",
+  "reply_text": "先按这几个点整理：三段、摘要。\n\n围绕“把复盘报告压成三段摘要”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b879c5471b7b41a0890da6989c8a5d62",
+  "trace_id": "trc_33352e2013d948558765d202247f47f4",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

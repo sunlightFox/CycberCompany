@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-087",
+  "category": "办公协作",
+  "title": "我想拒绝一个临时插活，语气稳一点。",
+  "prompt": "办公协作要能直接发给人，边界清楚，不假装已经完成。请自然提到：拒绝、临时插活。\n我想拒绝一个临时插活，语气稳一点。",
+  "reply_text": "下面这段可以直接发：\n这个临时插活我这边先拒绝了。\n目前手上的事项已经排满，而且有明确交付节点，如果再接会影响现有工作的质量和进度。\n如果这个事情优先级确实更高，建议先同步调整我当前任务的排期和负责人，我再配合重新评估。谢谢理解。小曜建议：这版语气比较稳，不情绪化，也把边界说清楚了。先给结论，下面这段可以直接发：\n这个临时插活我这边先拒绝了。\n目前手上的事项已经排满，而且有明确交付节点，如",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_fe431c2366a14cab8f89e6f30b712e03",
+  "trace_id": "trc_fd2c374c26e34580baa0e122b714d8f8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

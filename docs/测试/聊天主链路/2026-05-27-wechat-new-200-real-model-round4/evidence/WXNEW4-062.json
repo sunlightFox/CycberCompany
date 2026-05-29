@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW4-062",
+  "category": "办公文档",
+  "title": "帮我做月报结构，不生成文件。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：月报、不生成文件。\n帮我做月报结构，不生成文件。",
+  "reply_text": "下面给你一版可直接复制使用的月报结构，不生成文件。目标：- 完成内容：- 当前进展：-结果/产出： 工作事项二：【事项名称】",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b5eead173d1145328a4fe806b4fae980",
+  "trace_id": "trc_b7ed3f0f146342b8925da6f03e143d00",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

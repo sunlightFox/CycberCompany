@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-150",
+  "category": "生活办公混合",
+  "title": "突然被打断，怎么回到任务？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：打断、第一步。\n突然被打断，怎么回到任务？",
+  "reply_text": "被打断以后先别硬顶。对自己说一句：我回来了，现在只做眼前这一小步。然后把下一个动作写成 10 个字以内，比如“打开文档”或“补第一条”。先不追刚才丢掉的状态，回来就算重新接上了，慢慢来\n\n补上这轮关键点：打断、第一步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_59165ee3c59542ab9e86cb8b3b118116",
+  "trace_id": "trc_19f0105d28c14c5d8a8733cb5e62ca0c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

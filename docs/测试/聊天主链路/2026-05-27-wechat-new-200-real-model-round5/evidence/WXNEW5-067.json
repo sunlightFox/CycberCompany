@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-067",
+  "category": "办公文档",
+  "title": "写一封申请会议室变更的邮件。",
+  "prompt": "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：会议室、变更。\n写一封申请会议室变更的邮件。",
+  "reply_text": "我接住这句：写一封申请会议室变更的邮件。\n\n这轮重点是会议室、变更；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8bfb3ac53b214f939d827d52eca1f6fe",
+  "trace_id": "trc_355e1422092342bb946bf5de8c13180b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

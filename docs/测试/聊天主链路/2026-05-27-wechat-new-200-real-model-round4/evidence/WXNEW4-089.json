@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-089",
+  "category": "办公协作",
+  "title": "内部资料别外传，怎么发群里？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：资料、外传。\n内部资料别外传，怎么发群里？",
+  "reply_text": "可以这样发群里：\n\n各位，提醒一下：群里涉及的资料仅限内部沟通使用，请不要外传、转发到外部群或发给无关人员。如需对外使用，请先确认口径和授权，避免信息泄露。谢谢配合。\n\n如果想更简短一点：\n\n提醒下：本群资料仅限内部使用，请勿外传或转发给无关人员；如需对外发送，请先确认授权。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3198d2525f31414584694934efbd1a43",
+  "trace_id": "trc_0b69e17837f04f4caf27631159e23554",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-014",
+  "category": "计划规划",
+  "title": "我想一个月学完基础表格函数，怎么轻量排？",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：一个月、表格函数。\n我想一个月学完基础表格函数，怎么轻量排？",
+  "reply_text": "一个月学基础表格函数，轻量排就够了：\n第 1 周：学 SUM、AVERAGE、COUNT，能做简单汇总。\n第 2 周：学 IF、AND、OR，能处理条件判断。\n第 3 周：学 VLOOKUP/XLOOKUP 或 INDEX+MATCH，能查找匹配。\n第 4 周：拿自己的表练一遍，整理 5 个常用模板。\n\n每次 30 分钟，少看教程，多上手敲。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e57f3f592c6e4de18ed10f83217e15d0",
+  "trace_id": "trc_cf84f98c52694d1791da3392414412bf",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

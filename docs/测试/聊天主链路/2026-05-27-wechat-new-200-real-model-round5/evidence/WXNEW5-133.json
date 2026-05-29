@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-133",
+  "category": "生活办公",
+  "title": "家里临时有事，怎么跟同事同步不细说隐私？",
+  "prompt": "生活和办公混合场景要贴近日常，给下一步，不说教。请自然提到：隐私、同步。\n家里临时有事，怎么跟同事同步不细说隐私？",
+  "reply_text": "可以直接说重点：“家里有点临时情况需要处理，我先离开/晚点上线。手头事项我会同步到文档/群里，紧急的请先找 XX 或电话我。”\n\n更自然一点可以发：\n我家里临时有点事要处理，细节就不展开了。\n今天我会把手头进度和待办同步一下，紧急事项可以先找我电话/找 XX 接一下。\n晚点我再补上更新。\n\n这样既说明了情况，也守住隐私；同事最关心的是你什么时候可联系、工作怎么交接。下一步你就补三点：你离开多久、哪些事受影响、谁能临时接手。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_84bfba101e4843c6bd733659fe6faeee",
+  "trace_id": "trc_3d1bd0707c124ac2843ba1e1fa40c4ea",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

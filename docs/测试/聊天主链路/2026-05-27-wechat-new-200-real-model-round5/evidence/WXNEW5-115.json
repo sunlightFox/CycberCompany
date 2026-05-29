@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-115",
+  "category": "知识研究",
+  "title": "没有数据时，报告里能写什么？",
+  "prompt": "知识研究要区分事实、假设、缺口，不把没查到的说成确定。请自然提到：没有数据、不能下结论。\n没有数据时，报告里能写什么？",
+  "reply_text": "没有数据时，报告不能写“结论”，但可以写清楚“已知事实、合理假设、缺口、风险、下一步验证方案”。可以这样写：\n事实部分写声称已确认的信息，比如研究对象、问题背景、已有公开资料、访谈记录、样本范围。但只写证据能支撑的内容\n\n补上这轮关键点：没有数据、不能下结论。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6c1f65eb447748d3bb78f109cbc45497",
+  "trace_id": "trc_bae63e96e6b64b13a278a03f0942c5d1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

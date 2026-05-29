@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-130",
+  "category": "记忆偏好",
+  "title": "以后办公先给结论，再给动作。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：结论、动作。\n以后办公先给结论，再给动作。",
+  "reply_text": "以后办公类内容我会先给结论，再给动作。\n\n动作：这条作为你的长期沟通偏好来遵守；source 是你当前这条消息。关于记忆/偏好：我会区分临时范围和长期范围，涉及敏感内容不写入。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f972710694d04ef58037355e80e190d0",
+  "trace_id": "trc_164aee6b76404d0d97c4287905eb5ea4",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

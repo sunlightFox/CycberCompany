@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-099",
+  "category": "HR管理",
+  "title": "团队调查样本少，怎么温和提醒？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：样本、谨慎。\n团队调查样本少，怎么温和提醒？",
+  "reply_text": "可以温和提醒：这次样本偏少，结论要谨慎看。\n\n建议只说“目前反馈里出现了这些信号”，不要写成团队整体判断；后续最好补样本、说明覆盖范围，再决定要不要作为正式结论。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_91878c15267c47678e526a8fafe22c50",
+  "trace_id": "trc_070e4bcec2204ca8a418608f15427756",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

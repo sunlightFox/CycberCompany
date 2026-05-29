@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-176",
+  "category": "模型语气",
+  "title": "计划类回复为什么不能只说加油？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：计划、步骤。\n计划类回复为什么不能只说加油？",
+  "reply_text": "计划类回复不能只说“加油”，是因为“加油”只能给情绪支持，但解决不了对方真正卡住的地方。\n\n如果对方在聊计划，其实他需要的不是一句口号，而是有人帮他把事情往前推一点：先做什么、后做什么、哪里可能会难、如果卡住了怎么办。只说“加油”，听起来就像把压力又还给了对方：你自己努力吧。\n\n更像小吴本人、也更自然的说法可以是：\n\n“可以，别一下子想太远。我们先把计划拆小一点，第一步先把最要紧的事情列出来，第二步看哪些今天能做，哪些可以往后放。你不用一口气全搞定，先把眼前这一步走顺就行。”\n\n或者更短一点：\n\n“加油肯定是要加油的，但光说加油没啥用。我们先看计划怎么拆，步骤别太多，先定一个今天能完成的小动作，做完再往下推。”\n\n核心就是：计划类回复要给“陪伴感 + 推进感”。不是喊口号，而是帮对方把路看清一点。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_781bc077ef634985b6ff02a12cb79ae4",
+  "trace_id": "trc_93800f84b2574c16bf2898f4b4455428",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

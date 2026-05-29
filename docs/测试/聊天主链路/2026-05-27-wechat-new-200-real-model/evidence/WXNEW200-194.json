@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW200-194",
+  "category": "办公文档",
+  "title": "帮我设计项目交付验收单字段。（变体）",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：交付物、验收标准、证据。\n帮我设计项目交付验收单字段。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "项目交付验收单可以包含这些栏位：\n1. 交付物：名称、版本、提交人、提交时间、存放位置。\n2. 验收标准：功能、性能、文档、数据、权限和安全要求。\n3. 证据：测试记录、截图、日志、会议确认或客户签收记录。\n4. 未结项：问题描述、影响、负责人、预计关闭时间。\n5. 签收：验收结论、签收人、日期和备注。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d758d38a6bc8416d895c53158745dfd0",
+  "trace_id": "trc_def71bca0f344c25857aa97941b00b34",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

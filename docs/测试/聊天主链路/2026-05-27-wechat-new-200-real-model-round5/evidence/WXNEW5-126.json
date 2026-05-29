@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-126",
+  "category": "记忆偏好",
+  "title": "临时记一下：今天别催我运动。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：临时、今天。\n临时记一下：今天别催我运动。",
+  "reply_text": "小曜记下了——临时范围，仅今天，不会催你运动。\n\nsource：来自你这条消息。范围：临时偏好，只适用于今天。敏感内容：不写入长期记忆。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b6c1ca41fabf438993f97ef3e8987e8a",
+  "trace_id": "trc_181f66cf11004d4b84bc6bae1e64e675",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

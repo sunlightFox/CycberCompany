@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-080",
+  "category": "办公表格",
+  "title": "缺两天数据，趋势图怎么说明？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：缺失、标注。\n缺两天数据，趋势图怎么说明？",
+  "reply_text": "可以这样说明，重点是：不补编、不硬连、把缺失原因和影响标注清楚。\n注：本趋势图按【日期】统计【指标字段】，统计口径为【具体口径】。\n其中【日期1】、【日期2】数据缺失，图中已标注；缺失日期未做填充或估算，趋势判断仅基于现有可用数据。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_cc07024186da4b7f94a0f85886d93f05",
+  "trace_id": "trc_02496a0b48b749888bcfc2b89e3a6f81",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

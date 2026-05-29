@@ -13,11 +13,15 @@ from app.schemas.goals import (
     GoalCreateRequest,
     GoalDetailResponse,
     GoalEventListResponse,
+    GoalIntakeUpdateRequest,
     GoalListResponse,
+    GoalModelCallListResponse,
     GoalProgressResponse,
+    GoalReplanRequest,
     GoalResponse,
     GoalSupervisionRequest,
     GoalSupervisionResponse,
+    GoalTimelineResponse,
 )
 from app.services.registry import ServiceRegistry
 
@@ -101,6 +105,38 @@ async def start_goal_supervision(
     return GoalSupervisionResponse(
         policy=policy,
         scheduled_task_id=policy.scheduled_task_id,
+    )
+
+
+@router.post("/{goal_id}/intake", response_model=GoalDetailResponse)
+async def update_goal_intake(
+    goal_id: str,
+    payload: GoalIntakeUpdateRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> GoalDetailResponse:
+    return _detail_response(
+        await registry.goal_service.update_intake(
+            goal_id,
+            payload,
+            trace_id=getattr(request.state, "trace_id", None),
+        )
+    )
+
+
+@router.post("/{goal_id}/replan", response_model=GoalDetailResponse)
+async def replan_goal(
+    goal_id: str,
+    payload: GoalReplanRequest,
+    request: Request,
+    registry: ServiceRegistry = Depends(get_registry),
+) -> GoalDetailResponse:
+    return _detail_response(
+        await registry.goal_service.replan(
+            goal_id,
+            payload,
+            trace_id=getattr(request.state, "trace_id", None),
+        )
     )
 
 
@@ -225,6 +261,26 @@ async def list_goal_events(
     )
 
 
+@router.get("/{goal_id}/timeline", response_model=GoalTimelineResponse)
+async def get_goal_timeline(
+    goal_id: str,
+    limit: int = Query(default=200, ge=1, le=500),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> GoalTimelineResponse:
+    return GoalTimelineResponse(items=await registry.goal_service.timeline(goal_id, limit=limit))
+
+
+@router.get("/{goal_id}/model-calls", response_model=GoalModelCallListResponse)
+async def list_goal_model_calls(
+    goal_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    registry: ServiceRegistry = Depends(get_registry),
+) -> GoalModelCallListResponse:
+    return GoalModelCallListResponse(
+        items=await registry.goal_service.list_model_calls(goal_id, limit=limit)
+    )
+
+
 def _detail_response(bundle) -> GoalDetailResponse:  # type: ignore[no-untyped-def]
     return GoalDetailResponse(
         goal=bundle.goal,
@@ -232,4 +288,8 @@ def _detail_response(bundle) -> GoalDetailResponse:  # type: ignore[no-untyped-d
         plan_items=bundle.plan_items,
         supervision_policy=bundle.supervision_policy,
         progress=bundle.progress,
+        intake=bundle.intake,
+        milestones=bundle.milestones,
+        routines=bundle.routines,
+        latest_intervention=bundle.latest_intervention,
     )

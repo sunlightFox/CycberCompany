@@ -11,10 +11,10 @@ from typing import Any
 from brain.adapters import estimate_text_tokens
 from core_types import (
     ErrorCode,
-    MemoryConflictRecord,
     MemoryBlock,
     MemoryBlockItem,
     MemoryCandidate,
+    MemoryConflictRecord,
     MemoryExperienceRecord,
     MemoryItem,
     MemoryLayer,
@@ -1230,6 +1230,67 @@ class MemoryService:
             root_span_id=root_span_id,
         )
 
+    async def record_goal_signal(
+        self,
+        *,
+        summary_text: str,
+        organization_id: str,
+        member_id: str,
+        source: dict[str, Any],
+        payload: dict[str, Any] | None = None,
+        signal_kind: str = "goal_progress",
+        trace_id: str | None = None,
+        root_span_id: str | None = None,
+    ) -> MemoryCommandResult:
+        clean_text = str(redact(summary_text)).strip()
+        goal_id = str((source or {}).get("goal_id") or "")
+        if not clean_text:
+            return MemoryCommandResult(handled=False, reason="empty_summary")
+        if not goal_id:
+            return MemoryCommandResult(handled=False, reason="missing_goal_source")
+        member = await self._members.get_member(member_id)
+        if member is None:
+            raise AppError(ErrorCode.NOT_FOUND, "member not found", status_code=404)
+        redacted_payload = redact(payload or {})
+        source_payload = await self._memory_source_payload(
+            source_type="goal_event",
+            member_id=member_id,
+            conversation_id=source.get("conversation_id"),
+            turn_id=source.get("turn_id"),
+            message_id=source.get("message_id"),
+            trace_id=trace_id or source.get("trace_id"),
+            channel=source.get("channel") or "local",
+            extra={
+                "goal_id": goal_id,
+                "checkin_id": source.get("checkin_id"),
+                "intervention_id": source.get("intervention_id"),
+                "signal_kind": signal_kind,
+                "payload_keys": (
+                    sorted(redacted_payload) if isinstance(redacted_payload, dict) else []
+                ),
+            },
+        )
+        memory_kind, layer, score = _goal_memory_command_shape(signal_kind)
+        command = MemoryCommand(
+            kind=signal_kind,
+            memory_kind=memory_kind,
+            layer=layer,
+            summary=clean_text,
+            score=score,
+            explicit=False,
+            supersede_query=f"goal:{goal_id}:{signal_kind}",
+            review_required=signal_kind in {"goal_intervention"},
+        )
+        return await self._write_candidate_pipeline(
+            command=command,
+            text=clean_text,
+            organization_id=organization_id or str(member.get("organization_id") or ""),
+            member_id=member_id,
+            source=source_payload,
+            trace_id=trace_id or source.get("trace_id"),
+            root_span_id=root_span_id,
+        )
+
     async def enqueue_extract_after_turn(self, turn_id: str, *, schedule: bool = False) -> None:
         turn = await self._chat.get_turn(turn_id)
         if turn is None or turn["status"] != "completed":
@@ -2172,6 +2233,40 @@ class MemoryService:
             dedupe_span,
             output_data={"duplicate_memory_id": duplicate["memory_id"] if duplicate else None},
         )
+        if (
+            duplicate is not None
+            and command.kind == "correction"
+            and str(duplicate.get("kind") or "") == "correction"
+        ):
+            candidate = await self._insert_candidate(
+                organization_id=organization_id,
+                member_id=member_id,
+                source=source,
+                proposed_layer=command.layer,
+                proposed_kind=command.memory_kind,
+                proposed_scope_type="member",
+                proposed_scope_id=member_id,
+                summary_text=summary,
+                payload={"fact": summary},
+                score={
+                    "base": final_score,
+                    "quality_breakdown": quality_breakdown,
+                    "quality_score": final_score,
+                    "duplicate_memory_id": duplicate["memory_id"],
+                },
+                final_score=final_score,
+                sensitivity="low",
+                decision="discarded_duplicate",
+                decision_reason="duplicate_active_correction",
+                now=now,
+            )
+            await self._record_memory_ledger(
+                source=source,
+                decision="discarded_duplicate",
+                summary=summary,
+                candidate_id=candidate.candidate_id,
+            )
+            return MemoryCommandResult(handled=True, candidates=[candidate], reason="duplicate")
         if duplicate is not None and command.kind != "correction":
             candidate = await self._insert_candidate(
                 organization_id=organization_id,
@@ -3303,6 +3398,7 @@ def _canonical_memory_source_type(
         "retrieval_feedback": "external_ingest",
         "agent_workbench_reflection": "conversation_turn",
         "turn_recovery": "task_result",
+        "goal_event": "goal_event",
     }
     if value in mapping:
         return mapping[value]
@@ -3334,6 +3430,7 @@ def _source_reliability(row: dict[str, Any]) -> float:
         "task_result",
         "approval_resolution",
         "external_ingest",
+        "goal_event",
     }:
         return 0.95
     if source_type in {"chat", "message", "turn", "retrieval_feedback"}:
@@ -3346,6 +3443,9 @@ def _public_memory_source(source_value: Any) -> dict[str, Any]:
     return {
         "type": _canonical_memory_source_type(str(source.get("type") or "unknown")),
         "conversation_id": source.get("conversation_id"),
+        "goal_id": source.get("goal_id"),
+        "checkin_id": source.get("checkin_id"),
+        "intervention_id": source.get("intervention_id"),
         "task_id": source.get("task_id"),
         "step_id": source.get("step_id"),
         "turn_id": None,
@@ -3836,6 +3936,16 @@ def _kind_for_summary(summary: str) -> str:
     return "semantic_note"
 
 
+def _goal_memory_command_shape(signal_kind: str) -> tuple[str, str, float]:
+    if signal_kind in {"goal_blocker", "goal_intervention"}:
+        return ("goal_blocker", MemoryLayer.EPISODIC.value, 0.72)
+    if signal_kind == "goal_preference":
+        return ("goal_preference", MemoryLayer.SEMANTIC.value, 0.78)
+    if signal_kind == "goal_routine_effective":
+        return ("goal_routine_effective", MemoryLayer.PROCEDURAL.value, 0.74)
+    return ("goal_progress", MemoryLayer.EPISODIC.value, 0.68)
+
+
 def _memory_class_for_kind(kind: str, *, layer: str) -> str:
     if kind in {"preference", "correction"}:
         return "preference"
@@ -4044,6 +4154,7 @@ def _memory_quality_breakdown(
         "task_result",
         "approval_resolution",
         "external_ingest",
+        "goal_event",
     }
     value = 0.72 if kind in {"preference", "project_fact", "correction"} else 0.58
     if command_kind == "block":

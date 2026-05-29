@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-088",
+  "category": "办公协作",
+  "title": "合作方延期，跟进时留余地。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：延期、余地。\n合作方延期，跟进时留余地。",
+  "reply_text": "可以直接发：\n\n“你好，了解到这边进度有延期。我们这边需要同步调整后续安排，想跟你确认一下目前预计的交付时间，以及是否还有需要我们配合的地方。时间上我们会尽量留一些余地，但也希望能尽早拿到更新，方便内部排期。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9269f1df8eaa43bcab784369624722c0",
+  "trace_id": "trc_d356eb2caad6402687ceb34945dc1cc1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-147",
+  "category": "生活办公混合",
+  "title": "通勤路上想准备发言，怎么练？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：通勤、发言。\n通勤路上想准备发言，怎么练？",
+  "reply_text": "通勤路上别背稿，练“开头一句 + 三个要点 + 结尾一句”就够了。\n\n你可以这样练：\n\n🧠 1. 先定一句开场\n 比如：\n “我简单说三点，主要是进展、问题和2. 把发言压成 3 个关键词\n 通勤时不用看稿，就在心里反复过：\n “完成了什么、卡在哪里、需要谁支持。”\n\n3. 小声录一遍\n 戴耳机假装语音消息，控制在 1 分钟。\n 听回放时只改两件事：是不是啰嗦、重点清不清楚。\n\n4. 准备一句兜底\n 万一卡壳就说：\n “我补充一下核心点……”\n 或者：\n “这里我先说结论，细节会后同步。”\n\n小曜建议你通勤路上练两轮就行：第一轮顺内容，第二轮练语气。别追求完美，能把话说清楚就已经很稳。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_76f596dedc014e70a84768a1641538bc",
+  "trace_id": "trc_70b652a4e29b4fd7b41371549dcfdb37",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

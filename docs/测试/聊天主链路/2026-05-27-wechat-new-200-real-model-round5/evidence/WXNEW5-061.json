@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-061",
+  "category": "办公文档",
+  "title": "帮我把会议纪要整理成结论、行动项、风险。",
+  "prompt": "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：结论、行动项、风险。\n帮我把会议纪要整理成结论、行动项、风险。",
+  "reply_text": "可以按这个纪要结构整理：\n结论：先写本次会议已经达成的一句话结果。\n决策：列出已经确认的选择、负责人和生效范围。\n行动项：写清谁、在什么时候、交付什么。\n风险：单独列未确认事项、依赖和可能影响交付的点。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_7d2582b849494aab86ee379969502564",
+  "trace_id": "trc_a0304f7c2adb4142bd8a9a5977c2b322",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

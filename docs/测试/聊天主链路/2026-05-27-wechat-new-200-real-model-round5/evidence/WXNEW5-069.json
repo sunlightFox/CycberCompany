@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-069",
+  "category": "办公文档",
+  "title": "帮我写周报开头，先讲结果。",
+  "prompt": "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：周报、结果。\n帮我写周报开头，先讲结果。",
+  "reply_text": "先不假装已生成 Word 文件；这里直接给你一段可复制进周报的开头，先讲结果：\n- 周报开头：\n\n本周工作整体围绕核心目标推进，重点事项已取得阶段性结果。截止目前，主要任务按计划完成，关键问题已有明确处理进展，部分事项进入后续跟进阶段。整体来看，本周产出较为稳定，为下阶段工作推进打下了基础。\n\n如需更正式一点，也可以用：\n\n本周围绕既定工作目标推进各项任务，整体结果符合预期。重点工作已完成阶段性交付，关键事项取得明确进展，相关风险和问题已同步跟进处理。后续将继续聚焦未完成事项，推动结果进一步落地。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f74f0aed34e74103a936d15ae72ded86",
+  "trace_id": "trc_d84cebc8b3ec4f8a9f0a5615e2e2c012",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

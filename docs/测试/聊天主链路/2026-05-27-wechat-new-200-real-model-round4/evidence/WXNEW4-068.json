@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW4-068",
+  "category": "办公文档",
+  "title": "把一份汇报压成三段。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：三段、摘要。\n把一份汇报压成三段。",
+  "reply_text": "我接住这句：把一份汇报压成三段。\n\n这轮重点是三段、摘要；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_538ce7539449427ca1b6c5476f1cac18",
+  "trace_id": "trc_f21b9af924a5461496bc5ff8b1647713",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

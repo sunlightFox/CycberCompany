@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-084",
+  "category": "HR办公",
+  "title": "同事冲突复盘怎么写边界？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：双方、事实。\n同事冲突复盘怎么写边界？",
+  "reply_text": "同事冲突复盘里的“边界”，重点不是站队，而是把复盘限制在双方可核对的事实、工作影响和后续规则里，避免扩展到人格评价、动机猜测或私下传播。 *\n1.先界定复盘范围本次复盘仅围绕此次工作协作中的具体事件、沟通节点和造成的影响展开，不延伸评价双方性格、态度或过往无关事项。\n\n不确定性补充：冲突资料应标注不确定来源、口径差异和采用基准，不能包装成单一确定结论。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_772f7455bdc34a80a83dcc906474f898",
+  "trace_id": "trc_d7d5b3a1f75d44509c07dd3ce18068b9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

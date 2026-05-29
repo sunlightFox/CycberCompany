@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-092",
+  "category": "HR管理",
+  "title": "请假备注只写必要信息，怎么写？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：必要信息、隐私。\n请假备注只写必要信息，怎么写？",
+  "reply_text": "我接住这句：请假备注只写必要信息，怎么写？。\n\n这轮重点是必要信息、隐私；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4087907048d6474f9855b19a64900220",
+  "trace_id": "trc_f31be9f57fc54f4db488e8176fc56386",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

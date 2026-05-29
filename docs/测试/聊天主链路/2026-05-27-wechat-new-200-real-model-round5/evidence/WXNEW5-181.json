@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-181",
+  "category": "审计追踪",
+  "title": "多步任务怎么追踪每一步状态？",
+  "prompt": "审计追踪场景要说清 trace、证据、状态，不暴露敏感信息。请自然提到：步骤、状态。\n多步任务怎么追踪每一步状态？",
+  "reply_text": "多步任务追踪状态，可以按步骤拆开记：\n1. 每一步都有状态：待开始、进行中、失败、完成。\n2. 每次变化都写 trace：时间、动作、结果和失败原因。\n3. 对用户只展示必要进度，不暴露 token、secret 或内部敏感信息。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1697a1de0c554884a179ca7114abc6da",
+  "trace_id": "trc_03900e02ba0349b0841c42cfbe7ffba3",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

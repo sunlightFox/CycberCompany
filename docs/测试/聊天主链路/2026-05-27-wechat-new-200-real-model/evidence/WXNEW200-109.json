@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-109",
+  "category": "知识研究",
+  "title": "只有 12 条用户反馈，报告怎么写才不外推？",
+  "prompt": "知识类回答要说明证据、来源、样本、时效，不乱外推。请自然提到：12 条、不能外推。\n只有 12 条用户反馈，报告怎么写才不外推？",
+  "reply_text": "只有 12 条用户反馈时，报告要把边界说在前面：这只是当前样本观察，不能外推成全部用户结论。可以写成“基于这 12 条反馈，我们初步看到几个倾向”，再分别列出样本来源、共同问题、反例和不确定点。最后补一句下一步：需要扩大样本、补充不同用户类型，并用更多来源交叉验证后再升级为整体判断。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_cb2136a46b7a4b30bc8d9124ff317199",
+  "trace_id": "trc_591ec2a8832d46d88dfac17d53ef92a3",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

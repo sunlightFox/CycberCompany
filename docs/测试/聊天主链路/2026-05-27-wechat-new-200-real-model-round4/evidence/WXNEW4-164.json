@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-164",
+  "category": "语气排版",
+  "title": "什么时候该空一行？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：空一行、层次。\n什么时候该空一行？",
+  "reply_text": "该空一行的时候，就是内容换了一层意思：比如从结论到原因、从问题到做法、从上一件事到下一件事；不需要每句话都空，空一行是为了让层次更清楚、读起来不堵。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6f9b018c7104483e98b903d43a4613bc",
+  "trace_id": "trc_76786db983724aec9859e68e7a9576b8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-187",
+  "category": "渠道质量",
+  "title": "微信最终文本为什么最关键？",
+  "prompt": "测试治理场景要说清真实模型、微信投递、trace、最终可见回复。请自然提到：微信、证据。\n微信最终文本为什么最关键？",
+  "reply_text": "微信最终文本最关键，是因为它是用户真正看到的结果，也是测试治理里“是否合格”的最终判定点。\ntrace：把同一个 case 的真实模型调用、微信投递、最终可见回复串起来，确认链路没有断\n\n补上这轮关键点：微信、证据。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_fb50848b4f6c4ec6b82823a92b7c2f1d",
+  "trace_id": "trc_c94cc2e7cba342d6b47925652992ec9d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

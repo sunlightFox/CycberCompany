@@ -1,0 +1,29 @@
+{
+  "case_id": "WXNEW2-136",
+  "category": "办公协作",
+  "title": "给同事反馈文档问题，别像挑刺。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：文档、建议。\n给同事反馈文档问题，别像挑刺。",
+  "reply_text": "可以这样发：\n\n我看了下这版文档，整体方向是清楚的。有两处我建议再顺一下：一是开头结论可以更直接，二是关键数据最好补一下来源。这样读的人更容易跟上，也不是在挑刺。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b55ab4111ec647318384a5ff82ced053",
+  "trace_id": "trc_9e76d437d965476ca039598daf232071",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

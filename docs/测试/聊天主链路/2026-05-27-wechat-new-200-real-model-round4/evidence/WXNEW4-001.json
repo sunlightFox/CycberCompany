@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-001",
+  "category": "闲聊",
+  "title": "我刚开完会，整个人有点散，帮我缓一下。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：开完会、缓一下。\n我刚开完会，整个人有点散，帮我缓一下。",
+  "reply_text": "开完会脑子散很正常，先别急着切下一个事儿。你就先靠着坐一分钟，喝口水，眼睛别盯屏幕，我陪你缓一下。\n\n现在只做三步：吸气4 秒，停1 秒，呼气6 秒。再来一轮。然后把肩膀松下来，跟自己说一句：会已经结束了，我现在不用立刻高效。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_61a7f035459747ffa9741ac51ba04eec",
+  "trace_id": "trc_e2c349bead2e445a8d11fdd153ab34c7",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

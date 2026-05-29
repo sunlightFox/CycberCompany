@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-081",
+  "category": "办公协作",
+  "title": "帮我催设计图，但别让人有压力。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：设计图、时间点。\n帮我催设计图，但别让人有压力。",
+  "reply_text": "我不能替你假装已经发出，但这段你可以直接发，语气不压人：\n\n> 哈喽～想跟你轻轻确认一下设计图的进度。> 不着急催你，只是我这边想同步一下时间点，方便后面安排。>你看大概什么时候方便给我一个版本就好～辛苦啦。\n\n这句话的边界是：理解对方关心，但不把自己的节奏交出去。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e3abc8f333f34dbfba626477af281da8",
+  "trace_id": "trc_7f806d336e0046aeaff777b1c699049a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

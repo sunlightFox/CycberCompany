@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-057",
+  "category": "操作系统",
+  "title": "系统升级前怎么做安全检查？",
+  "prompt": "操作系统场景要讲清只读、确认、备份、审批，不假装已执行。请自然提到：备份、回滚。\n系统升级前怎么做安全检查？",
+  "reply_text": "我接住这句：系统升级前怎么做安全检查？。\n\n这轮重点是备份、回滚；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6d89c6e658de44f29edf2a92a54a3bde",
+  "trace_id": "trc_c61531edbcc54b34be6c12582a9a1c82",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

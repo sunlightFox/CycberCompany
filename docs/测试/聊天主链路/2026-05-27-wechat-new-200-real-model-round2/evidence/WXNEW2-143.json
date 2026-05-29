@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-143",
+  "category": "生活办公混合",
+  "title": "午休只有 20 分钟，想恢复一下。",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：20 分钟、恢复。\n午休只有 20 分钟，想恢复一下。",
+  "reply_text": "我接住这句：午休只有 20 分钟，想恢复一下。\n\n这轮重点是20 分钟、恢复；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6a164bec36f440c295f6f8eecc47d77f",
+  "trace_id": "trc_5f4a95ad70644c2ca5637ce42e3804eb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

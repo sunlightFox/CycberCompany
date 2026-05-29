@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-181",
+  "category": "长短控制",
+  "title": "只给一句晚安，不要展开。",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：晚安、一句。\n只给一句晚安，不要展开。",
+  "reply_text": "我接住这句：只给一句晚安，不要展开。\n\n这轮重点是晚安、一句；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c9501000261c4839878305173ad505ad",
+  "trace_id": "trc_6c05b700c2d641b5bc19c4728bfbb49f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

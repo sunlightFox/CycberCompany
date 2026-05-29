@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-139",
+  "category": "闲聊",
+  "title": "刚才我说话重了，帮我想一句修复关系的开场。（变体）",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：修复、开场。\n刚才我说话重了，帮我想一句修复关系的开场。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "可以这样发：\n\n“刚才我说话有点重了，不是想伤你。想先跟你道个歉，也想好好修复一下我们之间的感觉。”\n\n如果想更像开场一点：\n\n“我想先说句抱歉，刚才语气重了。不是针对你，也不想让这事卡在我们中间。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_61e0c1866c8c49cc8db5a1ac43e90846",
+  "trace_id": "trc_55f7d4c0f8cb4c819b590047841651a1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

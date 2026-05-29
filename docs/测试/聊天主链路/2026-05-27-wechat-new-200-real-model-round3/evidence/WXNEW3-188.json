@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-188",
+  "category": "渠道质量",
+  "title": "系统腔为什么要判失败？",
+  "prompt": "测试治理场景要说清真实模型、微信投递、trace、最终可见回复。请自然提到：系统腔、用户体验。\n系统腔为什么要判失败？",
+  "reply_text": "系统腔要判失败，核心不是“语气不好听”，而是它会直接损害用户体验，尤其在微信投递这种短平快场景里很明显。\n不像真实模型在回答当前问题 系统腔常见问题是套模板、堆流程词、先讲“我将如何处理”，但没有先接住用户真正问的点。\n用户感受到的是“机器在念规则”，不是一个真实模型在理解问题。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3f4ce9d996b343bc8145ce3213a97670",
+  "trace_id": "trc_d225e09066ce4e8aaca48de8dc61a8bc",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

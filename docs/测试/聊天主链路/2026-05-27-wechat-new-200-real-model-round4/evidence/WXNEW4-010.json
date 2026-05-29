@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-010",
+  "category": "闲聊",
+  "title": "我想轻轻提醒朋友别迟到。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：提醒、轻一点。\n我想轻轻提醒朋友别迟到。",
+  "reply_text": "我接住这句：我想轻轻提醒朋友别迟到。\n\n这轮重点是提醒、轻一点；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_650114dbd9774fd9b0b160e7f096ccc8",
+  "trace_id": "trc_1f96daaf5ff94a7e8f2914e1969de1f4",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

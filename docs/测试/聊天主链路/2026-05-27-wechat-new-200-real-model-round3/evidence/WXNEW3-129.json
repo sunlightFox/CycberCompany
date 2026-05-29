@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-129",
+  "category": "记忆偏好",
+  "title": "问偏好从哪来时怎么答？",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：source、范围。\n问偏好从哪来时怎么答？",
+  "reply_text": "可以这样答：\n\n“这些偏好主要来自你在对话里明确说过的要求，也就是 source；有些只在当前这次对话里临时生效，有些如果你明确希望长期保留，才会作为长期偏好使用。涉及敏感内容或不适合记忆的内容，我不会写入偏好或长期记忆。”\n\n更口语一点：\n\n“偏好是从你聊天里明确表达的要求来的，source 就是你说过的话或当前任务上下文。范围上，有的是本轮临时偏好，有的是你确认后长期适用的偏好；敏感内容不会写进记忆。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ec7e56911e23485eba0a2b1d46e6140a",
+  "trace_id": "trc_d96d35b4c7fc4157820780176c5379da",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

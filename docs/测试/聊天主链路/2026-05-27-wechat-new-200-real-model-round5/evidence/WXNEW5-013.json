@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-013",
+  "category": "计划拆解",
+  "title": "周五前要交一版方案，帮我倒排三步。",
+  "prompt": "帮我规划时要分段清楚、能照着做，不要报告腔。请自然提到：周五、三步。\n周五前要交一版方案，帮我倒排三步。",
+  "reply_text": "周五前交一版方案，倒排就按“三步”走——先定骨架，再补内容，最后留时间改。\n第一步：今天把框架定死明确方案目标、对象、核心结论和目录。\n\n先不要追求完美，重点是把“这版方案要解决什么问题”写清楚。\n第二步：明天到周四上午补正文按目录填内容：背景、问题、方案、资源、时间表、风险和预期结果。每一块先写能用的版本，缺数据的地方先标注，不要卡住。\n第三步：\n周四下午到周五提交前做收口统一口径、删废话、补关键数据、检查逻辑和格式。周五交出去的是“能讨论的一版”，不是终稿，所以重点是完整、清楚、可推进。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8e6040842c224ddb88fe8874f769da0a",
+  "trace_id": "trc_25e8bce701b442a3895df03b591ccab0",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW3-065",
+  "category": "办公文档",
+  "title": "采购申请说明要有哪些段落？",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：采购、必要性。\n采购申请说明要有哪些段落？",
+  "reply_text": "我接住这句：采购申请说明要有哪些段落？。\n\n这轮重点是采购、必要性；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_44bb85bc838a41acb78c0c0c6720fe13",
+  "trace_id": "trc_260d0b7b9f2a44a7ae798f3e23e8b14b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

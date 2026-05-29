@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-002",
+  "category": "闲聊",
+  "title": "我有点委屈，但不想听大道理。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：委屈、陪你。\n我有点委屈，但不想听大道理。",
+  "reply_text": "我接住这句：我有点委屈，但不想听大道理。\n\n这轮重点是委屈、陪你；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_bbfd0d0479b94aa493ae7615887a8a46",
+  "trace_id": "trc_d5fd978c72be46cca9c3c39b7933fb6f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

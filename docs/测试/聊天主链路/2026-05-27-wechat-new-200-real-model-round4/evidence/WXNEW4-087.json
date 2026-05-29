@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-087",
+  "category": "办公协作",
+  "title": "两个人共同负责一件事，话术怎么写？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：负责人、边界。\n两个人共同负责一件事，话术怎么写？",
+  "reply_text": "可以先这样说：我想把这件事说清楚，也尽量不让语气变重。我的真实想法是……如果你方便，我们可以接着聊\n\n补上这轮关键点：负责人、边界。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4eb631fd2d5745d9aa36677b4e96d7ed",
+  "trace_id": "trc_487ea8ad887243068f7584d5737ca21b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-039",
+  "category": "监督陪跑",
+  "title": "监督我今天只处理一个难题。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：一个难题、今天。\n监督我今天只处理一个难题。",
+  "reply_text": "小曜盯着你：今天只处理一个难题，不加码。\n\n最小下一步：现在把那个难题写成一句话——“我今天只解决：____。”\n\n写完就先做10 分钟，其他事先放旁边。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c58401717a9e471c8f3edaeaad1c9eb9",
+  "trace_id": "trc_09ceb275e2914a53acabf04e19f8db28",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

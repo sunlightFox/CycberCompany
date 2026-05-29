@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-079",
+  "category": "办公表格",
+  "title": "做经营分析时，样本量和统计口径缺失怎么办？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：样本量、统计口径。\n做经营分析时，样本量和统计口径缺失怎么办？",
+  "reply_text": "样本量和统计口径缺失时，先不要下经营结论。\n\n样本量：说明当前数据覆盖多少客户、订单或时间段，太少就只能当线索。\n统计口径：补清分子、分母、去重规则、时间范围和渠道范围。\n补齐前，报告只能写“待核查”，不能把趋势说成确定事实。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4e4aee55c02845fb81444f8641328ef9",
+  "trace_id": "trc_557aafa777a648789cbc5e7dea07ec66",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

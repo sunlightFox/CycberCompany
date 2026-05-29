@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-007",
+  "category": "闲聊",
+  "title": "我想拒绝借钱，语气要稳。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：拒绝、边界。\n我想拒绝借钱，语气要稳。",
+  "reply_text": "可以直接发：这次借钱我这边不方便，真的不好意思。不是不想帮你，只是我现在也要顾好自己的安排，不能把钱借出去以后让两边都为难。\n如果你愿意，我可以陪你想想别的办法，比如拆一下最急的缺口，或者看看有没有更稳妥的周转方式\n\n补上这轮关键点：拒绝、边界。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6936087227b04f769efefc68bcb6bc08",
+  "trace_id": "trc_e6e5dfbdd0da40549e94bcd4f2c0e177",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

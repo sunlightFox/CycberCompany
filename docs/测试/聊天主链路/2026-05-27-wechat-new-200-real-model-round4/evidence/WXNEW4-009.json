@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-009",
+  "category": "闲聊",
+  "title": "我想表达歉意，但不要写小作文。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：抱歉、补救。\n我想表达歉意，但不要写小作文。",
+  "reply_text": "先按这几个点整理：抱歉、补救。\n\n围绕“我想表达歉意，但不要写小作文”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4f7c328a7bfc4041b7d9ff8b2eb02189",
+  "trace_id": "trc_44c11c31ace545a19cec5c846cb5b84e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

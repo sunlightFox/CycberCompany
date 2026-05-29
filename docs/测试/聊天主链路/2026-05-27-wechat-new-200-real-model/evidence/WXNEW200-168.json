@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-168",
+  "category": "监督",
+  "title": "我在会上被打断，有点恼，帮我复盘但别心理咨询腔。（变体）",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：打断、复盘。\n我在会上被打断，有点恼，帮我复盘但别心理咨询腔。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "你恼是正常的，先别急着“调整心态”，先把这次打断拆清楚。\n\n我来陪你做个最小复盘，先只看3 点：\n\n🧠 1. 他是在你刚开头、讲到关键点，还是快收尾时打断？\n2. 打断后，会议走向有没有偏掉？\n3.你当时最想补上的一句话是什么？\n\n最小下一步：现在先写一句——“我刚才被打断时，其实想把___说完。”\n\n你把这句补出来，我们再看下次会上怎么更稳地接回来",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d0ae1feb6e1b4e43bf2c4e6aaabdbb8e",
+  "trace_id": "trc_0cdfc861430141fe90de93ded30107ac",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

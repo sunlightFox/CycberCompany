@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-032",
+  "category": "监督陪跑",
+  "title": "我想少刷直播，给一个不极端的办法。",
+  "prompt": "做监督和陪跑要给最小下一步，不要像打卡机器或教练口号。请自然提到：直播、不极端。\n我想少刷直播，给一个不极端的办法。",
+  "reply_text": "别先戒，先“延后10 分钟”。\n\n下次想刷直播时，不要求自己忍住，只做一件事：先开个10 分钟计时器，去倒水、洗脸或站起来走一圈。10 分钟后还想看，就看，但给自己定一个“看一场/20 分钟”的小边界。\n\n这个办法不极端，重点不是立刻变自律，而是把“马上点开”改成“我先等一下”。能做到这一点，就已经在减少被直播牵着走了。先给结论：",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a1a7edd21a0b4305ac6cee355d9dcf73",
+  "trace_id": "trc_0ffedc4a89584dea8cbf524709f954b4",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

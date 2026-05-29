@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-020",
+  "category": "计划规划",
+  "title": "我想开始写文章，第一周怎么排？",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：第一周、写文章。\n我想开始写文章，第一周怎么排？",
+  "reply_text": "第一周先别把目标定太大。重点不是马上写出爆款，而是把“写文章”这件事跑起来：有选题、有框架、有一篇完整初稿。工作经验- 成长复盘\n- 生活观察\n- 读书/学习心得- 最近踩过的坑第一周不要追求宏大主题，越小越好。比如不要写“如何提升自己”，可以写“我最近让效率变高的一个小方法”。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a53d48dfdf8b47f896a0d07ca15553f3",
+  "trace_id": "trc_71c4c63d45944ae0af163b7144ccafff",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

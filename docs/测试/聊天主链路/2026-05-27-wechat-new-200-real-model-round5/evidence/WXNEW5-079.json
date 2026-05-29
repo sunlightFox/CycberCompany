@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-079",
+  "category": "表格数据",
+  "title": "导入表格前要检查哪些必填列？",
+  "prompt": "表格和数据场景要说明字段、口径、复核，不编数据。请自然提到：必填列、检查。\n导入表格前要检查哪些必填列？",
+  "reply_text": "先按这几个点整理：必填列、检查。\n\n围绕“导入表格前要检查哪些必填列？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_113eb0dbba514778b9a1b5ec7549f141",
+  "trace_id": "trc_0ada730290f746f0840a39ca27004ab3",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

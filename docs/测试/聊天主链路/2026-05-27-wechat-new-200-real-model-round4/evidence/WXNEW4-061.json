@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-061",
+  "category": "办公文档",
+  "title": "写一条客户续约风险说明。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：风险、下一步。\n写一条客户续约风险说明。",
+  "reply_text": "该客户当前存在续约不确定性，主要风险集中在使用价值感知、预算审批和竞品替代三个方面，建议尽快完成关键人沟通并明确续约条件\n\n补上这轮关键点：风险、下一步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_008b2b3382d04736b6ed32d0ecd7f5cc",
+  "trace_id": "trc_f801cbfa356e471d81638b9e8313c6a3",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

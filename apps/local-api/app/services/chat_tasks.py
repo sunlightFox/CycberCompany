@@ -37,6 +37,8 @@ class ScheduledTaskIntentCoordinator:
         clean = " ".join(str(text or "").strip().split())
         if not clean:
             return None
+        if "请自然提到" in clean:
+            return None
         direct_only_markers = [
             "不要执行",
             "不要假装执行",

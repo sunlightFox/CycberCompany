@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-021",
+  "category": "定时提醒",
+  "title": "今天 18:45 提醒我取快递。",
+  "prompt": "处理提醒请求要说清时间、事项、边界；缺信息先问，不假装已创建。请自然提到：18:45、取快递。\n今天 18:45 提醒我取快递。",
+  "reply_text": "提醒时间确认是今天 18:45，事项是WXNEW5-021：处理提醒请求要说清时间、事项、边界；缺信息先问，不假装已创建。请自然提到：18:45、取快递。\n今天 18:45 提醒我取快递。到点我只提醒你，不会自动改报告、提交结果或替你执行其他操作。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_90efc3d5d9e5480a9cd19a9f49333944",
+  "trace_id": "trc_19cf4b27aa1448a7bb3556a83a160678",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

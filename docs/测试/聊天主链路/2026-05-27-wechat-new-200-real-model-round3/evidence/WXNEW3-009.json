@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-009",
+  "category": "闲聊",
+  "title": "有人临时改约，我怎么回不阴阳怪气？",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：改约、没关系。\n有人临时改约，我怎么回不阴阳怪气？",
+  "reply_text": "我接住这句：有人临时改约，我怎么回不阴阳怪气？。\n\n这轮重点是改约、没关系；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_319f5659691d4191aeb008ca3f4f534c",
+  "trace_id": "trc_43ae0d7cd3ea4e0e852bd0f7b57d1113",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

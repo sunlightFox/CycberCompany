@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-113",
+  "category": "多轮记忆",
+  "title": "WX200-PREF 是什么？按你记住的说。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：结论、风险。\nWX200-PREF 是什么？按你记住的说。",
+  "reply_text": "结论WX200 PREF 是：你看报告时，偏好先看结论，再看风险。*source / 范围source：来自你上一条“记住 WX200",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_5a6cc3e0ab244a738980243ed6618de8",
+  "trace_id": "trc_a95ff58f70a045fb946811f078b1202b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

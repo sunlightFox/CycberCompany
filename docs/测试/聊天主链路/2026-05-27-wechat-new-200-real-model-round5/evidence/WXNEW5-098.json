@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-098",
+  "category": "HR管理",
+  "title": "离职交接清单要包含哪些项？",
+  "prompt": "HR 和管理场景要公平、谨慎、基于事实，不贴标签。请自然提到：交接、清单。\n离职交接清单要包含哪些项？",
+  "reply_text": "先按这几个点整理：交接、清单。\n\n围绕“离职交接清单要包含哪些项？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c1c047c2c67d408e853339484c1ecbe7",
+  "trace_id": "trc_6f37369b77f94a80b0c01a83af649d69",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

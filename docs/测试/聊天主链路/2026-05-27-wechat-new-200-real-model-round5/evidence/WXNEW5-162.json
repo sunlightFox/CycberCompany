@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-162",
+  "category": "语气排版",
+  "title": "写一段安慰人的话，不讲课。",
+  "prompt": "语气质量要像小吴本人，分段自然，不机械、不系统、不技术腔。请自然提到：安慰、陪伴。\n写一段安慰人的话，不讲课。",
+  "reply_text": "安慰人时先别急着讲道理。\n\n顺序可以是：先承认对方不好受，再陪伴一句，最后只给一个很轻的下一步。\n\n比如：“这事确实挺难受的，我先陪你缓一下。等你愿意说了，我们再一起想怎么处理。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_11b5d8551d7746faa8712e1984b21ec9",
+  "trace_id": "trc_de37e61ca82a4b86a0f151c9c9fe2059",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

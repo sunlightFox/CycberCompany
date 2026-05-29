@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-089",
+  "category": "办公协作",
+  "title": "合作方没回，跟进时留余地。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：跟进、余地。\n合作方没回，跟进时留余地。",
+  "reply_text": "可以直接发：\n\n你好，我这边跟进一下前面沟通的事项，想确认下目前是否有新的进展或需要我们补充的信息。\n如果你们还在内部确认，也没关系，我们这边可以预留一些调整余地，等你方便时同步即可。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_34d3d3d151a94b5ea1d18c388e186eea",
+  "trace_id": "trc_bad3e8c4da084743891f2ede02f8c735",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

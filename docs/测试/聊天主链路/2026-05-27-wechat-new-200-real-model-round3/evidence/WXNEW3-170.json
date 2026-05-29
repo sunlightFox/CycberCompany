@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-170",
+  "category": "语气排版",
+  "title": "微信里列表太密怎么处理？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：空行、编号。\n微信里列表太密怎么处理？",
+  "reply_text": "微信里列表太密，核心就两招：拆开 + 留白。\n一条只讲一个重点不要把三四个意思塞在同一行里。\n微信屏幕窄，一长就压迫\n\n补上这轮关键点：空行、编号。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b400290dc29f474898a5198d8bd17035",
+  "trace_id": "trc_2eb61c163e594bd7b082c1cf2d5abfcf",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

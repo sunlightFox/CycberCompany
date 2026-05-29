@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-175",
+  "category": "长短控制",
+  "title": "给一个 5 分钟启动步骤。",
+  "prompt": "长短控制要按用户意图决定详略，结构清楚。请自然提到：5 分钟、启动。\n给一个 5 分钟启动步骤。",
+  "reply_text": "可以，先按轻量计划排，重点抓住5 分钟、启动。\n\n1. 范围：围绕“给一个 5 分钟启动步骤”只选最关键的几块，不把任务铺太满。\n2. 节奏：每天留一小段固定时间，先看一个小点，再动手做一个练习或产出。\n3. 验收：每隔几天回看一次，只确认哪里会了、哪里还卡，不临时加新目标。\n\n这样能照着做，也不会变成报告腔。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_95c08b87354a410ead458c8fb646b0f7",
+  "trace_id": "trc_f461e553fb0a4efda1e44f838d4c0bf9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

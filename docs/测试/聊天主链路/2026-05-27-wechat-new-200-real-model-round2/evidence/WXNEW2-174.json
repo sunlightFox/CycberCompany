@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-174",
+  "category": "模型语气",
+  "title": "什么时候该换行？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：换行、层次。\n什么时候该换行？",
+  "reply_text": "该换行的时候，其实就看一句：读的人会不会喘不过气。换了一个意思，就换行前一句讲背景，后一句讲结论，就别挤在一起\n\n补上这轮关键点：换行、层次。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_abfb323753b54064b3802630e206ee94",
+  "trace_id": "trc_7abcb3dd8e9847a9ab4d6446eabe3e7f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-141",
+  "category": "生活办公混合",
+  "title": "我边带娃边写材料，怎么安排一个小时？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：一小时、材料。\n我边带娃边写材料，怎么安排一个小时？",
+  "reply_text": "这一小时别追求“写完”，只追求“搭好骨架+写出最关键一段”。边带娃时，目标越小越能推进。可以这么排：\n前10 分钟：先安顿娃 给一个相对安全、能独立玩的任务，比如拼图、积木、贴纸、绘本，尽量选不用你一直参与的。\n中间35 分钟：只写材料的主干 不改字、不查太多资料，先把标题、三四个要点、最重要的一段写出来。 被打断也没关系，回来就接着补要点。\n最后15 分钟：收尾和标记 把没写完的地方用“待补：数据/案例/结论”标出来，顺手列下一步需要补什么。\n\n小曜建议你现在就开一个文档，先写三行：\n1.这份材料要解决什么问题\n2.主要给谁看3. 最重要的一句话结论是什么有这三行，这一小时就不算白忙。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2686577d08dd4ef5b9ee995770e401fe",
+  "trace_id": "trc_1a4d1a3118b94987ac4be64feb67e1ce",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

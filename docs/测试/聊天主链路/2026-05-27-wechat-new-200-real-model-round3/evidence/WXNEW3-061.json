@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-061",
+  "category": "办公文档",
+  "title": "写一段项目风险说明，包含原因、影响、缓解。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：原因、缓解。\n写一段项目风险说明，包含原因、影响、缓解。",
+  "reply_text": "下面这段可直接放进项目文档：\n\n当前项目存在进度延期风险。原因是需求范围仍有调整可能，且关键资源在部分阶段存在并行占用，可能导致方案确认、开发联调和验收节点被压缩。影响方面，若风险持续放大，可能造成里程碑延期、交付质量下降，并增加后续返工成本。缓解措施包括：尽快冻结核心需求，明确变更审批机制；对关键路径任务设置负责人和截止时间；提前识别资源冲突并安排备选支持；同时建立每周风险跟踪机制，及时同步阻塞项并推动决策。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_fd77f9f6f1a74fc980a445197a3ab832",
+  "trace_id": "trc_624dd86e816b4801a14c9e6c2ddc69a5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

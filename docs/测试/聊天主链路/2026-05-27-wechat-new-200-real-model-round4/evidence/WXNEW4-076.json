@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-076",
+  "category": "办公表格",
+  "title": "转化率口径变了，报告里怎么标？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：口径、标注。\n转化率口径变了，报告里怎么标？",
+  "reply_text": "先按这几个点整理：口径、标注。\n\n围绕“转化率口径变了，报告里怎么标？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c4502c569e9e47e580b53629cfd6d0af",
+  "trace_id": "trc_4082d9b3fe2244da8e83798bd3ab8a31",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

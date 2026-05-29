@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-089",
+  "category": "办公协作",
+  "title": "提醒对方补附件，别像质问。",
+  "prompt": "办公协作要能直接发给人，边界清楚，不假装已经完成。请自然提到：附件、提醒。\n提醒对方补附件，别像质问。",
+  "reply_text": "可以直接发这句：\n\n“我这边先看了下内容，正文基本没问题。麻烦你方便时再补一下附件，我这边也做个提醒，等附件齐了再一起往下推进。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d939bf5da1c04aaa80d790aff594424b",
+  "trace_id": "trc_f6a5b26a0c284fedafae6d996ef83135",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

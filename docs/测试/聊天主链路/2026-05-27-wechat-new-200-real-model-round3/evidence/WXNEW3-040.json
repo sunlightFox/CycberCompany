@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-040",
+  "category": "监督陪跑",
+  "title": "我想减少夜宵，别羞辱我。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：夜宵、不羞辱。\n我想减少夜宵，别羞辱我。",
+  "reply_text": "小曜陪你做监督，不羞辱，也不喊口号。\n\n先给最小下一步：今晚夜宵先不追求“戒掉”，只改成“延迟10分钟再决定”。这10分钟里喝几口水、刷牙，或者把想吃的东西先放远一点。\n\n如果10分钟后还是想吃，也可以吃，但只做一个小调整：少一半，或者换成更轻的选择。目标不是证明你自律，是让夜宵慢慢变少。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ff62bd5806734595aa99f99849076540",
+  "trace_id": "trc_dfdb070cb9cb42ec9a8c8f2113ad488f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

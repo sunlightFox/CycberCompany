@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-015",
+  "category": "计划",
+  "title": "把健身、做饭、复盘放进今晚，不要过度安排。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：健身、缓冲。\n把健身、做饭、复盘放进今晚，不要过度安排。",
+  "reply_text": "我接住这句：把健身、做饭、复盘放进今晚，不要过度安排。\n\n这轮重点是健身、缓冲；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ee3e62e84fd24703a8c62f64607efd99",
+  "trace_id": "trc_b20136a664f846f9abc24228ac3be5f4",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

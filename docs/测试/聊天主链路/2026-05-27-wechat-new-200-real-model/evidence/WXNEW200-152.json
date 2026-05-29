@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-152",
+  "category": "提醒定时",
+  "title": "提醒我看报告，但我没说时间，你要问什么？（变体）",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：时间、不会创建模糊提醒。\n提醒我看报告，但我没说时间，你要问什么？\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "我会先确认时间：你想哪一天、几点提醒你看/定时请求？如果是循环提醒，也要确认频率和结束条件；在你给出具体时间前，我不会创建模糊提醒。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c7fba31efbac49d78dc993dabd7e60a7",
+  "trace_id": "trc_82d95b86f6d64db9a97241cb8288de6f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

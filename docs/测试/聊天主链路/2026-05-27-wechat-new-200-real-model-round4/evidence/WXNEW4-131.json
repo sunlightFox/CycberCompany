@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-131",
+  "category": "生活办公混合",
+  "title": "等车 12 分钟，怎么准备会议发言？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：12 分钟、发言。\n等车 12 分钟，怎么准备会议发言？",
+  "reply_text": "等车这12分钟，别写完整稿，抓住“我要表达什么、怎么开口、最后要什么结果”就够了。你可以这样准备会议发言：1.用2分钟定一句话结论先想清楚：我这次发言最想让大家记住什么？例如：“这个方案可行，但需要先解决资源和时间排期。” 📘\n\n补上这轮关键点：12 分钟、发言。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ffa3db220c714c529898316b22d73c5f",
+  "trace_id": "trc_8b3482b110ad4df1a9a2aa5052844698",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

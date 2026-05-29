@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-139",
+  "category": "生活办公混合",
+  "title": "胃不舒服但有会，怎么安排？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：不舒服、降级。\n胃不舒服但有会，怎么安排？",
+  "reply_text": "身体不舒服但还有交付，先降级，不硬扛满配。\n\n1. 只保最小交付：先交能说明结论和下一步的版本。\n2. 砍掉装饰项：排版、美化、延伸分析都往后放。\n3. 提前同步：告诉对方今天状态不舒服，会先给可用版本，细节后补。\n\n目标是不中断交代，也别把身体耗空。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_31d2af6da9734e2fb1714a699b8fb2af",
+  "trace_id": "trc_2b304f8b82dc4661aac491d8ab06c14b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

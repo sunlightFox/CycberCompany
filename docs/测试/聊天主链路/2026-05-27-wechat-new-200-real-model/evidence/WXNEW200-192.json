@@ -1,0 +1,29 @@
+{
+  "case_id": "WXNEW200-192",
+  "category": "办公文档",
+  "title": "我是运营负责人，要做 6 页 PPT 增长复盘，给每页标题和图表建议。（变体）",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：6 页、图表。\n我是运营负责人，要做 6 页 PPT 增长复盘，给每页标题和图表建议。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "先不假装生成文件。目前只给你一版可直接用的6 页 PPT结构，每页含图表建议：\n\n1. 增长复盘总览讲：核心结论、关键指标、最大变化 图表：指标总览卡 / 核心数据看板2. 增长来源拆解讲：渠道、产品、区域/人群贡献 图表：堆叠柱状图3. 转化漏斗变化讲：各环节转化率、流失点、改善点 图表：漏斗图4. 成本与效率复盘讲：投放成本、活动成本、人效、ROI 图表：ROI 趋势线 / 成本效率对比图5. 问题与风险讲：未达预期原因、数据口径问题、外部变量 图表：风险矩阵6. 下月增长动作讲：重点实验、负责人、时间表、验收指标 图表：行动路线图 / 甘特图缺口：还需要具体月份、业务类型、核心指标数据，才能进一步写成完整 PPT 文案或图表数据。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e15c50552e6f4d868279b788bb413eb1",
+  "trace_id": "trc_2ba3bd0977b14550a5aa81d9a28a388d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

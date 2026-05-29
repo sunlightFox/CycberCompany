@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-119",
+  "category": "知识研究",
+  "title": "政策变化要看什么出处？",
+  "prompt": "知识类回答要说明证据、来源、样本、时效，不乱外推。请自然提到：官方、日期。\n政策变化要看什么出处？",
+  "reply_text": "没有出处的专家观点，最好不要直接当证据用。先请对方补专家姓名、机构、发布时间、原文链接，或论文、会议、访谈来源。补不到出处时，可以把它写成“有人这样认为的线索”，不能写成已证实结论\n\n补上这轮关键点：官方、日期。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8b8a45c7031749e18c418e1f29087892",
+  "trace_id": "trc_4ed6a3e6df8f4c518647be980126c18a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

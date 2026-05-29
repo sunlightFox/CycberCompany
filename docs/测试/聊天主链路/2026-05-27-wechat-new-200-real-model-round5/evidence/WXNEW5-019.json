@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-019",
+  "category": "计划拆解",
+  "title": "旅行回来一堆事，先恢复再处理，怎么排？",
+  "prompt": "帮我规划时要分段清楚、能照着做，不要报告腔。请自然提到：恢复、处理。\n旅行回来一堆事，先恢复再处理，怎么排？",
+  "reply_text": "我接住这句：旅行回来一堆事，先恢复再处理，怎么排？。\n\n这轮重点是恢复、处理；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1a885f7e49574de3ad8cc9d47f72046e",
+  "trace_id": "trc_0a726a647b254af4825747823b32881c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

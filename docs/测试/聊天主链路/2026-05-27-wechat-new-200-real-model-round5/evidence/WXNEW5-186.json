@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-186",
+  "category": "审计追踪",
+  "title": "浏览器只读结果要留哪些证据？",
+  "prompt": "审计追踪场景要说清 trace、证据、状态，不暴露敏感信息。请自然提到：浏览器、证据。\n浏览器只读结果要留哪些证据？",
+  "reply_text": "浏览器只读结果要留能复核的证据，但不暴露敏感信息。\n\n1. trace：记录本次读取的 trace ID、时间、页面 URL 和只读模式。\n2. 证据摘要：保留标题、关键字段、可见文本片段或截图指针，不记录 cookie、token、密码。\n3. 状态：说明读取成功、失败、页面不可达，还是内容缺失。\n\n这样后续能复核来源，也不会把敏感内容写进日志。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4c76fc280d904fb08b62c8fece62f6fa",
+  "trace_id": "trc_b6ca7c03fd5646e3aff34b48a3a23a3c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

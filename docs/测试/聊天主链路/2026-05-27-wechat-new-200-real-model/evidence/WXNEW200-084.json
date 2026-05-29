@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-084",
+  "category": "HR招聘",
+  "title": "请假说明怎么写，不暴露隐私？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：请假、隐私。\n请假说明怎么写，不暴露隐私？",
+  "reply_text": "我接住这句：请假说明怎么写，不暴露隐私？。\n\n这轮重点是请假、隐私；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9bf31e41f5954b0ebc2b2fa65a224343",
+  "trace_id": "trc_66e7218104ad4cafa0595be7661e9695",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW200-200",
+  "category": "办公文档",
+  "title": "不要生成任何文件，只写报告摘要。（变体）",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：不生成文件、摘要。\n不要生成任何文件，只写报告摘要。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "不生成文件，只写摘要。\n\n摘要可以先按三句来：这份内容要解决什么问题、目前能确定的结论是什么、下一步还缺哪些信息。\n\n如果你还没给具体正文，我不会假装已经读完报告；你把材料贴过来后，我再压成可直接转发的摘要。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_bd9b92e26c904ffe81d790dbf63f7cd2",
+  "trace_id": "trc_febd3b4f675b4b3c97af94df1b0d36c1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

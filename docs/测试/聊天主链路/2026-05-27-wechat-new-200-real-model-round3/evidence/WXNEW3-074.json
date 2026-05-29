@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-074",
+  "category": "办公表格",
+  "title": "库存出现负数，先查哪些链路？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：负数、数据源。\n库存出现负数，先查哪些链路？",
+  "reply_text": "我接住这句：库存出现负数，先查哪些链路？。\n\n这轮重点是负数、数据源；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_dad520e9491a4cde85b2e59ecb5019a4",
+  "trace_id": "trc_de41de83fbc040849f749bb0623ffabf",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

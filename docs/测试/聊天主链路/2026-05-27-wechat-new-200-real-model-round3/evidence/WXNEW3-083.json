@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-083",
+  "category": "办公协作",
+  "title": "需求变更前要问产品哪些影响？",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：变更、影响范围。\n需求变更前要问产品哪些影响？",
+  "reply_text": "需求变更前，先问产品这几件事：\n1. 变更目标：为什么要改，解决哪个用户或业务问题？\n2. 影响范围：会影响哪些页面、接口、数据、测试和上线节奏？\n3. 优先级：是本次必须做，还是可以排到下一版？\n\n问清这些，再让研发和测试评估成本。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_cc0ce71cdd9747b88094141f1df610a3",
+  "trace_id": "trc_cd458ad0b2144cd0b0b497141a7d2e69",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-191",
+  "category": "审计追踪",
+  "title": "为什么每次模型调用都要 trace？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：trace、回溯。\n为什么每次模型调用都要 trace？",
+  "reply_text": "每次模型调用都要有 trace，核心不是“多记日志”，而是为了审计时能回溯完整链路，同时避免靠截图或口头描述判断。\n每一次模型调用都要 trace，是因为审计追踪看的是“同一个 case 从输入、模型调用、输出到投递”的连续证据链。\n先用 trace 把同一个 case 的模型调用、投递记录和最终回复串起来；\n再看真实模型事件，确认模型开始记录、模型完成记录和实际输出；接着看飞书投递记录，确认消息确实发出；截图放最后，只作为用户可见结果的补充证据，不能单独替代前面的链路证据。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_12037e6742ac4537bf30e4eb29310b5b",
+  "trace_id": "trc_8c37b0828b6b428d9b250c3a6e2f1125",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

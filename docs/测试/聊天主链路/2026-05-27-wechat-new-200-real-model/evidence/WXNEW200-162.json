@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-162",
+  "category": "监督",
+  "title": "监督我 15 分钟开始写，不要骂我。（变体）",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：15 分钟、开始。\n监督我 15 分钟开始写，不要骂我。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "不骂你。小曜陪你盯15 分钟。\n\n现在最小下一步：先打开文档，只写第一句，别管好坏。你回复我“开始”，我就按15 分钟陪跑节奏监督你。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1fe25c5b76a04a7fa6a3c7c154b76837",
+  "trace_id": "trc_de7090e1e22b490b8bff362f0f04b9bd",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

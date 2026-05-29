@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-162",
+  "category": "语气排版",
+  "title": "把公告腔改成微信短消息。",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：短消息、人话。\n把公告腔改成微信短消息。",
+  "reply_text": "按你刚刚改的这句，可以。先给结论：要把“公告腔”改成微信短消息，核心就是像小吴本人在说话——短消息、人话，别端着，别技术腔。\n\n你把原文发我，我直接改。\n\n如果先给一个改法方向，大概是这样：\n\n原公告腔：\n> 请各位同事务必于今日下班前完成信息填写，逾期将影响后续流程推进。\n\n微信短消息版：\n> 大家今天下班前把信息填一下哈，不然会影响后面流程。辛苦～\n\n语气标准：\n句子短一点\n像微信里随手发的\n少用“请各位”“务必”“推进”“落实”这类词\n多用“哈、辛苦、看下、麻烦大家”这种自然说法\n像小吴本人，不像系统公告",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_05b5cb3b67034cf091e86c155f10bdbc",
+  "trace_id": "trc_ce643bbc690f4044896dd59010970ead",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

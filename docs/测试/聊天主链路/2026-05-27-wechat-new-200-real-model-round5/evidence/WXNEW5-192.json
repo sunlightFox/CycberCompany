@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-192",
+  "category": "渠道质量",
+  "title": "微信回复里不要出现测试编号。",
+  "prompt": "渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：测试编号、不出现。\n微信回复里不要出现测试编号。",
+  "reply_text": "最终可见回复会保持自然，只保留用户需要看到的内容，不夹带内部标识、系统话或旧内容残留\n\n补上这轮关键点：测试编号、不出现。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3187ffa72e614a8ead9ba53f6a6af43c",
+  "trace_id": "trc_4396a437da1a493687b2593c4c65a1ed",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

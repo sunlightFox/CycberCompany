@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-179",
+  "category": "长短控制",
+  "title": "把汇报压成标题加两点。",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：标题、两点。\n把汇报压成标题加两点。",
+  "reply_text": "我接住这句：把汇报压成标题加两点。\n\n这轮重点是标题、两点；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_93e891625dc54d848539bb1034bb7d27",
+  "trace_id": "trc_0642bfee7c164e6f8b8e00a91f0a9a64",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-174",
+  "category": "长短控制",
+  "title": "用短答告诉我现在先做什么。",
+  "prompt": "长短控制要按用户意图决定详略，结构清楚。请自然提到：短答、先做。\n用短答告诉我现在先做什么。",
+  "reply_text": "我接住这句：用短答告诉我现在先做什么。\n\n这轮重点是短答、先做；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_44dec4d57136464d809759fe20a82144",
+  "trace_id": "trc_69dc8ddb9b0d4960925215d9724cdfb5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

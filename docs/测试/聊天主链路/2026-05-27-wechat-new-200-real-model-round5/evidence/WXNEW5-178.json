@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-178",
+  "category": "长短控制",
+  "title": "把复杂方案压成三层。",
+  "prompt": "长短控制要按用户意图决定详略，结构清楚。请自然提到：三层、方案。\n把复杂方案压成三层。",
+  "reply_text": "复杂方案可以压成三层：\n\n第一层：目标，先说这套方案要解决什么问题。\n第二层：路径，只保留三到五个关键动作，别把细枝末节塞进去。\n第三层：风险和下一步，说明最大不确定性，以及现在先推进哪一步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2872c1190b084b5d948201c8dfe65b8c",
+  "trace_id": "trc_9b80afd10b7b47f18f0588f0c627f75c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

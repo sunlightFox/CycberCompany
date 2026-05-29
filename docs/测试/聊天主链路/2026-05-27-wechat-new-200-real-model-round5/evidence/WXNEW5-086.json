@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-086",
+  "category": "办公协作",
+  "title": "跨部门要资料，怎么写清用途？",
+  "prompt": "办公协作要能直接发给人，边界清楚，不假装已经完成。请自然提到：资料、用途。\n跨部门要资料，怎么写清用途？",
+  "reply_text": "跨部门要资料，最好把“要什么资料、用途是什么、截止时间、交付形式、权限边界”一次说清楚，语气客气但不含糊。可以直接这样发：\n你好，我这边因【项目/事项名称】需要整理【报告/方案/数据分析/对外材料】，想请你协助提供一下【具体资料名称/范围】。\n这份资料主要用于【具体用途：内部评估/会议汇报/方案测算/流程核对等】，不会超出该用途使用。谢谢。\n\n更简短一点：\n你好，想请你协助提供【资料名称】。这边用途是【具体用途】，主要用于【项目/会议/分析】内部整理。\n麻烦看下是否方便在【时间】前发我；\n如果涉及权限或敏感内容，我可以按流程补申请。谢谢。小曜建议你别只写“领导要”“项目需要”，对方会不知道边界；把用途写成“用于什么场景、不用于什么范围”，跨部门配合会顺很多。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a6f36bba6f5f457a972c3c5826bf29d9",
+  "trace_id": "trc_7709d835890d443dac60f41c315f3da8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-064",
+  "category": "办公文档",
+  "title": "写一段项目启动会开场。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：项目启动、目标。\n写一段项目启动会开场。",
+  "reply_text": "各位同事，大家好。今天我们召开本次项目启动会，标志着项目正式进入推进阶段。首先感谢大家前期在需求梳理、资源准备和方案沟通中的支持。本次会议的目标，是让大家对项目背景、整体目标、关键计划、分工协作方式以及近期重点事项形成统一认识，确保后续工作责任清晰、节奏明确、沟通顺畅。接下来，我们将围绕项目目标、实施路径、时间安排和风险关注点逐项展开，也欢迎大家积极提出建议和问题，共同推动项目顺利落地。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_261507d12c2a4092838eaf86bd82f739",
+  "trace_id": "trc_9ac1f8ef111540e18337d068765dbe9d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -112,3 +112,77 @@ class GoalEvent(ApiModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     trace_id: EntityId | None = None
     created_at: datetime
+
+
+class GoalIntake(ApiModel):
+    intake_id: EntityId
+    goal_id: EntityId
+    domain_label: str = "general"
+    status: str = "collecting"
+    current_level: str | None = None
+    target_level: str | None = None
+    target_date: str | None = None
+    available_time: dict[str, Any] = Field(default_factory=dict)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    motivation: dict[str, Any] = Field(default_factory=dict)
+    missing_fields: list[str] = Field(default_factory=list)
+    raw_answers: dict[str, Any] = Field(default_factory=dict)
+    confirmed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class GoalMilestone(ApiModel):
+    milestone_id: EntityId
+    goal_id: EntityId
+    goal_plan_id: EntityId | None = None
+    title: str
+    description: str = ""
+    status: str = "planned"
+    target_date: str | None = None
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    sort_order: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class GoalRoutine(ApiModel):
+    routine_id: EntityId
+    goal_id: EntityId
+    goal_plan_id: EntityId | None = None
+    title: str
+    description: str = ""
+    cadence: dict[str, Any] = Field(default_factory=dict)
+    estimated_minutes: int | None = None
+    difficulty: str = "medium"
+    status: str = "active"
+    sort_order: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class GoalIntervention(ApiModel):
+    intervention_id: EntityId
+    goal_id: EntityId
+    trigger_type: str
+    status: str = "suggested"
+    summary: str
+    suggestion: dict[str, Any] = Field(default_factory=dict)
+    shown_at: datetime | None = None
+    user_feedback: dict[str, Any] = Field(default_factory=dict)
+    trace_id: EntityId | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class GoalModelCall(ApiModel):
+    model_call_id: EntityId
+    goal_id: EntityId | None = None
+    call_type: str
+    status: str
+    model_route: dict[str, Any] = Field(default_factory=dict)
+    input_redacted: dict[str, Any] = Field(default_factory=dict)
+    output_redacted: dict[str, Any] = Field(default_factory=dict)
+    fallback_reason: str | None = None
+    trace_id: EntityId | None = None
+    created_at: datetime

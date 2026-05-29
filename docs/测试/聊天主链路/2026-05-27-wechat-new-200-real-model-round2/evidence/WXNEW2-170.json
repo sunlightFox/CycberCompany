@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-170",
+  "category": "任务边界",
+  "title": "用户只说帮我弄一下，你要先问什么？",
+  "prompt": "任务边界场景要说明能做什么、不能假装完成、需要确认什么。请自然提到：目标、范围。\n用户只说帮我弄一下，你要先问什么？",
+  "reply_text": "可以这样问：“可以，我先确认一下：你想达成的目标是什么？这件事的范围包括哪些、不包括哪些？我可以帮你梳理方案、写内容、整理资料、生成步骤或草稿；但在没有权限、材料或确认前，我不能假装已经替你执行完成。你需要我现在先做哪一步？”如果场景涉及记忆或偏好，还要补一句：“如果你希望我以后记住某个偏好，请告诉我这个信息的 source 是什么，以及是只在本次对话临时使用，还是作为长期偏好保存；敏感内容我不会写入。若不适合保存，我可以给你替代方案，比如只在当前任务中临时参考。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_7f1194a94ee34b1390a97184975c3943",
+  "trace_id": "trc_3e40100285d347adb9f4dc5ef8fa36ff",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

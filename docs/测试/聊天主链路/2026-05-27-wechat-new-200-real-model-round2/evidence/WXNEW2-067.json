@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW2-067",
+  "category": "办公文档",
+  "title": "给一封催反馈邮件，礼貌但明确。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：反馈、截止时间。\n给一封催反馈邮件，礼貌但明确。",
+  "reply_text": "一封可直接使用的催反馈邮件：\n\n- *主题：关于XX事项反馈的提醒**\n\n您好，\n\n想跟进一下此前发给您的XX事项，目前还未收到相关反馈。为便于我们按计划推进后续工作，烦请您在XX月XX日XX点前回复意见或确认是否无补充。\n\n如您这边还需要更多时间，也请告知预计反馈时间，我们好同步调整安排。\n\n感谢支持，期待您的回复。\n\n祝好！\nXXX\n\n补上这轮关键点：反馈、截止时间。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_811dea8df3e74bcb98a5030d63276b1e",
+  "trace_id": "trc_0b04aacd0e8f4fe78b8d345146d85cef",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

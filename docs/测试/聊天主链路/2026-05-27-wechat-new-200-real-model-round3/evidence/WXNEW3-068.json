@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW3-068",
+  "category": "办公文档",
+  "title": "新人入职第一天提醒怎么写？",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：入职、提醒。\n新人入职第一天提醒怎么写？",
+  "reply_text": "可以这样写，适合发在微信/飞书群里，语气自然、不生硬：\n\n- *新人入职第一天提醒模板**\n\n各位好，提醒一下：今天是新同事【姓名】入职第一天。\n\n请相关同事协助做好以下事项：\n\n1. 行政/前台：协助办理入职手续、工位安排、门禁/考勤等事项。2. IT同事：协助开通电脑、邮箱、企业微信/飞书、系统账号等。3. 直属负责人：安排新人熟悉团队、岗位职责和近期工作内容。4. 团队同事：欢迎新同事加入，方便的话可以主动打个招呼，帮助新人尽快融入。\n\n如有其他入职相关事项，也请及时同步。谢谢大家配合。\n\n——如果想更口语一点，可以写成：\n\n各位好，提醒一下，今天【姓名】正式入职第一天。麻烦行政、IT和直属负责人协助完成入职手续、账号开通、工位安排和工作对接。也欢迎大家和新同事打个招呼，帮助他/她尽快熟悉环境。谢谢大家。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_cbc8ea4e689d4c888ac1c9217641d57c",
+  "trace_id": "trc_2784bd1d396444c492186b49301f8630",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

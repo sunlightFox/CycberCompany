@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-083",
+  "category": "HR办公",
+  "title": "绩效反馈要指出问题但别羞辱。",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：事实、改进。\n绩效反馈要指出问题但别羞辱。",
+  "reply_text": "我接住这句：绩效反馈要指出问题但别羞辱。\n\n这轮重点是事实、改进；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_46fcf1a7d5b6439889cf7b29f1540bd7",
+  "trace_id": "trc_210f7c5ef08b4b218a92e21d3d16d472",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

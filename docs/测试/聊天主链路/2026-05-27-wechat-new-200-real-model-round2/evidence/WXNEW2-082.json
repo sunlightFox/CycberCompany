@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-082",
+  "category": "HR办公",
+  "title": "员工请假原因很私密，怎么记录？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：隐私、必要信息。\n员工请假原因很私密，怎么记录？",
+  "reply_text": "我接住这句：员工请假原因很私密，怎么记录？。\n\n这轮重点是隐私、必要信息；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8bd9f3179ecd46b68cd002833bb498ac",
+  "trace_id": "trc_9e1ff74a674e4aedaa7925fcaabe17c5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

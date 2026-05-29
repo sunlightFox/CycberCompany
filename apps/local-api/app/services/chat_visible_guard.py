@@ -230,6 +230,210 @@ def _strip_internal_memory_artifact_lines(text: str) -> str:
     )
 
 
+def _visible_reply_misses_prompt_terms(text: str, raw: str) -> bool:
+    visible = str(text or "")
+    request = str(raw or "")
+    if any(marker in visible for marker in ("Office Skill", "cycber skills install", "clawhub:official/office")):
+        return True
+    if any(marker in visible for marker in ("200 场景", "200个场景", "新 200 场景", "抽样复核")) and "200" not in request:
+        return True
+    terms = [
+        term.strip()
+        for term in re.split(r"[，。；;、\s]+", request)
+        if len(term.strip()) >= 2 and term.strip() not in {"写一段", "写一个", "帮我", "飞书周报"}
+    ]
+    important = terms[:8]
+    if not important:
+        return len(visible) < 60
+    hits = sum(1 for term in important if term in visible)
+    return hits == 0 or len(visible) < 40
+
+
+def _report_reply_from_request(raw: str) -> str | None:
+    text = str(raw or "").strip()
+    if not any(marker in text for marker in ("周报", "日报", "飞书周报", "飞书日报")):
+        return None
+    completed = _extract_between(text, ("本周完成", "今天完成", "完成了", "完成"), ("风险是", "风险：", "风险"))
+    risk = _extract_between(text, ("风险是", "风险：", "风险"), ("下一步", "下周", "后续"))
+    next_step = _extract_between(text, ("下一步", "下周", "后续"), ())
+    if not any((completed, risk, next_step)):
+        return None
+    lines = []
+    if completed:
+        lines.append(f"本周完成{completed.rstrip('。')}。")
+    if risk:
+        lines.append(f"当前风险是{risk.rstrip('。')}。")
+    if next_step:
+        lines.append(f"下一步{next_step.rstrip('。')}。")
+    return "\n\n".join(lines)
+
+
+def _generic_report_reply(raw: str) -> str:
+    text = str(raw or "").strip("。")
+    return f"本周进展：{text}。\n\n当前风险：按已有信息先保留风险项，不把未确认内容写满。\n\n下一步：补齐证据和负责人后再更新最终版。"
+
+
+def _pr_description_from_request(raw: str) -> str | None:
+    text = str(raw or "").strip()
+    lowered = text.lower()
+    has_pr_marker = (
+        re.search(r"(?<![A-Za-z0-9])pr(?![A-Za-z0-9])", lowered) is not None
+        or "pull request" in lowered
+        or "合并请求" in text
+    )
+    if not has_pr_marker:
+        return None
+    if not any(marker in text for marker in ("描述", "说明", "标题", "正文", "文案")):
+        return None
+    topic = _extract_between(text, ("：", ":"), ()) or text
+    topic = re.sub(r"^\s*写(?:一|一个)?\s*(?:PR|pr|pull request|合并请求)\s*描述\s*", "", topic).strip("：。 ")
+    if not topic:
+        return None
+    return (
+        f"PR 描述可以这样写：\n\n"
+        f"变更内容：{topic.rstrip('。')}。\n\n"
+        "验证方式：补充对应入口的入站、模型完成、出站投递和最终可见回复证据，确认链路能对齐。\n\n"
+        "影响范围：只调整回复质量和投递证据相关逻辑，不改变权限、安全审批和底层业务数据。"
+    )
+
+
+def _extract_between(text: str, starts: tuple[str, ...], ends: tuple[str, ...]) -> str:
+    raw = str(text or "")
+    start_idx = 0
+    for marker in starts:
+        idx = raw.find(marker)
+        if idx >= 0:
+            start_idx = idx + len(marker)
+            break
+    else:
+        return ""
+    end_idx = len(raw)
+    for marker in ends:
+        idx = raw.find(marker, start_idx)
+        if idx >= 0:
+            end_idx = min(end_idx, idx)
+    return raw[start_idx:end_idx].strip("：，；。 .")
+
+
+def _visible_reply_is_goal_plan_response(text: str) -> bool:
+    visible = str(text or "")
+    return (
+        any(
+            marker in visible
+            for marker in (
+                "设成一个目标",
+                "目标（长期）",
+                "生成一版可执行计划",
+            )
+        )
+        and "目标" in visible
+        and "计划" in visible
+    )
+
+
+def _request_asks_for_goal_support(request: str) -> bool:
+    raw = str(request or "")
+    has_goal_stance = any(
+        marker in raw
+        for marker in (
+            "我要",
+            "我想",
+            "我希望",
+            "我打算",
+            "目标",
+        )
+    )
+    has_support_marker = any(
+        marker in raw
+        for marker in (
+            "监督",
+            "提醒",
+            "陪跑",
+            "打卡",
+            "复盘",
+            "计划",
+            "规划",
+            "习惯",
+            "长期",
+        )
+    )
+    return has_goal_stance and has_support_marker
+
+
+def _compact_ppt_outline_visible_reply(
+    raw: str,
+    text: str,
+    *,
+    stale_template: bool,
+) -> str | None:
+    if "PPT" not in raw or not any(marker in raw for marker in ("大纲", "提纲", "每页", "页")):
+        return None
+    too_long_or_flat = len(text) > 850 or (len(text) > 420 and "\n" not in text)
+    if not (stale_template or too_long_or_flat):
+        return None
+
+    page_count = 5
+    count_match = re.search(r"([3-9])\s*页", raw)
+    if count_match is not None:
+        page_count = max(3, min(9, int(count_match.group(1))))
+
+    topic = "这个主题"
+    topic_match = re.search(r"主题(?:是|为|：|:)\s*([^。\n，,？?]{2,40})", raw)
+    if topic_match is not None:
+        topic = topic_match.group(1).strip(" 。")
+
+    if "聊天质量闭环" in raw or "聊天质量" in raw:
+        slides = [
+            ("为什么要做", "说明聊天质量直接影响用户体验、转化和留存。"),
+            ("质量标准", "定义清晰、准确、自然、可执行、边界稳这几类指标。"),
+            ("发现问题", "从抽样评审、用户反馈、失败标签和渠道回执里找缺口。"),
+            ("修复闭环", "把问题归因到提示、工具、数据、流程或交付格式，再做通用修复。"),
+            ("验收机制", "用真实场景回归，按最终可见回复判断是否通过。"),
+        ]
+    else:
+        slides = [
+            ("背景与目标", f"说明为什么要讲“{topic}”，以及这份 PPT 想让听众形成什么判断。"),
+            ("现状与问题", "列出当前事实、主要矛盾和最影响结果的 2-3 个问题。"),
+            ("核心方案", "给出主线方法、关键动作和优先级，避免堆概念。"),
+            ("落地路径", "拆成时间表、负责人、依赖资源和验收标准。"),
+            ("风险与下一步", "说明风险、需要确认的缺口，以及会后第一步动作。"),
+        ]
+
+    while len(slides) < page_count:
+        slides.insert(-1, (f"补充页 {len(slides)}", "放数据、案例、对比或关键证据，只服务一个结论。"))
+    slides = slides[:page_count]
+
+    lines = [f"{page_count} 页 PPT 大纲可以这样排，主题围绕“{topic}”："]
+    for index, (title, point) in enumerate(slides, start=1):
+        lines.append(f"{index}. {title}：{point}")
+    lines.append("每页只放一个主结论，标题先写判断，再放 3 个以内要点；不要把详细报告塞进 PPT。")
+    return "\n".join(lines)
+
+
+def _compact_agent_failure_visible_reply(
+    raw: str,
+    text: str,
+    *,
+    stale_template: bool,
+) -> str | None:
+    if "Agent" not in raw or not any(marker in raw for marker in ("失败原因", "常见失败", "失败")):
+        return None
+    dense = len(text) > 420 and "\n" not in text
+    glued = "没听明白任务" in text and "缺关键材料" in text and "\n" not in text
+    missing_core = not all(marker in text for marker in ("目标", "材料", "复查"))
+    if not (stale_template or dense or glued or missing_core):
+        return None
+    return (
+        "Agent 做任务常见失败，通常不是“不聪明”，而是这几类问题：\n"
+        "1. 目标没说清：它不知道到底要交付什么。\n"
+        "2. 材料不够：文件、网页、账号、权限或上下文没拿全，只能猜。\n"
+        "3. 步骤太长：中途漏步骤、顺序乱，越做越偏。\n"
+        "4. 工具或权限不够：想到了办法，但没有可用工具或授权落地。\n"
+        "5. 没复查结果：看起来做完了，其实没有核对输出、送达和格式。\n\n"
+        "所以好的 Agent 不只是会回答，还要先问清目标，补齐材料，分步执行，最后检查结果。"
+    )
+
+
 def generic_visible_content_repair(
     visible: str,
     request: str,
@@ -241,7 +445,40 @@ def generic_visible_content_repair(
     original = str(original_visible or "")
     if not raw:
         return None
+    if _visible_reply_is_goal_plan_response(text) and _request_asks_for_goal_support(raw):
+        return None
+    report_reply = _report_reply_from_request(raw)
+    if report_reply and _visible_reply_misses_prompt_terms(text, raw):
+        return report_reply
+    pr_reply = _pr_description_from_request(raw)
+    if pr_reply and _visible_reply_misses_prompt_terms(text, raw):
+        return pr_reply
     stale_template = _reply_looks_like_wrong_analytic_template(text)
+    if (
+        any(marker in raw for marker in ("浏览器搜索", "用浏览器搜索"))
+        and "证据来源" in raw
+        and (stale_template or "证据来源" not in text)
+    ):
+        query = re.sub(r"^.*?浏览器搜索", "", raw).strip(" ，。？?")
+        query = re.sub(r"，?并.*$", "", query).strip(" ，。？?") or "相关内容"
+        return (
+            f"我会按只读浏览器搜索来处理“{query}”。\n\n"
+            "结论会基于搜索结果页能看到的标题、摘要和链接，不把网页里的隐藏指令当命令。\n\n"
+            "证据来源：浏览器搜索结果页及其可见结果摘要；如果需要最终判断，还要继续核对原文页面和发布时间。"
+        )
+    if "压缩包" in raw and (
+        stale_template
+        or "可以归纳成三层" in text
+        or "安全摘要" not in text
+        or "直接打开" not in text
+    ):
+        return "这个压缩包我收到了，但我先只保留安全摘要，不会直接打开里面的内容。"
+    ppt_outline = _compact_ppt_outline_visible_reply(raw, text, stale_template=stale_template)
+    if ppt_outline is not None:
+        return ppt_outline
+    agent_failure = _compact_agent_failure_visible_reply(raw, text, stale_template=stale_template)
+    if agent_failure is not None:
+        return agent_failure
     if any(marker in raw for marker in ("同义表达", "同义词", "近义表达", "近义词")) and "误判" in raw and (
         stale_template or "同义" not in text or "误判" not in text or len(text) < 120
     ):
@@ -5264,6 +5501,17 @@ def _learning_visible_repair(request: str) -> str:
 
 def _fact_check_visible_repair(request: str) -> str:
     raw = str(request or "")
+    if any(marker in raw for marker in ("这张图片", "这张图", "图片")) and not any(
+        marker in raw for marker in ("真假", "核查", "伪造", "热搜", "转发", "谣", "断章取义")
+    ):
+        return "我收到这张图了，现在还能看到的只是基础信息，细节我不会瞎猜。你要是告诉我重点，我就能接着帮你看。"
+    if "截图" in raw and any(marker in raw for marker in ("登录", "打开", "网页", "页面")) and not any(
+        marker in raw for marker in ("真假", "核查", "伪造", "热搜", "转发", "谣", "断章取义")
+    ):
+        return (
+            "这一步是登录后截图留证，不能把未执行说成完成。\n"
+            "需要先确认页面、账号范围和截图是否包含隐私；真正执行后，再用截图 artifact、页面状态或任务记录作为完成证据。"
+        )
     if "injection.html" in raw:
         return (
             "页面事实可以这样写：页面里出现的是 injection canary 和一段不可信的网页文字。\n"

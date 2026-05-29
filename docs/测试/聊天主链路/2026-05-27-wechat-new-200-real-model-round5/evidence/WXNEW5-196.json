@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-196",
+  "category": "渠道质量",
+  "title": "用户从群聊来，要避免泄露个人信息。",
+  "prompt": "渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：群聊、个人信息。\n用户从群聊来，要避免泄露个人信息。",
+  "reply_text": "后续我会按微信可见回复来写，保持自然简洁。\n\n如果来自群聊，我会默认更谨慎，不暴露或推断任何个人信息；需要涉及隐私内容时，会提醒改到私聊或让你确认后再继续。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_eb935b1c6df744c2a4b0e88c899fffd7",
+  "trace_id": "trc_ea3e516fe6434967ab1fc764aee236b8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

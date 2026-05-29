@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-142",
+  "category": "生活办公混合",
+  "title": "出门前要带电脑、钥匙、药，帮我确认。",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：电脑、钥匙、药。\n出门前要带电脑、钥匙、药，帮我确认。",
+  "reply_text": "我不能替你现场确认物品真的在包里，但我可以帮你做出门前核对。\n\n现在就按这三样过一遍：\n\n- 电脑：在包里了吗？电源/充电器要不要带？\n钥匙：摸一下口袋或包侧袋，确认能拿到。\n药：今天要用的药带上了吗？最好放在固定小袋里。\n\n▸ 下一步：你现在站在门口前，按“电脑 → 钥匙 → 药”摸一遍；三样都碰到手，就可以出门。\n\n补充：来源要优先核对药品说明书、医生或药师意见。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4d6127cdec74461b9492254aebf6f518",
+  "trace_id": "trc_b645e38d56614f2a93bcff6be249d489",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

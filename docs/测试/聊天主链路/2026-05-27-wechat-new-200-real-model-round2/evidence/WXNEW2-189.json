@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-189",
+  "category": "长短控制",
+  "title": "把汇报压缩成标题加两点。",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：标题、两点。\n把汇报压缩成标题加两点。",
+  "reply_text": "我会先把材料压成结论、原因、影响和下一步四块，而不是只复述原文。结论放最前面，原因按人、流程、信息和外部约束分层，影响只保留会改变判断的部分，最后给出可执行的补证或推进动作\n\n补上这轮关键点：标题、两点。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0985cac5704147d2913611db062cdf00",
+  "trace_id": "trc_c397ab59b8454702a8846434ee659e82",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

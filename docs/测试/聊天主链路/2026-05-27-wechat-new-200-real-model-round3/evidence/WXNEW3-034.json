@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-034",
+  "category": "监督陪跑",
+  "title": "我想连续两天早起，怎么监督不压迫？",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：两天、不压迫。\n我想连续两天早起，怎么监督不压迫？",
+  "reply_text": "就监督两天，只做轻提醒和回执，不搞打鸡血，也不压迫。最小下一步是：今晚先定一个“明早起床后立刻发的信号”。比如你可以选这个：> 明早起床后，给我发一句：起了。> 我只回你一句：收到，今天算完成。监督方式就这么轻：前一晚你告诉我：明早几点起。到点后你发“起了”。\n如果没发，我不催命，只隔一会儿轻轻问一句： “醒了吗？不行也没事，先坐起来。”连续做两天就结束，不加码。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c983f02d06ae47d3a0ffbcf658dbead5",
+  "trace_id": "trc_26b8b0bcebe048ad8e4beae6cb091d73",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

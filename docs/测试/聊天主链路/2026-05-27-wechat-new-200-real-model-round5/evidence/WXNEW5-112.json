@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-112",
+  "category": "知识研究",
+  "title": "资料来源很旧，结论怎么写边界？",
+  "prompt": "知识研究要区分事实、假设、缺口，不把没查到的说成确定。请自然提到：来源、时效。\n资料来源很旧，结论怎么写边界？",
+  "reply_text": "资料来源很旧时，结论要写成“基于旧来源的有限判断”，明确标出来源、时效、可用范围和不确定性，不要写成当前确定事实。可以这样写：\n基于目前可查到的资料，主要来源为【来源名称/机构/报告】，发布时间为【年份/日期】。由于资料时效较早，且暂未查到更新数据，以下结论仅能反映当时或该来源覆盖范围内的情况，不能直接等同于当前现状。\n现有信息显示：【事实结论】。\n但关于【关键问题】，目前缺少近年数据/一手来源/官方更新，因此只能作为趋势参考，后续仍需通过【更新来源类型】进一步核实。\n\n更短一点也可以：\n该判断基于【来源】在【时间】发布的信息。由于资料较旧，结论仅代表当时情况或有限样本，不宜外推为当前确定事实；目前缺口是缺少近年更新来源。\n\n我来理一下边界写法：\n- 事实：旧资料里明确写了什么。\n假设：如果沿用旧资料，可能推得什么。\n缺口：缺少最新数据、权威更新、交叉验证。\n时效：说明“截至该来源发布时间”，而不是“截至现在”。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d169cf4477e6422580112e6724922701",
+  "trace_id": "trc_862a094662bd4bdbbe9dd2a2825fba67",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

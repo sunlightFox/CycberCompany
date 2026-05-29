@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-030",
+  "category": "定时提醒",
+  "title": "如果我要取消提醒，你要先确认哪一条吗？",
+  "prompt": "处理提醒请求要说清时间、事项、边界；缺信息先问，不假装已创建。请自然提到：取消、哪一条。\n如果我要取消提醒，你要先确认哪一条吗？",
+  "reply_text": "要的。你要取消提醒时，我会先确认“取消哪一条”。\n\n因为我这边不能假装已经删掉提醒；\n如果你没有明确说明具体事项或时间，我会先问清楚，比如：\n“你是要取消明天上午 9 点开会那条，还是晚上 8 点吃药那条？”\n\n确认后，再按可用能力继续处理或告诉你边界。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ae84354fbe554506b0be99d3d2395413",
+  "trace_id": "trc_7febc9ca9a214789a2d0efaa1c2d0584",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

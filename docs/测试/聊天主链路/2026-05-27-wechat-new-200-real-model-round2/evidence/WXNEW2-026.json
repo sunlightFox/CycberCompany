@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-026",
+  "category": "提醒定时",
+  "title": "每天 22:45 提醒我放下手机。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：22:45、放下手机。\n每天 22:45 提醒我放下手机。",
+  "reply_text": "已为你创建：每天22:45 提醒你“放下手机”。\n\n目前不缺确认；到点我只会发提醒，不会自动执行锁屏、关闭应用等设备动作。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_34f9af497b6f499fa1ea8bc04ffb0cdd",
+  "trace_id": "trc_c938e41852bb49b9a443d6332580e74f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

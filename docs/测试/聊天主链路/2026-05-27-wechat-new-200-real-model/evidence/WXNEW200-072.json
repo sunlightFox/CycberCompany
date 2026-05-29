@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-072",
+  "category": "办公表格",
+  "title": "收入增长但利润下降，怎么拆原因？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：成本、价格、费用。\n收入增长但利润下降，怎么拆原因？",
+  "reply_text": "收入增长但利润下降，可以按四条线查：\n1. 成本：直接成本、交付成本、采购价或人力成本是否涨得比收入更快。\n2. 价格：是否用折扣、低价项目或促销换来了收入增长，拉低了毛利率。\n3. 产品结构：高毛利产品占比是否下降，低毛利产品或项目制收入是否上升。\n4. 费用：销售、市场、研发、管理费用是否前置投入，或有一次性费用。\n复核边界：结论不要只写“收入增长、利润下降”，要核对金额、比例、期间、数据源和口径；缺少证据时只写假设，不直接定责。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1372d291b9ce48a38fb5d26663a94231",
+  "trace_id": "trc_66675146eec245e7a2f4567a79749a95",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

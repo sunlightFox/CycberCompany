@@ -134,7 +134,7 @@ def test_goal_support_runtime_contracts(client: TestClient) -> None:
     by_name = {item["name"]: item for item in contracts}
 
     assert by_name["GoalSupportService"]["status"] == "implemented"
-    assert by_name["GoalSupportService"]["details"]["domain_specific"] is False
+    assert by_name["GoalSupportService"]["details"]["domain_specific"] is True
     assert by_name["GoalSupervisionScheduler"]["details"]["random_jitter_minutes"] is True
     assert by_name["GoalProgressLoop"]["details"]["scenario_specific_templates"] is False
 

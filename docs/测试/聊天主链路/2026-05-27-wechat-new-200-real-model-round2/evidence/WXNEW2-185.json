@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-185",
+  "category": "长短控制",
+  "title": "如果用户只要 yes/no，怎么回答？",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：先回答、必要补充。\n如果用户只要 yes/no，怎么回答？",
+  "reply_text": "如果用户只要 yes/no，就先回答“是/否”，不要绕。\n\n推荐格式：\n\n> 是。> 必要补充：……（只补一句最关键的条件/例外）\n\n或：\n\n> 否。> 必要补充：……（说明一个核心原因即可）\n\n原则是：先回答，满足用户要 yes/no 的意图；只有在会误导、存在条件限制或风险时，再做必要补充。不要把简单问题扩写成说明文。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0b9c085f62b94bd4bf1cafd8424293e3",
+  "trace_id": "trc_238cd4a8dd154f258054ab3bb8217f94",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

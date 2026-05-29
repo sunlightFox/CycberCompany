@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-091",
+  "category": "HR管理",
+  "title": "团队满意度样本太少，怎么谨慎表达？",
+  "prompt": "HR 和管理场景要公平、谨慎、基于事实，不贴标签。请自然提到：样本、谨慎。\n团队满意度样本太少，怎么谨慎表达？",
+  "reply_text": "可以温和提醒：这次样本偏少，结论要谨慎看。\n\n建议只说“目前反馈里出现了这些信号”，不要写成团队整体判断；后续最好补样本、说明覆盖范围，再决定要不要作为正式结论。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_41c70c493fdf41bb926456e36c00cc17",
+  "trace_id": "trc_1c7cfbd96bcf49b5a02ca124aa886c31",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

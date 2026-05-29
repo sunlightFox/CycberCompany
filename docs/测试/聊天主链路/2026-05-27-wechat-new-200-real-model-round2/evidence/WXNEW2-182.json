@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-182",
+  "category": "长短控制",
+  "title": "给我三条会议前检查项。",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：三条、检查项。\n给我三条会议前检查项。",
+  "reply_text": "我接住这句：给我三条会议前检查项。\n\n这轮重点是三条、检查项；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_028003f79efd47e4a8dc424a725b68d8",
+  "trace_id": "trc_309d40c5a054457bb2ce73d81f324051",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "case_id": "WXNEW2-144",
+  "category": "生活办公混合",
+  "title": "晚饭后还要开会，怎么不崩？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：晚饭、开会。\n晚饭后还要开会，怎么不崩？",
+  "reply_text": "别硬扛，晚饭后开会最容易崩的是“血糖+疲劳+没缓冲”，你只要做个小过渡就能稳很多。\n\n今晚这样来：\n\n🧠 1. 晚饭别吃太撑 七八分饱，少油少辣少甜，不然开会时容易困、胀、烦。\n\n2. 饭后留10 分钟缓冲走两步、洗把脸、换杯温水/淡茶，让身体知道“下一段要开始了”。\n\n3. 我会先把结论说清，再把风险和下一步拆开，避免让你在一大段话里找重点。\n\n如果证据不够，就直接说缺什么；\n如果只是建议，就不说成已经执行；\n如果涉及权限、文件、账号或外部平台，就先讲清确认和审批边界。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8a9832ac33eb4d31839f8b004ffa2194",
+  "trace_id": "trc_531bd36860a344ba805af3e2b53d7592",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.fallback",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

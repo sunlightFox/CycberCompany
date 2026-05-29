@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-073",
+  "category": "办公表格",
+  "title": "客户表有重复手机号，怎么清洗？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：重复、手机号。\n客户表有重复手机号，怎么清洗？",
+  "reply_text": "Excel 清洗步骤：\n1. 重复：按手机号去重，保留最近更新时间或信息最完整的一条。\n2. 空值：公司名为空的记录单独标记，先补充来源，补不齐就进入待确认清单。\n3. 统一：地区写法统一到省/市/区三级口径，别混用简称和全称。\n4. 校验：抽查手机号格式、地区是否存在、公司名是否异常，并保留清洗前后数量对比。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_94d0a83ca29d4a8d96d2892adf49dbca",
+  "trace_id": "trc_0a367ad1779245b1b460b17e830f7a9d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

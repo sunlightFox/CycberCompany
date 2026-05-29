@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-011",
+  "category": "计划规划",
+  "title": "今天晚上只剩 70 分钟，要洗衣、回消息、收拾包。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：70 分钟、顺序。\n今天晚上只剩 70 分钟，要洗衣、回消息、收拾包。",
+  "reply_text": "这70分钟按“先机器、再脑力、最后打包”的顺序来，最稳。洗衣先启动，别让它占用整段时间。前10 分钟：把衣服丢进洗衣机，顺手检查口袋、分一下深浅色，开洗\n\n补上这轮关键点：70 分钟、顺序。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_dc447554c6764bfd93a4a916175f105b",
+  "trace_id": "trc_c0bc15725a6341ba8f6d610d022f85b7",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

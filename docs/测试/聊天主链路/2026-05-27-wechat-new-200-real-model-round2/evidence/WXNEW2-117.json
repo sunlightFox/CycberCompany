@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-117",
+  "category": "记忆偏好",
+  "title": "我不想记长期，只在今天用短回复。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：今天、不写长期。\n我不想记长期，只在今天用短回复。",
+  "reply_text": "今天我会用短回复；这个偏好只按你这条消息作为 source 临时生效，不写长期记忆。敏感内容也不会写入。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_05289545bc6a4e9c8f518298df869dce",
+  "trace_id": "trc_765452435c3c40ae8e69d127629a0ffc",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

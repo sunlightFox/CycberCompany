@@ -68,6 +68,18 @@ def test_phase36_chat_scheduled_parser_allows_no_fuzzy_task_boundary() -> None:
     assert intent.goal == "整理本周风险"
 
 
+def test_phase36_chat_scheduled_parser_ignores_quality_test_prompts() -> None:
+    parser = ScheduledTaskIntentCoordinator()
+
+    prompts = [
+        "帮我规划时，回复要自然分段。请自然提到：50 分钟、顺序。\n晚上只剩 50 分钟，整理明天包、洗澡、读两页书怎么排？",
+        "像微信一样自然，不要机械。请自然提到：提醒、轻一点。\n我想轻轻提醒朋友别忘了带证件。",
+    ]
+
+    for prompt in prompts:
+        assert parser.parse(prompt) is None
+
+
 def test_phase36_chat_cancel_parser_does_not_steal_manual_action_reminders() -> None:
     parser = ScheduledTaskCancelIntentCoordinator()
 

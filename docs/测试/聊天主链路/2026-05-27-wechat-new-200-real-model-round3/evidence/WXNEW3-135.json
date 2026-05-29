@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-135",
+  "category": "生活办公混合",
+  "title": "网络断了但要交文件，先做什么？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：断网、备选。\n网络断了但要交文件，先做什么？",
+  "reply_text": "我接住这句：网络断了但要交文件，先做什么？。\n\n这轮重点是断网、备选；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e03f4a51512743e9acf2272b68cf02c3",
+  "trace_id": "trc_617918d44c224b9b88f3afa3f7a7a16f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

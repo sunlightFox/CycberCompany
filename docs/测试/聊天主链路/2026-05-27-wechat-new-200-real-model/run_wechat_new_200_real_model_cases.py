@@ -746,7 +746,9 @@ def _peer_ref_for_case(case: CaseSpec) -> str:
 def run(*, case_ids: list[str] | None = None, limit: int | None = None, timeout: float = 240.0) -> list[CaseResult]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     os.environ["CYCBER_ROOT"] = str(ROOT_DIR)
-    os.environ["CYCBER_DATA_DIR"] = str(OUTPUT_DIR / ".tmp-data")
+    if not os.environ.get("CYCBER_DATA_DIR"):
+        run_data_dir = OUTPUT_DIR / ".tmp-data" / time.strftime("run-%Y%m%d-%H%M%S")
+        os.environ["CYCBER_DATA_DIR"] = str(run_data_dir)
     os.environ["CYCBER_BROWSER_EXECUTOR"] = "http_fallback"
     os.environ["CYCBER_REAL_MODEL_ENDPOINT"] = REAL_MODEL_ENDPOINT
     os.environ["CYCBER_REAL_MODEL_MODEL"] = REAL_MODEL_MODEL

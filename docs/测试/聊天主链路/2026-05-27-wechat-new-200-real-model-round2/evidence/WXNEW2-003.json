@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-003",
+  "category": "闲聊",
+  "title": "我想拒绝一个临时邀约，别显得冷。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：拒绝、改天。\n我想拒绝一个临时邀约，别显得冷。",
+  "reply_text": "可以这样回，像微信里熟人那种不冷但也明确拒绝：\n\n“今天有点临时安排不开，就先不去了哈，不是故意拒绝你 改天你提前跟我说，我一定尽量安排上。”\n\n更短一点也可以：\n\n“今天真有点赶不过去，就先不去了哈。改天提前约我，我好好安排一下～”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ad6989b8cb394b419895a2c45836cc24",
+  "trace_id": "trc_1b54c90fe2b34c10965053f526e090a5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

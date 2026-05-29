@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-137",
+  "category": "闲聊",
+  "title": "今天脑子很乱，帮我把情绪放一放。（变体）",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：乱、先。\n今天脑子很乱，帮我把情绪放一放。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "先别急着理清，乱就先乱一会儿。\n\n你现在不用解决任何事，先把手机放低一点，慢慢呼一口气。情绪来了不是你不行，是脑子太挤了。\n\n我在这儿陪你把它放一放。下一步就做一件小事：喝口水，坐稳，先不做决定。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8accdf6fdf844b808cdbb71af04ecf02",
+  "trace_id": "trc_dfc5982b29dc475883e2ecdb36293544",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

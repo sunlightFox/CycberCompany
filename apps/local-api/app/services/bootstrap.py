@@ -868,6 +868,7 @@ def _read_codex_runtime_config() -> dict[str, Any]:
         "CYCBER_REAL_MODEL_NAME"
     )
     wire_api_override = os.environ.get("CYCBER_REAL_MODEL_WIRE_API")
+    reasoning_override = os.environ.get("CYCBER_REAL_MODEL_REASONING_EFFORT")
     api_key_ref = os.environ.get("CYCBER_REAL_MODEL_API_KEY_REF", DEFAULT_CODEX_AUTH_API_KEY_REF)
     codex_config = _read_codex_config()
     provider_key = str(codex_config.get("model_provider") or "custom")
@@ -875,15 +876,13 @@ def _read_codex_runtime_config() -> dict[str, Any]:
     wire_api = str(wire_api_override or provider_config.get("wire_api") or "responses").lower()
     if wire_api not in {"responses", "chat_completions"}:
         wire_api = "responses"
-    reasoning_effort = str(
-        codex_config.get("model_reasoning_effort") or DEFAULT_CODEX_REASONING_EFFORT
-    )
+    reasoning_effort = str(reasoning_override or DEFAULT_CODEX_REASONING_EFFORT)
     return {
         "codex_provider": provider_key,
         "provider": "openai_compatible",
         "endpoint": endpoint_override
         or str(provider_config.get("base_url") or DEFAULT_CODEX_ENDPOINT),
-        "model": model_override or str(codex_config.get("model") or DEFAULT_CODEX_MODEL),
+        "model": model_override or DEFAULT_CODEX_MODEL,
         "wire_api": wire_api,
         "reasoning_effort": reasoning_effort,
         "requires_openai_auth": bool(provider_config.get("requires_openai_auth", True)),

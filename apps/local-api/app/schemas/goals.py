@@ -8,9 +8,14 @@ from core_types import (
     Goal,
     GoalCheckin,
     GoalEvent,
+    GoalIntake,
+    GoalIntervention,
+    GoalMilestone,
+    GoalModelCall,
     GoalPlan,
     GoalPlanItem,
     GoalProgressSnapshot,
+    GoalRoutine,
     GoalSupervisionPolicy,
 )
 from pydantic import Field
@@ -26,6 +31,9 @@ class GoalCreateRequest(ApiModel):
     constraints: dict[str, Any] = Field(default_factory=dict)
     motivation: dict[str, Any] = Field(default_factory=dict)
     created_from_turn_id: EntityId | None = None
+    intake: dict[str, Any] = Field(default_factory=dict)
+    preferred_domain: str | None = None
+    planning_mode: str = "model_first"
 
 
 class GoalConfirmPlanRequest(ApiModel):
@@ -62,12 +70,33 @@ class GoalActionRequest(ApiModel):
     reason: str | None = None
 
 
+class GoalIntakeUpdateRequest(ApiModel):
+    current_level: str | None = None
+    target_level: str | None = None
+    target_date: str | None = None
+    available_time: dict[str, Any] = Field(default_factory=dict)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    motivation: dict[str, Any] = Field(default_factory=dict)
+    raw_answers: dict[str, Any] = Field(default_factory=dict)
+    confirm: bool = False
+
+
+class GoalReplanRequest(ApiModel):
+    reason: str | None = None
+    feedback: str | None = None
+    planning_mode: str = "model_first"
+
+
 class GoalDetailResponse(ApiModel):
     goal: Goal
     active_plan: GoalPlan | None = None
     plan_items: list[GoalPlanItem] = Field(default_factory=list)
     supervision_policy: GoalSupervisionPolicy | None = None
     progress: GoalProgressSnapshot | None = None
+    intake: GoalIntake | None = None
+    milestones: list[GoalMilestone] = Field(default_factory=list)
+    routines: list[GoalRoutine] = Field(default_factory=list)
+    latest_intervention: GoalIntervention | None = None
 
 
 class GoalListResponse(ApiModel):
@@ -97,3 +126,11 @@ class GoalProgressResponse(GoalProgressSnapshot):
 
 class GoalEventListResponse(ApiModel):
     items: list[GoalEvent] = Field(default_factory=list)
+
+
+class GoalTimelineResponse(ApiModel):
+    items: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class GoalModelCallListResponse(ApiModel):
+    items: list[GoalModelCall] = Field(default_factory=list)

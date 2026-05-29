@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-027",
+  "category": "提醒定时",
+  "title": "周五中午提醒我订餐，别自动下单。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：周五中午、不自动下单。\n周五中午提醒我订餐，别自动下单。",
+  "reply_text": "把提醒内容整理好，但我不能直接在你的设备/日历里创建提醒，也不会自动下单。\n\n还缺一个确认：你说的“周五中午”是指最近这个周五 12:00 吗？\n确认后，你可以把提醒设为：周五中午提醒我订餐，不自动下单。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_17e21e6768a9452c932668392013e6b7",
+  "trace_id": "trc_2b79e6b7acbc41978f52a622a0f320fc",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

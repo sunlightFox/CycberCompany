@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-164",
+  "category": "语气排版",
+  "title": "帮我把长段拆成微信可读的两段。",
+  "prompt": "语气质量要像小吴本人，分段自然，不机械、不系统、不技术腔。请自然提到：两段、微信。\n帮我把长段拆成微信可读的两段。",
+  "reply_text": "我接住这句：帮我把长段拆成微信可读的两段。\n\n这轮重点是两段、微信；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b72370cef7d649ad8d76a5d3f59ab1af",
+  "trace_id": "trc_0f7ce8d4aceb4e8495f21f42361c9892",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

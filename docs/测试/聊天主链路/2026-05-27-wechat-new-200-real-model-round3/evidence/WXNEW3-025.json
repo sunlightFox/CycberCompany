@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-025",
+  "category": "提醒定时",
+  "title": "每月最后一天提醒我导出账单。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：每月最后一天、账单。\n每月最后一天提醒我导出账单。",
+  "reply_text": "我理解你的需求是：每月最后一天提醒你导出账单。\n\n但我这边目前不能直接创建系统级定时提醒，也不会自动执行任何设备动作，比如自动打开 App、导出账单或操作文件。\n如果要真正生效，还缺一个确认：每月最后一天的几点提醒你？ 例如“上午 9 点”。\n\n你可以这样设置到手机/日历里：\n- *每月最后一天 09:00，提醒：导出账单。**",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ff10b7c2ae624243bd13fe110c9556c8",
+  "trace_id": "trc_100c17db99564cdeaf3724bcb4c41154",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

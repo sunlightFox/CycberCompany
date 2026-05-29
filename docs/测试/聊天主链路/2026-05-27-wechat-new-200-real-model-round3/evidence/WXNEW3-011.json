@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-011",
+  "category": "计划规划",
+  "title": "明天早上 2 小时，要运动、洗衣服、写周报，怎么排？",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：2 小时、周报。\n明天早上 2 小时，要运动、洗衣服、写周报，怎么排？",
+  "reply_text": "- 前10 分钟：先把洗衣服启动起床后直接把衣服丢进洗衣机，别等。洗衣机跑着，你就去做别的。*第10–50 分钟：运动40 分钟做一组不太拖时间的：热身5 分钟 + 有氧/力量30 分钟 + 拉伸5 分钟。别练太满，不然影响后面写周报\n\n补上这轮关键点：2 小时、周报。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f65a22a5998942bebe84353c6a0600e5",
+  "trace_id": "trc_f7cb38f8935a4a1687a872319132ba71",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

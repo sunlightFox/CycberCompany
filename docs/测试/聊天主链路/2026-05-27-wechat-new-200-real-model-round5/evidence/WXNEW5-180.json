@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-180",
+  "category": "长短控制",
+  "title": "先短后长：先结论，再补原因。",
+  "prompt": "长短控制要按用户意图决定详略，结构清楚。请自然提到：结论、原因。\n先短后长：先结论，再补原因。",
+  "reply_text": "小曜会按这个来——先短后长，先给结论，再补原因。\n\n原因：这样最符合你要的阅读节奏；简单问题不啰嗦，复杂问题也能先抓重点，再展开说明。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_150a50dbb41d449ead804b8d0ea7769e",
+  "trace_id": "trc_8a390b8bbcb14b978351a75962828d77",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

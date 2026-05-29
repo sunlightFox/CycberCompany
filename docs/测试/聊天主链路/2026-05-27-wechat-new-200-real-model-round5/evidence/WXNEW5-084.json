@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-084",
+  "category": "办公协作",
+  "title": "对方没回消息，我想催一下但不压人。",
+  "prompt": "办公协作要能直接发给人，边界清楚，不假装已经完成。请自然提到：催一下、不压人。\n对方没回消息，我想催一下但不压人。",
+  "reply_text": "可以直接发这句：\n我来催一下～你这边方便的时候帮我看下就好，不着急，也不压人。主要是我这边想确认下进度，方便安排后面的事。\n\n更轻一点也可以：\n方便的时候帮我看下这条就行～我催一下进度，不压人哈。\n\n这句话的边界是：理解对方关心，但不把自己的节奏交出去。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8f5cace9ec5a4b96849492dab24353ed",
+  "trace_id": "trc_92c9c795de524797a08862343059655c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

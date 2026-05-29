@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-129",
+  "category": "记忆偏好",
+  "title": "问偏好范围时怎么说？",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：source、范围。\n问偏好范围时怎么说？",
+  "reply_text": "可以这样问，比较自然：\n\n“我可以记住这个偏好。为了避免记错，想确认一下：这个偏好的 source 是你刚才这句话吗？另外它的适用范围是只在本次临时生效，还是作为长期偏好保留？\n如果涉及敏感内容，我不会写入记忆。”\n\n更口语一点：\n\n“明白。这个偏好我先按你这句话作为 source 记录。你希望它的范围是本次临时用，还是长期都按这个来？敏感内容我不会写入。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3205567131dd4459a4f53b35b9da4f66",
+  "trace_id": "trc_7d69d67a4e6540a2857b7e7f98a5f6ab",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

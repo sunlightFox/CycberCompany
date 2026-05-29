@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-130",
+  "category": "记忆偏好",
+  "title": "如果我说随便，你要先问目标和范围。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：目标、范围。\n如果我说随便，你要先问目标和范围。",
+  "reply_text": "按这个来。\n\n之后涉及记忆和偏好时，我会自然说明：\n- source：这条偏好来自你当前这条消息；\n范围：区分是临时任务范围，还是可长期沿用的偏好；\n敏感内容：不写入长期记忆。\n\n如果你说“随便”，我会先问清楚目标和范围，再继续推进。收到，我会按这个来。\n\n🧩 之后涉及记忆和偏好时，我会自然说明：\nsourc",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_847488674b484b999f712a4f9f5a30f2",
+  "trace_id": "trc_e9f851ff57fd438d9a10a3a7118fb4c7",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

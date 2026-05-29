@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-027",
+  "category": "提醒定时",
+  "title": "明天 16:10 提醒我回访客户。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：明天 16:10、回访客户。\n明天 16:10 提醒我回访客户。",
+  "reply_text": "已为你创建提醒：明天16:10，提醒你回访客户。\n\n到点我只会提醒你，不会自动执行设备动作或替你进行高风险操作\n\n补上这轮关键点：明天 16:10、回访客户。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_5c27b182e09940108cbfc4c189a43d67",
+  "trace_id": "trc_4cd4de7be55640de85ce4b7eae514c99",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

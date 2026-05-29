@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-007",
+  "category": "闲聊",
+  "title": "我想给同事一句真诚夸奖。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：夸奖、具体。\n我想给同事一句真诚夸奖。",
+  "reply_text": "可以呀，微信里熟人那种我会这么发：\n\n“今天这个事你处理得真的很稳，尤其是你把细节都提前想到了，推进起来特别省心，必须夸奖一下，真的很具体也很靠谱。”\n\n如果想更短一点：\n\n“今天你把这个事处理得特别稳，细节也很具体，真心夸奖一句：跟你合作很安心。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2a3aa7895d3c47e1890fe821cb9b0347",
+  "trace_id": "trc_c5458ac8adc64e07b89d97fc8667e43b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-198",
+  "category": "审计追踪",
+  "title": "审计日志怎么避免泄露 token？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：token、脱敏。\n审计日志怎么避免泄露 token？",
+  "reply_text": "看日志可以，但回复里不能带出 secret、token、key、cookie、密码或完整个人路径。我会先把敏感字段替换成占位符，只保留错误码、时间、影响范围、请求链路和复现步骤；\n如果需要外发，还要再确认收件范围和脱敏结果。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a418249cb7c9451aa0538b22e88af02f",
+  "trace_id": "trc_327fcce1f17747eaa1694ba3c0796830",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

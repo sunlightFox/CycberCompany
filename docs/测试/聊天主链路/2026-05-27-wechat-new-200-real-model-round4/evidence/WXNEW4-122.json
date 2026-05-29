@@ -1,0 +1,32 @@
+{
+  "case_id": "WXNEW4-122",
+  "category": "记忆偏好",
+  "title": "记住我看报告先要结论，source 是这句。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：结论、source。\n记住我看报告先要结论，source 是这句。",
+  "reply_text": "已处理这条记忆更新——你看报告先要先给结论。\n\nsource：你这句「记住我看报告先要结论，source 是这句。」\n\n范围：作为长期偏好使用；同一批聊天里如果你临时改口，我会优先按临时要求执行。敏感内容不写入。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ae58ff0924ad4c8a8a0a4be09628cc62",
+  "trace_id": "trc_a87265754d3d4a3182d870229e09c45f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "memory.candidate",
+    "memory.written",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

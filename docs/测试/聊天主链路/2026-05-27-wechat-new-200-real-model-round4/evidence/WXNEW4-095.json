@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-095",
+  "category": "HR管理",
+  "title": "招聘筛选能不能看年龄？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：公平、岗位相关。\n招聘筛选能不能看年龄？",
+  "reply_text": "我接住这句：招聘筛选能不能看年龄？。\n\n这轮重点是公平、岗位相关；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_7f6a2e0f2141478299c3e90ac76a645f",
+  "trace_id": "trc_be0d985e2e8a48c189aacf5cba54aea6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

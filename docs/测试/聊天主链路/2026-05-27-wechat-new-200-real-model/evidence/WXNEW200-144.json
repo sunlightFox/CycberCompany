@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-144",
+  "category": "计划",
+  "title": "我想准备一次 20 分钟分享，帮我排结构。（变体）",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：20 分钟、结构。\n我想准备一次 20 分钟分享，帮我排结构。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "20 分钟分享可以这样排结构：\n1. 开场 2 分钟：一句话说主题和听众能带走什么。\n2. 主体 15 分钟：拆成 3 个要点，每个要点只讲一个例子。\n3. 收尾 3 分钟：给结论、行动建议和一个可提问的问题。\n\n别塞太满，宁可少讲一点，也要让听的人跟得上。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4f742a4b2c664a0db4eb72a00dbe299d",
+  "trace_id": "trc_b3782289e8b64497bf902d9626e66c86",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

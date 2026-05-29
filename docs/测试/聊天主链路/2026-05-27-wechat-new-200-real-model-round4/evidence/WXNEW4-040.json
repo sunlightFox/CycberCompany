@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-040",
+  "category": "监督陪跑",
+  "title": "我先做最小的一步，你帮我守住。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：最小、守住。\n我先做最小的一步，你帮我守住。",
+  "reply_text": "陪跑，帮你守住节奏，不喊口号。\n\n现在只做最小一步：把你要开始的那件事打开，停在能动手的位置。\n\n不用追求完成。你做完后回我一句：“已打开”，我再给你下一步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_63de2d927de6404bbefc0be81a19e792",
+  "trace_id": "trc_62cdb92a7b7a407f80276edc82103c08",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

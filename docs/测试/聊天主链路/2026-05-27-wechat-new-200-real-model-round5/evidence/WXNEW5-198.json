@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-198",
+  "category": "渠道质量",
+  "title": "如果上一轮失败了，这一轮怎么补救？",
+  "prompt": "渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：补救、说明。\n如果上一轮失败了，这一轮怎么补救？",
+  "reply_text": "这一轮要做的是“承认问题、清掉残留、重新给出可执行回复”，不要解释太多内部原因。“刚才那轮回复没有处理好，我这轮重新说明：我会只按你当前这条消息来回应，不带内部编号、系统话或旧轮次内容。接下来我会把最终可见回复整理成适合微信阅读的版本，重点说清楚问题、补救方式和下一步。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_52629f53fa364216a96edd148c422082",
+  "trace_id": "trc_217054a6eddf4ccc91ef1b11e96dc84e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

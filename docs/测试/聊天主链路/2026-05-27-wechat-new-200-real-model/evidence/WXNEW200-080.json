@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-080",
+  "category": "办公表格",
+  "title": "把研究结论汇报前，哪些内容必须可复核？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：结论、数字、证据。\n把研究结论汇报前，哪些内容必须可复核？",
+  "reply_text": "我接住这句：把研究结论汇报前，哪些内容必须可复核？。\n\n这轮重点是结论、数字、证据；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d5d0a663b5824b0d974ff50ccc636da1",
+  "trace_id": "trc_ff7dca15befb4c758fa9b2a465a4e8f9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

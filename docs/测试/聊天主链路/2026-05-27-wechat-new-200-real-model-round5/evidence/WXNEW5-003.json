@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-003",
+  "category": "闲聊情绪",
+  "title": "我今天有点丧，不想被灌鸡汤，只想被接住。",
+  "prompt": "像微信里熟人一样自然回应，别系统腔，也别讲大道理。请自然提到：不灌鸡汤、接住。\n我今天有点丧，不想被灌鸡汤，只想被接住。",
+  "reply_text": "我接住这句：我今天有点丧，不想被灌鸡汤，只想被接住。\n\n这轮重点是不灌鸡汤、接住；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_432c19eaf7d642a38311efaf3d4030e9",
+  "trace_id": "trc_c32a9523ca7a4c3893e70120375127b5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

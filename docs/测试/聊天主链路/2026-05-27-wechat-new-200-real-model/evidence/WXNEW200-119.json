@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-119",
+  "category": "多轮记忆",
+  "title": "临时改成更短的回复风格，不覆盖长期偏好。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：临时、长期偏好。\n临时改成更短的回复风格，不覆盖长期偏好。",
+  "reply_text": "按你刚刚改的这句，收到。小曜先按临时设置来：本轮起回复更短；不覆盖你的长期偏好。\n\nsource：你这条消息。范围：临时，仅当前聊天/阶段有效；敏感内容不写入记忆。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_179b68acd291456c9e1730ca68efaa8d",
+  "trace_id": "trc_cb302ed22ff54a4d84f445550ce6d8dc",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

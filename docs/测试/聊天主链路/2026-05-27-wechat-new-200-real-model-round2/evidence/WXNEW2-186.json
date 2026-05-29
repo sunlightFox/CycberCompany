@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-186",
+  "category": "长短控制",
+  "title": "回复太短会漏什么风险？",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：风险、上下文。\n回复太短会漏什么风险？",
+  "reply_text": "漏掉用户真实意图只给结论，没结合上下文，可能答偏，比如用户想要“判断标准”，却只收到一句“要看情况”。漏掉边界条件 没说明适用范围、前提、例外情况，用户容易误用结论\n\n补上这轮关键点：风险、上下文。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4fff2e1de49949d69a99c48f4910cde3",
+  "trace_id": "trc_f31a783d3f0a4159960ac8c05646b7b2",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

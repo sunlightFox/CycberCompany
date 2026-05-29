@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-127",
+  "category": "记忆偏好",
+  "title": "我只在本轮想要详细回答。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：本轮、不写长期。\n我只在本轮想要详细回答。",
+  "reply_text": "你这次要求“详细回答”的偏好只在本轮生效，我会按当前消息执行，不写长期记忆。我来理一下：\n- source：来源是你当前这条消息里的明确说明：“我只在本轮想要详细回答。”长期记忆：不会因为这句话把“你喜欢详细回答”写入长期记忆。敏感内容：如涉及隐私、账号、密钥、身份信息、一次性任务进度等，都不会写入长期记忆。当前优先级：如果本轮要求和历史偏好冲突，以你当前这条消息为准。所以本轮我会更详细一点；后续如果你没再说明，我不会默认延续这个“详细回答”的要求。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e8b5b49204c445169fb02b7ce60f3b20",
+  "trace_id": "trc_a3735842ba974e06ace6f3e8abf4e378",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

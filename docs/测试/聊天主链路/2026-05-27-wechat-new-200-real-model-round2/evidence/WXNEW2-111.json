@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-111",
+  "category": "记忆偏好",
+  "title": "这轮先叫我阿澈，不写长期记忆。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：阿澈、当前聊天。\n这轮先叫我阿澈，不写长期记忆。",
+  "reply_text": "我接住这句：这轮先叫我阿澈，不写长期记忆。\n\n这轮重点是阿澈、当前聊天；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e58793432170494391a219c049b8479f",
+  "trace_id": "trc_32e5519424ea4b2399de6529952b5b6e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

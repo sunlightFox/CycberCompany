@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-200",
+  "category": "渠道质量",
+  "title": "复杂回复在手机上怎么分段？",
+  "prompt": "渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：手机、分段。\n复杂回复在手机上怎么分段？",
+  "reply_text": "复杂回复在手机上要分段，核心是短、清楚、能扫读：\n1. 先给结论：第一屏就让用户知道答案。\n2. 再分小段：每段只讲一个意思，别把原因、步骤、提醒塞在一起。\n3. 列表别半截：有 1 就尽量有 2、3，避免停在开头。\n4. 最后收边界：说明还缺什么、下一步做什么。\n\n微信里宁可多换两行，也不要把一整坨文字压给用户。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c4c88fdda5734adb990d163ab5c05537",
+  "trace_id": "trc_53c82253c5af40148006e7e07bc103e5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-028",
+  "category": "提醒定时",
+  "title": "每天中午提醒我吃药，但别给诊断建议。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：吃药、不替代医生。\n每天中午提醒我吃药，但别给诊断建议。",
+  "reply_text": "可以创建提醒，但当前记录里已创建的是“每天早上9 点提醒吃药”，不是“每天中午”。\n\n如果你要改成每天中午，请确认一下具体时间：比如12:00还是12:30。\n确认后才能按这个时间处理。\n\n提醒内容只会是吃药提醒，不提供诊断建议，也不替代医生；到点只提醒你，不会自动执行任何设备动作。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_54e5ff92ff5041bbb8f85d56b498678c",
+  "trace_id": "trc_a47734b7774e4a7a99f78c31fc62e62c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

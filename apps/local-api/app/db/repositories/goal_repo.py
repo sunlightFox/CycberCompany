@@ -46,6 +46,28 @@ CHECKIN_UPDATE_COLUMNS = {
     "trace_id",
     "replied_at",
 }
+INTAKE_UPDATE_COLUMNS = {
+    "domain_label",
+    "status",
+    "current_level",
+    "target_level",
+    "target_date",
+    "available_time",
+    "constraints",
+    "motivation",
+    "missing_fields",
+    "raw_answers",
+    "confirmed_at",
+    "updated_at",
+}
+MILESTONE_UPDATE_COLUMNS = {"status", "target_date", "updated_at"}
+ROUTINE_UPDATE_COLUMNS = {"status", "updated_at"}
+INTERVENTION_UPDATE_COLUMNS = {
+    "status",
+    "shown_at",
+    "user_feedback",
+    "updated_at",
+}
 
 
 class GoalRepository:
@@ -466,6 +488,256 @@ class GoalRepository:
         )
         return [_event_from_row(dict(row)) for row in rows]
 
+    async def insert_intake(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO goal_intakes (
+              intake_id, goal_id, domain_label, status, current_level, target_level,
+              target_date, available_time_json, constraints_json, motivation_json,
+              missing_fields_json, raw_answers_json, confirmed_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["intake_id"],
+                data["goal_id"],
+                data.get("domain_label") or "general",
+                data.get("status") or "collecting",
+                data.get("current_level"),
+                data.get("target_level"),
+                data.get("target_date"),
+                _json(data.get("available_time", {})),
+                _json(data.get("constraints", {})),
+                _json(data.get("motivation", {})),
+                _json(data.get("missing_fields", [])),
+                _json(data.get("raw_answers", {})),
+                data.get("confirmed_at"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def update_intake(self, intake_id: str, fields: dict[str, Any]) -> None:
+        values = _json_update_fields(
+            {key: value for key, value in fields.items() if key in INTAKE_UPDATE_COLUMNS},
+            {
+                "available_time": "available_time_json",
+                "constraints": "constraints_json",
+                "motivation": "motivation_json",
+                "missing_fields": "missing_fields_json",
+                "raw_answers": "raw_answers_json",
+            },
+        )
+        if not values:
+            return
+        assignments = ", ".join(f"{column} = ?" for column in values)
+        await self._db.execute(
+            f"UPDATE goal_intakes SET {assignments} WHERE intake_id = ?",
+            (*values.values(), intake_id),
+        )
+
+    async def latest_intake_for_goal(self, goal_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM goal_intakes
+            WHERE goal_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (goal_id,),
+        )
+        return _intake_from_row(dict(row)) if row else None
+
+    async def insert_milestone(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO goal_milestones (
+              milestone_id, goal_id, goal_plan_id, title, description, status,
+              target_date, acceptance_criteria_json, sort_order, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["milestone_id"],
+                data["goal_id"],
+                data.get("goal_plan_id"),
+                data["title"],
+                data.get("description") or "",
+                data.get("status") or "planned",
+                data.get("target_date"),
+                _json(data.get("acceptance_criteria", [])),
+                int(data.get("sort_order") or 0),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def update_milestone(self, milestone_id: str, fields: dict[str, Any]) -> None:
+        values = {
+            key: value for key, value in fields.items() if key in MILESTONE_UPDATE_COLUMNS
+        }
+        if not values:
+            return
+        assignments = ", ".join(f"{column} = ?" for column in values)
+        await self._db.execute(
+            f"UPDATE goal_milestones SET {assignments} WHERE milestone_id = ?",
+            (*values.values(), milestone_id),
+        )
+
+    async def list_milestones(self, goal_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM goal_milestones
+            WHERE goal_id = ?
+            ORDER BY sort_order ASC, created_at ASC
+            """,
+            (goal_id,),
+        )
+        return [_milestone_from_row(dict(row)) for row in rows]
+
+    async def insert_routine(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO goal_routines (
+              routine_id, goal_id, goal_plan_id, title, description, cadence_json,
+              estimated_minutes, difficulty, status, sort_order, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["routine_id"],
+                data["goal_id"],
+                data.get("goal_plan_id"),
+                data["title"],
+                data.get("description") or "",
+                _json(data.get("cadence", {})),
+                data.get("estimated_minutes"),
+                data.get("difficulty") or "medium",
+                data.get("status") or "active",
+                int(data.get("sort_order") or 0),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def update_routine(self, routine_id: str, fields: dict[str, Any]) -> None:
+        values = {key: value for key, value in fields.items() if key in ROUTINE_UPDATE_COLUMNS}
+        if not values:
+            return
+        assignments = ", ".join(f"{column} = ?" for column in values)
+        await self._db.execute(
+            f"UPDATE goal_routines SET {assignments} WHERE routine_id = ?",
+            (*values.values(), routine_id),
+        )
+
+    async def list_routines(self, goal_id: str) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM goal_routines
+            WHERE goal_id = ?
+            ORDER BY sort_order ASC, created_at ASC
+            """,
+            (goal_id,),
+        )
+        return [_routine_from_row(dict(row)) for row in rows]
+
+    async def insert_intervention(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO goal_interventions (
+              intervention_id, goal_id, trigger_type, status, summary, suggestion_json,
+              shown_at, user_feedback_json, trace_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["intervention_id"],
+                data["goal_id"],
+                data["trigger_type"],
+                data.get("status") or "suggested",
+                data["summary"],
+                _json(data.get("suggestion", {})),
+                data.get("shown_at"),
+                _json(data.get("user_feedback", {})),
+                data.get("trace_id"),
+                data["created_at"],
+                data["updated_at"],
+            ),
+        )
+
+    async def update_intervention(self, intervention_id: str, fields: dict[str, Any]) -> None:
+        values = _json_update_fields(
+            {key: value for key, value in fields.items() if key in INTERVENTION_UPDATE_COLUMNS},
+            {"user_feedback": "user_feedback_json"},
+        )
+        if not values:
+            return
+        assignments = ", ".join(f"{column} = ?" for column in values)
+        await self._db.execute(
+            f"UPDATE goal_interventions SET {assignments} WHERE intervention_id = ?",
+            (*values.values(), intervention_id),
+        )
+
+    async def latest_intervention_for_goal(self, goal_id: str) -> dict[str, Any] | None:
+        row = await self._db.fetch_one(
+            """
+            SELECT *
+            FROM goal_interventions
+            WHERE goal_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (goal_id,),
+        )
+        return _intervention_from_row(dict(row)) if row else None
+
+    async def list_interventions(self, goal_id: str, *, limit: int = 100) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM goal_interventions
+            WHERE goal_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (goal_id, limit),
+        )
+        return [_intervention_from_row(dict(row)) for row in rows]
+
+    async def insert_model_call(self, data: dict[str, Any]) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO goal_model_calls (
+              model_call_id, goal_id, call_type, status, model_route_json,
+              input_redacted_json, output_redacted_json, fallback_reason, trace_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["model_call_id"],
+                data.get("goal_id"),
+                data["call_type"],
+                data["status"],
+                _json(data.get("model_route", {})),
+                _json(data.get("input_redacted", {})),
+                _json(data.get("output_redacted", {})),
+                data.get("fallback_reason"),
+                data.get("trace_id"),
+                data["created_at"],
+            ),
+        )
+
+    async def list_model_calls(self, goal_id: str, *, limit: int = 50) -> list[dict[str, Any]]:
+        rows = await self._db.fetch_all(
+            """
+            SELECT *
+            FROM goal_model_calls
+            WHERE goal_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (goal_id, limit),
+        )
+        return [_model_call_from_row(dict(row)) for row in rows]
+
 
 def _goal_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["success_criteria"] = json.loads(row.pop("success_criteria_json") or "[]")
@@ -508,6 +780,38 @@ def _snapshot_from_row(row: dict[str, Any]) -> dict[str, Any]:
 def _event_from_row(row: dict[str, Any]) -> dict[str, Any]:
     row["payload"] = json.loads(row.pop("payload_redacted_json") or "{}")
     row.pop("payload_json", None)
+    return row
+
+
+def _intake_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["available_time"] = json.loads(row.pop("available_time_json") or "{}")
+    row["constraints"] = json.loads(row.pop("constraints_json") or "{}")
+    row["motivation"] = json.loads(row.pop("motivation_json") or "{}")
+    row["missing_fields"] = json.loads(row.pop("missing_fields_json") or "[]")
+    row["raw_answers"] = json.loads(row.pop("raw_answers_json") or "{}")
+    return row
+
+
+def _milestone_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["acceptance_criteria"] = json.loads(row.pop("acceptance_criteria_json") or "[]")
+    return row
+
+
+def _routine_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["cadence"] = json.loads(row.pop("cadence_json") or "{}")
+    return row
+
+
+def _intervention_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["suggestion"] = json.loads(row.pop("suggestion_json") or "{}")
+    row["user_feedback"] = json.loads(row.pop("user_feedback_json") or "{}")
+    return row
+
+
+def _model_call_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    row["model_route"] = json.loads(row.pop("model_route_json") or "{}")
+    row["input_redacted"] = json.loads(row.pop("input_redacted_json") or "{}")
+    row["output_redacted"] = json.loads(row.pop("output_redacted_json") or "{}")
     return row
 
 

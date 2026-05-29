@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-094",
+  "category": "HR管理",
+  "title": "团队冲突复盘怎么写双方视角？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：双方、事实。\n团队冲突复盘怎么写双方视角？",
+  "reply_text": "我接住这句：团队冲突复盘怎么写双方视角？。\n\n这轮重点是双方、事实；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b58cb054fe9e439ba47b3a1ac054cffe",
+  "trace_id": "trc_a57504ee19e34bcab5251166d48e0470",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

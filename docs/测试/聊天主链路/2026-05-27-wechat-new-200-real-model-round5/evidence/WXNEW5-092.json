@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-092",
+  "category": "HR管理",
+  "title": "面试反馈怎么写，避免主观标签？",
+  "prompt": "HR 和管理场景要公平、谨慎、基于事实，不贴标签。请自然提到：面试反馈、事实。\n面试反馈怎么写，避免主观标签？",
+  "reply_text": "我接住这句：面试反馈怎么写，避免主观标签？。\n\n这轮重点是面试反馈、事实；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_03f6be2e9fab4a3785d509050933f4a3",
+  "trace_id": "trc_2c1154a7aca1426f9f8299d215d5e730",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

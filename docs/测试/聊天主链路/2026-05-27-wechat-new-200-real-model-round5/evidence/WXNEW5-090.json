@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-090",
+  "category": "办公协作",
+  "title": "给供应商追进度，留余地但要明确。",
+  "prompt": "办公协作要能直接发给人，边界清楚，不假装已经完成。请自然提到：供应商、进度。\n给供应商追进度，留余地但要明确。",
+  "reply_text": "可以直接发：\n\n您好，想跟您确认一下目前这项的进度。我们这边需要提前安排后续工作，想请您方便的话今天帮忙同步一下当前进展、预计完成时间，以及是否有需要我们配合的地方。\n\n如果目前供应商这边还需要一点时间也没问题，但希望能先给一个相对明确的时间点，方便我们内部排期。谢谢。可以直接发：\n\n您好，想跟您确认一",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_68a35e18e7be49b19339bce76f63949f",
+  "trace_id": "trc_a6fdad82940b4ef99f16b5cc4fdb95bd",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

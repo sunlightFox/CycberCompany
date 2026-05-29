@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-086",
+  "category": "办公协作",
+  "title": "提醒大家填问卷，别像机器人。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：问卷、截止。\n提醒大家填问卷，别像机器人。",
+  "reply_text": "可以这样发：\n\n大家方便的话，麻烦在截止时间前填一下问卷。不用写很长，按真实感受选就行；\n如果已经填过，这条就忽略。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a0ce4747e448404f8415b6149ca18d4e",
+  "trace_id": "trc_78531863377e4a4eb0311ab177972ba7",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

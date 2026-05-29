@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-073",
+  "category": "办公表格",
+  "title": "客户满意度只有 9 份样本怎么写？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：9 份、不能外推。\n客户满意度只有 9 份样本怎么写？",
+  "reply_text": "我接住这句：客户满意度只有 9 份样本怎么写？。\n\n这轮重点是9 份、不能外推；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1cf87f36e6684baea3a247a83dc257dc",
+  "trace_id": "trc_e415cd94171d4b9e86b43a7d1789b91f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-174",
+  "category": "长短控制",
+  "title": "详细方案怎么先分层？",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：方案、分层。\n详细方案怎么先分层？",
+  "reply_text": "我接住这句：详细方案怎么先分层？。\n\n这轮重点是方案、分层；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1185179d9d5c46abb898e88087c69996",
+  "trace_id": "trc_d65df3731e9d4aa6a05f164b74df047d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-111",
+  "category": "知识研究",
+  "title": "帮我研究一个新行业，先问哪三个问题？",
+  "prompt": "知识研究要区分事实、假设、缺口，不把没查到的说成确定。请自然提到：行业、三个问题。\n帮我研究一个新行业，先问哪三个问题？",
+  "reply_text": "我接住这句：帮我研究一个新行业，先问哪三个问题？。\n\n这轮重点是行业、三个问题；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_32e7cdc396434270974f0c6e4b6a1197",
+  "trace_id": "trc_9ac67553741c4bc29e06f067aba5b205",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

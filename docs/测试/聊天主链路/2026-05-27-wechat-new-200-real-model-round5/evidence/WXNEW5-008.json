@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-008",
+  "category": "闲聊情绪",
+  "title": "我想夸同事靠谱，别写成表彰稿。",
+  "prompt": "像微信里熟人一样自然回应，别系统腔，也别讲大道理。请自然提到：靠谱、具体。\n我想夸同事靠谱，别写成表彰稿。",
+  "reply_text": "可以这样说，像微信里顺手夸一句：\n“你这次真的挺靠谱的，不光推进得稳，细节也想得很具体，跟你配合很省心。”\n\n或者更口语一点：\n\n“说真的，跟你搭活儿很安心，靠谱，而且每次都能落到很具体的点上，不虚。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c58d545362574ab0ab81d6dbbc721551",
+  "trace_id": "trc_d7dc2af231a942538bb309e55620b702",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

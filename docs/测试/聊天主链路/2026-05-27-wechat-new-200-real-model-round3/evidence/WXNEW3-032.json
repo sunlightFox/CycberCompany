@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-032",
+  "category": "监督陪跑",
+  "title": "我想少刷群消息，给个温和收手法。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：群消息、收手。\n我想少刷群消息，给个温和收手法。",
+  "reply_text": "别硬戒，先用一个“温和收手句”。\n\n你下次想刷群消息时，就做这一步：\n先看一眼时间，然后对自己说：\n“我收手一下，先离开 5 分钟，等会儿再决定要不要看。”\n\n不用立刻卸载、不用骂自己，也不用保证今天再也不看。\n只要把“继续刷”改成“延后 5 分钟”，就已经是在收手了。\n\n小曜陪你盯最小",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_af0f8596416c420597d044e6bbaa6302",
+  "trace_id": "trc_0cb1c03171124155969c4fa22770a0e5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

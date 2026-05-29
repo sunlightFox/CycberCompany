@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-074",
+  "category": "办公表格",
+  "title": "现金流预警表要看哪些数据源？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：银行余额、应收、应付。\n现金流预警表要看哪些数据源？",
+  "reply_text": "先按这几个点整理：银行余额、应收、应付。\n\n围绕“现金流预警表要看哪些数据源？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_84401651e3194a509358194d88c06565",
+  "trace_id": "trc_3b753c59ef3c43c9951123b7a87f8482",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-033",
+  "category": "监督陪跑",
+  "title": "陪我把发票贴好，第一步别太大。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：发票、第一步。\n陪我把发票贴好，第一步别太大。",
+  "reply_text": "我陪你。先不搞大工程。\n\n第一步：只拿出一张发票，放到要贴的那页旁边。不用贴、也不用分类，先让它“就位”。\n\n你弄好后回我一句“放好了”，我再给你下一小步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_38682a2d5e294ff0ab4edf54f2668ffe",
+  "trace_id": "trc_c4d7adadeea642da981a3cc4b7407eb7",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

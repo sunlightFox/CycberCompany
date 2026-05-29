@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-164",
+  "category": "语气排版",
+  "title": "什么时候应该换段？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：换段、层次。\n什么时候应该换段？",
+  "reply_text": "我接住这句：什么时候应该换段？。\n\n这轮重点是换段、层次；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0493a1eb7fed4ffb878303d8c1a3b63a",
+  "trace_id": "trc_52cd5013f43744dfac4dfa05af06053b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-195",
+  "category": "审计追踪",
+  "title": "怎么证明某条消息真的发出去了？",
+  "prompt": "审计追踪场景要说清 trace、证据和不暴露敏感信息。请自然提到：投递、证据。\n怎么证明某条消息真的发出去了？",
+  "reply_text": "要证明“某条消息真的发出去了”，不能只看一句“发送成功”，而是看一条完整的审计链路： trace 能串起来 每条消息生成唯一 消息记录 / 审计记录，从创建、入队、调用通道、通道返回、回调确认都用同一个 trace 串联，能还原它的投递路径\n\n补上这轮关键点：投递、证据。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b521b48c34fe4198887ffe757a39dea7",
+  "trace_id": "trc_482e9a4e76a049ba990df7a654bf945f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

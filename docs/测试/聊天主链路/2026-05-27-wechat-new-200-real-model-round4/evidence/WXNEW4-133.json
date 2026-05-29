@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-133",
+  "category": "生活办公混合",
+  "title": "午后很困但还有材料，怎么降级？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：困、降级。\n午后很困但还有材料，怎么降级？",
+  "reply_text": "别硬扛，直接把任务降级成“能交付一版粗稿”。🧠\n1.先喝水、站起来走2 分钟 困的时候别先逼自己进入状态，先把脑子唤醒一点。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_cb73c284da414d028275cd863cba023e",
+  "trace_id": "trc_d8dc0afb960d4ef696141b012f75bc1c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

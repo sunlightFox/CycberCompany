@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-123",
+  "category": "记忆偏好",
+  "title": "刚才那个短句风格只今天有效。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：今天、长期。\n刚才那个短句风格只今天有效。",
+  "reply_text": "source 是你这条消息：刚才那个“短句风格”只在今天临时有效，不作为长期偏好。\n\n长期记忆这边我会按边界处理：只有你明确要求、且内容不敏感时才考虑写入；敏感内容不写入。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_88149efcc5e942cd9bac3eeb2a5a005e",
+  "trace_id": "trc_88c7a38b17d2461a86bde02532c4f915",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

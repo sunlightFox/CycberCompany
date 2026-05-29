@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-057",
+  "category": "操作系统",
+  "title": "磁盘快满了，先列安全排查顺序。",
+  "prompt": "操作系统场景要讲清只读、确认、备份和风险，不假装已经执行。请自然提到：磁盘、顺序。\n磁盘快满了，先列安全排查顺序。",
+  "reply_text": "磁盘快满时，先按安全顺序只读排查，不要上来就删。\n\n1. 看整体容量：确认是系统盘、数据盘、日志盘，还是某个目录暴涨。\n2. 看占用来源：按文件类型、时间和目录大小定位，不直接删除。\n3. 先备份再清理：重要数据、配置和工作文件先备份；确认范围后再处理缓存、临时文件或日志。\n\n没确认来源前，不做批量删除。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_56befba9d30349ecafe28c785402ef2c",
+  "trace_id": "trc_eed71fe1861445888030788af26885c1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

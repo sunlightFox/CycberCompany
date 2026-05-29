@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-038",
+  "category": "监督陪跑",
+  "title": "别让我完美主义，先交一个粗版本。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：粗版本、先交。\n别让我完美主义，先交一个粗版本。",
+  "reply_text": "小曜来盯你：别打磨了，先交一个粗版本。\n\n最小下一步就一个：把你现在脑子里的内容写成3 行，哪怕很烂也行——先交，不许优化标题、不许补资料、不许改措辞。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4050f52a3fb444e784669342755db8f8",
+  "trace_id": "trc_76a9cdda1ac94073a409c1126586ab7e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

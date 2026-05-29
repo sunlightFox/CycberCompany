@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-188",
+  "category": "审计追踪",
+  "title": "高风险动作被拒绝也要记录什么？",
+  "prompt": "审计追踪场景要说清 trace、证据、状态，不暴露敏感信息。请自然提到：拒绝、记录。\n高风险动作被拒绝也要记录什么？",
+  "reply_text": "高风险动作被拒绝也要记录，但只记录可审计事实，不写敏感原文。\n\n1. 请求摘要：用户想做什么、涉及哪类资源或动作。\n2. 拒绝原因：权限不足、风险过高、缺审批，还是缺少确认范围。\n3. trace 和状态：记录时间、决策结果、后续可行替代方案。\n\nsecret、token、私钥、cookie 这类内容只留脱敏摘要或证据指针。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_daa5ff4e97664571a8f1d7a5aeb89559",
+  "trace_id": "trc_bd8419075ef7478eacd7e25c07389a93",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

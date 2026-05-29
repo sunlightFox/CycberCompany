@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-036",
+  "category": "监督陪跑",
+  "title": "监督我做康复动作，但疼了要停。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：疼、停止。\n监督我做康复动作，但疼了要停。",
+  "reply_text": "陪你盯节奏，不喊口号。\n\n最小下一步：先做 1 个动作、1组、慢一点。开始前先确认：现在静息状态下疼不疼？\n如果已经疼，就先停止，不硬做。\n\n做的时候按这个规则：\n- 轻微拉伸感可以；\n出现明显疼、刺痛、麻、加重，立刻停止；\n做完后疼痛如果持续增加，也先停，休息并考虑问医生/康复师。\n\n你现在先告诉我：准备做哪个康复动作？我帮你按次数和停顿盯着。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1a0efde01ab843d98d1e69de4935e6eb",
+  "trace_id": "trc_da2e932244cc45f589e298a529902714",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

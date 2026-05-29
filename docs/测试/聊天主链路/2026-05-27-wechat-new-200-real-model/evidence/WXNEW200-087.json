@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-087",
+  "category": "HR招聘",
+  "title": "迟到沟通话术怎么写，别羞辱人。",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：事实、改进。\n迟到沟通话术怎么写，别羞辱人。",
+  "reply_text": "迟到沟通要聚焦事实和影响，不贴标签、不羞辱人；同时给出明确的改进期待和复核时间。 我想和你沟通一下近期考勤情况。根据记录，你在最近两周内有 3 次迟到，分别是 9:18、9:25 和 9:12 到岗。\n\n话术补充：考勤沟通建议先陈述迟到和补卡事实，再说明制度风险，最后给出改进要求和复盘时间。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_83494a6b7ee449f58465d6da8f02cd06",
+  "trace_id": "trc_b8e65934ab6f41d8b3f34414259fd51c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "case_id": "WXNEW200-193",
+  "category": "办公文档",
+  "title": "写一条办公区搬迁群公告，包含时间、地点、影响、联系人。（变体）",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：时间、地点、联系人。\n写一条办公区搬迁群公告，包含时间、地点、影响、联系人。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "群公告可以这样发：\n\n各位好，办公区将于【时间】搬迁至【地点】。搬迁期间可能影响工位使用、会议室预约和快递收发，请大家提前整理个人物品。\n\n如有特殊设备、资料或当天到访安排，请提前联系【联系人】。具体搬迁批次和临时办公安排会另行同步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_5bfbe10e2f2141ccbf2216fdd8e17fea",
+  "trace_id": "trc_34fedff124204d3f84637c1789313e8c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "task.created",
+    "task.planned",
+    "task.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

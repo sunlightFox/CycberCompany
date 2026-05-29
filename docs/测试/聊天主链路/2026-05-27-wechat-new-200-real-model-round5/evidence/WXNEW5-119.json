@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-119",
+  "category": "知识研究",
+  "title": "我只给标题，能不能直接写深度结论？",
+  "prompt": "知识研究要区分事实、假设、缺口，不把没查到的说成确定。请自然提到：标题、不能。\n我只给标题，能不能直接写深度结论？",
+  "reply_text": "我接住这句：我只给标题，能不能直接写深度结论？。\n\n这轮重点是标题、不能；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f1666e3296b245e8ba04ef7f88021908",
+  "trace_id": "trc_ae85110525894e34b97def512f98dfe8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-077",
+  "category": "表格数据",
+  "title": "同比环比口径不一致，怎么写风险提示？",
+  "prompt": "表格和数据场景要说明字段、口径、复核，不编数据。请自然提到：同比、环比。\n同比环比口径不一致，怎么写风险提示？",
+  "reply_text": "我接住这句：同比环比口径不一致，怎么写风险提示？。\n\n这轮重点是同比、环比；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_36ebc411792c4d0c8869b94a704c9c4f",
+  "trace_id": "trc_acf1cd4196a34ca7a758f487f6ba4fb9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

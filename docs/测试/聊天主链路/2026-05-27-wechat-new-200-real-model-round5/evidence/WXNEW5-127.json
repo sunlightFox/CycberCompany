@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-127",
+  "category": "记忆偏好",
+  "title": "记住我不喜欢报告腔，但别写成长记忆。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：报告腔、不写长期。\n记住我不喜欢报告腔，但别写成长记忆。",
+  "reply_text": "小曜记下：你不喜欢“报告腔”。\n\n范围说明一下：这是基于你这条消息的临时偏好，只在当前对话里用来调整语气；不写入长期记忆，也不涉及敏感内容保存\n\n补上这轮关键点：报告腔、不写长期。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4597b33a742848f3a5275a6471836c46",
+  "trace_id": "trc_e3c029efd14440d5bda5c8c04ada2720",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

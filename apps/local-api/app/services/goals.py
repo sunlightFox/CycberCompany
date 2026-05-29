@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from core_types import (
@@ -9,9 +9,14 @@ from core_types import (
     Goal,
     GoalCheckin,
     GoalEvent,
+    GoalIntake,
+    GoalIntervention,
+    GoalMilestone,
+    GoalModelCall,
     GoalPlan,
     GoalPlanItem,
     GoalProgressSnapshot,
+    GoalRoutine,
     GoalSupervisionPolicy,
     RiskLevel,
     ScheduledTask,
@@ -26,10 +31,22 @@ from app.schemas.goals import (
     GoalCheckinCreateRequest,
     GoalCheckinReplyRequest,
     GoalCreateRequest,
+    GoalIntakeUpdateRequest,
+    GoalReplanRequest,
     GoalSupervisionRequest,
 )
 from app.schemas.scheduled_tasks import ScheduledTaskCreateRequest
 from app.services.audit import AuditEventService
+from app.services.goal_engine import (
+    GoalChatOutcome,
+    GoalDomainRegistry,
+    GoalMemoryProjector,
+    GoalPlanner,
+    GoalProgressEvaluator,
+    GoalResponsePresenter,
+    extract_goal_intake_from_text,
+    merge_intake,
+)
 
 GOAL_ACTIVE_STATUSES = {"awaiting_confirmation", "active", "paused"}
 GOAL_TERMINAL_STATUSES = {"cancelled", "archived", "completed"}
@@ -42,13 +59,10 @@ class GoalBundle:
     plan_items: list[GoalPlanItem]
     supervision_policy: GoalSupervisionPolicy | None = None
     progress: GoalProgressSnapshot | None = None
-
-
-@dataclass(frozen=True)
-class GoalChatOutcome:
-    intent: str
-    text: str
-    payload: dict[str, Any]
+    intake: GoalIntake | None = None
+    milestones: list[GoalMilestone] = field(default_factory=list)
+    routines: list[GoalRoutine] = field(default_factory=list)
+    latest_intervention: GoalIntervention | None = None
 
 
 class GoalService:
@@ -60,12 +74,24 @@ class GoalService:
         scheduled_task_service: Any | None,
         trace_service: TraceService,
         audit_service: AuditEventService,
+        memory_service: Any | None = None,
+        brain_repo: Any | None = None,
+        model_gateway: Any | None = None,
     ) -> None:
         self._repo = repo
         self._members = member_repo
         self._scheduled_tasks = scheduled_task_service
         self._trace = trace_service
         self._audit = audit_service
+        self._domains = GoalDomainRegistry()
+        self._planner = GoalPlanner(
+            self._domains,
+            brain_repo=brain_repo,
+            model_gateway=model_gateway,
+        )
+        self._progress_evaluator = GoalProgressEvaluator()
+        self._presenter = GoalResponsePresenter()
+        self._memory_projector = GoalMemoryProjector(memory_service)
 
     async def create_goal(
         self,
@@ -77,9 +103,25 @@ class GoalService:
         if member is None:
             raise AppError(ErrorCode.NOT_FOUND, "member not found", status_code=404)
         title = request.title or _title_from_text(request.description)
-        plan = _build_plan(title=title, description=request.description)
+        extracted_intake = extract_goal_intake_from_text(request.description)
+        request_intake = merge_intake(extracted_intake, request.intake)
+        domain_label = (
+            request.preferred_domain
+            or request.domain_label
+            or self._domains.classify(request.description, request.preferred_domain)
+        )
+        missing_fields = self._domains.missing_fields(domain_label, request_intake)
+        plan = await self._planner.build_plan(
+            title=title,
+            description=request.description,
+            domain_label=domain_label,
+            intake=request_intake,
+            planning_mode=request.planning_mode,
+            trace_id=trace_id,
+        )
         goal_id = new_id("goal")
         plan_id = new_id("gplan")
+        intake_id = new_id("gint")
         now = utc_now_iso()
         async with self._repo.transaction():
             await self._repo.insert_goal(
@@ -90,14 +132,39 @@ class GoalService:
                     "conversation_id": request.conversation_id,
                     "title": title,
                     "description": request.description,
-                    "domain_label": request.domain_label or _domain_label(request.description),
+                    "domain_label": domain_label,
                     "status": "awaiting_confirmation",
-                    "success_criteria": request.success_criteria or plan["success_criteria"],
+                    "success_criteria": request.success_criteria or plan.success_criteria,
                     "constraints": request.constraints,
                     "motivation": request.motivation,
                     "active_plan_id": plan_id,
                     "created_from_turn_id": request.created_from_turn_id,
                     "trace_id": trace_id,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+            await self._repo.insert_intake(
+                {
+                    "intake_id": intake_id,
+                    "goal_id": goal_id,
+                    "domain_label": domain_label,
+                    "status": "collecting" if missing_fields else "ready",
+                    "current_level": request_intake.get("current_level"),
+                    "target_level": request_intake.get("target_level"),
+                    "target_date": request_intake.get("target_date"),
+                    "available_time": request_intake.get("available_time", {}),
+                    "constraints": {
+                        **dict(request.constraints or {}),
+                        **dict(request_intake.get("constraints") or {}),
+                    },
+                    "motivation": {
+                        **dict(request.motivation or {}),
+                        **dict(request_intake.get("motivation") or {}),
+                    },
+                    "missing_fields": missing_fields,
+                    "raw_answers": request_intake.get("raw_answers", {}),
+                    "confirmed_at": None,
                     "created_at": now,
                     "updated_at": now,
                 }
@@ -108,14 +175,23 @@ class GoalService:
                     "goal_id": goal_id,
                     "version": 1,
                     "status": "proposed",
-                    "summary": plan["summary"],
-                    "assumptions": plan["assumptions"],
-                    "risk_notes": plan["risk_notes"],
+                    "summary": plan.summary,
+                    "assumptions": plan.assumptions,
+                    "risk_notes": plan.risk_notes,
                     "created_at": now,
                     "updated_at": now,
                 }
             )
-            for index, item in enumerate(plan["items"], start=1):
+            await self._repo.insert_model_call(
+                {
+                    "model_call_id": new_id("gmodel"),
+                    "goal_id": goal_id,
+                    **plan.model_call,
+                    "trace_id": trace_id,
+                    "created_at": now,
+                }
+            )
+            for index, item in enumerate(plan.items, start=1):
                 await self._repo.insert_plan_item(
                     {
                         "goal_plan_item_id": new_id("gitem"),
@@ -132,10 +208,49 @@ class GoalService:
                         "updated_at": now,
                     }
                 )
+            for index, item in enumerate(plan.milestones, start=1):
+                await self._repo.insert_milestone(
+                    {
+                        "milestone_id": new_id("gms"),
+                        "goal_id": goal_id,
+                        "goal_plan_id": plan_id,
+                        "title": item["title"],
+                        "description": item.get("description", ""),
+                        "status": "planned",
+                        "target_date": item.get("target_date"),
+                        "acceptance_criteria": item.get("acceptance_criteria", []),
+                        "sort_order": index,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+            for index, item in enumerate(plan.routines, start=1):
+                await self._repo.insert_routine(
+                    {
+                        "routine_id": new_id("grtn"),
+                        "goal_id": goal_id,
+                        "goal_plan_id": plan_id,
+                        "title": item["title"],
+                        "description": item.get("description", ""),
+                        "cadence": item.get("cadence", {}),
+                        "estimated_minutes": item.get("estimated_minutes"),
+                        "difficulty": item.get("difficulty", "medium"),
+                        "status": "active",
+                        "sort_order": index,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
             await self._event(
                 goal_id,
                 "goal.created",
-                {"title": title, "plan_id": plan_id},
+                {
+                    "title": title,
+                    "plan_id": plan_id,
+                    "domain_label": domain_label,
+                    "missing_fields": missing_fields,
+                    "fallback_used": plan.fallback_used,
+                },
                 trace_id=trace_id,
             )
         await self._audit.write_event(
@@ -164,12 +279,22 @@ class GoalService:
         )
         policy_row = await self._repo.latest_policy_for_goal(goal_id)
         progress_row = await self._repo.latest_snapshot(goal_id)
+        intake_row = await self._repo.latest_intake_for_goal(goal_id)
+        milestone_rows = await self._repo.list_milestones(goal_id)
+        routine_rows = await self._repo.list_routines(goal_id)
+        intervention_row = await self._repo.latest_intervention_for_goal(goal_id)
         return GoalBundle(
             goal=goal,
             active_plan=active_plan,
             plan_items=items,
             supervision_policy=GoalSupervisionPolicy(**policy_row) if policy_row else None,
             progress=GoalProgressSnapshot(**progress_row) if progress_row else None,
+            intake=GoalIntake(**intake_row) if intake_row else None,
+            milestones=[GoalMilestone(**row) for row in milestone_rows],
+            routines=[GoalRoutine(**row) for row in routine_rows],
+            latest_intervention=(
+                GoalIntervention(**intervention_row) if intervention_row else None
+            ),
         )
 
     async def list_goals(
@@ -218,6 +343,16 @@ class GoalService:
                     "updated_at": now,
                 },
             )
+            intake_row = await self._repo.latest_intake_for_goal(goal_id)
+            if intake_row:
+                await self._repo.update_intake(
+                    intake_row["intake_id"],
+                    {
+                        "status": "confirmed",
+                        "confirmed_at": now,
+                        "updated_at": now,
+                    },
+                )
             await self._event(
                 goal_id,
                 "goal.plan_confirmed",
@@ -350,12 +485,13 @@ class GoalService:
         request: GoalCheckinReplyRequest,
         *,
         trace_id: str | None = None,
+        turn_id: str | None = None,
     ) -> GoalProgressSnapshot:
         goal = await self._goal(goal_id)
         checkin_row = await self._repo.get_checkin(checkin_id)
         if checkin_row is None or checkin_row["goal_id"] != goal_id:
             raise AppError(ErrorCode.NOT_FOUND, "goal checkin not found", status_code=404)
-        parsed_status = _parse_checkin_status(request.reply_text)
+        parsed_status = self._progress_evaluator.parse_status(request.reply_text)
         advice = _advice_for_reply(request.reply_text, parsed_status, goal.title)
         encouragement = _encouragement(parsed_status)
         progress_delta = _progress_delta(parsed_status)
@@ -379,6 +515,11 @@ class GoalService:
             trace_id=trace_id,
         )
         await self._advance_plan_items(goal, parsed_status)
+        intervention = await self._maybe_create_intervention(
+            goal,
+            parsed_status=parsed_status,
+            trace_id=trace_id,
+        )
         await self._event(
             goal_id,
             "goal.checkin_replied",
@@ -386,8 +527,20 @@ class GoalService:
                 "checkin_id": checkin_id,
                 "parsed_status": parsed_status,
                 "progress_percent": snapshot.progress_percent,
+                "intervention_id": (
+                    intervention.intervention_id if intervention is not None else None
+                ),
             },
             trace_id=trace_id,
+        )
+        await self._memory_projector.project_checkin(
+            goal=goal,
+            checkin_id=checkin_id,
+            progress=snapshot,
+            parsed_status=parsed_status,
+            turn_id=turn_id,
+            trace_id=trace_id,
+            intervention=intervention,
         )
         return snapshot
 
@@ -453,6 +606,208 @@ class GoalService:
     async def list_events(self, goal_id: str, *, limit: int = 100) -> list[GoalEvent]:
         await self._goal(goal_id)
         return [GoalEvent(**row) for row in await self._repo.list_events(goal_id, limit=limit)]
+
+    async def update_intake(
+        self,
+        goal_id: str,
+        request: GoalIntakeUpdateRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> GoalBundle:
+        goal = await self._goal(goal_id)
+        row = await self._repo.latest_intake_for_goal(goal_id)
+        if row is None:
+            now = utc_now_iso()
+            row = {
+                "intake_id": new_id("gint"),
+                "goal_id": goal_id,
+                "domain_label": goal.domain_label,
+                "status": "collecting",
+                "current_level": None,
+                "target_level": None,
+                "target_date": None,
+                "available_time": {},
+                "constraints": {},
+                "motivation": {},
+                "missing_fields": [],
+                "raw_answers": {},
+                "confirmed_at": None,
+                "created_at": now,
+                "updated_at": now,
+            }
+            await self._repo.insert_intake(row)
+        merged = merge_intake(row, request)
+        missing_fields = self._domains.missing_fields(goal.domain_label, merged)
+        now = utc_now_iso()
+        intake_status = (
+            "confirmed"
+            if request.confirm and not missing_fields
+            else "ready"
+            if not missing_fields
+            else "collecting"
+        )
+        confirmed_at = now if request.confirm and not missing_fields else row.get("confirmed_at")
+        await self._repo.update_intake(
+            row["intake_id"],
+            {
+                "current_level": merged.get("current_level"),
+                "target_level": merged.get("target_level"),
+                "target_date": merged.get("target_date"),
+                "available_time": merged.get("available_time", {}),
+                "constraints": merged.get("constraints", {}),
+                "motivation": merged.get("motivation", {}),
+                "raw_answers": merged.get("raw_answers", {}),
+                "missing_fields": missing_fields,
+                "status": intake_status,
+                "confirmed_at": confirmed_at,
+                "updated_at": now,
+            },
+        )
+        await self._event(
+            goal_id,
+            "goal.intake_updated",
+            {"missing_fields": missing_fields},
+            trace_id=trace_id,
+        )
+        return await self.replan(
+            goal_id,
+            GoalReplanRequest(reason="intake_updated", planning_mode="model_first"),
+            trace_id=trace_id,
+        )
+
+    async def replan(
+        self,
+        goal_id: str,
+        request: GoalReplanRequest,
+        *,
+        trace_id: str | None = None,
+    ) -> GoalBundle:
+        goal = await self._goal(goal_id)
+        latest_plans = await self._repo.list_plans(goal_id)
+        next_version = max([int(row.get("version") or 1) for row in latest_plans] or [1]) + 1
+        intake_row = await self._repo.latest_intake_for_goal(goal_id)
+        intake_payload = dict(intake_row or {})
+        draft = await self._planner.build_plan(
+            title=goal.title,
+            description=request.feedback or goal.description,
+            domain_label=goal.domain_label,
+            intake=intake_payload,
+            planning_mode=request.planning_mode,
+            trace_id=trace_id,
+        )
+        plan_id = new_id("gplan")
+        now = utc_now_iso()
+        async with self._repo.transaction():
+            await self._repo.insert_plan(
+                {
+                    "goal_plan_id": plan_id,
+                    "goal_id": goal_id,
+                    "version": next_version,
+                    "status": "proposed",
+                    "summary": draft.summary,
+                    "assumptions": draft.assumptions,
+                    "risk_notes": draft.risk_notes,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+            await self._repo.update_goal(
+                goal_id,
+                {"active_plan_id": plan_id, "updated_at": now},
+            )
+            await self._repo.insert_model_call(
+                {
+                    "model_call_id": new_id("gmodel"),
+                    "goal_id": goal_id,
+                    **draft.model_call,
+                    "trace_id": trace_id,
+                    "created_at": now,
+                }
+            )
+            for index, item in enumerate(draft.items, start=1):
+                await self._repo.insert_plan_item(
+                    {
+                        "goal_plan_item_id": new_id("gitem"),
+                        "goal_plan_id": plan_id,
+                        "goal_id": goal_id,
+                        "title": item["title"],
+                        "description": item["description"],
+                        "item_type": item["item_type"],
+                        "cadence": item["cadence"],
+                        "success_metric": item["success_metric"],
+                        "status": "planned",
+                        "sort_order": index,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+            for index, item in enumerate(draft.milestones, start=1):
+                await self._repo.insert_milestone(
+                    {
+                        "milestone_id": new_id("gms"),
+                        "goal_id": goal_id,
+                        "goal_plan_id": plan_id,
+                        "title": item["title"],
+                        "description": item.get("description", ""),
+                        "status": "planned",
+                        "target_date": item.get("target_date"),
+                        "acceptance_criteria": item.get("acceptance_criteria", []),
+                        "sort_order": index,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+            for index, item in enumerate(draft.routines, start=1):
+                await self._repo.insert_routine(
+                    {
+                        "routine_id": new_id("grtn"),
+                        "goal_id": goal_id,
+                        "goal_plan_id": plan_id,
+                        "title": item["title"],
+                        "description": item.get("description", ""),
+                        "cadence": item.get("cadence", {}),
+                        "estimated_minutes": item.get("estimated_minutes"),
+                        "difficulty": item.get("difficulty", "medium"),
+                        "status": "active",
+                        "sort_order": index,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+            await self._event(
+                goal_id,
+                "goal.replanned",
+                {"plan_id": plan_id, "version": next_version, "reason": request.reason},
+                trace_id=trace_id,
+            )
+        return await self.detail(goal_id)
+
+    async def timeline(self, goal_id: str, *, limit: int = 200) -> list[dict[str, Any]]:
+        await self._goal(goal_id)
+        events = [
+            {"kind": "event", "created_at": item.created_at, "item": item.model_dump(mode="json")}
+            for item in await self.list_events(goal_id, limit=limit)
+        ]
+        checkins = [
+            {"kind": "checkin", "created_at": item.created_at, "item": item.model_dump(mode="json")}
+            for item in await self.list_checkins(goal_id, limit=limit)
+        ]
+        interventions = [
+            {"kind": "intervention", "created_at": row["created_at"], "item": row}
+            for row in await self._repo.list_interventions(goal_id, limit=limit)
+        ]
+        return sorted(
+            events + checkins + interventions,
+            key=lambda item: str(item.get("created_at") or ""),
+            reverse=True,
+        )[:limit]
+
+    async def list_model_calls(self, goal_id: str, *, limit: int = 50) -> list[GoalModelCall]:
+        await self._goal(goal_id)
+        return [
+            GoalModelCall(**row)
+            for row in await self._repo.list_model_calls(goal_id, limit=limit)
+        ]
 
     async def pause(self, goal_id: str, *, trace_id: str | None = None) -> Goal:
         current = await self._goal(goal_id)
@@ -542,11 +897,16 @@ class GoalService:
                 ),
                 trace_id=trace_id,
             )
-            text_out = _goal_plan_reply(bundle)
+            text_out = self._presenter.created_reply(
+                title=bundle.goal.title,
+                plan_items=bundle.plan_items,
+                domain_label=bundle.goal.domain_label,
+                missing_fields=bundle.intake.missing_fields if bundle.intake else [],
+            )
             return GoalChatOutcome(
                 intent="goal_plan_request",
-                text=text_out,
-                payload=_bundle_payload(bundle) | {"action": "goal_created"},
+                visible_text=text_out,
+                structured_payload=_bundle_payload(bundle) | {"action": "goal_created"},
             )
         pending = await self._latest_conversation_goal(
             owner_member_id=member_id,
@@ -575,10 +935,32 @@ class GoalService:
             text_out = _goal_confirm_reply(bundle.goal, policy)
             return GoalChatOutcome(
                 intent="goal_confirm_plan",
-                text=text_out,
-                payload=_bundle_payload(bundle)
+                visible_text=text_out,
+                structured_payload=_bundle_payload(bundle)
                 | {"policy": policy.model_dump(mode="json") if policy else None},
             )
+        if pending is not None:
+            intake_patch = extract_goal_intake_from_text(clean)
+            has_intake_patch = any(
+                intake_patch.get(key) for key in ("available_time", "target_date", "raw_answers")
+            )
+            if has_intake_patch:
+                bundle = await self.update_intake(
+                    pending.goal_id,
+                    GoalIntakeUpdateRequest(**intake_patch),
+                    trace_id=trace_id,
+                )
+                missing_fields = bundle.intake.missing_fields if bundle.intake else []
+                suffix = self._presenter.intake_question(bundle.goal.domain_label, missing_fields)
+                text_out = (
+                    f"收到，我已补充「{bundle.goal.title}」的目标信息，并更新了一版计划。"
+                    + (f" {suffix}" if suffix else " 现在可以确认计划并告诉我监督节奏。")
+                )
+                return GoalChatOutcome(
+                    intent="goal_intake_update",
+                    visible_text=text_out,
+                    structured_payload=_bundle_payload(bundle) | {"action": "intake_updated"},
+                )
         if _looks_like_goal_progress_query(clean):
             goal = await self._resolve_single_active_goal(member_id, conversation_id, clean)
             if goal is None:
@@ -587,8 +969,8 @@ class GoalService:
             text_out = _progress_reply(goal, progress)
             return GoalChatOutcome(
                 intent="goal_progress_query",
-                text=text_out,
-                payload={
+                visible_text=text_out,
+                structured_payload={
                     "goal": goal.model_dump(mode="json"),
                     "progress": progress.model_dump(mode="json"),
                 },
@@ -600,8 +982,8 @@ class GoalService:
             updated = await self.pause(goal.goal_id, trace_id=trace_id)
             return GoalChatOutcome(
                 intent="goal_pause",
-                text=f"已暂停「{updated.title}」的监督。计划还在，之后你说继续，我再接上。",
-                payload={"goal": updated.model_dump(mode="json")},
+                visible_text=f"已暂停「{updated.title}」的监督。计划还在，之后你说继续，我再接上。",
+                structured_payload={"goal": updated.model_dump(mode="json")},
             )
         if _looks_like_goal_cancel(clean):
             goal = await self._resolve_single_active_goal(member_id, conversation_id, clean)
@@ -610,8 +992,8 @@ class GoalService:
             updated = await self.cancel(goal.goal_id, trace_id=trace_id)
             return GoalChatOutcome(
                 intent="goal_cancel",
-                text=f"已取消「{updated.title}」。我不会再围绕这个目标追问你。",
-                payload={"goal": updated.model_dump(mode="json")},
+                visible_text=f"已取消「{updated.title}」。我不会再围绕这个目标追问你。",
+                structured_payload={"goal": updated.model_dump(mode="json")},
             )
         if _looks_like_checkin_reply(clean):
             checkin = await self._repo.latest_open_checkin(
@@ -637,16 +1019,40 @@ class GoalService:
                 checkin_id,
                 GoalCheckinReplyRequest(reply_text=clean),
                 trace_id=trace_id,
+                turn_id=turn_id,
             )
-            status = _parse_checkin_status(clean)
-            text_out = _checkin_reply(goal, progress, status, clean)
+            status = self._progress_evaluator.parse_status(clean)
+            latest_intervention_row = await self._repo.latest_intervention_for_goal(goal.goal_id)
+            text_out = self._presenter.checkin_reply(
+                goal=goal,
+                progress=progress,
+                status=status,
+                intervention_summary=(
+                    str(latest_intervention_row.get("summary") or "")
+                    if latest_intervention_row
+                    else None
+                ),
+            )
             return GoalChatOutcome(
                 intent="goal_checkin_reply",
-                text=text_out,
-                payload={
+                visible_text=text_out,
+                structured_payload={
                     "goal": goal.model_dump(mode="json"),
                     "progress": progress.model_dump(mode="json"),
+                    "intervention": latest_intervention_row,
                 },
+                memory_candidates=[
+                    {
+                        "kind": "goal_progress",
+                        "summary": progress.summary,
+                        "source": {
+                            "type": "goal_event",
+                            "goal_id": goal.goal_id,
+                            "turn_id": turn_id,
+                            "trace_id": trace_id,
+                        },
+                    }
+                ],
             )
         return None
 
@@ -701,13 +1107,62 @@ class GoalService:
             return
         now = utc_now_iso()
         if parsed_status in {"done", "partial"}:
-            await self._mark_first_plan_item(rows, "planning", "completed", now)
-            await self._mark_first_plan_item(rows, "routine", "in_progress", now)
-            await self._mark_first_plan_item(rows, "checkin", "in_progress", now)
+            await self._mark_plan_items(rows, "planning", "completed", now)
+            await self._mark_plan_items(rows, "routine", "in_progress", now)
+            await self._mark_plan_items(rows, "checkin", "in_progress", now)
         elif parsed_status in {"missed", "blocked", "unclear"}:
-            await self._mark_first_plan_item(rows, "routine", "in_progress", now)
-            await self._mark_first_plan_item(rows, "checkin", "in_progress", now)
+            await self._mark_plan_items(rows, "routine", "in_progress", now)
+            await self._mark_plan_items(rows, "checkin", "in_progress", now)
         await self._mark_first_plan_item(rows, "review", "planned", now, only_if_missing=True)
+
+    async def _maybe_create_intervention(
+        self,
+        goal: Goal,
+        *,
+        parsed_status: str,
+        trace_id: str | None,
+    ) -> GoalIntervention | None:
+        if parsed_status not in {"missed", "blocked"}:
+            return None
+        checkins = await self._repo.list_checkins(goal.goal_id, limit=5)
+        recent = [str(item.get("parsed_status") or "") for item in checkins[:3]]
+        trigger = None
+        if len(recent) >= 2 and all(item == "missed" for item in recent[:2]):
+            trigger = "consecutive_missed"
+            summary = "最近连续没完成，建议把下一步降到更小。"
+            suggestion = {"next_action": "把下一次行动缩小到 10 分钟以内", "tone": "gentle"}
+        elif len(recent) >= 2 and all(item == "blocked" for item in recent[:2]):
+            trigger = "consecutive_blocked"
+            summary = "最近连续卡住，建议先拆一个具体阻碍。"
+            suggestion = {"next_action": "只处理一个卡点，必要时重规划", "tone": "gentle"}
+        elif parsed_status == "blocked":
+            trigger = "single_blocked"
+            summary = "这次卡住了，先不用硬推，拆清楚卡点更重要。"
+            suggestion = {"next_action": "说明卡在时间、方法、资源还是状态", "tone": "gentle"}
+        if trigger is None:
+            return None
+        latest = await self._repo.latest_intervention_for_goal(goal.goal_id)
+        if latest and latest.get("trigger_type") == trigger and latest.get("status") == "suggested":
+            return GoalIntervention(**latest)
+        now = utc_now_iso()
+        intervention_id = new_id("gintv")
+        await self._repo.insert_intervention(
+            {
+                "intervention_id": intervention_id,
+                "goal_id": goal.goal_id,
+                "trigger_type": trigger,
+                "status": "suggested",
+                "summary": summary,
+                "suggestion": suggestion,
+                "shown_at": now,
+                "user_feedback": {},
+                "trace_id": trace_id,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        row = await self._repo.latest_intervention_for_goal(goal.goal_id)
+        return GoalIntervention(**row) if row else None
 
     async def _mark_first_plan_item(
         self,
@@ -730,6 +1185,27 @@ class GoalService:
                 {"status": status, "updated_at": updated_at},
             )
             return
+
+    async def _mark_plan_items(
+        self,
+        rows: list[dict[str, Any]],
+        item_type: str,
+        status: str,
+        updated_at: str,
+    ) -> None:
+        terminal_statuses = {"completed", "cancelled", "archived"}
+        for row in rows:
+            if row.get("item_type") != item_type:
+                continue
+            current_status = str(row.get("status") or "")
+            if current_status == status:
+                continue
+            if current_status in terminal_statuses and status != "completed":
+                continue
+            await self._repo.update_plan_item(
+                row["goal_plan_item_id"],
+                {"status": status, "updated_at": updated_at},
+            )
 
     async def _goal(self, goal_id: str) -> Goal:
         row = await self._repo.get_goal(goal_id)
@@ -935,13 +1411,19 @@ def _parse_checkin_status(text: str) -> str:
         marker in clean
         for marker in (
             "卡住",
+            "卡在",
             "卡点",
             "瓶颈",
             "不会",
             "不懂",
+            "不理解",
+            "不知道",
             "方法不对",
             "困难",
+            "困惑",
             "阻力",
+            "阻塞",
+            "难点",
             "受伤",
             "疼",
             "痛",
@@ -954,14 +1436,26 @@ def _parse_checkin_status(text: str) -> str:
         marker in clean
         for marker in (
             "做了一半",
+            "练了一半",
             "一半",
             "部分",
+            "一部分",
             "一点",
+            "只",
+            "只练",
+            "但",
+            "还差",
+            "没听完",
+            "没看完",
+            "没做完",
             "半小时",
             "有一点",
             "推进",
             "有进展",
             "没全部",
+            "还没",
+            "未完全",
+            "停了",
         )
     ):
         return "partial"
@@ -972,18 +1466,68 @@ def _parse_checkin_status(text: str) -> str:
             "没完成",
             "没时间",
             "没来得及",
+            "没练",
+            "没跑",
+            "没看",
+            "没复习",
+            "没背",
+            "没刷题",
+            "没刷",
+            "没去训练馆",
+            "没去",
+            "没控制住",
+            "超时",
+            "被临时会议打断",
+            "打断",
             "来不及",
             "忘了",
             "耽搁",
             "拖延",
             "失败",
             "没有",
+            "临时加班",
+            "下雨堵车",
+            "膝盖酸",
+            "有点酸",
+            "休息了",
+            "太忙",
+            "太累",
+            "很累",
+            "脑子很累",
+            "工作太满",
+            "会议太多",
+            "状态不好",
+            "状态不太好",
+            "状态一般",
+            "沮丧",
         )
     ):
         return "missed"
     if any(
         marker in clean
-        for marker in ("完成", "做完", "搞定", "已做", "打卡", "按计划", "done", "finished")
+        for marker in (
+            "完成",
+            "做完",
+            "练完",
+            "刷完",
+            "读完",
+            "听完",
+            "看完",
+            "学完",
+            "听写完",
+            "整理完",
+            "搭完",
+            "拍完",
+            "背完",
+            "跟读完",
+            "练习完",
+            "搞定",
+            "已做",
+            "打卡",
+            "按计划",
+            "done",
+            "finished",
+        )
     ):
         return "done"
     return "unclear"
@@ -1053,14 +1597,92 @@ def _progress_summary(title: str, progress: int, status: str) -> str:
 
 
 def _looks_like_goal_plan_request(text: str) -> bool:
-    if any(marker in text for marker in ("提醒我", "定时", "闹钟", "每隔", "明天")):
+    durable_markers = (
+        "学习",
+        "学",
+        "考证",
+        "证书",
+        "考试",
+        "备考",
+        "复习",
+        "英语",
+        "日语",
+        "编程",
+        "代码",
+        "开发",
+        "Python",
+        "React",
+        "前端",
+        "后端",
+        "健身",
+        "运动",
+        "跑步",
+        "减脂",
+        "增肌",
+        "\u666e\u62c9\u63d0",
+        "\u6838\u5fc3",
+        "\u4f53\u6001",
+        "\u8bad\u7ec3",
+        "\u7ec3\u4e60",
+        "写作",
+        "面试",
+        "转岗",
+        "项目",
+        "作品集",
+        "习惯",
+        "提升",
+        "达到",
+        "写完",
+        "做一个",
+        "\u7406\u8d22",
+        "\u6295\u8d44\u590d\u76d8",
+        "\u957f\u671f\u7406\u8d22",
+        "\u8d44\u4ea7\u8bb0\u5f55",
+        "\u51b3\u7b56\u590d\u76d8",
+        "TOEIC",
+        "toeic",
+        "\u542c\u529b",
+        "\u5206\u6570",
+        "\u63d0\u5206",
+    )
+    has_durable_goal = any(marker in text for marker in durable_markers)
+    if (
+        any(marker in text for marker in ("提醒我", "定时", "闹钟", "每隔", "明天", "到点叫"))
+        and not has_durable_goal
+    ):
         return False
     has_goal_marker = any(
-        marker in text for marker in ("我要", "我想", "我准备", "我打算", "目标", "监督我")
+        marker
+        in text
+        for marker in (
+            "我要",
+            "我想",
+            "\u6211\u60f3\u8981",
+            "\u6211\u5e0c\u671b",
+            "\u60f3\u8981",
+            "我准备",
+            "我打算",
+            "目标",
+            "监督我",
+            "帮我监督",
+            "帮我盯",
+        )
     )
-    has_plan_marker = any(marker in text for marker in ("计划", "规划", "制定", "安排"))
-    return has_goal_marker and has_plan_marker
-
+    support_markers = (
+        "计划",
+        "规划",
+        "制定",
+        "安排",
+        "监督",
+        "陪跑",
+        "\u966a\u7ec3",
+        "打卡",
+        "复盘",
+        "提醒",
+        "关心",
+    )
+    has_support_marker = any(marker in text for marker in support_markers)
+    return has_goal_marker and (has_support_marker or has_durable_goal)
 
 def _looks_like_goal_confirmation(text: str) -> bool:
     return any(
@@ -1174,6 +1796,14 @@ def _bundle_payload(bundle: GoalBundle) -> dict[str, Any]:
         "active_plan": bundle.active_plan.model_dump(mode="json") if bundle.active_plan else None,
         "plan_items": [item.model_dump(mode="json") for item in bundle.plan_items],
         "progress": bundle.progress.model_dump(mode="json") if bundle.progress else None,
+        "intake": bundle.intake.model_dump(mode="json") if bundle.intake else None,
+        "milestones": [item.model_dump(mode="json") for item in bundle.milestones],
+        "routines": [item.model_dump(mode="json") for item in bundle.routines],
+        "latest_intervention": (
+            bundle.latest_intervention.model_dump(mode="json")
+            if bundle.latest_intervention
+            else None
+        ),
     }
 
 

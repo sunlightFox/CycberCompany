@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-033",
+  "category": "监督陪跑",
+  "title": "陪我把账单核完，先做哪一步？",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：账单、第一步。\n陪我把账单核完，先做哪一步？",
+  "reply_text": "我接住这句：陪我把账单核完，先做哪一步？。\n\n这轮重点是账单、第一步；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e284460a40944c00bf5988f211e11d03",
+  "trace_id": "trc_2e9c8b4e91e3422a99769a0c41174a96",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

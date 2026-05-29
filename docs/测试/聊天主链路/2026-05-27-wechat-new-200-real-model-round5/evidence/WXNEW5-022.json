@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-022",
+  "category": "定时提醒",
+  "title": "每周三早上提醒我同步项目状态。",
+  "prompt": "处理提醒请求要说清时间、事项、边界；缺信息先问，不假装已创建。请自然提到：每周三、项目状态。\n每周三早上提醒我同步项目状态。",
+  "reply_text": "我还不能直接创建提醒，因为缺少具体时间。\n\n我已理解事项是：每周三早上提醒你同步项目状态。\n还需要你补一句：早上几点？ 比如 9:00 或 10:30。若有时区要求也一起告诉我。\n\n你确认后，我可以帮你整理成可复制到日历/提醒事项里的提醒内容。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_cf065f46d41245c28591453cd43130ea",
+  "trace_id": "trc_f81f86201c754f3fb0305f1c4ae756d6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

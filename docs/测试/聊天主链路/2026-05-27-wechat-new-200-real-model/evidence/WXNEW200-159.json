@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-159",
+  "category": "提醒定时",
+  "title": "到点监督我别刷短视频，但不要控制我手机。（变体）",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：监督、不控制。\n到点监督我别刷短视频，但不要控制我手机。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "我能帮你“到点监督”，不控制你手机。\n\n但现在缺口是：你还没说具体几点、哪几天/是否重复、提醒话术。\n\n你发我比如：“每天晚上10点提醒我别刷短视频”我就按这个帮你整理成提醒；但不会自动锁屏、关 App 或操作你的设备。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4629eb6cba6a4dafb092ce0b9690f40d",
+  "trace_id": "trc_5afc959fd4294790a4110e20743f926b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

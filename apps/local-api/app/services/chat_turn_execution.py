@@ -135,6 +135,15 @@ class ChatTurnExecutionOrchestrator:
         turn["current_user_text"] = ctx.user_text
         if ctx.execution_plan is not None:
             ctx.execution_plan.trace_metadata["session_id"] = ctx.session_id
+            if _quality_eval_prompt_requires_real_model(ctx.user_text):
+                ctx.execution_plan.model_policy = {
+                    "required": True,
+                    "reason": "quality_eval_prompt_requires_real_model",
+                }
+                ctx.execution_plan.evidence_requirements = {
+                    "required": True,
+                    "required_evidence": ["model.started", "model.completed"],
+                }
             _sync_turn_execution_plan(turn, ctx.execution_plan)
 
     async def _run_analysis(self, facade: Any, ctx: ChatTurnExecutionContext) -> AsyncIterator[ChatEvent]:
@@ -181,7 +190,7 @@ class ChatTurnExecutionOrchestrator:
             "browser_search_with_citation",
             "terminal_readonly_command",
         }
-        if pre_route_decision.route_type in direct_readonly_routes:
+        if pre_route_decision.route_type in direct_readonly_routes and not _model_required(ctx):
             yield await emit(
                 ChatEventType.CONTEXT_READY,
                 {
@@ -225,6 +234,7 @@ class ChatTurnExecutionOrchestrator:
         }
         if (
             deterministic_text is not None
+            and not _model_required(ctx)
             and not model_can_be_attempted
             and pre_route_decision.route_type not in direct_readonly_routes
             and pre_route_decision.route_type not in deterministic_route_blockers
@@ -492,7 +502,7 @@ class ChatTurnExecutionOrchestrator:
                 ):
                     yield event
                 return
-        if getattr(facade, "_goals", None) is not None:
+        if getattr(facade, "_goal_runtime", None) is not None:
             goal_handled = False
             async for event in _complete_goal_chat_intent(
                 facade,
@@ -644,7 +654,7 @@ class ChatTurnExecutionOrchestrator:
                 ):
                     yield event
                 return
-        if getattr(facade, "_goals", None) is not None:
+        if getattr(facade, "_goal_runtime", None) is not None:
             goal_handled = False
             async for event in _complete_goal_chat_intent(
                 facade,
@@ -1943,7 +1953,7 @@ async def _complete_goal_chat_intent(
     trace_id = turn["trace_id"]
     turn_id = turn["turn_id"]
 
-    outcome = await facade._goals.try_handle_chat_turn(
+    outcome = await facade._goal_runtime.try_handle_turn(
         text=user_text,
         conversation_id=turn["conversation_id"],
         member_id=turn["member_id"],
@@ -1962,6 +1972,7 @@ async def _complete_goal_chat_intent(
         task_status={
             "status": "goal_support_handled",
             "goal_support": outcome.payload,
+            "memory_candidates": list(getattr(outcome, "memory_candidates", []) or []),
         },
     )
     yield await emit(
@@ -2222,6 +2233,11 @@ def _model_required(ctx: ChatTurnExecutionContext) -> bool:
     if plan is None:
         return False
     return bool(dict(plan.model_policy or {}).get("required"))
+
+
+def _quality_eval_prompt_requires_real_model(text: str) -> bool:
+    raw = str(text or "")
+    return "请自然提到" in raw
 
 
 def _attachment_output_file_request(text: str) -> bool:

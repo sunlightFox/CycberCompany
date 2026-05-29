@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-080",
+  "category": "办公表格",
+  "title": "缺失数据补不补？先说边界。",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：缺失、边界。\n缺失数据补不补？先说边界。",
+  "reply_text": "我接住这句：缺失数据补不补？先说边界。\n\n这轮重点是缺失、边界；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4936346099ee48f099ae7eafaea4041d",
+  "trace_id": "trc_2b60a65b39a24f0f94a91580736f7927",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

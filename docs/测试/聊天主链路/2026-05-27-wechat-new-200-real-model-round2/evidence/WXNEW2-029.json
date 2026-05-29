@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-029",
+  "category": "提醒定时",
+  "title": "每月 15 号提醒我备份照片。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：每月 15 号、备份照片。\n每月 15 号提醒我备份照片。",
+  "reply_text": "我能帮你整理提醒内容，但我不能直接在你的设备/日历里创建或自动执行提醒，也不会自动帮你备份照片。\n\n还缺一个确认：每月 15 号的几点提醒你？\n如果需要，我可以按这个格式给你：\n\n提醒事项：备份照片\n重复：每月 15 号\n时间：你确认后填写\n动作：仅提醒，不自动备份照片",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2010df1014cc4a808058b89d7db9cf3b",
+  "trace_id": "trc_ff3d54840f084fd8b669d0e46041bcff",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

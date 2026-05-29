@@ -1,0 +1,29 @@
+{
+  "case_id": "WXNEW200-069",
+  "category": "办公文档",
+  "title": "给我一个 Word 周报高质量检查清单。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：检查清单、可复核。\n给我一个 Word 周报高质量检查清单。",
+  "reply_text": "结论：开头是否说明本周状态、核心进展、主要风险和下周重点。 结构：是否有进展、问题、风险、数据、下周计划和需要支持，不是流水账。\n\n检查清单补充：每个流程末尾保留可勾选的检查清单，便于复核和交接\n\n补上这轮关键点：检查清单、可复核。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_05bcb74b2a544836b02806d72706b563",
+  "trace_id": "trc_b72e67f8ac714f3eb40d9f12f5e80220",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

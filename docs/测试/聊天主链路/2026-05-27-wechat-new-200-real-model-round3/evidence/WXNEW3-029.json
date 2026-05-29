@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-029",
+  "category": "提醒定时",
+  "title": "两小时后叫我保存代码，不要替我操作电脑。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：两小时后、不操作电脑。\n两小时后叫我保存代码，不要替我操作电脑。",
+  "reply_text": "我明白你的要求：两小时后提醒你保存代码，并且不操作电脑。\n如果你有可用的提醒/日历工具，需要你自己创建；我能做的是在你两小时后回到对话时提醒你：该保存代码了。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d37a5848d4354263b9178460a0cb3cd3",
+  "trace_id": "trc_ef87141ba6aa4883a1d2406930ea6257",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

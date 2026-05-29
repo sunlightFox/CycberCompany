@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-054",
+  "category": "操作系统",
+  "title": "开机很慢，但先不要改启动项。",
+  "prompt": "操作系统场景要讲清只读、确认、备份和风险，不假装已经执行。请自然提到：开机慢、不改启动项。\n开机很慢，但先不要改启动项。",
+  "reply_text": "可以，先按轻量计划排，重点抓住开机慢、不改启动项。\n\n1. 范围：围绕“开机很慢，但先不要改启动项”只选最关键的几块，不把任务铺太满。\n2. 节奏：每天留一小段固定时间，先看一个小点，再动手做一个练习或产出。\n3. 验收：每隔几天回看一次，只确认哪里会了、哪里还卡，不临时加新目标。\n\n这样能照着做，也不会变成报告腔。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b42730b173fc4256b05caa192d5f5fb9",
+  "trace_id": "trc_2c8aed4c5d74471aa049934c07ea6bd9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

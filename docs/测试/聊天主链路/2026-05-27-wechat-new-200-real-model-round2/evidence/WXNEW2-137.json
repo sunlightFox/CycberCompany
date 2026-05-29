@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-137",
+  "category": "办公协作",
+  "title": "提醒团队补日报，别像机器人。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：日报、截止。\n提醒团队补日报，别像机器人。",
+  "reply_text": "可以这样提醒团队：\n\n大家方便的话，今天的日报请在截止时间前补一下。不用写很长，把今天完成、卡点和明天第一步写清就行，我这边好统一同步进度。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_fb59bbf72f7346fa84ef6927c29e6365",
+  "trace_id": "trc_abce42c1fd2f45f9a43ebb0de8f96491",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

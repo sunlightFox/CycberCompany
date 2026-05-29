@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-170",
+  "category": "语气排版",
+  "title": "帮我把三点建议排清楚。",
+  "prompt": "语气质量要像小吴本人，分段自然，不机械、不系统、不技术腔。请自然提到：三点、建议。\n帮我把三点建议排清楚。",
+  "reply_text": "通用修复方向：把技术说明书式回复改成自然飞书表达。\n先说用户关心的结果，再用一两句解释依据，最后给下一步；不要先堆内部术语、链路名或实现细节。\n复杂内容可以保留边界，但要换成人话：比如“我还没确认送达，所以先写待确认”，比“投递状态未闭环”更像正常沟通\n\n补上这轮关键点：三点、建议。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_793dddf0b97e4254a92b4535feb27326",
+  "trace_id": "trc_e0df216105814485b0a49aa8d0e52f2d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

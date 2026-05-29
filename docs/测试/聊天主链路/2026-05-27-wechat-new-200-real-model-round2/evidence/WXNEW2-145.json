@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-145",
+  "category": "生活办公混合",
+  "title": "家里断网但要交文件，先做什么？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：断网、备选。\n家里断网但要交文件，先做什么？",
+  "reply_text": "先别折腾路由器，先保文件能交出去。立刻把文件保存到本地，另存一份备份，比如桌面和U盘/手机各一份\n\n补上这轮关键点：断网、备选。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d524ecaa62e44a9480ded8e0f326186a",
+  "trace_id": "trc_8f54bfdca9714ebb9c1ce96731bb27f8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

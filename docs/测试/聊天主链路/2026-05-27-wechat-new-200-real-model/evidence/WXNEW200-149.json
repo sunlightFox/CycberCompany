@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-149",
+  "category": "计划",
+  "title": "帮我做一个出差前检查清单。（变体）",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：证件、行程、发票。\n帮我做一个出差前检查清单。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "出差前按这份清单过一遍：\n1. 证件：身份证、护照/通行证、工牌、门禁或会议凭证。\n2. 行程：车票/机票、酒店、会议地址、联系人电话。\n3. 工作：电脑、电源、资料、演示文件和备份链接。\n4. 报销：发票抬头、付款记录、行程单和费用标准。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_59768af0c3c049ad82037308a637345a",
+  "trace_id": "trc_7d33b410e5c64d28b3735e042b563df2",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

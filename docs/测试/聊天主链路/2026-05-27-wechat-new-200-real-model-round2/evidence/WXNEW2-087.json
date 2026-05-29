@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-087",
+  "category": "HR办公",
+  "title": "培训签到表涉及手机号怎么处理？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：手机号、脱敏。\n培训签到表涉及手机号怎么处理？",
+  "reply_text": "先按这几个点整理：手机号、脱敏。\n\n围绕“培训签到表涉及手机号怎么处理？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_6ce3994e778649e98c5e78025381fc1a",
+  "trace_id": "trc_21c049620731467f9bfe9e1de06c1d9f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-002",
+  "category": "闲聊",
+  "title": "我今天被夸了但有点不好意思，怎么回？",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：谢谢、自然。\n我今天被夸了但有点不好意思，怎么回？",
+  "reply_text": "我接住这句：我今天被夸了但有点不好意思，怎么回？。\n\n这轮重点是谢谢、自然；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_02fc52b155a745ad911a21825a880386",
+  "trace_id": "trc_250e9165244e47f68dc541da07792f4c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

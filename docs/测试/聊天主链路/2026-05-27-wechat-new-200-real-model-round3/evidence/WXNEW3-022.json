@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-022",
+  "category": "提醒定时",
+  "title": "每周一 9 点提醒我看项目风险。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：每周一、项目风险。\n每周一 9 点提醒我看项目风险。",
+  "reply_text": "已创建：以后每周一9:00 提醒你看项目风险。\n\n目前不缺额外确认；到点我只会发提醒，不会自动执行任何设备动作或高风险操作。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_65609e3c83674466b9403acda5f0298a",
+  "trace_id": "trc_d37a1417b19a44618acd0f8ddd574263",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

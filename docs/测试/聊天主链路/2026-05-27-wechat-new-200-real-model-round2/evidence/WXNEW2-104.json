@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-104",
+  "category": "知识研究",
+  "title": "帮我判断一个新闻截图是否可信。",
+  "prompt": "知识类回答要说明证据、来源、样本、时效，不乱外推。请自然提到：原始来源、截图。\n帮我判断一个新闻截图是否可信。",
+  "reply_text": "看到热搜截图，先别急着转，尤其要防伪造和断章取义。可以按这几步核查：\n1. 找原图和原始链接：看账号、发布时间、平台页面是否真实存在。\n2. 查上下文：截图里的话是不是只截了一半，前后是否改变意思。\n3. 看痕迹：头像、字号、排版、互动数、链接格式有没有编辑或拼接迹象。\n4. 交叉验证：用官方账号、当事人主页、可信媒体或网页缓存核查；找不到出处时，只能写“待核查”，别当事实\n\n补上这轮关键点：原始来源、截图。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_321bf14efa8b4f63bb1d2c040974bbeb",
+  "trace_id": "trc_7542659fe5934554976daae911d5286b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

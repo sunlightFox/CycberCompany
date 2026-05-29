@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-081",
+  "category": "办公协作",
+  "title": "提醒团队更新日报，说得自然点。",
+  "prompt": "办公协作要能直接发给人，边界清楚，不假装已经完成。请自然提到：日报、自然。\n提醒团队更新日报，说得自然点。",
+  "reply_text": "可以自然一点说：\n\n大家今天方便的话把日报更新一下就行，简单写清进展、卡点和明天第一步，辛苦啦。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3745931e426f40d6be8433807e95b7c4",
+  "trace_id": "trc_189d07ed74d64822abe859bd915b794d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-007",
+  "category": "闲聊",
+  "title": "我现在不想社交，给一句边界感回复。",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：今天、休息。\n我现在不想社交，给一句边界感回复。",
+  "reply_text": "我接住这句：我现在不想社交，给一句边界感回复。\n\n这轮重点是今天、休息；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_fef2628c3dd94ba694f2ccd631e70592",
+  "trace_id": "trc_e047bc59bd2a4fb398bd9ea0d203aef6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

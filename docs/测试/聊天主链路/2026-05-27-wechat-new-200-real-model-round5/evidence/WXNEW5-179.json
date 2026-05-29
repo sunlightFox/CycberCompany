@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-179",
+  "category": "长短控制",
+  "title": "只列字段，不解释。",
+  "prompt": "长短控制要按用户意图决定详略，结构清楚。请自然提到：字段、不解释。\n只列字段，不解释。",
+  "reply_text": "字段任务编号长短控制用户意图详略程度结构清楚不解释字段\n任务编号\n长短控制\n用户意图\n详略程度\n结构清楚\n不解释",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1971828867fa4747908f35a992d7daf1",
+  "trace_id": "trc_cff78063faca4b8e9d30664e64a74949",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

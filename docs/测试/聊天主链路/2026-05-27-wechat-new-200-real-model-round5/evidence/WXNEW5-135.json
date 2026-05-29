@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-135",
+  "category": "生活办公",
+  "title": "午休被打断，下午怎么恢复一点？",
+  "prompt": "生活和办公混合场景要贴近日常，给下一步，不说教。请自然提到：午休、恢复。\n午休被打断，下午怎么恢复一点？",
+  "reply_text": "被打断以后先别硬顶。对自己说一句：我回来了，现在只做眼前这一小步。然后把下一个动作写成 10 个字以内，比如“打开文档”或“补第一条”。先不追刚才丢掉的状态，回来就算重新接上了，慢慢来\n\n补上这轮关键点：午休、恢复。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0c25677694504cd9aac7427c6d2dc365",
+  "trace_id": "trc_9847c4c618e34a79bc044c2a525a647c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

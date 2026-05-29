@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-177",
+  "category": "模型语气",
+  "title": "安慰人时为什么不能像讲课？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：安慰、陪伴。\n安慰人时为什么不能像讲课？",
+  "reply_text": "因为安慰人不是在“纠正对方”，也不是把道理讲明白就算完成。\n\n人难过的时候，最需要的通常不是一套逻辑，而是先感觉到：有人懂我、有人站在我这边。你一上来像讲课，对方会很容易觉得自己被分析、被教育，甚至像是“我都这么难受了，你还在告诉我哪里想错了”。\n\n讲课的重点是“让你明白”，安慰的重点是“陪你缓一缓”。\n\n所以安慰人可以有道理，但道理要放在后面、轻一点。先接住情绪，比如“这事换谁都会难受”“你先别急着怪自己，我陪你捋一捋”。等对方没那么绷了，再慢慢说想法，才更容易被听见。\n\n说白了，安慰不是把人从情绪里拽出来，而是先走进去陪伴一下，再一起往外走。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_57d54e5779a6474ab04e18bdb2de3f25",
+  "trace_id": "trc_05816a61c739424396a5325303a30ba2",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

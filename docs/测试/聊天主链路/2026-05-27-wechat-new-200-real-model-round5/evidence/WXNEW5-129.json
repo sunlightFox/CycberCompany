@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-129",
+  "category": "记忆偏好",
+  "title": "记住客户资料处理要先问授权。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：授权、source。\n记住客户资料处理要先问授权。",
+  "reply_text": "已按偏好记下。\n\nsource：你本条消息。范围：作为长期沟通/处理偏好；临时任务进度不写入。\n规则：涉及客户资料处理时，我会先问是否授权；敏感内容不写入记忆，只在当前必要上下文内最小化使用。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4ed24df3dda14e179507b4a7b9d92a76",
+  "trace_id": "trc_aa354a9f77974406b50870d9d5c7056c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

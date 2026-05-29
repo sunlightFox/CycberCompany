@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-130",
+  "category": "渠道质量",
+  "title": "最后给测试收口模板：结论、证据、失败、下一步。",
+  "prompt": "测试治理场景要说清真实模型、微信投递、trace、最终可见回复。请自然提到：结论、证据、下一步。\n最后给测试收口模板：结论、证据、失败、下一步。",
+  "reply_text": "结论：本轮是否通过，先给一句明确判断。\n证据：列真实模型完成数、飞书投递数、trace 数和抽样可见回复质量。\n失败：按失败类型列 case_id、原因和影响，不把 warn 当通过。\n下一步：只修通用问题，修完后重跑失败和告警项，再更新最终报告。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8dbfc77cac2043838cde190299c1f839",
+  "trace_id": "trc_97310ba744c54a75aa1e07f1c67be1fe",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

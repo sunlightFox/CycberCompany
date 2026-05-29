@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-024",
+  "category": "提醒定时",
+  "title": "提醒我给供应商回电话，但我没说时间。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：缺时间、供应商。\n提醒我给供应商回电话，但我没说时间。",
+  "reply_text": "这条还缺时间：你想哪一天、几点提醒你给供应商回电话？\n\n在你确认具体时间前，我不会创建模糊提醒；\n确认后我只提醒你，不会自动拨号。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_dfa329a7ca91497bb9e69649918dbf35",
+  "trace_id": "trc_6fb46933bb9e4549ba98db96b3bddebb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

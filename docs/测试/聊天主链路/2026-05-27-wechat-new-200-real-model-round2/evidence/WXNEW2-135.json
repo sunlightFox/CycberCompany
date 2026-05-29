@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-135",
+  "category": "办公协作",
+  "title": "把会议改期通知写得简短。",
+  "prompt": "办公协作场景要可直接发、边界清楚、不假装完成。请自然提到：改期、新时间。\n把会议改期通知写得简短。",
+  "reply_text": "可以直接发：\n\n大家好，原定会议因安排调整需要改期，新时间为【填写新时间】。请大家提前预留时间，如有冲突请及时反馈。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_5c28756dbaa54d298ea25b1272dfa9b0",
+  "trace_id": "trc_7735ea81b01d4539b95e85cae81e723a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

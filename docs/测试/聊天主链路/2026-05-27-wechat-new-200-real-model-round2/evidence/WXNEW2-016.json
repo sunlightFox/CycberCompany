@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-016",
+  "category": "计划",
+  "title": "我下班后只剩两小时，怎么安排写材料？",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：两小时、材料。\n我下班后只剩两小时，怎么安排写材料？",
+  "reply_text": "可以按“先成稿、再修细”的思路来，不要一上来就追求完美。下班后只有两小时，重点是把材料先写出来。*前10 分钟：定框架先别急着写正文，打开文档把标题、背景、重点内容、结论/建议这几块列出来。\n如果材料有固定格式，就直接套格式；没有的话，先用“现状—问题—做法—结果/建议”来搭。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_400c8f9ce7a54b82882540745b34fe9f",
+  "trace_id": "trc_3fb74f7018394c9e9b842cc3b92d382f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

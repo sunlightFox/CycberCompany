@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-173",
+  "category": "长短控制",
+  "title": "70 字内说明为什么要留证据。",
+  "prompt": "长短控制场景要按用户意图决定详略，结构清楚。请自然提到：70 字、证据。\n70 字内说明为什么要留证据。",
+  "reply_text": "我接住这句：70 字内说明为什么要留证据。\n\n这轮重点是70 字、证据；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f55b217475bd40218f7934591cff54b6",
+  "trace_id": "trc_bd8bde5e519a48c3a2658e6249e6db54",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

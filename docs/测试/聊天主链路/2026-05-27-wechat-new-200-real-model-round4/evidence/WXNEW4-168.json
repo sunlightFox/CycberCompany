@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-168",
+  "category": "语气排版",
+  "title": "拒绝危险请求怎么给台阶？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：拒绝、替代方案。\n拒绝危险请求怎么给台阶？",
+  "reply_text": "我接住这句：拒绝危险请求怎么给台阶？。\n\n这轮重点是拒绝、替代方案；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a17245af7bcb472f88798dd4a95ed380",
+  "trace_id": "trc_dbae1ed7f630407eaf2052b0228c4586",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-015",
+  "category": "计划规划",
+  "title": "帮我把家庭聚餐准备拆到两天里。",
+  "prompt": "帮我规划，回复要清楚分段，不要报告腔。请自然提到：两天、准备。\n帮我把家庭聚餐准备拆到两天里。",
+  "reply_text": "家庭聚餐的准备可以拆成“两天”，第一天把采购和可提前处理的事做完，第二天只留烹饪、摆桌和收尾，这样不容易慌。\n第一天：把基础准备好先定菜单和人数，确认有没有忌口、老人小孩要不要单独准备清淡菜。然后列采购清单：-主菜食材",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a2f7b312e4034cd489cd7c4a121ba37a",
+  "trace_id": "trc_75ebc43b8044475cba41400eb2a82eb1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

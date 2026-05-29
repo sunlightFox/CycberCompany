@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-082",
+  "category": "HR招聘",
+  "title": "绩效沟通材料如何写清事实、贡献、问题和改进计划？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：事实、贡献、改进计划。\n绩效沟通材料如何写清事实、贡献、问题和改进计划？",
+  "reply_text": "绩效沟通材料可以按这四块写：\n1. 事实：只写可核验的信息，比如项目、时间、指标、交付物和反馈来源，避免先下评价。\n2. 贡献：对应目标写清产出、影响和协作价值，例如提升效率、稳定交付、支持团队或解决关键问题。\n3. 问题：描述差距和影响，区分能力、资源、优先级和沟通问题，不贴人格标签。\n4. 改进计划：写明下一阶段目标、动作、负责人、时间点和复盘方式。\n\n边界：绩效材料要让员工有补充事实的机会，涉及评级和奖惩前应由主管、人事和制度口径复核。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1e2208693b1f435eb991acb2922071f5",
+  "trace_id": "trc_4bb95cfac37d4b3b8a0ab8aa19dca17b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

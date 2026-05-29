@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-097",
+  "category": "HR管理",
+  "title": "培训名单有手机号，外发前怎么处理？",
+  "prompt": "HR 场景要有事实、边界、公平和复核。请自然提到：手机号、脱敏。\n培训名单有手机号，外发前怎么处理？",
+  "reply_text": "外发客户名单前先停一下。\n\n要检查授权范围、接收方、最小必要字段和用途；手机号、身份证、地址、合同编号等先脱敏。没有审批和脱敏记录前，不要直接外发原始名单。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2c82ffbeb0f9446182e7825de246eed0",
+  "trace_id": "trc_1042e45e35b04d708b8aa0da4da93081",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

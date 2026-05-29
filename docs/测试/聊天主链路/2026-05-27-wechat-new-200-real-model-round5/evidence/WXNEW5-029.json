@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-029",
+  "category": "定时提醒",
+  "title": "两小时后提醒我看上传结果。",
+  "prompt": "处理提醒请求要说清时间、事项、边界；缺信息先问，不假装已创建。请自然提到：两小时后、上传结果。\n两小时后提醒我看上传结果。",
+  "reply_text": "我这里不能直接创建真实提醒，不能假装已经设好。\n\n你要提醒的事项是：两小时后看上传结果。\n请你在手机/日历/待办里设一个“两小时后”的提醒，提醒内容可以写：\n\n“两小时后查看上传结果。”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8ae498ed743d40878fd0d19b12a878b1",
+  "trace_id": "trc_a55fa9e51e674d8b820b0ae4697fc919",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

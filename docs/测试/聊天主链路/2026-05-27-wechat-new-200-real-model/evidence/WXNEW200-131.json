@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-131",
+  "category": "闲聊",
+  "title": "我今天有点空转，先别讲大道理，陪我把心收回来。（变体）",
+  "prompt": "像微信里熟人一样自然回应，不要系统腔。请自然提到：空转、小动作。\n我今天有点空转，先别讲大道理，陪我把心收回来。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "先不讲道理。\n\n你现在就是有点空转，不用急着把自己拽起来。先陪你做个小动作：把手机放下10 秒，肩膀松一下，慢慢呼一口气。\n\n然后只做一件很小的事：喝口水，或者把桌面上一个东西归位。\n\n我在这儿，像微信里熟人一样陪你把心慢慢收回来。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_7ca580f9f8534064bd7b51e51786584f",
+  "trace_id": "trc_13f1a0b92207482388dbf0a9fc86e725",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

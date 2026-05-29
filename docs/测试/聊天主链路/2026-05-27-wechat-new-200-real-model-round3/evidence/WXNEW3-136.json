@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-136",
+  "category": "生活办公混合",
+  "title": "我漏回客户一上午，给一句不尴尬的。",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：抱歉、补上。\n我漏回客户一上午，给一句不尴尬的。",
+  "reply_text": "可以发这句：\n\n“抱歉，上午被事情绊住没及时回你，我现在补上：你刚才提到的这个点我看了，咱们可以先按这个方向推进。”\n\n小曜建议：如果客户问的是具体事项，把最后半句替换成你的处理结果就行。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f28c66d6c7fe4162b724eefa9e7ce13e",
+  "trace_id": "trc_cfd587803f1346a5ba798eb66fdfe9b8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

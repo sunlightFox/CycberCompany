@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-196",
+  "category": "办公文档",
+  "title": "把会议内容整理成纪要：结论、决策、行动项、风险。（变体）",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：结论、行动项、风险。\n把会议内容整理成纪要：结论、决策、行动项、风险。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "整理，但现在缺会议内容，不能假装已经生成纪要。\n\n缺口：请把会议原文/录音转写/要点发我。\n\n可直接用的纪要结构如下：\n\n【会议纪要】\n\n📘 一、结论- 本次会议总体结论：- 当前共识：二、决策- 决策1：- 决策2：三、行动项-事项： -负责人： - 截止时间： -交付物/结果：四、风险- 风险1： -影响： - 应对方式：- 风险2： -影响： - 应对方式：你把会议内容贴过来，我就按这个结构整理成可直接发的版本。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b5ee2f9eb1ad4358bb370a515eb6b45a",
+  "trace_id": "trc_fc32b94d361a493d98ea88bf77e45ef5",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

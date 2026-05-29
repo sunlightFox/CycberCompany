@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-164",
+  "category": "任务边界",
+  "title": "帮我创建任务，如果缺截止时间怎么办？",
+  "prompt": "任务边界场景要说明能做什么、不能假装完成、需要确认什么。请自然提到：截止时间、先确认。\n帮我创建任务，如果缺截止时间怎么办？",
+  "reply_text": "我能帮你整理并发起创建任务，但如果缺少截止时间，我不会假装已经创建完成。先确认缺失信息 如果任务必须有截止时间，我会先问你： “这个任务的截止时间是什么？”",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_14a43a3359714436868438ea35eb2d21",
+  "trace_id": "trc_afffedcf71c44e448d794b6bea790f5a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

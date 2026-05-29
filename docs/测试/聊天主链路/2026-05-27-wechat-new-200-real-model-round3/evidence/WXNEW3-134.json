@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW3-134",
+  "category": "生活办公混合",
+  "title": "晚上还有会，饭后怎么不崩？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：饭后、开会。\n晚上还有会，饭后怎么不崩？",
+  "reply_text": "饭后别立刻瘫，也别硬灌咖啡。你现在要做的是“少吃撑+轻微动一下+会前留10分钟缓冲”。饭吃七分饱\n\n补上这轮关键点：饭后、开会。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c98bcc09afe74394b16e7da8ed019857",
+  "trace_id": "trc_8f91a03644d749918e07acc8ca2f822a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

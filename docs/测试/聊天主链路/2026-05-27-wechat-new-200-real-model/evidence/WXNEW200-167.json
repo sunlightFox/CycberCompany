@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-167",
+  "category": "监督",
+  "title": "我写不下去，帮我用五分钟重启。（变体）",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：五分钟、重启。\n我写不下去，帮我用五分钟重启。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "先别硬写。小曜陪你做一个五分钟重启：\n\n1. 打开文档，只做一件事：写下“我现在卡在__”2.下面随便补三句，不求好： - 我想说的是 -这一段大概是 -先放一个很烂的版本：__3. 五分钟到就停，哪怕只写了半句也算重启成功。\n\n你现在缺的不是状态，是入口。先把第一句发我也行。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c98ff866659a4a2eb6a59e6338feba2f",
+  "trace_id": "trc_f6d2a9a4a4404440a457bfa1fd8634a6",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

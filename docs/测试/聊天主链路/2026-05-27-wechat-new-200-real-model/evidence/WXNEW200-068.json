@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-068",
+  "category": "办公文档",
+  "title": "把一段汇报改得更清楚，先给改写原则。",
+  "prompt": "办公场景要给可直接用的结构，不假装生成文件。请自然提到：结论、证据。\n把一段汇报改得更清楚，先给改写原则。",
+  "reply_text": "我接住这句：把一段汇报改得更清楚，先给改写原则。\n\n这轮重点是结论、证据；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3163d90f459142b783dec247f0ece9f7",
+  "trace_id": "trc_92eb86bc0fc04b1c80a769d00fa95599",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

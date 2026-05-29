@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-170",
+  "category": "语气排版",
+  "title": "编号太密怎么换行？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：编号、换行。\n编号太密怎么换行？",
+  "reply_text": "我接住这句：编号太密怎么换行？。\n\n这轮重点是编号、换行；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f321274fd36c411c99361c471efd3a2c",
+  "trace_id": "trc_a35774568598463297575d6068497d01",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

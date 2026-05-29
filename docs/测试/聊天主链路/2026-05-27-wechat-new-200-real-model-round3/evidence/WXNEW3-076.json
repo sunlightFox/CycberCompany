@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-076",
+  "category": "办公表格",
+  "title": "转化率要不要写分子分母？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：分子、分母。\n转化率要不要写分子分母？",
+  "reply_text": "我接住这句：转化率要不要写分子分母？。\n\n这轮重点是分子、分母；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0477a8a6ab02453ebc2017154d2c6c24",
+  "trace_id": "trc_e768371b097b4bc7b623b33bd5d67483",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

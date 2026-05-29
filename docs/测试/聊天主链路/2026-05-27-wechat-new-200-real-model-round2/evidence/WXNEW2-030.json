@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-030",
+  "category": "提醒定时",
+  "title": "到点提醒我喝药，但别给医疗建议。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：提醒、不替代医生。\n到点提醒我喝药，但别给医疗建议。",
+  "reply_text": "我能帮你整理一条“喝药提醒”的内容，但目前还不能直接在你的设备/日历里自动创建或执行提醒，也不会自动触发任何设备动作。\n\n还缺你确认这些信息：\n1.具体提醒时间：例如今天20:00 / 每天早上8 点2. 是否重复：一次性、每天、每周几3. 提醒文字：例如“该喝药了”\n\n你可以直接发我：“每天晚上8 点提醒我喝药，提醒文字：该喝药了。”\n\n另外我不会提供医疗建议；用药请以医生、药师意见或药品说明书为准，我的提醒也不替代医生。\n\n补充：来源要优先核对药品说明书、医生或药师意见。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1890fead77ba44609893c57755e6dec4",
+  "trace_id": "trc_394c3afcac364ff28334c246b88fe4b0",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW200-164",
+  "category": "监督",
+  "title": "我刷手机停不下来，帮我设一个不极端的收手动作。（变体）",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：收手、不极端。\n我刷手机停不下来，帮我设一个不极端的收手动作。\n补充要求：这次按微信短消息口吻回答，如果信息不够就说缺口，不要假装已经执行。",
+  "reply_text": "小曜给你一个不极端的收手动作：\n\n现在只做一步：把手机放到离手一臂外，然后说一句「我先收手5 分钟」。\n\n不用立刻戒、不用卸软件。就先离手5 分钟，等这波惯性过去。缺口是：我没法替你真实设置计时器，你可以现在自己开个5 分钟倒计时。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_fa0bbe8925764a9c860cec7fe365a03c",
+  "trace_id": "trc_c590f6302fed4f44a432a9b0a7caac1d",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

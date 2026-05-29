@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW200-076",
+  "category": "办公表格",
+  "title": "培训反馈怎么归类，避免泄露个人信息？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：归类、个人信息。\n培训反馈怎么归类，避免泄露个人信息？",
+  "reply_text": "培训反馈先做归类，不要贴个人标签。\n\n归类：按主题分，比如课程内容、讲师节奏、工具环境、后续支持。\n个人信息：姓名、手机号、部门小样本、原话里能识别身份的内容先脱敏。\n输出时只写趋势和代表性建议，不把单个人的尖锐意见暴露出来。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f1539d36b2bd412b91016072bbca1ee7",
+  "trace_id": "trc_5ac983d59179422595f0c8838d0f1226",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

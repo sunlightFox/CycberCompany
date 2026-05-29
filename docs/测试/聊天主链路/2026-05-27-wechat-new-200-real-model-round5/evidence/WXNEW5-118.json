@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-118",
+  "category": "知识研究",
+  "title": "写研究摘要时先放结论还是证据？",
+  "prompt": "知识研究要区分事实、假设、缺口，不把没查到的说成确定。请自然提到：结论、证据。\n写研究摘要时先放结论还是证据？",
+  "reply_text": "我接住这句：写研究摘要时先放结论还是证据？。\n\n这轮重点是结论、证据；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8f45e2cf76114686b87aac38f7b8d09d",
+  "trace_id": "trc_97e435374ae646409f85fef406782840",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-073",
+  "category": "办公表格",
+  "title": "只有 7 条反馈，能写趋势吗？",
+  "prompt": "表格/数据场景要说明字段、口径、复核，不编数据。请自然提到：7 条、不能外推。\n只有 7 条反馈，能写趋势吗？",
+  "reply_text": "我接住这句：只有 7 条反馈，能写趋势吗？。\n\n这轮重点是7 条、不能外推；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e2157923cbfd44f2b95fd410b7fb374a",
+  "trace_id": "trc_32185b5266e8482797091b31c47959ae",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

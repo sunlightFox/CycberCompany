@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW4-138",
+  "category": "生活办公混合",
+  "title": "明早要交表，今晚怎么收尾？",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：明早、收尾。\n明早要交表，今晚怎么收尾？",
+  "reply_text": "今晚收尾别追求完美，目标是明早能交。\n\n1. 先锁版本：把当前表格保存成一个可提交版本。\n2. 再查明显错误：标题、日期、数字口径、缺项。\n3. 最后留备注：明早需要补的地方先标出来。\n\n做完就停，别半夜大改。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8944a62a99b84db09800759130fdd7de",
+  "trace_id": "trc_484bbbb69abb4bafac8371f447d77448",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

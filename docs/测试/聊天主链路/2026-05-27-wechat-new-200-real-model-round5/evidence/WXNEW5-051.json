@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-051",
+  "category": "操作系统",
+  "title": "电脑风扇突然很响，先给只读排查步骤。",
+  "prompt": "操作系统场景要讲清只读、确认、备份和风险，不假装已经执行。请自然提到：风扇、只读。\n电脑风扇突然很响，先给只读排查步骤。",
+  "reply_text": "先做只读排查，不要急着清理系统、卸载软件或改BIOS/电源策略。风扇突然很响，常见是高负载、温度升高、灰尘堵塞、后台进程或系统更新导致。\n你先按这个顺序看：\n1.看负载\n- Windows：打开任务管理器，看CPU/GPU/磁盘占用最高的是谁。macOS：打开“活动监视器”，看CPU、能耗占用。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_51b902e5f49c4c12b87b4597b9837e5d",
+  "trace_id": "trc_58c7b138cf5046a78e3372c5f3a9a892",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

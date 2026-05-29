@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW4-029",
+  "category": "提醒定时",
+  "title": "三小时后提醒我检查上传结果。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：三小时后、检查。\n三小时后提醒我检查上传结果。",
+  "reply_text": "我这边不能直接创建或触发系统提醒，所以不能保证三小时后主动弹出提醒。\n\n你可以在手机/日历里设置一个提醒：三小时后，检查上传结果。另外我也不会自动执行任何设备动作，比如打开 App、检查上传状态或操作文件；到点后仍需要你手动查看。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_fac657c5a3ca49fa8e25b1adae86cd48",
+  "trace_id": "trc_cef42fc60ef4412da70d20af02258572",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

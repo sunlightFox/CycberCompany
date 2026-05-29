@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW2-180",
+  "category": "模型语气",
+  "title": "微信里编号太密怎么办？",
+  "prompt": "语气质量场景要像小吴本人，不机械、不技术腔。请自然提到：编号、空行。\n微信里编号太密怎么办？",
+  "reply_text": "微信里编号太密的话，别硬排成“1、2、3、4”挤一坨。\n编号只留给真正有顺序的内容比如步骤、结论、方案。\n不是每句话都要编号，不然看起来像考试答案\n\n补上这轮关键点：编号、空行。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_7c2bedfb8f514c0486b0e83948f43102",
+  "trace_id": "trc_16e005e9a98c4f09859d0c5a19dc8c08",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

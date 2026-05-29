@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-037",
+  "category": "监督",
+  "title": "陪我把拖延的报销做完，第一步是什么？",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：报销、第一步。\n陪我把拖延的报销做完，第一步是什么？",
+  "reply_text": "报销的第一步不是整理全部材料，是先把“入口”打开。\n\n现在只做这一步：打开报销系统/表格/小程序，停在新建报销单的页面。\n\n不用填完，不用找齐发票。你打开后回我一句“到了”，我再陪你做下一小步。\n\n勇者这才明白，最难打败的不是黑龙，而是拖延。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9fdb0f23dde54f74b2fd116c5c49fccc",
+  "trace_id": "trc_6f2727a7320446ab9d08534a7e6b7215",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

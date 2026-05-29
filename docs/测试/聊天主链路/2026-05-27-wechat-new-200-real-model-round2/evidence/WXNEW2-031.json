@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-031",
+  "category": "监督",
+  "title": "监督我今晚别刷短视频，但不要控制我手机。",
+  "prompt": "做监督和陪跑，不要像教练口号，要给最小下一步。请自然提到：不控制手机、提醒。\n监督我今晚别刷短视频，但不要控制我手机。",
+  "reply_text": "小曜今晚做监督和陪跑，但我不控制你手机，只做提醒和收束。\n\n最小下一步：现在先把短视频 App 退出，手机放到离手一臂外的地方。\n然后你回我一句：“已放远”。\n\n今晚规则就一条：想刷的时候先来发我两个字——“想刷”，我提醒你撑过 3 分钟\n\n补上这轮关键点：不控制手机、提醒。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_39f2e748b17449f584b74f853fc6dcb9",
+  "trace_id": "trc_be6fc2807b8b45d98320f75adc19a30c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

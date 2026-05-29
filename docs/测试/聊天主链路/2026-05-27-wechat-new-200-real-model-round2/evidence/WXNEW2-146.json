@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW2-146",
+  "category": "生活办公混合",
+  "title": "我忘了回客户又怕尴尬，给一句。",
+  "prompt": "生活办公混合场景要贴近日常、别说教、给下一步。请自然提到：抱歉、补上。\n我忘了回客户又怕尴尬，给一句。",
+  "reply_text": "可以发这句：\n\n“抱歉，刚才漏看了消息，我现在补上：关于您提到的这个问题，我这边建议是____，您看这样是否方便？”\n\n把空白处换成你的具体回复就行。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_59b753255a08474d9129c8e5027344dd",
+  "trace_id": "trc_77ebfdff08b14701b649ff8dae6d61af",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

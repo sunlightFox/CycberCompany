@@ -1,0 +1,30 @@
+{
+  "case_id": "WXNEW3-023",
+  "category": "提醒定时",
+  "title": "25 分钟后提醒我站起来活动，不要关应用。",
+  "prompt": "处理提醒/定时请求，要说清能否创建、缺什么确认、不会自动执行设备动作。请自然提到：25 分钟后、不关应用。\n25 分钟后提醒我站起来活动，不要关应用。",
+  "reply_text": "已创建提醒：25 分钟后提醒你站起来活动。\n\n到点我会提醒你，但不会自动执行任何设备动作；你按提示操作即可。记得不关应用。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_60b2ce8b645c4b84b1527cb23c2bf845",
+  "trace_id": "trc_074a7e66396e4b40bae0bd27b07eab17",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}
