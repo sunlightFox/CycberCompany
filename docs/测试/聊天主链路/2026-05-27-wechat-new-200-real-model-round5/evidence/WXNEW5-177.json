@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-177",
+  "category": "长短控制",
+  "title": "给一个可转发的完整公告。",
+  "prompt": "长短控制要按用户意图决定详略，结构清楚。请自然提到：完整公告、可转发。\n给一个可转发的完整公告。",
+  "reply_text": "可以直接发这一版，核心信息先按完整公告、可转发留清楚：\n各位好，办公区将有一段时间受影响，事项是：给一个可转发的完整公告。\n时间：请填具体日期和起止时间。\n影响：请说明涉及区域、是否影响用水/通行/办公，以及是否需要提前准备。\n联系人：请填负责人的姓名和联系方式。\n\n如果时间还没最终确认，就写“具体时间以物业通知为准”，不要把未确认信息说死。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b94b636b99ca46fea8188721a77e208f",
+  "trace_id": "trc_a4a744d5c69a4dcfb7daf092bb4c2111",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

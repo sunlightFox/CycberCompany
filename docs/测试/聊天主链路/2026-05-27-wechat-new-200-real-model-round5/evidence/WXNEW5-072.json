@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-072",
+  "category": "表格数据",
+  "title": "客户增长表缺样本量和统计口径，怎么提醒？",
+  "prompt": "表格和数据场景要说明字段、口径、复核，不编数据。请自然提到：样本量、统计口径。\n客户增长表缺样本量和统计口径，怎么提醒？",
+  "reply_text": "提醒时不要直接说“数据不对”，可以说“这张表还缺两个关键说明：样本量和统计口径，否则增长率容易被误读”。\n\n可以这样发：\n这版客户增长表我看了一下，字段本身没问题，但目前缺少样本量和统计口径说明。\n建议补充：本次统计覆盖多少客户/记录、时间范围是什么、客户增长的定义是新增客户数还是净增长客户数。\n另外最好标一下数据来源和复核人，避免后续解读时口径不一致。\n\n更口语一点：\n这张客户增长表建议再补两项说明：样本量和统计口径。\n比如统计了多少客户、统计周期是哪段、增长是按新增客户算还是净增客户算。\n不然单看增长数据，后面复盘时容易出现理解偏差。\n\n小曜建议你用第二版，比较自然，不像挑错。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_49920e7a41d745a39923b37380c439e1",
+  "trace_id": "trc_e15c93250b3f4ae9b61c834246b82dc9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

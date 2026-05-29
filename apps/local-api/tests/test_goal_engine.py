@@ -67,6 +67,9 @@ def test_goal_domain_registry_covers_common_goal_domains() -> None:
     assert registry.classify("\u6211\u60f3\u51c6\u5907 JLPT N2 \u65e5\u8bed\u9605\u8bfb") == "language_learning"
     assert registry.classify("\u6211\u8981\u51c6\u5907 DELE B1 \u897f\u73ed\u7259\u8bed\u8003\u8bd5") == "language_learning"
     assert registry.classify("\u6211\u60f3\u51c6\u5907 IELTS \u82f1\u8bed\u53e3\u8bed 7 \u5206") == "language_learning"
+    assert registry.classify("I want to prepare Cambridge B2 First English exam") == "language_learning"
+    assert registry.classify("\u6211\u8981\u51c6\u5907 YKI \u82ac\u5170\u8bed A2 \u8003\u8bd5") == "language_learning"
+    assert registry.classify("\u6211\u8981\u51c6\u5907 OET \u533b\u62a4\u82f1\u8bed\u8003\u8bd5") == "language_learning"
     assert registry.classify("\u6211\u60f3\u51c6\u5907 TEF Canada \u6cd5\u8bed\u542c\u529b\u548c\u53e3\u8bed") == "language_learning"
     assert registry.classify("\u6211\u8981\u51c6\u5907 CILS B1 \u610f\u5927\u5229\u8bed\u8003\u8bd5") == "language_learning"
     assert registry.classify("\u6211\u8981\u51c6\u5907 Goethe-Zertifikat B2 \u5fb7\u8bed\u8003\u8bd5") == "language_learning"
@@ -74,10 +77,15 @@ def test_goal_domain_registry_covers_common_goal_domains() -> None:
     assert registry.classify("\u6211\u60f3\u5b66 Kubernetes Prometheus Grafana \u53ef\u89c2\u6d4b\u6027") == "programming_learning"
     assert registry.classify("\u6211\u60f3\u5b66 LangChain RAG Chroma \u505a\u77e5\u8bc6\u5e93\u95ee\u7b54") == "programming_learning"
     assert registry.classify("\u6211\u60f3\u5b66 Blazor \u548c .NET \u505a\u6307\u6807\u770b\u677f") == "programming_learning"
+    assert registry.classify("I want to learn Deno and Fresh for an edge app") == "programming_learning"
+    assert registry.classify("I want to prepare Google Analytics Certification") == "exam_certification"
+    assert registry.classify("I want to prepare Certified Kubernetes Administrator") == "exam_certification"
+    assert registry.classify("I want to learn OpenTelemetry tracing") == "programming_learning"
     assert registry.classify("\u6211\u51c6\u5907 GRE \u9605\u8bfb\u548c\u5199\u4f5c") == "language_learning"
     assert registry.classify("\u6211\u60f3\u5b66\u8df3\u821e\uff0c\u63d0\u5347\u8282\u594f\u548c\u8eab\u4f53\u534f\u8c03") == "fitness"
     assert registry.classify("\u6211\u60f3\u7ec3\u6500\u5ca9\uff0c\u63d0\u5347\u63e1\u529b\u548c\u8def\u7ebf\u9605\u8bfb") == "fitness"
     assert registry.classify("\u6211\u60f3\u5efa\u7acb\u80a9\u9888\u62c9\u4f38\u548c\u653e\u677e\u4e60\u60ef") == "fitness"
+    assert registry.classify("\u6211\u60f3\u7ec3\u5f15\u4f53\u5411\u4e0a\u57fa\u7840\u529b\u91cf") == "fitness"
     assert registry.classify("\u6211\u60f3\u7ec3\u592a\u6781\u548c\u8eab\u4f53\u5e73\u8861") == "fitness"
     assert registry.classify("\u6211\u60f3\u5efa\u7acb\u6bcf\u5929\u559d\u6c34\u548c\u51cf\u5c11\u542b\u7cd6\u996e\u6599\u4e60\u60ef") == "fitness"
 
@@ -148,7 +156,9 @@ def test_goal_progress_evaluator_parses_natural_feedback_variants() -> None:
     assert evaluator.parse_status("\u4eca\u5929\u53c8\u5237\u77ed\u89c6\u9891\uff0c\u6ca1\u63a7\u5236\u4f4f") == "missed"
     assert evaluator.parse_status("\u4eca\u5929\u8fd8\u662f\u8d85\u65f6\u4e86\uff0c\u6709\u70b9\u6cae\u4e27") == "missed"
     assert evaluator.parse_status("\u4eca\u5929\u53c8\u5237\u77ed\u89c6\u9891\u5230\u4e00\u70b9\uff0c\u6ca1\u63a7\u5236\u4f4f") == "missed"
+    assert evaluator.parse_status("\u4eca\u5929\u6ca1\u51a5\u60f3\uff0c\u6574\u665a\u90fd\u5728\u8d76\u4e8b") == "missed"
     assert evaluator.parse_status("\u4eca\u5929\u5199\u5b8c\u4e86\u4e00\u7bc7\u8bae\u8bba\u6587\u63d0\u7eb2\u548c\u7b2c\u4e00\u6bb5") == "done"
+    assert evaluator.parse_status("\u4eca\u5929\u5199\u5b8c\u4e86\u76ee\u6807\u8fdb\u5c55\uff0c\u4f46\u963b\u788d\u548c\u4e0b\u5468\u91cd\u70b9\u8fd8\u6ca1\u6574\u7406") == "partial"
 
 
 def test_goal_engine_exam_intake_replan_and_timeline(client: TestClient) -> None:

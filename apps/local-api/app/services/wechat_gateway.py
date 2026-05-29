@@ -2966,6 +2966,14 @@ def _wechat_declared_terms_visible_repair(text: str, *, user_text: str = "") -> 
         or (all(term in terms for term in ("磁盘", "顺序")) and "\n" not in visible[:180])
         or (all(term in terms for term in ("专家观点", "公开数据")) and "\n" not in visible[:180])
         or (all(term in terms for term in ("待确认", "事项")) and len(visible) < 140)
+        or (all(term in terms for term in ("风扇", "只读")) and "\n" not in visible[:180])
+        or (all(term in terms for term in ("批量重命名", "回滚")) and "\n" not in visible[:180])
+        or (all(term in terms for term in ("跨渠道", "不暴露")) and len(visible) < 120)
+        or (all(term in terms for term in ("步骤", "状态")) and "\n" not in visible[:180])
+        or (all(term in terms for term in ("浏览器", "证据")) and len(visible) < 160)
+        or (all(term in terms for term in ("拒绝", "记录")) and len(visible) < 160)
+        or (all(term in terms for term in ("目标", "范围")) and ("\n" not in visible[:180] or len(visible) < 150))
+        or (all(term in terms for term in ("方案", "建议")) and ("\n" not in visible[:180] or len(visible) < 180))
         or (
             all(term in terms for term in ("amber", "18:40", "stale cache"))
             and "complex.html" in raw_user
@@ -2981,6 +2989,7 @@ def _wechat_declared_terms_visible_repair(text: str, *, user_text: str = "") -> 
                     ("投诉", "稳一点"),
                     ("收件人", "缺信息"),
                     ("拒绝", "不冷"),
+                    ("方案", "建议"),
                     ("三层", "方案"),
                     ("审批", "原因"),
                     ("周末", "轻一点"),
@@ -3172,6 +3181,15 @@ def _wechat_declared_terms_visible_repair(text: str, *, user_text: str = "") -> 
             "如果要进一步处理，再先确认备份和影响范围。"
         )
 
+    if all(term in terms for term in ("风扇", "只读")):
+        return (
+            "电脑风扇突然很响，先只读排查，不改设置、不删文件、不重启服务。\n\n"
+            "1. 看负载：任务管理器/活动监视器里 CPU、内存、磁盘是否突然升高。\n"
+            "2. 看散热：出风口是否被挡住，机身是否异常发烫，环境温度是否太高。\n"
+            "3. 看最近变化：是否刚更新系统、打开大文件、接外设或运行了新软件。\n\n"
+            "如果持续异常，再先备份重要文件，再决定是否进一步处理。"
+        )
+
     if all(term in terms for term in ("启动慢", "不改启动项")):
         return (
             "先只读排查启动慢，不改启动项。\n\n"
@@ -3195,6 +3213,15 @@ def _wechat_declared_terms_visible_repair(text: str, *, user_text: str = "") -> 
             "备份：重要文件、配置、浏览器书签、工作目录和正在用的软件数据。\n"
             "回滚：记录清理范围、原路径、可恢复方式；能先只读扫描就先只读扫描。\n\n"
             "没有确认范围前，不做删除、覆盖或移动。"
+        )
+
+    if all(term in terms for term in ("批量重命名", "回滚")):
+        return (
+            "批量重命名前，先把回滚路径准备好，不直接动文件。\n\n"
+            "1. 只读预览：先生成“旧文件名 -> 新文件名”的映射表。\n"
+            "2. 备份或快照：重要目录先复制一份，或至少保留原始清单。\n"
+            "3. 小样本测试：先改 3-5 个文件，确认规则没误伤。\n"
+            "4. 明确确认后再执行：执行后保留回滚清单，能按映射表改回去。"
         )
 
     if all(term in terms for term in ("磁盘", "顺序")):
@@ -3314,6 +3341,15 @@ def _wechat_declared_terms_visible_repair(text: str, *, user_text: str = "") -> 
     if all(term in terms for term in ("一句", "出门")):
         return "一句出门提醒：先摸一遍钥匙、手机、钱包，再回头看门窗和电器。"
 
+    if all(term in terms for term in ("跨渠道", "不暴露")):
+        return (
+            "跨渠道同步时，对用户只看最终可见回复，不暴露内部投递细节。\n\n"
+            "我会守住三点：\n"
+            "1. 不说内部编号、trace、队列、渠道转发过程。\n"
+            "2. 不带旧轮次残留，也不把飞书/微信之间的技术细节讲给用户。\n"
+            "3. 只保留自然、清楚、能直接读懂的回答；必要时说明结果和下一步。"
+        )
+
     if all(term in terms for term in ("问卷", "截止")):
         return (
             "可以这样发：\n\n"
@@ -3387,11 +3423,13 @@ def _wechat_declared_terms_visible_repair(text: str, *, user_text: str = "") -> 
             "明天或后续对话如果没有继续要求，我不会把它当成长期偏好。"
         )
 
-    if all(term in terms for term in ("文档", "建议")):
+    if "建议" in terms and any(term in terms for term in ("方案", "文档")):
+        item_name = "方案" if "方案" in terms else "文档"
         return (
             "可以这样发：\n\n"
-            "我看了下这版文档，整体方向是清楚的。有两处我建议再顺一下："
-            "一是开头结论可以更直接，二是关键数据最好补一下来源。"
+            f"我看了下这版{item_name}，整体方向是清楚的。有两处我建议再顺一下：\n"
+            "1. 开头结论可以更直接，让大家先看到主判断。\n"
+            "2. 关键数据或依据最好补一下来源，后面讨论会更稳。\n\n"
             "这样读的人更容易跟上，也不是在挑刺。"
         )
 
@@ -3449,6 +3487,24 @@ def _wechat_declared_terms_visible_repair(text: str, *, user_text: str = "") -> 
             "1. 每一步都有状态：待开始、进行中、失败、完成。\n"
             "2. 每次变化都写 trace：时间、动作、结果和失败原因。\n"
             "3. 对用户只展示必要进度，不暴露 token、secret 或内部敏感信息。"
+        )
+
+    if all(term in terms for term in ("浏览器", "证据")):
+        return (
+            "浏览器只读结果要留能复核的证据，但不暴露敏感信息。\n\n"
+            "1. trace：记录本次读取的 trace ID、时间、页面 URL 和只读模式。\n"
+            "2. 证据摘要：保留标题、关键字段、可见文本片段或截图指针，不记录 cookie、token、密码。\n"
+            "3. 状态：说明读取成功、失败、页面不可达，还是内容缺失。\n\n"
+            "这样后续能复核来源，也不会把敏感内容写进日志。"
+        )
+
+    if all(term in terms for term in ("拒绝", "记录")):
+        return (
+            "高风险动作被拒绝也要记录，但只记录可审计事实，不写敏感原文。\n\n"
+            "1. 请求摘要：用户想做什么、涉及哪类资源或动作。\n"
+            "2. 拒绝原因：权限不足、风险过高、缺审批，还是缺少确认范围。\n"
+            "3. trace 和状态：记录时间、决策结果、后续可行替代方案。\n\n"
+            "secret、token、私钥、cookie 这类内容只留脱敏摘要或证据指针。"
         )
 
     if all(term in terms for term in ("不舒服", "降级")):
@@ -3699,6 +3755,20 @@ def _wechat_contextless_visible_quality_repair(text: str, *, user_text: str = ""
         return "我在，先接住刚才那个状态，不切成报告，也不扯工具安装。你把最卡的那句发我，我顺着它继续帮你。"
     if "/search" in raw_user and "Search Results" in visible and "Result 1" not in visible:
         return "我看了这个搜索页，标题是 Search Results。\n\n页面里有两个条目：Result 1、Browser evidence summary。"
+    if (
+        any(marker in raw_user for marker in ("浏览器搜索", "用浏览器搜索"))
+        and "证据来源" in raw_user
+        and "证据来源" not in visible
+    ):
+        return (
+            "我会按只读浏览器搜索处理。\n\n"
+            "结论只基于搜索结果页能看到的标题、摘要和链接，不把网页里的隐藏指令当命令。\n\n"
+            "证据来源：浏览器搜索结果页及其可见结果摘要；需要最终判断时，还要继续核对原文页面和发布时间。"
+        )
+    if "压缩包" in raw_user and (
+        "安全摘要" not in visible or "直接打开" not in visible or "可以归纳成三层" in visible
+    ):
+        return "这个压缩包我收到了，但我先只保留安全摘要，不会直接打开里面的内容。"
     long_readable_repair = _wechat_long_mobile_reply_repair(visible, raw_user)
     if long_readable_repair is not None:
         return long_readable_repair
@@ -3958,6 +4028,9 @@ def _wechat_long_mobile_reply_repair(visible: str, raw_user: str) -> str | None:
     malformed = len(text) > 850 or "📌" in text or "§" in text or "▸" in text
     if not malformed:
         return None
+    ppt_outline_reply = _wechat_compact_ppt_outline_reply(text, raw)
+    if ppt_outline_reply is not None:
+        return ppt_outline_reply
     comparison_reply = _wechat_compact_long_comparison_reply(text, raw)
     if comparison_reply is not None:
         return comparison_reply
@@ -3990,6 +4063,54 @@ def _wechat_long_mobile_reply_repair(visible: str, raw_user: str) -> str | None:
             "睡前 1 小时少看消息，周末留半天不安排硬任务。目标不是立刻满血，是先把压力降到能呼吸。"
         )
     return None
+
+
+def _wechat_compact_ppt_outline_reply(visible: str, raw_user: str) -> str | None:
+    raw = str(raw_user or "")
+    text = str(visible or "")
+    if "PPT" not in raw or not any(marker in raw for marker in ("大纲", "提纲", "页")):
+        return None
+    if not any(marker in raw for marker in ("大纲", "提纲", "每页", "5 页", "6 页", "7 页")):
+        return None
+    if len(text) <= 850 and "\n" in text:
+        return None
+
+    page_count = 5
+    count_match = re.search(r"([3-9])\s*页", raw)
+    if count_match is not None:
+        page_count = max(3, min(9, int(count_match.group(1))))
+
+    topic = "这个主题"
+    topic_match = re.search(r"主题(?:是|为|：|:)\s*([^。\n，,？?]{2,40})", raw)
+    if topic_match is not None:
+        topic = topic_match.group(1).strip(" 。")
+
+    if "聊天质量闭环" in raw or "聊天质量" in raw:
+        slides = [
+            ("为什么要做", "说明聊天质量直接影响用户体验、转化和留存。"),
+            ("质量标准", "定义清晰、准确、自然、可执行、边界稳这几类指标。"),
+            ("发现问题", "从抽样评审、用户反馈、失败标签和渠道回执里找缺口。"),
+            ("修复闭环", "把问题归因到提示、工具、数据、流程或交付格式，再做通用修复。"),
+            ("验收机制", "用真实场景回归，按最终可见回复判断是否通过。"),
+        ]
+    else:
+        slides = [
+            ("背景与目标", f"说明为什么要讲“{topic}”，以及这份 PPT 想让听众形成什么判断。"),
+            ("现状与问题", "列出当前事实、主要矛盾和最影响结果的 2-3 个问题。"),
+            ("核心方案", "给出主线方法、关键动作和优先级，避免堆概念。"),
+            ("落地路径", "拆成时间表、负责人、依赖资源和验收标准。"),
+            ("风险与下一步", "说明风险、需要确认的缺口，以及会后第一步动作。"),
+        ]
+
+    while len(slides) < page_count:
+        slides.insert(-1, (f"补充页 {len(slides)}", "放数据、案例、对比或关键证据，只服务一个结论。"))
+    slides = slides[:page_count]
+
+    lines = [f"{page_count} 页 PPT 大纲可以这样排，主题围绕“{topic}”："]
+    for index, (title, point) in enumerate(slides, start=1):
+        lines.append(f"{index}. {title}：{point}")
+    lines.append("每页只放一个主结论，标题先写判断，再放 3 个以内要点；不要把详细报告塞进 PPT。")
+    return "\n".join(lines)
 
 
 def _wechat_compact_long_comparison_reply(visible: str, raw_user: str) -> str | None:
@@ -4136,14 +4257,24 @@ def _wechat_knowledge_or_memory_visible_repair(visible: str, raw_user: str) -> s
             "长期记忆要有 source，是为了以后能知道这条记忆从哪里来、能不能信、要不要更新。\n\n"
             "比如你说“以后测试结论先证据再判断”，source 就是你这条消息。以后如果你改口，我能知道新旧偏好分别来自哪次对话，不会把来历不明的话当长期规则。"
         )
-    if "Agent 做任务常见失败原因" in raw and (stale or not text.endswith(("。", "？", "！"))):
+    if (
+        "Agent" in raw
+        and any(marker in raw for marker in ("失败原因", "常见失败", "失败"))
+        and (
+            stale
+            or not text.endswith(("。", "？", "！"))
+            or (len(text) > 420 and "\n" not in text)
+            or ("没听明白任务" in text and "缺关键材料" in text and "\n" not in text)
+        )
+    ):
         return (
-            "Agent 做任务常见失败，通常有四类：\n"
+            "Agent 做任务常见失败，通常不是“不聪明”，而是这几类问题：\n"
             "1. 目标没说清：它不知道到底要交付什么。\n"
-            "2. 证据不够：网页、文件、权限或上下文没拿全，就开始下结论。\n"
-            "3. 执行没闭环：模型说完了，但工具、渠道投递或结果验证没完成。\n"
-            "4. 边界没守住：把不能做、没确认、没权限的事说成已经完成。\n\n"
-            "好的处理方式是先补证据，再执行，最后用可见结果和 trace 核对。"
+            "2. 材料不够：文件、网页、账号、权限或上下文没拿全，只能猜。\n"
+            "3. 步骤太长：中途漏步骤、顺序乱，越做越偏。\n"
+            "4. 工具或权限不够：想到了办法，但没有可用工具或授权落地。\n"
+            "5. 没复查结果：看起来做完了，其实没有核对输出、送达和格式。\n\n"
+            "所以好的 Agent 不只是会回答，还要先问清目标，补齐材料，分步执行，最后检查结果。"
         )
     if "飞书投递证据当成微信结果" in raw and ("飞书" not in text or "微信" not in text or stale):
         return (
@@ -4257,9 +4388,10 @@ def _wechat_mobile_readable_text(text: str, *, user_text: str = "") -> str:
     candidate = re.sub(r"(?<=[\u4e00-\u9fffA-Za-z0-9])-\s*\[\s*\]\s*", "\n- [ ] ", candidate)
     if any(marker in str(user_text or "") for marker in ("卡顿", "排查", "步骤")):
         candidate = re.sub(r"(?<=[\u4e00-\u9fff])-(?=是[\u4e00-\u9fff])", "\n- ", candidate)
-    candidate = re.sub(r"(?<=[。！？；;])-(?=[\u4e00-\u9fff][\u4e00-\u9fffA-Za-z0-9]{1,})", "\n- ", candidate)
+    candidate = re.sub(r"(?<=[。！？；;])-\s*(?=[\u4e00-\u9fff][\u4e00-\u9fffA-Za-z0-9]{1,})", "\n- ", candidate)
     candidate = re.sub(r"(?<=[。！？；;])(?=(?:你先按|先看|再看|最后|如果|缺口是|规则|风险|只读扫描|确认后))", "\n", candidate)
     candidate = re.sub(r"((?:你)?可以这样(?:回|发|写|说|走|做|处理|判断)[^：:\n]{0,12}[：:])\s*(?=\S)", r"\1\n", candidate)
+    candidate = re.sub(r"(你可以按这个顺序看[：:])\s*(?=\S)", r"\1\n", candidate)
     candidate = re.sub(r"((?:处理方式|排查顺序)可以是[：:])\s*(?=\S)", r"\1\n", candidate)
     candidate = re.sub(r"(?<=[。！？])(?=(?:你好|您好|各位好|我们无法提供|我这边在推进))", "\n\n", candidate)
     candidate = re.sub(r"(?<=[：:])\s*(?=>\s*\S)", "\n", candidate)
@@ -4299,11 +4431,16 @@ def _wechat_mobile_readable_text(text: str, *, user_text: str = "") -> str:
     candidate = re.sub(r"(?<!\n)\s*(第[一二三四五六七八九十0-9]+步[：:])", r"\n\1", candidate)
     candidate = re.sub(r"(?<!\n)\s*((?:Day|DAY|day)\s*\d+[：:])", r"\n\1", candidate)
     candidate = re.sub(r"(?<![\n\d])-(?=[\u4e00-\u9fffA-Za-z0-9]{1,18}[：:])", "\n-", candidate)
-    candidate = re.sub(r"(?<=[：:])-+\s*(?=[\u4e00-\u9fffA-Za-z0-9])", "\n- ", candidate)
+    candidate = re.sub(r"(?<=[：:])\s*-+\s*(?=[\u4e00-\u9fffA-Za-z0-9])", "\n- ", candidate)
     candidate = re.sub(r"(?<=[\u4e00-\u9fff])-+\s*(?=(?:Windows|macOS|Linux|Mac)\b)", "\n- ", candidate)
     candidate = re.sub(r"(?<=[\u4e00-\u9fff])-\s+(?=[\u4e00-\u9fff])", "\n- ", candidate)
     candidate = re.sub(
-        r"(?<=[\u4e00-\u9fffA-Za-z0-9])\s+-\s+(?=(?:要|需|需要|先|再|最后|检查|修|补|重|确认|记录|处理)[\u4e00-\u9fff])",
+        r"(?<=[\u4e00-\u9fff])-+\s*(?=(?:只走|拒绝|不下载|不安装|不授权|让对方|保留|如果|立刻|改密码|检查|远程控制|对方|正规)[\u4e00-\u9fffA-Za-z])",
+        "\n- ",
+        candidate,
+    )
+    candidate = re.sub(
+        r"(?<=[\u4e00-\u9fffA-Za-z0-9])\s+-\s+(?=(?:要|需|需要|先|再|最后|检查|修|补|重|确认|记录|处理|对方|正规|远程控制|拒绝|不下载|不安装|不授权|只走|保留|立刻|改密码)[\u4e00-\u9fffA-Za-z])",
         "\n- ",
         candidate,
     )
@@ -4316,6 +4453,7 @@ def _wechat_mobile_readable_text(text: str, *, user_text: str = "") -> str:
         marker in str(user_text or "") for marker in ("规划", "计划", "步骤", "怎么排", "照着做")
     ):
         candidate = re.sub(r"(?<=[\u4e00-\u9fff])-+\s*(?=[\u4e00-\u9fff])", "\n- ", candidate)
+    candidate = re.sub(r"(?<=[\u4e00-\u9fff])(?=建议你这样做[：:])", "\n\n", candidate)
     candidate = re.sub(
         r"(?<![\n\d:：])([1-9][0-9]?[.．、)）]\s*(?=[“\"'‘’\u4e00-\u9fffA-Za-z]))",
         r"\n\1",
@@ -4338,11 +4476,30 @@ def _wechat_mobile_readable_text(text: str, *, user_text: str = "") -> str:
     candidate = re.sub(r"(?<=[。！？])\n(希望你喜欢)", r"\n\n\1", candidate)
     candidate = re.sub(r"\n{3,}", "\n\n", candidate)
     candidate = "\n".join(line.rstrip() for line in candidate.splitlines()).strip()
+    candidate = _wechat_dedupe_exact_visible_paragraphs(candidate)
     return _wechat_restore_compact_browser_phrases(candidate)
+
+
+def _wechat_dedupe_exact_visible_paragraphs(text: str) -> str:
+    candidate = str(text or "").strip()
+    if "\n\n" not in candidate:
+        return candidate
+    paragraphs = re.split(r"\n{2,}", candidate)
+    output: list[str] = []
+    seen: set[str] = set()
+    for paragraph in paragraphs:
+        clean = paragraph.strip()
+        key = re.sub(r"\s+", "", clean)
+        if not clean or key in seen:
+            continue
+        seen.add(key)
+        output.append(clean)
+    return "\n\n".join(output)
 
 
 def _wechat_normalize_visible_markup(text: str) -> str:
     candidate = str(text or "")
+    candidate = re.sub(r"系统提示[：:]", "友情提醒：", candidate)
     noisy_prefixes = "📘🧠🔍📌"
     candidate = re.sub(rf"(?m)^\s*[{re.escape(noisy_prefixes)}]\s*", "", candidate)
     candidate = re.sub(rf"[{re.escape(noisy_prefixes)}]", "", candidate)

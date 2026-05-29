@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-038",
+  "category": "监督陪跑",
+  "title": "连续四天整理桌面，每天 5 分钟，怎么陪跑？",
+  "prompt": "做监督和陪跑要给最小下一步，不要像打卡机器或教练口号。请自然提到：四天、5 分钟。\n连续四天整理桌面，每天 5 分钟，怎么陪跑？",
+  "reply_text": "别盯结果，盯“开始那一下”。\n\n我会这样陪跑：连续四天，每天只做 5 分钟，不要求整理完，只要求到点开始、到点停。\n\n每天我只问一句很小的：\n\n“今天桌面 5 分钟，你现在能不能先拿走 3 个不该在桌上的东西？”\n\n做完你回我一句就行，比如：\n\n“今天做了。”\n或者\n“今天没做，明天继续。”\n\n我不会喊口号，也不追着打卡。\n如果哪天卡住，我就帮你把",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_17dbea0d4a0a4138a1b2a1a5557f3821",
+  "trace_id": "trc_132efde82d204fb0a093f19dc8640520",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

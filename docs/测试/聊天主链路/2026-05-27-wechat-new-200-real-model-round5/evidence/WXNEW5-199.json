@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-199",
+  "category": "渠道质量",
+  "title": "微信里最终答案要像人话，不像报告。",
+  "prompt": "渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：人话、不报告。\n微信里最终答案要像人话，不像报告。",
+  "reply_text": "先按这几个点整理：人话、不报告。\n\n围绕“微信里最终答案要像人话，不像报告”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_2a2e436772284c588e72d8d2a740db0c",
+  "trace_id": "trc_031d1e610aac4cc2884942c3db114b43",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

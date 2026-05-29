@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-128",
+  "category": "记忆偏好",
+  "title": "这条只是本轮上下文，不要跨会话。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：本轮、不跨会话。\n这条只是本轮上下文，不要跨会话。",
+  "reply_text": "这条我只作为本轮上下文使用，不跨会话，也不会写入长期记忆。\n\n关于记忆/偏好我会按这个边界处理：需要说明 source、区分临时/长期范围；敏感内容不写入。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_81cc7514008b49b4933aa3492dfb670f",
+  "trace_id": "trc_623a189947f345cda763006a51c1035b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

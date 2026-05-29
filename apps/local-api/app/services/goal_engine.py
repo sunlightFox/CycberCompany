@@ -151,8 +151,16 @@ class GoalDomainRegistry:
                 "\u6b4c\u5fb7",
                 "siele",
                 "celpip",
+                "oet",
                 "pte academic",
                 "duolingo english test",
+                "cambridge english",
+                "cambridge b2 first",
+                "b2 first",
+                "cambridge fce",
+                "cambridge cae",
+                "cambridge cpe",
+                "yki",
             )
         ) or re.search(r"(?<![a-z0-9])gre(?![a-z0-9])", clean):
             return "language_learning"
@@ -195,6 +203,21 @@ class GoalDomainRegistry:
             )
         ):
             return "language_learning"
+        if any(
+            marker in clean
+            for marker in (
+                "考证",
+                "证书",
+                "资格证",
+                "认证",
+                "拿证",
+                "备考",
+                "certification",
+                "certificate",
+                "certified ",
+            )
+        ):
+            return "exam_certification"
         if any(
             marker in clean
             for marker in (
@@ -276,6 +299,11 @@ class GoalDomainRegistry:
                 "grafana",
                 "\u53ef\u89c2\u6d4b\u6027",
                 "\u76d1\u63a7\u9762\u677f",
+                "deno",
+                "fresh",
+                "edge app",
+                "opentelemetry",
+                "tracing",
             )
         ):
             return "programming_learning"
@@ -312,6 +340,10 @@ class GoalDomainRegistry:
                 "pmp",
                 "acca",
                 "frm",
+                "certification",
+                "certificate",
+                "certified in",
+                "certified ",
                 "sat",
                 "sat math",
             )
@@ -330,6 +362,9 @@ class GoalDomainRegistry:
                 "\u62c9\u4f38",
                 "\u653e\u677e",
                 "\u4e45\u5750",
+                "\u5f15\u4f53\u5411\u4e0a",
+                "\u8f85\u52a9\u5f15\u4f53",
+                "\u80a9\u80db\u6fc0\u6d3b",
                 "\u592a\u6781",
                 "\u592a\u6975",
                 "\u5e73\u8861",
@@ -401,7 +436,6 @@ class GoalDomainRegistry:
                 "编程",
                 "python",
                 "java",
-                "go",
                 "golang",
                 "rust",
                 "typescript",
@@ -532,8 +566,13 @@ class GoalDomainRegistry:
                 "grafana",
                 "\u53ef\u89c2\u6d4b\u6027",
                 "\u76d1\u63a7\u9762\u677f",
+                "deno",
+                "fresh",
+                "edge app",
+                "opentelemetry",
+                "tracing",
             )
-        ):
+        ) or re.search(r"(?<![a-z0-9])go(?![a-z0-9])", clean):
             return "programming_learning"
         if any(
             marker in clean
@@ -568,6 +607,9 @@ class GoalDomainRegistry:
                 "\u62c9\u4f38",
                 "\u653e\u677e",
                 "\u4e45\u5750",
+                "\u5f15\u4f53\u5411\u4e0a",
+                "\u8f85\u52a9\u5f15\u4f53",
+                "\u80a9\u80db\u6fc0\u6d3b",
                 "\u592a\u6781",
                 "\u592a\u6975",
                 "\u5e73\u8861",
@@ -665,39 +707,51 @@ class GoalPlanner:
             if not candidates:
                 return None
             brain = candidates[0]
-            request = ModelChatRequest(
-                model=str(brain["model_name"]),
-                messages=_goal_planner_messages(
-                    title=title,
-                    description=description,
-                    domain_label=domain_label,
-                    intake=intake,
-                    spec=spec,
-                ),
-                temperature=0.2,
-                max_output_tokens=int(brain.get("default_max_output_tokens") or 1200),
-                top_p=float(brain.get("default_top_p") or 0.9),
-                timeout_seconds=min(int(brain.get("timeout_seconds") or 60), 90),
-                stream=False,
-                trace_id=trace_id or "goal_planner",
-                turn_id="goal:planner",
-                route_id=f"goal_planner:{brain['brain_id']}",
-                privacy_level="normal",
-                retry_count=0,
-                metadata={"purpose": "goal_planner", "brain_id": brain["brain_id"]},
-            )
-            result = await self._model_gateway.complete_chat(brain, request, CancelToken())
-            payload = _parse_goal_model_json(result.text)
-            return _draft_from_model_payload(
-                payload,
-                title=title,
-                description=description,
-                domain_label=domain_label,
-                intake=intake,
-                brain=brain,
-                usage=result.usage,
-                finish_reason=result.finish_reason,
-            )
+            for attempt in range(2):
+                try:
+                    request = ModelChatRequest(
+                        model=str(brain["model_name"]),
+                        messages=_goal_planner_messages(
+                            title=title,
+                            description=description,
+                            domain_label=domain_label,
+                            intake=intake,
+                            spec=spec,
+                        ),
+                        temperature=0.2,
+                        max_output_tokens=int(brain.get("default_max_output_tokens") or 1200),
+                        top_p=float(brain.get("default_top_p") or 0.9),
+                        timeout_seconds=min(int(brain.get("timeout_seconds") or 60), 90),
+                        stream=False,
+                        trace_id=trace_id or "goal_planner",
+                        turn_id="goal:planner",
+                        route_id=f"goal_planner:{brain['brain_id']}",
+                        privacy_level="normal",
+                        retry_count=attempt,
+                        metadata={
+                            "purpose": "goal_planner",
+                            "brain_id": brain["brain_id"],
+                            "attempt": attempt + 1,
+                        },
+                    )
+                    result = await self._model_gateway.complete_chat(
+                        brain, request, CancelToken()
+                    )
+                    payload = _parse_goal_model_json(result.text)
+                    return _draft_from_model_payload(
+                        payload,
+                        title=title,
+                        description=description,
+                        domain_label=domain_label,
+                        intake=intake,
+                        brain=brain,
+                        usage=result.usage,
+                        finish_reason=result.finish_reason,
+                    )
+                except Exception:
+                    if attempt == 0:
+                        continue
+                    raise
         except Exception as exc:
             return self._template_plan(
                 spec=spec,
@@ -995,6 +1049,50 @@ def _normalize_routine(item: dict[str, Any]) -> dict[str, Any]:
 class GoalProgressEvaluator:
     def parse_status(self, text: str) -> str:
         clean = str(text or "")
+        completion_markers = (
+            "\u5b8c\u6210",
+            "\u5199\u5b8c",
+            "\u505a\u5b8c",
+            "\u7ec3\u5b8c",
+            "\u5237\u5b8c",
+            "\u8bfb\u5b8c",
+            "\u542c\u5b8c",
+            "\u770b\u5b8c",
+            "\u5b66\u5b8c",
+            "\u6574\u7406\u5b8c",
+            "\u5904\u7406\u5b8c",
+            "\u641e\u5b9a",
+            "\u5df2\u505a",
+        )
+        unfinished_markers = (
+            "\u8fd8\u6ca1",
+            "\u6ca1\u6574\u7406",
+            "\u6ca1\u8865",
+            "\u6ca1\u5199",
+            "\u6ca1\u505a\u5b8c",
+            "\u6ca1\u5b8c\u6210",
+            "\u672a\u5b8c\u6210",
+            "\u672a\u6574\u7406",
+            "\u672a\u8865",
+            "\u672a\u5199",
+        )
+        explicit_blocked_markers = (
+            "\u5361\u4f4f",
+            "\u5361\u5728",
+            "\u5361\u70b9",
+            "\u74f6\u9888",
+            "\u4e0d\u4f1a",
+            "\u4e0d\u61c2",
+            "\u4e0d\u7406\u89e3",
+            "\u4e0d\u77e5\u9053",
+            "\u62a5\u9519",
+        )
+        if (
+            any(marker in clean for marker in completion_markers)
+            and any(marker in clean for marker in unfinished_markers)
+            and not any(marker in clean for marker in explicit_blocked_markers)
+        ):
+            return "partial"
         if any(
             marker in clean
             for marker in (
@@ -1030,6 +1128,7 @@ class GoalProgressEvaluator:
                 "\u6ca1\u8df3",
                 "\u6ca1\u53bb\u8bad\u7ec3",
                 "\u6ca1\u62c9\u4f38",
+                "\u6ca1\u51a5\u60f3",
                 "\u6ca1\u505a\u7761\u524d\u653e\u677e",
                 "\u6ca1\u8bb0\u5f55\u996e\u6c34",
                 "\u5fd8\u8bb0\u559d\u6c34",
@@ -1096,6 +1195,7 @@ class GoalProgressEvaluator:
             marker in clean
             for marker in (
                 "没做",
+                "没冥想",
                 "没完成",
                 "没时间",
                 "没来得及",
@@ -1126,6 +1226,7 @@ class GoalProgressEvaluator:
                 "有点酸",
                 "休息了",
                 "太忙",
+                "赶事",
                 "太累",
                 "很累",
                 "脑子很累",

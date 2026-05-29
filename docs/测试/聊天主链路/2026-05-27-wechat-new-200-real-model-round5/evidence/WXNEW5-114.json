@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-114",
+  "category": "知识研究",
+  "title": "帮我把一篇文章提炼成可验证假设。",
+  "prompt": "知识研究要区分事实、假设、缺口，不把没查到的说成确定。请自然提到：假设、验证。\n帮我把一篇文章提炼成可验证假设。",
+  "reply_text": "我会先把材料压成结论、原因、影响和下一步四块，而不是只复述原文。结论放最前面，原因按人、流程、信息和外部约束分层，影响只保留会改变判断的部分，最后给出可执行的补证或推进动作\n\n补上这轮关键点：假设、验证。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_662e238dfcd74db0851eac481342e0f1",
+  "trace_id": "trc_ffbbbc4b8707488faff45d5f6bbeac65",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

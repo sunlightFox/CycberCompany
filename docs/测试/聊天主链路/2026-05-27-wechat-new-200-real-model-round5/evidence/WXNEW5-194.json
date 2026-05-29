@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-194",
+  "category": "渠道质量",
+  "title": "用户只发一个问号，要自然接住。",
+  "prompt": "渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：问号、接住。\n用户只发一个问号，要自然接住。",
+  "reply_text": "一个问号我接住了。\n\n你是想让我继续刚才的话题，还是帮你把这句改成更自然的微信回复？",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_cb29e9a4095d463f895ad006e4cfb928",
+  "trace_id": "trc_eb8749e8a082449b888b7f028c6e3324",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

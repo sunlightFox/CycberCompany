@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-100",
+  "category": "HR管理",
+  "title": "员工反馈很尖锐，怎么转成可处理问题？",
+  "prompt": "HR 和管理场景要公平、谨慎、基于事实，不贴标签。请自然提到：尖锐、可处理。\n员工反馈很尖锐，怎么转成可处理问题？",
+  "reply_text": "我接住这句：员工反馈很尖锐，怎么转成可处理问题？。\n\n这轮重点是尖锐、可处理；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_db757a07e1004cd9ab42ea1a7d8a458b",
+  "trace_id": "trc_e049251f5b85482b83f77feb70a10431",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

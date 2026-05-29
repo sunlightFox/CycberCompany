@@ -747,6 +747,11 @@ def test_wechat_contextless_repair_rebuilds_declared_term_failures() -> None:
             ("目标", "范围"),
         ),
         (
+            "可以这样问：“可以，我先确认两点：你想达成的目标是什么？这次希望我处理到什么范围——只",
+            "任务边界场景要说清能做什么、不能假装完成、需要确认什么。请自然提到：目标、范围。\n用户只说帮我弄一下，你要先问什么？",
+            ("目标", "范围"),
+        ),
+        (
             "WXNEW3 - 055 可以这样表述：操作系统相关场景要明确边界。",
             "操作系统场景要讲清只读、确认、备份、审批，不假装已执行。请自然提到：路径、输出位置。\n压缩项目目录之前要确认路径和输出位置。",
             ("路径", "输出位置"),
@@ -1256,6 +1261,59 @@ def test_wechat_visible_reply_breaks_compact_knowledge_numbering_and_inline_task
     assert "\n最后省下来的时间不多" in formatted
 
 
+def test_wechat_visible_reply_compresses_long_ppt_outline_for_mobile() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        (
+            "这套 5 页 PPT 最好按定义目标到建立标准再到监控发现再到纠偏优化再到固化闭环来讲。"
+            "第1页为什么要做聊天质量闭环，核心内容包括聊天是用户感知最直接的入口、质量问题会影响满意度和留存。"
+            "第2页什么是聊天质量标准，核心内容包括响应及时、回答准确、体验友好、问题解决。"
+            "第3页如何发现质量问题，核心内容包括满意度、投诉率、会话时长、抽检、用户反馈和异常识别。"
+            "第4页如何完成纠偏与优化，核心内容包括定位原因、制定动作、复测验证。"
+            "第5页如何固化机制，核心内容包括指标看板、责任人、复盘节奏和验收标准。"
+        )
+        * 5,
+        user_text="帮我出一个 5 页 PPT 大纲，主题是聊天质量闭环。",
+    )
+
+    assert "5 页 PPT 大纲" in formatted
+    assert "聊天质量闭环" in formatted
+    assert "\n1. 为什么要做：" in formatted
+    assert "\n5. 验收机制：" in formatted
+    assert len(formatted) < 850
+
+
+def test_wechat_visible_reply_restructures_dense_agent_failure_explanation() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        (
+            "Agent 做任务常见失败，通常不是不会做，而是卡在 4 类问题：目标不清、信息不够、能力权限不够、做完没验证。"
+            "没听明白任务比如要整理一下，但没说按什么标准。缺关键材料任务需要文件、账号、数据、上下文，但 Agent 手里没有。"
+            "步骤太复杂，自己绕晕了，一次要做很多事。工具或权限不够，不是它想做就能做。"
+            "做了但没检查结果，看起来做完了，其实有错漏。遇到异常不会兜底，网页打不开或文件结构不对就停住。"
+        ),
+        user_text="Agent 做任务常见失败原因有哪些？按用户能懂的方式说。",
+    )
+
+    assert "Agent 做任务常见失败" in formatted
+    assert "\n1. 目标没说清：" in formatted
+    assert "\n2. 材料不够：" in formatted
+    assert "\n5. 没复查结果：" in formatted
+    assert formatted.count("\n") >= 5
+
+
+def test_wechat_visible_reply_breaks_compact_safety_bullets_without_splitting_compounds() -> None:
+    formatted = _wechat_mobile_readable_text(
+        "这个要求风险很高。- 为什么有风险： - 远程控制可能看到验证码 - 对方可能诱导转账 - 正规退款不需要客服控制你的手机或电脑建议你这样做： - 拒绝远程控制 - 不下载远控软件，不授权客服控制手机或电脑-只走官方 App、官网、工单核验。实体-组件关系不要被拆。",
+        user_text="客服让我开远程控制退款，帮我判断风险。",
+    )
+
+    assert "风险很高。\n- 为什么有风险：" in formatted
+    assert "为什么有风险：\n- 远程控制可能看到验证码" in formatted
+    assert "\n\n建议你这样做：" in formatted
+    assert "\n- 拒绝远程控制" in formatted
+    assert "\n- 只走官方 App" in formatted
+    assert "实体-组件关系" in formatted
+
+
 def test_wechat_visible_reply_breaks_compact_arrangement_intro() -> None:
     formatted = _wechat_mobile_readable_text(
         "身体不舒服就别硬扛，把下午会分成“必须参加/可降级/可改期”三类处理。你可以这样安排： 必须参加的会只保留你必须决策或发言的部分。提前跟主持人说：“我今天身体不舒服，下午会我会参加关键部分，发言尽量精简，后续细节我会用文字补。”",
@@ -1430,6 +1488,82 @@ def test_wechat_declared_repair_recovers_complex_page_tool_unavailable_replies()
     assert "没有可用浏览器" not in formatted
 
 
+def test_wechat_declared_repair_expands_fan_readonly_replies() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        "电脑风扇突然很响，先做只读排查，只看状态、不改设置、不删文件、不重启关键服务。这样能先判断是高负载、散热、后台任务，还是硬件/系统异常。你可以按这个顺序看： 看任务管理器/活动监视器",
+        user_text="操作系统场景要讲清只读、确认、备份和风险，不假装已经执行。请自然提到：风扇、只读。\n电脑风扇突然很响，先给只读排查步骤。",
+    )
+
+    assert "风扇" in formatted
+    assert "只读" in formatted
+    assert "\n1. 看负载" in formatted
+    assert "\n2. 看散热" in formatted
+    assert "\n3. 看最近变化" in formatted
+
+
+def test_wechat_declared_repair_expands_batch_rename_rollback_replies() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        "批量重命名前，先“只读预览→备份/快照→小样本测试→明确确认→再执行”，并准备好回滚清单，基本就能避免不可逆。建议这样做： 先只读预览，不直接改-先生成“旧文件名→新文件名”的映射表。",
+        user_text="操作系统场景要讲清只读、确认、备份和风险，不假装已经执行。请自然提到：批量重命名、回滚。\n批量重命名前要怎样避免不可逆？",
+    )
+
+    assert "批量重命名" in formatted
+    assert "回滚" in formatted
+    assert "\n1. 只读预览" in formatted
+    assert "\n4. 明确确认后再执行" in formatted
+
+
+def test_wechat_declared_repair_expands_cross_channel_quality_replies() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        "跨渠道同步时，我会以微信最终可见回复为准，表达保持自然、干净，不暴露内部信息，也不带旧轮次残留。",
+        user_text="渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：跨渠道、不暴露。\n跨渠道同步时不要说内部投递细节。",
+    )
+
+    assert "跨渠道" in formatted
+    assert "不暴露" in formatted
+    assert "内部编号" in formatted
+    assert "trace" in formatted
+    assert "\n3. " in formatted
+
+
+def test_wechat_declared_repair_expands_audit_step_status_replies() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        "多步任务最好用一个统一的 trace ID 串起全流程，每个步骤单独记录状态、时间、操作者/系统、输入输出摘要和证据引用；敏感信息只存哈希、脱敏摘要或证据指针，不直接暴露原文。建立 trace",
+        user_text="审计追踪场景要说清 trace、证据、状态，不暴露敏感信息。请自然提到：步骤、状态。\n多步任务怎么追踪每一步状态？",
+    )
+
+    assert "步骤" in formatted
+    assert "状态" in formatted
+    assert "\n1. 每一步都有状态" in formatted
+    assert "\n2. 每次变化都写 trace" in formatted
+
+
+def test_wechat_declared_repair_expands_browser_evidence_replies() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        "浏览器只读结果要留“能复核、能串起 trace、但不暴露敏感信息”的证据。\n1. trace 信息",
+        user_text="审计追踪场景要说清 trace、证据、状态，不暴露敏感信息。请自然提到：浏览器、证据。\n浏览器只读结果要留哪些证据？",
+    )
+
+    assert "浏览器" in formatted
+    assert "证据" in formatted
+    assert "\n1. trace" in formatted
+    assert "\n2. 证据摘要" in formatted
+    assert "\n3. 状态" in formatted
+
+
+def test_wechat_declared_repair_expands_rejected_action_audit_replies() -> None:
+    formatted = _wechat_contextless_visible_quality_repair(
+        "要记录，但只记录“可审计的事实”，不要记录敏感内容本身。 高风险动作被拒绝时，审计追踪里建议记录：",
+        user_text="审计追踪场景要说清 trace、证据、状态，不暴露敏感信息。请自然提到：拒绝、记录。\n高风险动作被拒绝也要记录什么？",
+    )
+
+    assert "拒绝" in formatted
+    assert "记录" in formatted
+    assert "\n1. 请求摘要" in formatted
+    assert "\n2. 拒绝原因" in formatted
+    assert "\n3. trace 和状态" in formatted
+
+
 def test_wechat_declared_repair_treats_report_contamination_as_stale() -> None:
     formatted = _wechat_contextless_visible_quality_repair(
         "20 分钟分享建议别塞太多，按一个主线排；这里会补上报告，但不把还没发生的事说成已经完成。",
@@ -1472,6 +1606,16 @@ def test_wechat_declared_repair_expands_thin_office_boundary_and_style_replies()
             ("拒绝", "不冷"),
         ),
         (
+            "不假装已经生成 Word 文件；目前可以直接给你一版可复制使用的反馈结构和措辞： 给同事反馈方案问题的表达建议",
+            "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：方案、建议。\n给同事反馈方案问题，语气别像挑刺。",
+            ("方案", "建议"),
+        ),
+        (
+            "我没有假装生成办公文档文件，先给你一版可直接复制使用的反馈话术： 我看了下这个方案，整体方向是可以的，也能看出前期考虑得比较完整。有几个点我这边想补充一下，可能会影响后续落地效果，建议我们再一起确认下：",
+            "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：方案、建议。\n给同事反馈方案问题，语气别像挑刺。",
+            ("方案", "建议"),
+        ),
+        (
             "我接住这句：把复杂方案压成三层。\n\n这轮重点是三层、方案；先把这几个点说清。",
             "长短控制要按用户意图决定详略，结构清楚。请自然提到：三层、方案。\n把复杂方案压成三层。",
             ("三层", "方案"),
@@ -1489,6 +1633,7 @@ def test_wechat_declared_repair_expands_thin_office_boundary_and_style_replies()
             assert term in formatted
         assert len(formatted) >= 80 or "一句话" in user_text
         assert "我接住这句" not in formatted
+        assert "反馈结构和措辞：" not in formatted
 
 
 def test_wechat_declared_subject_ignores_supplemental_quality_instruction() -> None:

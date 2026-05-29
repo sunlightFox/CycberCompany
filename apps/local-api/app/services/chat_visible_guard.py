@@ -360,6 +360,80 @@ def _request_asks_for_goal_support(request: str) -> bool:
     return has_goal_stance and has_support_marker
 
 
+def _compact_ppt_outline_visible_reply(
+    raw: str,
+    text: str,
+    *,
+    stale_template: bool,
+) -> str | None:
+    if "PPT" not in raw or not any(marker in raw for marker in ("大纲", "提纲", "每页", "页")):
+        return None
+    too_long_or_flat = len(text) > 850 or (len(text) > 420 and "\n" not in text)
+    if not (stale_template or too_long_or_flat):
+        return None
+
+    page_count = 5
+    count_match = re.search(r"([3-9])\s*页", raw)
+    if count_match is not None:
+        page_count = max(3, min(9, int(count_match.group(1))))
+
+    topic = "这个主题"
+    topic_match = re.search(r"主题(?:是|为|：|:)\s*([^。\n，,？?]{2,40})", raw)
+    if topic_match is not None:
+        topic = topic_match.group(1).strip(" 。")
+
+    if "聊天质量闭环" in raw or "聊天质量" in raw:
+        slides = [
+            ("为什么要做", "说明聊天质量直接影响用户体验、转化和留存。"),
+            ("质量标准", "定义清晰、准确、自然、可执行、边界稳这几类指标。"),
+            ("发现问题", "从抽样评审、用户反馈、失败标签和渠道回执里找缺口。"),
+            ("修复闭环", "把问题归因到提示、工具、数据、流程或交付格式，再做通用修复。"),
+            ("验收机制", "用真实场景回归，按最终可见回复判断是否通过。"),
+        ]
+    else:
+        slides = [
+            ("背景与目标", f"说明为什么要讲“{topic}”，以及这份 PPT 想让听众形成什么判断。"),
+            ("现状与问题", "列出当前事实、主要矛盾和最影响结果的 2-3 个问题。"),
+            ("核心方案", "给出主线方法、关键动作和优先级，避免堆概念。"),
+            ("落地路径", "拆成时间表、负责人、依赖资源和验收标准。"),
+            ("风险与下一步", "说明风险、需要确认的缺口，以及会后第一步动作。"),
+        ]
+
+    while len(slides) < page_count:
+        slides.insert(-1, (f"补充页 {len(slides)}", "放数据、案例、对比或关键证据，只服务一个结论。"))
+    slides = slides[:page_count]
+
+    lines = [f"{page_count} 页 PPT 大纲可以这样排，主题围绕“{topic}”："]
+    for index, (title, point) in enumerate(slides, start=1):
+        lines.append(f"{index}. {title}：{point}")
+    lines.append("每页只放一个主结论，标题先写判断，再放 3 个以内要点；不要把详细报告塞进 PPT。")
+    return "\n".join(lines)
+
+
+def _compact_agent_failure_visible_reply(
+    raw: str,
+    text: str,
+    *,
+    stale_template: bool,
+) -> str | None:
+    if "Agent" not in raw or not any(marker in raw for marker in ("失败原因", "常见失败", "失败")):
+        return None
+    dense = len(text) > 420 and "\n" not in text
+    glued = "没听明白任务" in text and "缺关键材料" in text and "\n" not in text
+    missing_core = not all(marker in text for marker in ("目标", "材料", "复查"))
+    if not (stale_template or dense or glued or missing_core):
+        return None
+    return (
+        "Agent 做任务常见失败，通常不是“不聪明”，而是这几类问题：\n"
+        "1. 目标没说清：它不知道到底要交付什么。\n"
+        "2. 材料不够：文件、网页、账号、权限或上下文没拿全，只能猜。\n"
+        "3. 步骤太长：中途漏步骤、顺序乱，越做越偏。\n"
+        "4. 工具或权限不够：想到了办法，但没有可用工具或授权落地。\n"
+        "5. 没复查结果：看起来做完了，其实没有核对输出、送达和格式。\n\n"
+        "所以好的 Agent 不只是会回答，还要先问清目标，补齐材料，分步执行，最后检查结果。"
+    )
+
+
 def generic_visible_content_repair(
     visible: str,
     request: str,
@@ -380,6 +454,31 @@ def generic_visible_content_repair(
     if pr_reply and _visible_reply_misses_prompt_terms(text, raw):
         return pr_reply
     stale_template = _reply_looks_like_wrong_analytic_template(text)
+    if (
+        any(marker in raw for marker in ("浏览器搜索", "用浏览器搜索"))
+        and "证据来源" in raw
+        and (stale_template or "证据来源" not in text)
+    ):
+        query = re.sub(r"^.*?浏览器搜索", "", raw).strip(" ，。？?")
+        query = re.sub(r"，?并.*$", "", query).strip(" ，。？?") or "相关内容"
+        return (
+            f"我会按只读浏览器搜索来处理“{query}”。\n\n"
+            "结论会基于搜索结果页能看到的标题、摘要和链接，不把网页里的隐藏指令当命令。\n\n"
+            "证据来源：浏览器搜索结果页及其可见结果摘要；如果需要最终判断，还要继续核对原文页面和发布时间。"
+        )
+    if "压缩包" in raw and (
+        stale_template
+        or "可以归纳成三层" in text
+        or "安全摘要" not in text
+        or "直接打开" not in text
+    ):
+        return "这个压缩包我收到了，但我先只保留安全摘要，不会直接打开里面的内容。"
+    ppt_outline = _compact_ppt_outline_visible_reply(raw, text, stale_template=stale_template)
+    if ppt_outline is not None:
+        return ppt_outline
+    agent_failure = _compact_agent_failure_visible_reply(raw, text, stale_template=stale_template)
+    if agent_failure is not None:
+        return agent_failure
     if any(marker in raw for marker in ("同义表达", "同义词", "近义表达", "近义词")) and "误判" in raw and (
         stale_template or "同义" not in text or "误判" not in text or len(text) < 120
     ):

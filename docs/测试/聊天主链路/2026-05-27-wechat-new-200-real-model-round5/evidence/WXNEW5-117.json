@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-117",
+  "category": "知识研究",
+  "title": "专家观点和公开数据不一致，怎么处理？",
+  "prompt": "知识研究要区分事实、假设、缺口，不把没查到的说成确定。请自然提到：专家观点、公开数据。\n专家观点和公开数据不一致，怎么处理？",
+  "reply_text": "专家观点和公开数据不一致时，先别急着二选一。\n\n1. 先看事实：公开数据的来源、时间、样本、统计口径是什么。\n2. 再看假设：专家观点基于经验判断、局部样本，还是不同定义。\n3. 最后列缺口：还缺哪份数据、哪段时间或哪个口径，才能判断谁更适用。\n\n结论可以写成“当前存在口径差异，需补证据后再判断”，不要把没查到的说成确定。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4498e8c3a9da46a887126178a1efe728",
+  "trace_id": "trc_c3c6947abfbd420792c61ddf01925cd8",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-120",
+  "category": "知识研究",
+  "title": "把风险写成待核查，不要吓人。",
+  "prompt": "知识研究要区分事实、假设、缺口，不把没查到的说成确定。请自然提到：待核查、风险。\n把风险写成待核查，不要吓人。",
+  "reply_text": "我接住这句：把风险写成待核查，不要吓人。\n\n这轮重点是待核查、风险；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_63fdbc4e6d3347888b8adcc3c835153e",
+  "trace_id": "trc_4cf276b5cb414d688812951556d76697",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

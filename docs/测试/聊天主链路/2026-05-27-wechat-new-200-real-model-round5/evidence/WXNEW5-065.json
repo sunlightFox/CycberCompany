@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-065",
+  "category": "办公文档",
+  "title": "帮我写办公区停水通知，包含时间、影响、联系人。",
+  "prompt": "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：时间、影响、联系人。\n帮我写办公区停水通知，包含时间、影响、联系人。",
+  "reply_text": "可以直接发这一版，核心信息先按时间、影响、联系人留清楚：\n各位好，办公区将有一段时间受影响，事项是：帮我写办公区停水通知，包含时间、影响、联系人。\n时间：请填具体日期和起止时间。\n影响：请说明涉及区域、是否影响用水/通行/办公，以及是否需要提前准备。\n联系人：请填负责人的姓名和联系方式。\n\n如果时间还没最终确认，就写“具体时间以物业通知为准”，不要把未确认信息说死。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0e1b2ba6155f41c189896387969d62af",
+  "trace_id": "trc_b2fff882be7344daa8a5288564d28209",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

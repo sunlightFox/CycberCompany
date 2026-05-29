@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-036",
+  "category": "监督陪跑",
+  "title": "我总拖到最后，怎么温和盯我？",
+  "prompt": "做监督和陪跑要给最小下一步，不要像打卡机器或教练口号。请自然提到：拖到最后、温和。\n我总拖到最后，怎么温和盯我？",
+  "reply_text": "用“温和提醒 + 只盯一个最小下一步”的方式，不催你立刻做完，也不喊口号。\n\n比如你总拖到最后，我们就不定“今天完成整件事”，只定：\n\n现在先打开文档/任务页，写下第一行或列出 3 个小点。\n\n我盯你的方式可以是这种语气：\n现在不用做完，先碰一下它就行。\n你回我一个“已打开”，我们就算启动了\n每次只问你一个最小动作，不追问一堆，不把你当打卡机器。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_49d508a34d2b4cc8bf040f2e88b38f5b",
+  "trace_id": "trc_d06cd74ec9d3449481b18d835cf8dc71",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

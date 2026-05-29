@@ -303,7 +303,7 @@ def _redact_eval_receipt_text(text: str) -> str:
     return candidate
 
 
-def _pair_peer(client: TestClient, peer_ref: str, *, expected_member_id: str) -> None:
+def _pair_peer(client: TestClient, peer_ref: str, *, expected_member_id: str) -> dict[str, Any]:
     registry = cast(Any, client.app).state.registry
     accounts = client.get(
         "/api/channels/accounts",
@@ -322,6 +322,30 @@ def _pair_peer(client: TestClient, peer_ref: str, *, expected_member_id: str) ->
     assert session["pairing_status"] == "paired"
     assert session["member_id"] == expected_member_id
     WechatEvalClient.events = []
+    return dict(session)
+
+
+def _delivery_bindings_for_peer(
+    client: TestClient,
+    *,
+    peer_session_id: str | None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    if not peer_session_id:
+        return []
+    bindings = client.get(
+        "/api/channels/delivery-bindings",
+        params={"provider": "wechat", "limit": limit},
+    )
+    if bindings.status_code != 200:
+        return []
+    items = bindings.json().get("items", [])
+    return [
+        item
+        for item in items
+        if isinstance(item, dict)
+        and str(item.get("channel_peer_session_id") or "") == peer_session_id
+    ]
 
 
 def _read_real_brain_config(client: TestClient) -> dict[str, Any]:
@@ -352,6 +376,7 @@ def _run_case(
     case: Case,
     *,
     peer_ref: str,
+    peer_session_id: str | None,
     timeout: float,
     feishu_connector: FeishuEvalConnector | None = None,
     feishu_channel_id: str | None = None,
@@ -359,6 +384,10 @@ def _run_case(
     attempt_index: int = 0,
 ) -> dict[str, Any]:
     previous_send_count = len(WechatEvalClient.send_calls)
+    previous_binding_ids = {
+        str(item.get("channel_delivery_binding_id") or "")
+        for item in _delivery_bindings_for_peer(client, peer_session_id=peer_session_id)
+    }
     event_id = f"evt-{case.case_id}-try{attempt_index + 1}"
     WechatEvalClient.events = [_text_event(event_id, peer_ref, case.prompt)]
     started = time.perf_counter()
@@ -371,13 +400,22 @@ def _run_case(
     while time.monotonic() < deadline:
         delivered = client.post("/api/channels/providers/wechat/deliver-due")
         delivery = _json_or_text(delivered)
-        if len(WechatEvalClient.send_calls) > previous_send_count:
-            reply_text = WechatEvalClient.send_calls[-1]["text"]
-            bindings = client.get(
-                "/api/channels/delivery-bindings",
-                params={"provider": "wechat", "limit": 5},
-            )
-            binding_items = bindings.json().get("items", []) if bindings.status_code == 200 else []
+        new_sends = [
+            call
+            for call in WechatEvalClient.send_calls[previous_send_count:]
+            if call.get("user_id") == peer_ref
+        ]
+        if new_sends:
+            reply_text = new_sends[-1]["text"]
+            binding_items = [
+                item
+                for item in _delivery_bindings_for_peer(
+                    client,
+                    peer_session_id=peer_session_id,
+                    limit=100,
+                )
+                if str(item.get("channel_delivery_binding_id") or "") not in previous_binding_ids
+            ]
             if binding_items:
                 turn_id = str(binding_items[0].get("turn_id") or "")
             break
@@ -455,6 +493,7 @@ def _run_case_with_retries(
     case: Case,
     *,
     peer_ref: str,
+    peer_session_id: str | None,
     timeout: float,
     retries: int,
     feishu_connector: FeishuEvalConnector | None = None,
@@ -467,6 +506,7 @@ def _run_case_with_retries(
             client,
             case,
             peer_ref=peer_ref,
+            peer_session_id=peer_session_id,
             timeout=timeout,
             feishu_connector=feishu_connector,
             feishu_channel_id=feishu_channel_id,
@@ -1360,11 +1400,12 @@ def run(options: RunOptions) -> dict[str, Any]:
                     results.append(existing_by_id[case.case_id])
                     continue
                 peer_ref = f"wxid-real-model-200-peer-{case.case_id.lower()}"
-                _pair_peer(client, peer_ref, expected_member_id=options.member_id)
+                peer_session = _pair_peer(client, peer_ref, expected_member_id=options.member_id)
                 item = _run_case_with_retries(
                     client,
                     case,
                     peer_ref=peer_ref,
+                    peer_session_id=str(peer_session.get("channel_peer_session_id") or ""),
                     timeout=options.per_case_timeout,
                     retries=options.case_retries,
                     feishu_connector=feishu_connector,

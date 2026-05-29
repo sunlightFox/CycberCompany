@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-195",
+  "category": "渠道质量",
+  "title": "用户发语音转文字不完整，怎么问缺口？",
+  "prompt": "渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：语音、缺口。\n用户发语音转文字不完整，怎么问缺口？",
+  "reply_text": "别说“转文字不完整”，可以直接把缺口点出来，语气轻一点，让对方补一句就行。\n\n可以这样问：\n\n“我这边看到语音转文字有点断，关键信息缺了一小段。你方便再补一下：时间、地点/对象、要我做什么，这几个里缺的是哪一项？”\n\n更自然一点：\n\n“刚那段语音我这边识别得不太全，中间有个缺口。你再补一句重点就行：你希望我接下来具体怎么处理？”\n\n如果想更微信口吻：\n\n“语音有一小段没识别出来，我怕理解错。你补下缺口就好：是要我确认、转达，还是直接处理？”先给结论：",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_97404e662abd4b7bb3562a206340135b",
+  "trace_id": "trc_29672fc92f1b4f41b23bd092bf9fd4e1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

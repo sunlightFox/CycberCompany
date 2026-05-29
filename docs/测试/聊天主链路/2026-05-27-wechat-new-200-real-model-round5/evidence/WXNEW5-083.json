@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-083",
+  "category": "办公协作",
+  "title": "提醒大家填问卷，别像命令。",
+  "prompt": "办公协作要能直接发给人，边界清楚，不假装已经完成。请自然提到：问卷、截止。\n提醒大家填问卷，别像命令。",
+  "reply_text": "可以这样发：\n大家方便的话，麻烦在截止时间前填一下问卷。不用写很长，按真实感受选就行；\n如果已经填过，这条就忽略。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_f41ed22d0c78440a9be94134015d050b",
+  "trace_id": "trc_6b74fea049654760969fb209cf082faa",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

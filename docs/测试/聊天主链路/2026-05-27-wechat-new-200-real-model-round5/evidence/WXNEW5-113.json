@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-113",
+  "category": "知识研究",
+  "title": "两份资料冲突，怎么表达不确定性？",
+  "prompt": "知识研究要区分事实、假设、缺口，不把没查到的说成确定。请自然提到：冲突、不确定。\n两份资料冲突，怎么表达不确定性？",
+  "reply_text": "把“两份资料冲突”表达成事实层、判断层、缺口层三段，不要急着选边站。\n\n可以这样写：\n目前资料 A 与资料 B 在【具体点】上存在冲突。\n已能确认的是：【共同事实/可核实事实】。\n尚不确定的是：【冲突点】，原因是【来源口径、时间、样本或定义不同】。\n在进一步核验前，暂不将任一说法视为定论，后续需要补充【需要查的证据】。\n\n更短一点：\n两份资料对【问题】的描述不一致，因此该结论仍存在不确定性。当前只能确认【事实】，不能确认【争议点】。需要进一步核验【来源/时间/原始数据】后再判断。\n\n如果要写得更研究化：\n现有证据支持【较稳妥结论】，但由于资料之间存在冲突，关于【具体判断】仍有不确定。该部分应作为待验证假设，而非确定事实。\n\n小曜建议你记住这个顺序：\n确认什么 → 冲突在哪 → 为什么不确定 → 下一步查什么。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_711d4f140dfe48e48649309a90892d18",
+  "trace_id": "trc_af0522442e8f4708b0aec2f3b7af1b15",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

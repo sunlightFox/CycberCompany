@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-193",
+  "category": "渠道质量",
+  "title": "一段话太长时怎么按微信换行？",
+  "prompt": "渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：换行、微信。\n一段话太长时怎么按微信换行？",
+  "reply_text": "微信里一段话太长，直接按“换行键”就能分段；\n如果键盘没有换行键，可以长按发送键旁边的位置，或在输入法里找“回车/换行”。\n\n更好读的做法是：\n一句话讲一个意思，2～3 行就换行一次。\n重点内容单独一行。\n不要整段堆在一起。\n\n比如微信里可以这样发：\n我来理一下：\n这件事先确认目标。\n再看时间和负责人。\n最后决定今天要不要推进。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3149fb7cb872481cb44a1d80195b3b73",
+  "trace_id": "trc_5e0d37998c634d96b1deae7ae455f86a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

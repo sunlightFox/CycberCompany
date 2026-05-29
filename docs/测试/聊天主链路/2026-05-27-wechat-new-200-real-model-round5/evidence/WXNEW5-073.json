@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-073",
+  "category": "表格数据",
+  "title": "月度费用表要怎样做复核列？",
+  "prompt": "表格和数据场景要说明字段、口径、复核，不编数据。请自然提到：复核、费用。\n月度费用表要怎样做复核列？",
+  "reply_text": "先按这几个点整理：复核、费用。\n\n围绕“月度费用表要怎样做复核列？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_80d13b83b70a43cebd9a683255e97df6",
+  "trace_id": "trc_4a1d747ced0145ef90ec3d3bb71befeb",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

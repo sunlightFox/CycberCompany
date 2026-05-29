@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-068",
+  "category": "办公文档",
+  "title": "把领导口头要求整理成待确认事项。",
+  "prompt": "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：待确认、事项。\n把领导口头要求整理成待确认事项。",
+  "reply_text": "可以先整理成待确认事项，不假装已经生成 Word 文件。\n\n待确认事项：\n1. 目标：领导口头要求最终要交付什么结果。\n2. 范围：涉及哪些部门、数据、文件或时间段。\n3. 截止时间：什么时候给初稿，什么时候定稿。\n4. 负责人：谁确认口径，谁补资料，谁最终拍板。\n\n发出去前可以补一句：以上是我根据口头要求整理的版本，请确认是否有遗漏或理解偏差。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_c4834eaac9c244cd879c661c2f93ef9c",
+  "trace_id": "trc_01d435a4487e4a0c89f17ba3b0ec83cf",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

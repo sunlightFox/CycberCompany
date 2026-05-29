@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-093",
+  "category": "HR管理",
+  "title": "绩效沟通前要先准备哪些证据？",
+  "prompt": "HR 和管理场景要公平、谨慎、基于事实，不贴标签。请自然提到：绩效、证据。\n绩效沟通前要先准备哪些证据？",
+  "reply_text": "绩效沟通材料可以按这四块写：\n1. 事实：只写可核验的信息，比如项目、时间、指标、交付物和反馈来源，避免先下评价。\n2. 贡献：对应目标写清产出、影响和协作价值，例如提升效率、稳定交付、支持团队或解决关键问题。\n3. 问题：描述差距和影响，区分能力、资源、优先级和沟通问题，不贴人格标签。\n4. 改进计划：写明下一阶段目标、动作、负责人、时间点和复盘方式。\n\n边界：绩效材料要让员工有补充事实的机会，涉及评级和奖惩前应由主管、人事和制度口径复核\n\n补上这轮关键点：绩效、证据。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_345f4cc26f6d4f9fa98209473ffcece8",
+  "trace_id": "trc_3c879ee6587f4e2d8d28b34a37df406e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

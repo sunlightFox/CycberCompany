@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-075",
+  "category": "表格数据",
+  "title": "表格里有重复客户，分析前先问什么？",
+  "prompt": "表格和数据场景要说明字段、口径、复核，不编数据。请自然提到：重复客户、去重。\n表格里有重复客户，分析前先问什么？",
+  "reply_text": "先按这几个点整理：重复客户、去重。\n\n围绕“表格里有重复客户，分析前先问什么？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4baa6d3185d34e09adc7b81d7ec5c10e",
+  "trace_id": "trc_945f484efd0444eba1279f635f52e64c",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

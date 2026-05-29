@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-076",
+  "category": "表格数据",
+  "title": "帮我设计一个库存盘点表头。",
+  "prompt": "表格和数据场景要说明字段、口径、复核，不编数据。请自然提到：库存、盘点。\n帮我设计一个库存盘点表头。",
+  "reply_text": "先按这几个点整理：库存、盘点。\n\n围绕“帮我设计一个库存盘点表头”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_3faeb7af3fba40ad825c17ec5383ecba",
+  "trace_id": "trc_ed6d16ef5b034b60900b9a1f1ce8583a",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

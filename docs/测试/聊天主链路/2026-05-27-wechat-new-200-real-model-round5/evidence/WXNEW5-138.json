@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-138",
+  "category": "生活办公",
+  "title": "今天照顾家人，工作只能保底，怎么说？",
+  "prompt": "生活和办公混合场景要贴近日常，给下一步，不说教。请自然提到：保底、照顾家人。\n今天照顾家人，工作只能保底，怎么说？",
+  "reply_text": "可以这么说：\n\n“今天家里需要照顾家人，我这边工作先按保底推进：优先处理紧急和必须今天交付的事项，其他不影响进度的我明天补上。有特别急的你直接标我，我会尽量及时看。”\n\n更口语一点：\n\n“今天主要在照顾家人，工作这边我先保底处理，紧急的我会优先回，其他事项明天补齐。要是有必须今天定的，直接喊我。”\n\n小曜建议用第二版，贴近日常，也把下一步说清楚了。先给结论，",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_a1d2957363fb40fbbf5da857e053e043",
+  "trace_id": "trc_0b465067fee04089b29b424e2de21de1",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

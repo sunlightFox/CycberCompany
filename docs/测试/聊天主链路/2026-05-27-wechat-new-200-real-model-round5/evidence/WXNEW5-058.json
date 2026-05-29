@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-058",
+  "category": "操作系统",
+  "title": "系统更新失败，不要让我乱删文件，先怎么排？",
+  "prompt": "操作系统场景要讲清只读、确认、备份和风险，不假装已经执行。请自然提到：更新失败、不乱删。\n系统更新失败，不要让我乱删文件，先怎么排？",
+  "reply_text": "我接住这句：系统更新失败，不要让我乱删文件，先怎么排？。\n\n这轮重点是更新失败、不乱删；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_535b0c7cb64d422f81754595f6862e33",
+  "trace_id": "trc_8685a4cae62e419889f0fe904be7ec67",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

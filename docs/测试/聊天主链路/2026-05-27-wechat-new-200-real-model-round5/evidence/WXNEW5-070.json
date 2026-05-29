@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-070",
+  "category": "办公文档",
+  "title": "帮我把投诉回复写得稳一点。",
+  "prompt": "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：投诉、稳一点。\n帮我把投诉回复写得稳一点。",
+  "reply_text": "投诉回复可以这样写，语气稳一点：\n您好，您的反馈我们已经收到。对这次体验给您造成的不便，我们先向您说明歉意。\n我们会按记录核对投诉涉及的时间、事项和处理过程；\n确认后再给您明确回复。\n在结果出来前，我不会先下定论，但会持续跟进，并把下一步处理方式同步给您。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9481e3cf2fc1440d8e81a370be5233a8",
+  "trace_id": "trc_26c9c27b626244ebbc752dd0e0262511",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

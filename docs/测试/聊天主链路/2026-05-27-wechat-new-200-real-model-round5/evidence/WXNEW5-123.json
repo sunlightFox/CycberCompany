@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-123",
+  "category": "记忆偏好",
+  "title": "这个偏好只在这次项目里生效。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：这次项目、范围。\n这个偏好只在这次项目里生效。",
+  "reply_text": "WXNEW5-123。\n\n先给结论：这个偏好我会按“这次项目”的临时范围处理，不写入长期记忆；后续如果涉及记忆/偏好，我会说明 source，以及它是临时还是长期范围。敏感内容不会写入。\n\nsource：你当前这条消息。范围：仅这次项目内生效。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_240b15a256e346e6aa56542484cec52e",
+  "trace_id": "trc_b27e3629ab3241ff9e5e20ba799279ff",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

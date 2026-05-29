@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-039",
+  "category": "监督陪跑",
+  "title": "运动恢复期怕逞强，怎么提醒我停？",
+  "prompt": "做监督和陪跑要给最小下一步，不要像打卡机器或教练口号。请自然提到：恢复期、停。\n运动恢复期怕逞强，怎么提醒我停？",
+  "reply_text": "恢复期就别靠意志力硬扛，提醒你“停”的标准要很简单。\n\n我会这样提醒你：\n\n“先停一下。现在不是证明自己的时候，是恢复期。疼痛、发紧、动作变形、心率压不下来，任一出现就到这儿。”\n\n最小下一步就一个：运动中每10 分钟问自己一次：有没有疼、有没有代偿、有没有越练越不舒服？有一个“有”，就停。\n\n不是偷懒，是把恢复做完。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8643b457633e4594a5779e66854bd93e",
+  "trace_id": "trc_14cdabfb664c48f69cfc419e09750242",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-125",
+  "category": "记忆偏好",
+  "title": "我喜欢先结论后行动，办公场景默认这样。",
+  "prompt": "记忆和偏好要说明 source、临时/长期范围，敏感内容不写入。请自然提到：结论、行动。\n我喜欢先结论后行动，办公场景默认这样。",
+  "reply_text": "按这个偏好来——办公场景默认“先结论、后行动”。\n\n行动：后续如果涉及记忆/偏好，我会说明来源 source、区分临时/长期范围；敏感内容不写入长期记忆。当前这条可作为你的长期沟通偏好来源：你明确说“喜欢先结论后行动”。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9b28c691750c4ea0877e8df378c48e0d",
+  "trace_id": "trc_20b1fa1002474696bc9ec48deb8c2e10",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

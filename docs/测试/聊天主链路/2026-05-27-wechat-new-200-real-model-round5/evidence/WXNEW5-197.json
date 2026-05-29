@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-197",
+  "category": "渠道质量",
+  "title": "跨渠道同步时不要说内部投递细节。",
+  "prompt": "渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：跨渠道、不暴露。\n跨渠道同步时不要说内部投递细节。",
+  "reply_text": "跨渠道同步时，对用户只看最终可见回复，不暴露内部投递细节。\n\n我会守住三点：\n1. 不说内部编号、trace、队列、渠道转发过程。\n2. 不带旧轮次残留，也不把飞书/微信之间的技术细节讲给用户。\n3. 只保留自然、清楚、能直接读懂的回答；必要时说明结果和下一步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_65b9feaa8c60467d93ba6edaac9c3162",
+  "trace_id": "trc_bab671ebad664de39ea232823ebbc97f",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

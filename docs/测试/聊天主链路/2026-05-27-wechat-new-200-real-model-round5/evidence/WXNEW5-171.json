@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-171",
+  "category": "长短控制",
+  "title": "只给我一句出门提醒。",
+  "prompt": "长短控制要按用户意图决定详略，结构清楚。请自然提到：一句、出门。\n只给我一句出门提醒。",
+  "reply_text": "一句出门提醒：先摸一遍钥匙、手机、钱包，再回头看门窗和电器。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_71f9ed1a011240d791aeb1d665c62aad",
+  "trace_id": "trc_fbb4716dfe6e4612b8d87fe998b372b9",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

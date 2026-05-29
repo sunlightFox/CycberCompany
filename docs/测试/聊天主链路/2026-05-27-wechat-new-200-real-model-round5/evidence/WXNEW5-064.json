@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-064",
+  "category": "办公文档",
+  "title": "不要生成文件，只写一段报告摘要。",
+  "prompt": "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：不生成文件、摘要。\n不要生成文件，只写一段报告摘要。",
+  "reply_text": "小曜不生成文件，只写一段可直接使用的报告摘要：\n\n本报告围绕近期工作进展、关键成果与后续计划进行梳理，总结了当前阶段已完成的主要任务、存在的问题与改进方向。整体来看，各项工作推进较为平稳，核心目标基本达成，但在",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_42c54c9f8fe443988117b1c98333a18a",
+  "trace_id": "trc_515e470d45974d3b873d8c7d29e2b132",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

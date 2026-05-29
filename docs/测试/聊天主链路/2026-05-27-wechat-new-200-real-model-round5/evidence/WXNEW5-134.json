@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-134",
+  "category": "生活办公",
+  "title": "出门前还要回客户消息，怎么排不慌？",
+  "prompt": "生活和办公混合场景要贴近日常，给下一步，不说教。请自然提到：出门前、客户消息。\n出门前还要回客户消息，怎么排不慌？",
+  "reply_text": "我接住这句：出门前还要回客户消息，怎么排不慌？。\n\n这轮重点是出门前、客户消息；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b01652f5b3cb4137923e68277bd840b1",
+  "trace_id": "trc_a1ace95286154d2ab6211a08f5d6aeae",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

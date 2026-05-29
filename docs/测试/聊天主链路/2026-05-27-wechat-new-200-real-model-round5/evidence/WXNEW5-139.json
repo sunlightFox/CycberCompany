@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-139",
+  "category": "生活办公",
+  "title": "通勤路上只能语音记想法，怎么整理？",
+  "prompt": "生活和办公混合场景要贴近日常，给下一步，不说教。请自然提到：通勤、语音。\n通勤路上只能语音记想法，怎么整理？",
+  "reply_text": "通勤路上的语音别急着整理，先“收进去”，到办公室或晚上再用5 分钟统一分拣。 语音开头加标签比如：“工作-周会想法”“生活-买东西”“灵感-文章标题”。后面整理时一听开头就知道放哪。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_d4c7a81f2ecd4d1a8cd5bdba4738b716",
+  "trace_id": "trc_1dd773d173114d39afc122101c9efdee",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-137",
+  "category": "生活办公",
+  "title": "我状态很低但要开会，给我一句开场。",
+  "prompt": "生活和办公混合场景要贴近日常，给下一步，不说教。请自然提到：状态低、开场。\n我状态很低但要开会，给我一句开场。",
+  "reply_text": "可以这样开场：昨天我说话的语气有点冲，想先跟你认真道个歉。我不是想把问题翻过去，而是希望把当时没说好的部分重新说清楚，也把关系修复一下\n\n补上这轮关键点：状态低、开场。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_9b5b89b8c5644b9199f1883f79b19497",
+  "trace_id": "trc_36860306fac24b6893b7253455453584",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

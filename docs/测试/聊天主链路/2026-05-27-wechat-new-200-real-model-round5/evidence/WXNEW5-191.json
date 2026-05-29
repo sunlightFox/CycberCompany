@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-191",
+  "category": "渠道质量",
+  "title": "如果飞书收到但微信没收到，应该怎么说？",
+  "prompt": "渠道质量场景要以微信最终可见回复为准，别出现内部编号、系统话或旧轮次残留。请自然提到：微信、送达。\n如果飞书收到但微信没收到，应该怎么说？",
+  "reply_text": "应该以微信是否送达为准，不能因为飞书收到了就说“已送达”。\n\n可以这样说：\n“飞书侧已收到，但微信这边暂未确认送达。当前以微信最终送达结果为准，我会按未送达处理，并继续排查或重发。”\n\n如果要更短一点：\n\n“飞书已收到，但微信未送达；本次按微信未送达处理。”先给结论：应该以微信是否送达",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_71f4034b120745758718fb9ce633e297",
+  "trace_id": "trc_718063aa952c4cce82faaef7e1c20a16",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

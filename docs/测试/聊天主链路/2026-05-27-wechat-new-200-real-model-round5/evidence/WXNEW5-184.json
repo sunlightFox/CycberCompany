@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-184",
+  "category": "审计追踪",
+  "title": "记忆写入时为什么要有 source？",
+  "prompt": "审计追踪场景要说清 trace、证据、状态，不暴露敏感信息。请自然提到：source、记忆。\n记忆写入时为什么要有 source？",
+  "reply_text": "记忆写入必须有source，是为了让后续使用这条记忆时能追溯“它从哪里来、基于什么证据、当前状态是否可靠”，避免把临时判断、误解或敏感内容当成长期事实。在审计追踪场景里，source主要解决三件事： trace可追溯以后看到某条记忆时，能知道它来自哪次对话、用户明确表达，还是系统推断，方便回查路径。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_0f834dd3f9634c8ca953f99d5508ebdb",
+  "trace_id": "trc_182ce5491e7c4f3589dafe910557a3a7",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-085",
+  "category": "办公协作",
+  "title": "同步风险时怎么不显得吓人？",
+  "prompt": "办公协作要能直接发给人，边界清楚，不假装已经完成。请自然提到：风险、同步。\n同步风险时怎么不显得吓人？",
+  "reply_text": "同步风险不吓人，关键是把“风险”说成可管理的偏差/不确定性，同时给出影响、建议动作和需要谁确认，不要只抛问题。可以用这个结构：\n我同步一个可能影响进度的小风险：目前【事项】还缺【条件/确认】，如果今天没定，可能会影响【具体节点】。\n我建议先按【方案A】推进，同时请【某人】确认【关键点】。这样即使有调整，也能把影响控制在【范围】内。\n\n更自然一点可以这么说：\n我先同步下风险，不是紧急事故，主要是为了避免后面返工：现在【问题】还没完全确认，可能影响【结果】。我这边建议【下一步】，麻烦你看下是否按这个方向走。\n\n办公协作里，小曜建议避免这些说法：- “有重大风险”“可能出大问题”——容易吓人；\n“我已经处理好了”——如果没真实完成，边界不清；\n“你们自己看着办”——只同步风险但不给下一步。\n\n更稳的表达是：“我先同步一个可控风险 +目前状态 + 建议动作 +需要确认的点。”这样既专业，也不会显得在制造紧张。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_79aeac5ddb8e452daa2ee96e6edd678f",
+  "trace_id": "trc_0e620959cc0b4f25904f82adb8a91165",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

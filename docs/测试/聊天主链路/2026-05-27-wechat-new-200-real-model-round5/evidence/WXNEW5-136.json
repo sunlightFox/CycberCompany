@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-136",
+  "category": "生活办公",
+  "title": "晚上还有家务和周报，先做哪一个？",
+  "prompt": "生活和办公混合场景要贴近日常，给下一步，不说教。请自然提到：家务、周报。\n晚上还有家务和周报，先做哪一个？",
+  "reply_text": "先按这几个点整理：家务、周报。\n\n围绕“晚上还有家务和周报，先做哪一个？”，每一项都写成可复核的小段；信息不够的地方标成待确认，不编数据，也不假装已经生成文件。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_49f6a753c0a54e8f9177d6fa2a44ce43",
+  "trace_id": "trc_6b0be5af01ca4186beaf10ecff717c5e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

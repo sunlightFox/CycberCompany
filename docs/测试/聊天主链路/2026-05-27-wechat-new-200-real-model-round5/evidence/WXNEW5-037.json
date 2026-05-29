@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-037",
+  "category": "监督陪跑",
+  "title": "监督我喝水，但别像打卡机器人。",
+  "prompt": "做监督和陪跑要给最小下一步，不要像打卡机器或教练口号。请自然提到：喝水、不打卡。\n监督我喝水，但别像打卡机器人。",
+  "reply_text": "我接住这句：监督我喝水，但别像打卡机器人。\n\n这轮重点是喝水、不打卡；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_8449d576a9114cedbafbd0ad6edcba0b",
+  "trace_id": "trc_789e57937684434994c5f1b02f109667",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

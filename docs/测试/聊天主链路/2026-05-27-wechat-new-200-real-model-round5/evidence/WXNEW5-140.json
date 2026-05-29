@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-140",
+  "category": "生活办公",
+  "title": "周末想休息又怕漏事，怎么做收口？",
+  "prompt": "生活和办公混合场景要贴近日常，给下一步，不说教。请自然提到：休息、收口。\n周末想休息又怕漏事，怎么做收口？",
+  "reply_text": "这轮收口就看四件事：100 条是否都走了微信入站和出站，回复是否贴题且没有系统腔、技术腔，格式约束是否被遵守，以及失败或告警是通用问题还是个案。有问题先修通用链路，再复测命中项，最后用证据和摘要给结论\n\n补上这轮关键点：休息、收口。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e1063fd066ce4308b6ffd3da64635e36",
+  "trace_id": "trc_6855500ee0f94c6e8cbbe28bd040ef93",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

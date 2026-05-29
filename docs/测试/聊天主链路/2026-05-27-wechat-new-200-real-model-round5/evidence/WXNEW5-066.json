@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-066",
+  "category": "办公文档",
+  "title": "把一段长公告压成三句话。",
+  "prompt": "办公文档场景要给可直接用的结构，不假装已生成文件。请自然提到：三句话、公告。\n把一段长公告压成三句话。",
+  "reply_text": "可以直接发这一版，核心信息先按三句话、公告留清楚：\n各位好，办公区将有一段时间受影响，事项是：把一段长公告压成三句话。\n时间：请填具体日期和起止时间。\n影响：请说明涉及区域、是否影响用水/通行/办公，以及是否需要提前准备。\n联系人：请填负责人的姓名和联系方式。\n\n如果时间还没最终确认，就写“具体时间以物业通知为准”，不要把未确认信息说死。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1c5d2316f3c14e93a70ae1975058b5c9",
+  "trace_id": "trc_718e101051d145e6b9e0110d9010884b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "model.started",
+    "model.completed",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

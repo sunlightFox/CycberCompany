@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-096",
+  "category": "HR管理",
+  "title": "团队冲突复盘，怎么不站队？",
+  "prompt": "HR 和管理场景要公平、谨慎、基于事实，不贴标签。请自然提到：冲突、不站队。\n团队冲突复盘，怎么不站队？",
+  "reply_text": "团队冲突复盘里“不站队”，不是谁都不得罪，而是站事实、站流程、站目标，不站个人立场。 -\n1. 先定复盘边界\n\n不确定性补充：冲突资料应标注不确定来源、口径差异和采用基准，不能包装成单一确定结论。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_4d58e3f098804dbe8e997b03dfd57cf9",
+  "trace_id": "trc_9ee4bb95c6414a80b0edb28f45c88d69",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

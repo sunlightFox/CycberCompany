@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-088",
+  "category": "办公协作",
+  "title": "帮我写一句确认会议结论的话。",
+  "prompt": "办公协作要能直接发给人，边界清楚，不假装已经完成。请自然提到：会议结论、确认。\n帮我写一句确认会议结论的话。",
+  "reply_text": "确认一下会议结论：\n我们按刚才对齐的方案推进。\n如果有补充或调整，请大家今天下班前在群里确认；没有补充的话，我就按这个口径同步。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_5742a1cd62ae484b894925f1c307e4c5",
+  "trace_id": "trc_0f7512cd3663404fb21bf551f5056505",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

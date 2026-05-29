@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-094",
+  "category": "HR管理",
+  "title": "有人请假频繁，怎么先问情况不下判断？",
+  "prompt": "HR 和管理场景要公平、谨慎、基于事实，不贴标签。请自然提到：请假、不下判断。\n有人请假频繁，怎么先问情况不下判断？",
+  "reply_text": "我接住这句：有人请假频繁，怎么先问情况不下判断？。\n\n这轮重点是请假、不下判断；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_e1efa7bc267041caa90d3c9b00e01547",
+  "trace_id": "trc_78681969ccfe4fbbbbfe44c26cf4a7d7",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

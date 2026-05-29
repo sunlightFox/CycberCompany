@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-078",
+  "category": "表格数据",
+  "title": "缺少时间范围时，经营结论怎么降级？",
+  "prompt": "表格和数据场景要说明字段、口径、复核，不编数据。请自然提到：时间范围、降级。\n缺少时间范围时，经营结论怎么降级？",
+  "reply_text": "我接住这句：缺少时间范围时，经营结论怎么降级？。\n\n这轮重点是时间范围、降级；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_1d94ad5ab1f745639f6eb395f652bd2e",
+  "trace_id": "trc_60167131df964224a381ae6d0da7d620",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

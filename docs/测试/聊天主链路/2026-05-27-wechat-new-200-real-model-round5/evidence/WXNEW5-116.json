@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-116",
+  "category": "知识研究",
+  "title": "竞品分析先看哪几类证据？",
+  "prompt": "知识研究要区分事实、假设、缺口，不把没查到的说成确定。请自然提到：竞品、证据。\n竞品分析先看哪几类证据？",
+  "reply_text": "我接住这句：竞品分析先看哪几类证据？。\n\n这轮重点是竞品、证据；先把这几个点说清，不绕成系统口吻，也不把没确认的事说成已经完成。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_b6b84ad88c814aa2994e989cff3d902b",
+  "trace_id": "trc_7c93d962d10f487c861d89c46fda945b",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

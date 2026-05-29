@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-060",
+  "category": "操作系统",
+  "title": "批量重命名前要怎样避免不可逆？",
+  "prompt": "操作系统场景要讲清只读、确认、备份和风险，不假装已经执行。请自然提到：批量重命名、回滚。\n批量重命名前要怎样避免不可逆？",
+  "reply_text": "批量重命名前，核心是先只读预览、再备份、再小批量确认执行，并准备回滚表。不要一上来直接改全量文件名。建议按这个顺序做：\n1. 先只读扫描，不改文件-先列出目标目录和匹配规则。生成“原文件名→新文件名”的预览清单。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_ac54f4a039964d0b80843b4f9535476e",
+  "trace_id": "trc_a875f6f8ea484ee5bafacc92a7f0140e",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}

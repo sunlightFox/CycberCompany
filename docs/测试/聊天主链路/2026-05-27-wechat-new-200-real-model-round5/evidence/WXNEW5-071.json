@@ -1,0 +1,31 @@
+{
+  "case_id": "WXNEW5-071",
+  "category": "表格数据",
+  "title": "预算表要哪些字段才不乱？",
+  "prompt": "表格和数据场景要说明字段、口径、复核，不编数据。请自然提到：预算项、负责人。\n预算表要哪些字段才不乱？",
+  "reply_text": "预算表先把责任和口径列清楚，至少要有这些字段：\n1. 预算项：这笔钱花在什么事项上。\n2. 金额和币种：预计金额、是否含税、统计周期。\n3. 负责人：谁提出、谁复核、谁最终确认。\n4. 依据：报价、合同、历史数据或测算逻辑。\n\n关键是金额要能追溯，不编数据。",
+  "verdict": "pass",
+  "score": 100,
+  "notes": [],
+  "turn_id": "turn_69941257b6704a998166f928698d171c",
+  "trace_id": "trc_2c6dd597b2fa4df287074db438152078",
+  "model_started": true,
+  "model_completed": true,
+  "delivery_sent": true,
+  "event_types": [
+    "turn.queued",
+    "turn.queue_started",
+    "content.normalized",
+    "turn.started",
+    "context.started",
+    "context.ready",
+    "intent.detected",
+    "mode.selected",
+    "route.selected",
+    "model.started",
+    "model.completed",
+    "response.delta",
+    "response.completed",
+    "turn.completed"
+  ]
+}
