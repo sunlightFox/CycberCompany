@@ -1,0 +1,303 @@
+{
+  "run_label": "FNEW50R13-REAL-BRAIN-20260528",
+  "started_at": "2026-05-28T10:16:27",
+  "runner": "C:\\Users\\Administrator\\Desktop\\Cycbercompany\\docs\\测试\\聊天主链路\\2026-05-28-feishu-new-50-real-brain-round13\\run_feishu_new_50_round13_real_brain_cases.py",
+  "total_selected": 49,
+  "completed": 49,
+  "items": [
+    {
+      "case_id": "FNEW50R13-002",
+      "verdict": "warn",
+      "score": 72,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R13-003",
+      "verdict": "warn",
+      "score": 72,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R13-004",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-005",
+      "verdict": "warn",
+      "score": 86,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R13-006",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-007",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-008",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-009",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-010",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-011",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-012",
+      "verdict": "warn",
+      "score": 86,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R13-013",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-014",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-015",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-016",
+      "verdict": "warn",
+      "score": 86,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R13-017",
+      "verdict": "warn",
+      "score": 86,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R13-018",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-019",
+      "verdict": "warn",
+      "score": 72,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R13-020",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-021",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-022",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-023",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-024",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-025",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-026",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-027",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-028",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-029",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-030",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-031",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-032",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-033",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-034",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-035",
+      "verdict": "warn",
+      "score": 86,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R13-036",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-037",
+      "verdict": "warn",
+      "score": 90,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R13-038",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-039",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-040",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-041",
+      "verdict": "warn",
+      "score": 86,
+      "error": "case_verdict:warn"
+    },
+    {
+      "case_id": "FNEW50R13-042",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-043",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-044",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-045",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-046",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-047",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-048",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-049",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    },
+    {
+      "case_id": "FNEW50R13-050",
+      "verdict": "pass",
+      "score": 100,
+      "error": ""
+    }
+  ]
+}
